@@ -1,0 +1,96 @@
+/* ==========================================================================
+   custom.css — base helpers only.
+   Theme, tokens, cards, value-boxes, navbar, tables, modals, notifications,
+   the loader and the waiter overlay all live in wfp-ui.css (which loads after
+   this file and wins). Keep this file to widget-level fixes that don't depend
+   on the theme.
+   ========================================================================== */
+
+/* Firefox scrollbar inside DT scrollY bodies (WebKit scrollbars are in wfp-ui.css) */
+.dataTables_scrollBody {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+
+/* Plotly widgets fill their card */
+.js-plotly-plot .plotly .main-svg {
+  height: 100% !important;
+  width: 100% !important;
+}
+.plotly.html-widget {
+  min-height: 0 !important;
+}
+
+/* Slim, clean filter dropdowns and date pickers */
+.bootstrap-select > .dropdown-toggle,
+.datepicker--input {
+  height: 32px !important;
+  padding-top: 3px !important;
+  padding-bottom: 3px !important;
+  padding-left: 8px !important;
+  padding-right: 24px !important;
+  font-size: 13px !important;
+}
+
+/* Smaller picker menu items */
+.bootstrap-select .dropdown-menu .dropdown-item {
+  font-size: 13px !important;
+  padding: 4px 8px !important;
+}
+
+/* Slimmer action buttons inside picker (Select All / Deselect All) */
+.bootstrap-select .bs-actionsbox .btn {
+  font-size: 12px !important;
+  padding: 2px 6px !important;
+}
+
+/* Slimmer search box inside picker */
+.bootstrap-select .bs-searchbox .form-control {
+  height: 30px !important;
+  font-size: 13px !important;
+  padding: 4px 8px !important;
+}
+
+/* Ensure popups (pickers and calendars) float above the rest of the page */
+.inner.show, .datepicker {
+  z-index: 9999 !important;
+  overflow: visible !important;
+}
+/* Force the picker menu to show a scrollbar */
+.bootstrap-select .dropdown-menu.inner {
+  max-height: 400px !important;
+  overflow-y: auto !important;
+  display: block !important;
+}
+.bootstrap-select .dropdown-menu.inner::-webkit-scrollbar {
+  width: 8px;
+}
+.bootstrap-select .dropdown-menu.inner::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 10px;
+}
+
+/* The 'Frozen' state: visible but unclickable */
+.frozen-panel {
+  pointer-events: none !important;
+  opacity: 0.5;
+  filter: grayscale(50%);
+  cursor: not-allowed;
+}
+
+/* Highlight the setup tab to guide the user */
+.nav-link[data-value='setup_tab'] {
+  border: 1px solid var(--wfp-blue) !important;
+}
+
+/* Navbar collapse toggler stays white on the WFP-blue bar */
+.navbar-toggler,
+.navbar-toggler-icon {
+  color: #ffffff !important;
+  border-color: rgba(255, 255, 255, 0.5) !important;
+}
+
+/* Smooth progress-bar width transitions inside the waiter */
+.progress-bar {
+  transition: width 0.4s ease-in-out;
+}

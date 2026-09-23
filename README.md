@@ -1,0 +1,353 @@
+# TargetWise
+
+*Reach the right people.*
+
+**An R package and Shiny application for humanitarian targeting: design the targeting on assessment data, select beneficiaries on registration data, and monitor what was delivered on post-distribution monitoring (PDM) data.**
+
+It follows the WFP *Targeting and Prioritization Operational Guidance Note* (2021) and the WFP APP-FA Targeting Advisories 1/2025 (outcome indicators are not criteria), 2/2025 (design vs implementation errors) and 3/2025 (ROC curves and thresholds). It is built for large registries (millions of rows), keeps an audit trail of every change, and documents each step in a self-contained report that serves as evidence for review and audit.
+
+---
+
+## Contents
+
+1. [What it does](#what-it-does)
+2. [Installation](#installation)
+3. [Launching the app](#launching-the-app)
+4. [Try it with the demo data](#try-it-with-the-demo-data)
+5. [User guide](#user-guide)
+6. [Data requirements](#data-requirements)
+7. [Methods and references](#methods-and-references)
+8. [Configuration](#configuration)
+9. [Sessions, privacy and security](#sessions-privacy-and-security)
+10. [Working with large data](#working-with-large-data)
+11. [Deployment](#deployment)
+12. [Development](#development)
+13. [Citation, author and contact](#citation-author-and-contact)
+14. [Licence](#licence)
+
+---
+
+## What it does
+
+The app follows the targeting cycle in three phases, each working on its own dataset:
+
+| Phase | Dataset | What you get |
+|---|---|---|
+| **1. Targeting Design** | Needs-assessment survey with a food-security outcome (e.g. CARI) | A weighted **scorecard** of household criteria, its eligibility threshold, design inclusion/exclusion errors, a verdict against your tolerance band, and a full HTML design report |
+| **2. Beneficiary Selection** | Household registration list | Data-quality checks and corrections, spot-check sampling, and a beneficiary list produced by the targeting approach you choose (scorecard, categorical, hybrid, community-based, geographic, blanket), with prioritisation when resources are short |
+| **3. Targeting Monitoring** | PDM survey | Implementation inclusion/exclusion errors and coverage, judged with the Advisory 2/2025 decision table |
+
+---
+
+## Installation
+
+### Requirements
+
+- **R ≥ 4.6** (the package is developed and checked against R 4.6).
+- On Windows, no compiler is needed: every dependency is available as a binary from CRAN.
+- A modern browser (Chrome, Edge, Firefox).
+
+The app runs entirely on your computer and **works offline** once installed; only the MODA/Kobo/ODK import and the map's background tiles need a connection. The repository is public: no GitHub account or token is needed. Choose the route that fits:
+
+| Route | Internet needed | GitHub account needed |
+|---|---|---|
+| **A. From GitHub** (recommended) | Yes, to install | No |
+| **B. Offline installer** (Windows) | No | No |
+
+### A. From GitHub (internet, no account)
+
+In R or RStudio:
+
+```r
+install.packages("remotes")
+remotes::install_github("bbbagoa/TargetWise", dependencies = TRUE)
+```
+
+Every dependency is installed from CRAN at the same time. On Windows no compiler is needed. The first installation takes a few minutes.
+
+- **A given version** (for example the one your office validated): `remotes::install_github("bbbagoa/TargetWise@v0.1.0")`, using a tag from the [Releases](https://github.com/bbbagoa/TargetWise/releases) page.
+- **The optional machine-learning models** (random forest, XGBoost, naive Bayes, neural network, SVM): `install.packages(c("ranger", "xgboost", "e1071", "nnet"))`.
+
+**Common errors**
+- `HTTP error 403. API rate limit exceeded`: GitHub limits anonymous downloads per network (60 an hour, shared by everyone behind the same office connection). Wait an hour, or sign in once with a free account token: `usethis::create_github_token()`, then `gitcreds::gitcreds_set()`.
+- `Could not find tools necessary to compile a package`: a dependency has no ready-made binary for your R version. Install the latest R release, or use the offline installer.
+- Behind a proxy: set `Sys.setenv(https_proxy = "http://proxy:port")` before installing.
+
+### B. Offline installer (Windows, no internet)
+
+Ask the maintainer for the file `TargetWise_<version>_offline_windows_R<x.y>.zip`, shared by USB key, email or SharePoint. It contains the package and every package it depends on.
+
+1. Install **R** of the version in the file name (e.g. R 4.6) if it is not installed. The bundle may include the R installer.
+2. Unzip the file anywhere.
+3. Open R or RStudio, set the working directory to the unzipped folder (R: *File > Change dir…*; RStudio: *Session > Set Working Directory > Choose Directory…*), and run:
+
+```r
+source("install.R")
+```
+
+4. Start the app any time with `TargetWise::run_app()`.
+
+### Updating
+
+**How you know an update is available.**
+- **In the app.** When the app starts with an internet connection, it compares your version with the one on GitHub and shows a notice, *"Update available: version x.y.z"*, with the command to run. It checks at most once a day and is silent offline. Turn it off with `TARGETWISE_UPDATE_CHECK=false`.
+- **By email.** On the repository page, click **Watch → Custom → Releases** (needs a free GitHub account).
+- **Offline users** receive the new offline installer from the maintainer.
+
+**How to update.** Close the app, restart R, and run the `install_github(...)` line again (route A), or `source("install.R")` from the new offline bundle (route B).
+
+What changed in each version is listed in [NEWS.md](NEWS.md). Your saved sessions, setup profiles and country office setting are kept across updates.
+
+### Reproducible install with renv (for deployments)
+
+The repository ships an `renv.lock` with the exact package versions used in development:
+
+```r
+# in a clone of the repository
+install.packages("renv")
+renv::restore()        # installs the locked versions into a project library
+renv::install(".")     # installs TargetWise itself
+```
+
+---
+
+## Launching the app
+
+```r
+library(TargetWise)
+run_app()
+```
+
+The app opens in your browser. Useful options:
+
+```r
+run_app(options = list(port = 4321, launch.browser = TRUE))   # fixed port
+run_app(options = list(host = "0.0.0.0", port = 3838))        # reachable from other machines
+```
+
+Uploads up to **2 GB** are accepted by default.
+
+---
+
+## Try it with the demo data
+
+Two synthetic datasets are installed with the package:
+
+```r
+system.file("extdata", "assessment_demo.csv",   package = "TargetWise")  # 1,500 households, CARI outcome
+system.file("extdata", "registration_demo.csv", package = "TargetWise")  # 1,500 registered households
+```
+
+1. **Targeting Design**: load `assessment_demo.csv`. The outcome `FSI_CARI2_2class` is picked automatically.
+2. **Beneficiary Selection › Load registration data**: load `registration_demo.csv`, then map the variables.
+
+---
+
+## User guide
+
+### Welcome page
+
+The Welcome page explains the three phases and links to each. The navbar has a **light/dark** switch (the app always opens in light mode), a **language** selector (English, French) and the **Session** toolbar (Save / Load / Clear).
+
+### Phase 1: Targeting Design
+
+A stepper across the top shows where you are: *Data loaded → Outcome → Criteria → Variable selection → Model fitted → Threshold & errors*. Click a step to jump to it. Each step ends with **Back** and **Continue** buttons. Continue stays disabled until the step is complete, and a message says what is missing.
+
+**Load the assessment data.** Use the *Load assessment data* field, or *Use the dataset currently loaded* to reuse the registration data. The **Variable calculator** builds variables the data does not carry yet (see below).
+
+1. **Outcome.** Choose the food-security outcome and the level that means *vulnerable*. CARI-type variables with two levels are proposed first.
+2. **Criteria.** Pick the candidate criteria: yes/no household characteristics. Columns that look like outcome indicators (FCS, rCSI, LCSI, CARI, HHS…) are refused, as Advisory 1/2025 requires. Columns that are not yes/no must be binarised first with the calculator.
+3. **Variable selection** (descriptive only, no model is fitted here):
+   - Tick the candidates to examine (**Use**) and click **Select ticked variables**. The page shows a compact **correlation matrix** and a **descriptive statistics** table: prevalence overall, among vulnerable and not-vulnerable households, the gap between them, missing values, and each variable's strongest correlation.
+   - Variables that duplicate a stronger one (above the |r| cut-off) are pre-ticked in the **Drop** column. Adjust as you see fit, then click **Drop ticked and continue to the model**.
+   - Optional **Quick screening** dialog: choose a significance level and a multiplicity adjustment, click **Screen**, and see which candidates are associated with the outcome, with direction. *Tick only the associated ones* applies the result to the Use column. The dialog explains how the test works.
+4. **Model & weights.** All settings are on one row:
+   - **Model**: logistic regression, stepwise logistic, weight of evidence or boosted stumps. All give a fixed number of points per criterion.
+   - **Weighting scheme**: odds ratio (APP-FA reference), log-odds, whole points out of 10, or equal weights.
+   - **Hold-out** share and **seed**, **survey weights**, and optional **benchmarks** (random forest, gradient boosting).
+
+   Click **Fit model**. The **Model estimates** table shows β, SE, the odds ratio with its 95% interval and a colour-coded p-value; points and the review flags (*Verifiable*, *Community-validated*) are editable in place. Below it:
+   - **Model comparison**: held-out AUC of the card against the benchmarks.
+   - **Each variable under every model**: a table and chart showing whether a weight is robust to the method.
+   - Charts of weight/direction, prevalence and effect by model.
+
+   **Iterate**: untick criteria in *Criteria in the model* or change any setting, then fit again. Every fit is kept in the **run history**, and **Restore** brings any run back.
+5. **Threshold & errors.** A new fit starts at the threshold that minimises the larger of the two design errors. Helpers: **Minimise errors**, **Balance (Youden)** and **Fit to caseload**. The page shows:
+   - the AUC, the eligible share, and the inclusion/exclusion error rates on a track with your **tolerance band** coloured in;
+   - the **design error matrix** and the Advisory 2/2025 **verdict**;
+   - the ROC curve, score distribution, score by vulnerability (boxplot), what drives the score, criteria met, and coverage by criterion.
+
+   Record the **rationale** for the band and the threshold (Advisory 2/2025 requires it), then click **Adopt this scorecard**.
+
+**Exports** (sidebar):
+- **Scorecard (Excel)**: a workbook that Beneficiary Selection can load back.
+- **Scorecard (JSON)**.
+- **Design report (HTML)**: a single file documenting the data, calculated variables, outcome, kept variables, model, estimates, comparison, threshold, errors and verdict, plus a **Methods** section explaining every technique used, with references.
+
+### Variable calculator
+
+Available on the Targeting Design data card and on the registration import page. It has three modes:
+
+- **Conditions (yes/no)**: combine tests (equals, is one of, at least, contains, is missing…) with AND/OR, coded 1/0 or Yes/No. Under each condition the app shows the column's **categories** (click one to use it) or its **range and quartiles**.
+- **Formula**: numeric variables such as a dependency ratio, e.g. `(n_children + n_elderly) / pmax(n_adults, 1)`. Only column names and a whitelist of arithmetic and recoding functions are accepted.
+- **Bulk binarise**: apply one rule to many similar columns at once. Pick the columns by name (*Select matching*), set the rule and a prefix (e.g. `Targ_`), and each column becomes a 0/1 variable. The preview lists every new variable with its prevalence.
+
+Every variable created on the registration data is written to the **Audit Trail**, and variables created on the assessment data appear in the design report.
+
+### Phase 2: Beneficiary Selection
+
+1. **Load registration data**: a local file (Excel, SPSS, Stata, CSV, Parquet), or pull it from **MODA, Kobo Toolbox or ODK Central**.
+2. **Variable Definition & Setup**: map your columns to the app's fields: unique ID, admin levels, GPS, household-head sex and age, household size, vulnerability score, eligibility, survey weights… The app guesses the mapping and validates it (duplicate IDs, text in numeric columns).
+3. **Overview**: KPIs (weighted and unweighted), a map (points or area summary), vulnerability tables, Lorenz/Gini, cross-tabulations and profile charts.
+4. **Data Quality**: spelling and integrity, location name normalisation, missing data, outliers (IQR, z-score, MAD; mean, median or KNN imputation), duplicates, and enumerator performance. Every correction is logged.
+5. **Spot Checking**: draw a verification sample (e.g. 10 %, OGN), export it, and compare the back-check.
+6. **Selection**:
+   - Choose the **targeting approach**: hybrid, scorecard/PMT, categorical, community-based, geographic, blanket or self-targeting.
+   - Load an **adopted scorecard**, or its Excel export. A crosswalk auto-detects the matching registration columns.
+   - Add eligibility rules, then **prioritise** (total caseload, or caseload per area, most vulnerable first).
+
+   Eligible households cut by prioritisation are reported as **excluded by design**, not as exclusion errors. The export contains the selected list, the excluded-by-design list and the full metadata.
+7. **Audit Trail**: every modification, exportable to Excel/CSV.
+
+### Phase 3: Targeting Monitoring
+
+Load the PDM extract and map the eligibility (ground truth) and beneficiary columns. Optionally also map a prioritised column, a breakdown unit and weights. Click **Compute accuracy** to get the implementation inclusion/exclusion errors, coverage, precision and recall, the confusion matrix, coverage by unit, and the Advisory 2/2025 implementation verdict.
+
+---
+
+## Data requirements
+
+| Dataset | Must contain | Notes |
+|---|---|---|
+| Assessment | A food-security outcome with two levels (or one you can recode), and yes/no candidate criteria | Other columns can be binarised with the calculator. A survey-weight column is optional. |
+| Registration | One row per household and a unique ID | Admin levels, GPS, household size, vulnerability score and weights are used when mapped. |
+| PDM | An eligibility flag and a received-assistance flag | Yes/No, 1/0, TRUE/FALSE and eligible/ineligible are all understood. |
+
+Accepted formats: `.xlsx`, `.xls`, `.sav`, `.dta`, `.csv`, `.parquet`. CSV and Parquet load fastest.
+
+---
+
+## Methods and references
+
+Each design report's **Methods** section gives these explanations for the choices actually made. In brief:
+
+| Method | Used for | Reference |
+|---|---|---|
+| Phi correlation and a findCorrelation-style drop rule | Flagging criteria that duplicate each other | Kuhn (2008), *J. Stat. Software* 28(5) (caret) |
+| Likelihood-ratio test / Fisher's exact test | Quick screening of each candidate | Agresti (2013), *Categorical Data Analysis* |
+| Benjamini–Hochberg, Holm, Bonferroni | Multiplicity adjustment | Benjamini & Hochberg (1995), *JRSS B* 57; Holm (1979) |
+| Logistic regression | Scorecard weights (APP-FA reference) | Hosmer, Lemeshow & Sturdivant (2013), *Applied Logistic Regression* |
+| Backward stepwise selection on AIC | Shorter card | Venables & Ripley (2002), *Modern Applied Statistics with S* |
+| Weight of evidence | Robust univariate weights | Siddiqi (2017), *Intelligent Credit Scoring* |
+| Boosted stumps (xgboost, depth 1) | Additive boosting-based weights | Friedman (2001), *Ann. Statist.* 29(5); Chen & Guestrin (2016), KDD |
+| Random forest, gradient boosting | Benchmarks only | Breiman (2001), *Machine Learning* 45; Chen & Guestrin (2016) |
+| Stratified hold-out, ROC and AUC | Honest accuracy | Fawcett (2006), *Pattern Recognition Letters* 27 |
+| Youden's J, minimax threshold, caseload threshold | Threshold helpers | Youden (1950), *Cancer* 3 |
+| Design and implementation errors, tolerance bands | Verdicts | WFP Targeting Advisory 2/2025; WFP Targeting OGN (2021) p. 59 |
+
+`reference/COMPLIANCE.md` maps each requirement of the WFP guidance, and of UNHCR-WFP Joint Hub and ICRC/IFRC material, to what the app does and what remains a gap.
+
+---
+
+## Configuration
+
+Set these environment variables, for example in `.Renviron` or in your hosting platform:
+
+| Variable | Effect |
+|---|---|
+| `TARGETWISE_SESSION_PASSPHRASE` | Derive the session encryption key from this passphrase, so saved sessions open on any machine that shares it. Without it, a random per-install key is used. |
+| `TARGETWISE_SESSION_DIR` | Where encrypted sessions are stored. Default: `tools::R_user_dir("TargetWise", "data")`. |
+| `TARGETWISE_REQUIRE_AUTH` | `true` on any shared deployment: the app refuses anonymous use and keeps one session store per signed-in user. |
+| `TARGETWISE_USER` | Fixed user name when the platform does not provide one (single-user installs). |
+| `TARGETWISE_UPDATE_CHECK` | `false` turns off the start-up check for a newer version (e.g. on a server whose administrator manages updates). |
+| `TARGETWISE_RELEASES_URL` | An organisation's own copy of the releases (a web address, or a `file:///` path to a shared drive), checked for updates instead of GitHub. |
+| `GITHUB_PAT` | Optional GitHub token. Not needed (the repository is public); it only raises GitHub's limit on anonymous downloads for offices sharing one connection. |
+| `TARGETWISE_AUTOSAVE_MAX_MB` | Datasets larger than this (default 200 MB) are not autosaved; use *Session › Save*. |
+
+---
+
+## Sessions, privacy and security
+
+- Data is processed **in memory** in the R session and never sent anywhere else.
+- **Sessions** hold the registration data, the variable mapping and the audit log, plus the work done in each phase: the whole Targeting Design (assessment data, calculated variables, selection, every model run, edited points, review ticks, threshold and rationale), the Beneficiary Selection settings, the spot-check sample and back-check, and the PDM analysis. They are **encrypted with libsodium** before being written to disk. They autosave once there is something worth saving, and can be restored on start-up.
+- **MODA/ONA API tokens are never saved.**
+- On shared servers, put the app behind the platform's authentication (Posit Connect, Shiny Server Pro, ShinyProxy) and set `TARGETWISE_REQUIRE_AUTH=true`.
+- Every data change (corrections, deletions, created variables) is written to the audit trail.
+
+---
+
+## Working with large data
+
+- Prefer **CSV** or **Parquet** for files over 100 MB; Excel is the slowest format to read.
+- Charts and tables show summaries; very large tables are paged.
+- Autosave skips datasets above the configured size; save explicitly from the Session menu.
+- Memory: the whole dataset is held in the R session, so plan server RAM for a few times the file size per concurrent user.
+
+---
+
+## Deployment
+
+- **Posit Connect**: the repository contains `app.R` (which calls `pkgload::load_all()` then `run_app()`) and a `manifest.json`. Regenerate it with `rsconnect::writeManifest()` after any dependency change, then deploy with `rsconnect::deployApp()`; see `dev/03_deploy.R`.
+- **Shiny Server / ShinyProxy / Docker**: install the package in the image and run `TargetWise::run_app(options = list(host = "0.0.0.0", port = 3838))`. Behind ShinyProxy, the signed-in user is read from `SHINYPROXY_USERNAME`.
+
+---
+
+## Development
+
+```r
+# in a clone of the repository
+renv::restore()
+devtools::load_all(); run_app()   # or source("dev/run_dev.R")
+devtools::test()                  # unit and app tests (testthat, shinytest2)
+devtools::check()                 # R CMD check
+```
+
+Layout: a standard **golem** package.
+
+```
+R/            modules (mod_*.R) and pure, unit-tested helpers (utils_*.R)
+inst/app/www  stylesheets (wfp-ui.css holds the design tokens), scripts, logos, translations
+inst/extdata  demo datasets
+tests/        testthat suite, including shinytest2 app tests
+reference/    WFP guidance documents and the compliance map (not in the built package)
+dev/          development and deployment scripts
+```
+
+### Publishing an update (maintainer)
+
+1. Bump `Version:` in `DESCRIPTION` (e.g. 0.1.0 → 0.2.0; use 0.1.1 for a bug fix). Users are only told about a new version when this number increases.
+2. Add a section at the top of `NEWS.md` describing the changes.
+3. Run `devtools::test()` and `devtools::check()`.
+4. Build the release on Windows, with the same R version as your users:
+
+   ```r
+   source("dev/release.R")
+   release_build()                  # add include_r = TRUE to put the R installer in the bundle
+   ```
+
+   This produces `dist/repo/`, a package repository with the source and Windows builds of this package only, and `dist/TargetWise_<version>_offline_windows_R<x.y>.zip`, the offline installer with every dependency (about 270 MB). The script stops if any dependency fails to download.
+5. Push to `main` and create a GitHub release tagged `v0.2.0` with the `NEWS.md` section as description. The in-app notice reads the version from `DESCRIPTION` on GitHub, so users see it from their next start.
+6. Share the offline zip with offline users (attach it to the GitHub release as well).
+7. Optional: an organisation that cannot reach GitHub can host `dist/repo/` on its own server or shared drive and point the app at it with `TARGETWISE_RELEASES_URL`; users then install with `install.packages("TargetWise", repos = c("<that address>", "https://cloud.r-project.org"))`.
+
+`AGENTS.md` documents the architecture and conventions in detail. Report issues or suggest changes at <https://github.com/bbbagoa/TargetWise/issues>; pull requests are welcome.
+
+---
+
+## Citation, author and contact
+
+**Author and maintainer:** Brice Baem BAGOA, Vulnerability Analysis and Mapping, World Food Programme.
+**Email:** [brice.bagoa@outlook.com](mailto:brice.bagoa@outlook.com)
+**GitHub:** <https://github.com/bbbagoa/TargetWise>
+
+To cite:
+
+> BAGOA, B. B. (2026). *TargetWise: a workflow for humanitarian targeting design, selection and monitoring* (Version 0.1.0) [R package]. https://github.com/bbbagoa/TargetWise
+
+In R: `citation("TargetWise")`.
+
+---
+
+## Licence
+
+GPL (≥ 3). See [LICENSE](LICENSE).

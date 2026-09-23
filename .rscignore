@@ -1,0 +1,10 @@
+.Renviron
+.gitattributes
+.here
+.zcode
+dev/.posit
+node_modules
+package.json
+package-lock.json
+AGENTS.md
+tests

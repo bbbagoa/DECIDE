@@ -1,0 +1,2333 @@
+/* ==========================================================================
+   TargetWise — soft-modern UI refresh
+   --------------------------------------------------------------------------
+   A single, token-driven stylesheet. Light is the default; dark mode is
+   activated by [data-bs-theme="dark"] (set by bslib's dark-mode toggle, wired
+   in app_server.R to swap a WFP-dark bslib theme).
+
+   Every color/radius/shadow below is a CSS variable so the whole app flips
+   consistently between light and dark. Chart colors in the R code should use
+   these tokens (via thematic) rather than hardcoded hexes.
+   ========================================================================== */
+
+/* App-wide font: Commissioner, bundled in www/fonts (SIL Open Font License,
+   see fonts/OFL.txt) so the app renders identically offline. One variable
+   font file per script covers every weight from 300 to 800. */
+@font-face {
+  font-family: "Commissioner"; font-style: normal; font-weight: 300 800; font-display: swap;
+  src: url("fonts/commissioner-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Commissioner"; font-style: normal; font-weight: 300 800; font-display: swap;
+  src: url("fonts/commissioner-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+/* --------------------------------------------------------------------------
+   1. Design tokens — light (default)
+   -------------------------------------------------------------------------- */
+:root {
+  /* WFP brand */
+  --wfp-blue: #0A6EB4;
+  --wfp-blue-600: #085a93;
+  --wfp-blue-700: #064a78;
+  --wfp-amber: #f7b825;
+
+  /* Radii & shape — restrained: 12px surfaces, 8px controls */
+  --card-radius: 12px;
+  --card-radius-sm: 10px;
+  --control-radius: 8px;
+  --pill-radius: 999px;
+  --card-padding: 1rem;
+
+  /* Hairline-first depth: borders do most of the work, shadows stay faint */
+  --shadow-soft: 0 1px 2px rgba(15, 40, 70, 0.04), 0 2px 8px rgba(15, 40, 70, 0.04);
+  --shadow-soft-lg: 0 2px 6px rgba(15, 40, 70, 0.05), 0 12px 28px rgba(15, 40, 70, 0.10);
+
+  /* Surfaces & borders */
+  --surface: #ffffff;
+  --surface-2: #f5f8fc;       /* app background, sidebars */
+  --surface-3: #eef3f9;       /* subtle fills, table headers */
+  --border: rgba(10, 110, 180, 0.12);
+  --border-strong: rgba(10, 110, 180, 0.22);
+  --body-text: #1f2a37;
+  --text-muted: #5b6b7e;
+
+  /* Semantic accent tints (soft value-box backgrounds) */
+  --accent-primary: #0A6EB4;  --accent-primary-bg: rgba(10, 110, 180, 0.10);
+  --accent-info:     #26bde2; --accent-info-bg:     rgba(38, 189, 226, 0.12);
+  --accent-success:  #3f7e44; --accent-success-bg:  rgba(63, 126, 68, 0.12);
+  --accent-warning:  #f7b825; --accent-warning-bg:  rgba(247, 184, 37, 0.16);
+  --accent-danger:   #c5192d; --accent-danger-bg:   rgba(197, 25, 45, 0.12);
+  --accent-secondary:#6c757d; --accent-secondary-bg:rgba(108, 117, 125, 0.12);
+  --accent-dark:     #2c3a4b; --accent-dark-bg:     rgba(44, 58, 75, 0.10);
+
+  --transition: 180ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* --------------------------------------------------------------------------
+   2. Design tokens — dark
+   -------------------------------------------------------------------------- */
+[data-bs-theme="dark"] {
+  --wfp-blue: #2f9fe0;        /* brighter blue for dark contrast */
+  --wfp-blue-600: #0A6EB4;
+  --wfp-blue-700: #085a93;
+  --wfp-amber: #f7b825;
+
+  --surface: #121826;
+  --surface-2: #0e1422;
+  --surface-3: #1b2333;
+  --border: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.16);
+  --body-text: #e6ebf2;
+  --text-muted: #94a3b8;
+
+  --shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.30), 0 2px 10px rgba(0, 0, 0, 0.25);
+  --shadow-soft-lg: 0 2px 6px rgba(0, 0, 0, 0.35), 0 14px 30px rgba(0, 0, 0, 0.45);
+
+  --accent-primary: #2f9fe0;  --accent-primary-bg: rgba(47, 159, 224, 0.16);
+  --accent-info:     #4dd0f5; --accent-info-bg:     rgba(77, 208, 245, 0.16);
+  --accent-success:  #5bb46a; --accent-success-bg:  rgba(91, 180, 106, 0.18);
+  --accent-warning:  #f7b825; --accent-warning-bg:  rgba(247, 184, 37, 0.20);
+  --accent-danger:   #ef5260; --accent-danger-bg:   rgba(239, 82, 96, 0.18);
+  --accent-secondary:#9aa6b5; --accent-secondary-bg:rgba(154, 166, 181, 0.16);
+  --accent-dark:     #cbd6e3; --accent-dark-bg:     rgba(203, 214, 227, 0.12);
+}
+
+/* ==========================================================================
+   3. Base / body
+   ========================================================================== */
+/* !important on the surfaces: after any session$setCurrentTheme() restyle,
+   bslib re-inserts the compiled Bootstrap CSS *after* this file, so without it
+   the theme's body/card colors (e.g. darkly's #222) would win over the tokens. */
+body {
+  background-color: var(--surface-2) !important;
+  color: var(--body-text);
+  font-family: "Commissioner", "Segoe UI", system-ui, sans-serif !important;
+}
+/* Force the app font on every surface (bslib/Bootswatch presets ship their own
+   font stacks; this guarantees Commissioner wins everywhere). */
+input, button, select, textarea, .form-control, .form-select,
+.navbar, .card, .modal-content, .bslib-value-box,
+.table, table.dataTable, .shiny-notification {
+  font-family: "Commissioner", "Segoe UI", system-ui, sans-serif !important;
+}
+/* Also expose the font on the Bootstrap font variable for components that read it */
+:root { --bs-body-font-family: "Commissioner", "Segoe UI", system-ui, sans-serif; }
+[data-bs-theme="dark"] { --bs-body-font-family: "Commissioner", "Segoe UI", system-ui, sans-serif; }
+
+/* Generic link focus ring (accessibility, brand-tinted) */
+a:focus-visible,
+.btn:focus-visible,
+.form-control:focus-visible,
+.form-select:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-primary-bg) !important;
+}
+
+/* ==========================================================================
+   4. Cards — soft rounded, subtle border, soft shadow
+   ========================================================================== */
+.bslib-card,
+.card {
+  background-color: var(--surface) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--card-radius) !important;
+  box-shadow: var(--shadow-soft);
+}
+
+/* Graph cards (any card hosting a plotly or leaflet widget): invisible border,
+   no rounding — the chart fills the card edge-to-edge. */
+.bslib-card:has(.js-plotly-plot),
+.bslib-card:has(.leaflet),
+.card:has(.js-plotly-plot),
+.card:has(.leaflet) {
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+/* Remove the header radius/separator on borderless graph cards too */
+.bslib-card:has(.js-plotly-plot) .card-header,
+.card:has(.js-plotly-plot) .card-header {
+  border-radius: 0 !important;
+  background-color: transparent !important;
+  border-bottom: none !important;
+  padding-left: 0.25rem;
+}
+
+/* Card headers: quiet section labels, not colored bars. Same surface as the
+   card, a hairline divider, small uppercase title in muted ink. Any bg-* /
+   text-white classes left in the R code are neutralised here so no card gets
+   a filled header. */
+.bslib-card .card-header,
+.card-header,
+.card-header[class*="bg-"],
+.card-header.text-white {
+  background-color: transparent !important;
+  border-bottom: 1px solid var(--border) !important;
+  border-radius: var(--card-radius) var(--card-radius) 0 0 !important;
+  font-weight: 600;
+  font-size: 0.76rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted) !important;
+  padding: 0.7rem 1rem;
+}
+/* Leading icon in a header picks up the brand accent */
+.card-header > svg.bi,
+.card-header > .bi {
+  color: var(--wfp-blue);
+  width: 0.95rem; height: 0.95rem;
+  vertical-align: -0.15em;
+  margin-right: 0.35rem;
+}
+/* Controls embedded in a header keep their own casing and size */
+.card-header .btn,
+.card-header .form-control,
+.card-header .form-select,
+.card-header .dropdown-toggle {
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.bslib-card .card-body,
+.card-body { padding: var(--card-padding); }
+
+/* ==========================================================================
+   5. Value boxes — neutral surface, accent confined to an icon chip
+   ========================================================================== */
+.bslib-value-box,
+.bslib-value-box[class*="bg-"] {
+  border: 1px solid var(--border) !important;
+  border-radius: var(--card-radius-sm) !important;
+  box-shadow: var(--shadow-soft);
+  background: var(--surface) !important;
+  color: var(--body-text) !important;
+  /* Extra-short KPI cards: minimal vertical padding keeps the height low while
+     the text sizes below stay clearly legible. */
+  padding: 0.35rem 0.85rem !important;
+  min-height: 0 !important;
+  overflow: hidden;
+}
+/* Clear, readable title + value — the card's shortness comes from padding, not
+   from shrinking the text. */
+.bslib-value-box .value-box-title {
+  font-size: 0.78rem !important;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  font-weight: 600;
+  margin-bottom: 0.15rem !important;
+  line-height: 1.1;
+}
+.bslib-value-box .value-box-value {
+  font-size: 1.7rem !important;
+  font-weight: 700;
+  line-height: 1.05;
+  color: var(--body-text);
+  margin-top: 0 !important;
+}
+/* A widget used as showcase (e.g. the sync-rate sparkline) must not dictate
+   the height of the whole KPI row. */
+.bslib-value-box .value-box-showcase .html-widget,
+.bslib-value-box .value-box-showcase .js-plotly-plot,
+.bslib-value-box .value-box-showcase .plotly {
+  max-height: 64px !important;
+  min-height: 0 !important;
+}
+.bslib-value-box .value-box-title { color: var(--text-muted) !important; }
+.bslib-value-box .value-box-value { color: var(--body-text) !important; }
+.bslib-value-box .value-box-grid {
+  gap: 0.75rem !important;
+  align-items: center !important;
+}
+
+/* Icon chip: a small tinted square holds the showcase icon. bslib renders
+   `value_box(theme = "primary")` as class="bslib-value-box bg-primary", so the
+   tint is keyed on the .bg-* class. Showcases that hold a widget (e.g. the
+   sparkline) are left untouched via :has(). */
+.bslib-value-box .value-box-showcase:has(> svg.bi) {
+  width: 2.5rem; height: 2.5rem;
+  border-radius: var(--control-radius);
+  background: var(--accent-primary-bg);
+  display: flex; align-items: center; justify-content: center;
+  flex: 0 0 auto;
+}
+.bslib-value-box .value-box-showcase > svg.bi {
+  width: 1.15rem !important; height: 1.15rem !important;
+  font-size: 1.15rem !important;
+  color: var(--accent-primary) !important;
+}
+.bslib-value-box.bg-info      .value-box-showcase:has(> svg.bi) { background: var(--accent-info-bg); }
+.bslib-value-box.bg-success   .value-box-showcase:has(> svg.bi) { background: var(--accent-success-bg); }
+.bslib-value-box.bg-warning   .value-box-showcase:has(> svg.bi) { background: var(--accent-warning-bg); }
+.bslib-value-box.bg-danger    .value-box-showcase:has(> svg.bi) { background: var(--accent-danger-bg); }
+.bslib-value-box.bg-secondary .value-box-showcase:has(> svg.bi) { background: var(--accent-secondary-bg); }
+.bslib-value-box.bg-dark      .value-box-showcase:has(> svg.bi) { background: var(--accent-dark-bg); }
+.bslib-value-box.bg-info      .value-box-showcase > svg.bi { color: var(--accent-info)      !important; }
+.bslib-value-box.bg-success   .value-box-showcase > svg.bi { color: var(--accent-success)   !important; }
+.bslib-value-box.bg-warning   .value-box-showcase > svg.bi { color: #b8860b                  !important; }
+.bslib-value-box.bg-danger    .value-box-showcase > svg.bi { color: var(--accent-danger)    !important; }
+.bslib-value-box.bg-secondary .value-box-showcase > svg.bi { color: var(--accent-secondary) !important; }
+.bslib-value-box.bg-dark      .value-box-showcase > svg.bi { color: var(--accent-dark)      !important; }
+
+/* ==========================================================================
+   6. Buttons — softer radius, lighter, refined hover
+   ========================================================================== */
+.btn {
+  border-radius: var(--control-radius);
+  font-size: 0.82rem;
+  font-weight: 500;
+  padding: 0.36rem 0.75rem;
+  transition: background-color var(--transition), border-color var(--transition),
+              box-shadow var(--transition), color var(--transition);
+}
+.btn-sm { padding: 0.24rem 0.5rem; font-size: 0.78rem; }
+.btn .fa, .btn .bi { margin-right: 0.25rem; }
+
+/* Neutral secondary buttons: Shiny's fileInput "Browse" control and any
+   btn-default (modalButton, plain actionButton) that carries no Bootstrap
+   variant class. Buttons that *do* carry btn-primary/-success/... keep them. */
+.btn-file,
+.btn.btn-default:not([class*="btn-primary"]):not([class*="btn-secondary"]):not([class*="btn-success"]):not([class*="btn-info"]):not([class*="btn-warning"]):not([class*="btn-danger"]):not([class*="btn-dark"]):not([class*="btn-light"]):not([class*="btn-outline"]):not([class*="btn-link"]) {
+  background-color: var(--surface);
+  border: 1px solid var(--border-strong);
+  color: var(--body-text);
+}
+.btn-file:hover,
+.btn.btn-default:not([class*="btn-primary"]):not([class*="btn-secondary"]):not([class*="btn-success"]):not([class*="btn-info"]):not([class*="btn-warning"]):not([class*="btn-danger"]):not([class*="btn-dark"]):not([class*="btn-light"]):not([class*="btn-outline"]):not([class*="btn-link"]):hover {
+  background-color: var(--accent-primary-bg);
+  border-color: var(--wfp-blue);
+  color: var(--wfp-blue);
+}
+
+.btn-primary {
+  background-color: var(--wfp-blue);
+  border-color: var(--wfp-blue);
+}
+.btn-primary:hover, .btn-primary:focus {
+  background-color: var(--wfp-blue-600);
+  border-color: var(--wfp-blue-600);
+}
+/* Neutral outline for secondary actions (the theme's "secondary" is WFP amber,
+   which is too loud for export / deselect buttons). */
+.btn-outline-secondary {
+  color: var(--text-muted) !important;
+  border-color: var(--border-strong) !important;
+  background-color: transparent !important;
+}
+.btn-outline-secondary:hover, .btn-outline-secondary:focus {
+  color: var(--wfp-blue) !important;
+  border-color: var(--wfp-blue) !important;
+  background-color: var(--accent-primary-bg) !important;
+}
+.btn-success { background-color: var(--accent-success); border-color: var(--accent-success); }
+.btn-info    { background-color: var(--accent-info);    border-color: var(--accent-info); color: #033a47; }
+.btn-warning { background-color: var(--accent-warning); border-color: var(--accent-warning); color: #3a2c00; }
+.btn-danger  { background-color: var(--accent-danger);  border-color: var(--accent-danger); }
+
+/* ==========================================================================
+   7. Sidebar (bslib) — soft surface, subtle border
+   ========================================================================== */
+.bslib-sidebar,
+.bslib-sidebar-layout > .sidebar {
+  background-color: var(--surface) !important;
+  border-right: 1px solid var(--border) !important;
+}
+
+/* Inline label + control flex-row (migrated from app_ui.R inline <style>) */
+.bslib-sidebar .form-group,
+.bslib-sidebar .shiny-input-container {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.7rem;
+}
+.bslib-sidebar .form-group > label,
+.bslib-sidebar .shiny-input-container > label {
+  margin-bottom: 0;
+  font-weight: 500;
+  font-size: 0.82rem;
+  flex: 0 0 auto;
+  max-width: 40%;
+  color: var(--text-muted);
+}
+.bslib-sidebar .form-group > .bootstrap-select,
+.bslib-sidebar .form-group > .selectize-control,
+.bslib-sidebar .form-group > .irs,
+.bslib-sidebar .form-group > input,
+.bslib-sidebar .form-group > select,
+.bslib-sidebar .shiny-input-container > .bootstrap-select,
+.bslib-sidebar .shiny-input-container > .selectize-control,
+.bslib-sidebar .shiny-input-container > .irs,
+.bslib-sidebar .shiny-input-container > input,
+.bslib-sidebar .shiny-input-container > select {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: auto !important;
+}
+.bslib-sidebar .form-group > .bootstrap-select > .dropdown-toggle,
+.bslib-sidebar .shiny-input-container > .bootstrap-select > .dropdown-toggle {
+  padding: 0.35rem 0.65rem;
+  font-size: 0.82rem;
+}
+
+/* Form controls & selects pick up the soft border */
+.form-control, .form-select, .selectize-input, .irs {
+  border-color: var(--border-strong) !important;
+  background-color: var(--surface) !important;
+  color: var(--body-text) !important;
+}
+
+/* ==========================================================================
+   8. Navbar — stays WFP blue; softened + dark-aware
+   ========================================================================== */
+.navbar {
+  min-height: 48px !important;
+  background-color: var(--wfp-blue-600) !important; /* slightly deeper, refined */
+  box-shadow: 0 2px 10px rgba(10, 110, 180, 0.18);
+}
+.navbar-brand,
+.navbar-nav .nav-link,
+.navbar-nav .nav-link.active,
+.navbar-nav .nav-link:hover,
+.navbar-nav .nav-link:focus {
+  color: #ffffff !important;
+  font-size: 14px !important;
+  padding: 8px 12px !important;
+}
+.navbar-brand { font-size: 16px !important; font-weight: 600; }
+.navbar-brand img { height: 30px !important; margin-top: 0 !important; }
+/* Refined active underline */
+.navbar-nav .nav-link.active { box-shadow: inset 0 -2px 0 rgba(255,255,255,0.7); }
+
+/* Keep the whole bar on one line: tabs on the left, tools on the right */
+.navbar .navbar-nav { flex-wrap: nowrap; align-items: center; }
+.navbar .navbar-nav > .nav-item { white-space: nowrap; }
+
+/* Theme selector in the navbar — label is dropped (the select is self-explanatory) */
+.mini-theme-selector { display: flex; align-items: center; gap: 8px; color: #fff; }
+.mini-theme-selector .form-group,
+.mini-theme-selector .shiny-input-container { margin-bottom: 0 !important; }
+.mini-theme-selector > span { display: none; }
+.mini-theme-selector select {
+  background-color: rgba(255, 255, 255, 0.12) !important; color: #fff !important;
+  border: 1px solid rgba(255, 255, 255, 0.30) !important; border-radius: var(--control-radius) !important;
+  font-size: 12.5px !important; font-weight: 500; height: 30px !important;
+  padding: 0 8px !important; width: 128px !important; cursor: pointer;
+}
+
+/* Session toolbar: quiet, uniform controls on the blue bar instead of
+   green / cyan / amber fills competing with the content. */
+.session-toolbar > span { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; opacity: 0.85; }
+.session-toolbar .btn,
+.session-toolbar .btn[class*="btn-"] {
+  background-color: rgba(255, 255, 255, 0.12) !important;
+  border: 1px solid rgba(255, 255, 255, 0.30) !important;
+  color: #fff !important;
+  box-shadow: none !important;
+}
+.session-toolbar .btn:hover { background-color: rgba(255, 255, 255, 0.22) !important; }
+.session-toolbar .btn-group > .btn:not(:first-child) { margin-left: -1px; }
+.mini-theme-selector select:focus {
+  outline: none !important;
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.25) !important;
+  border-color: rgba(255, 255, 255, 0.8) !important;
+}
+.mini-theme-selector select option { background-color: var(--wfp-blue-600); color: #fff; }
+
+/* ==========================================================================
+   9. DataTables — soft, consistent, theme-aware
+   ========================================================================== */
+.dataTables_wrapper,
+table.dataTable,
+.table {
+  color: var(--body-text);
+  font-size: 0.85rem;
+}
+table.dataTable thead th {
+  background-color: var(--surface-3) !important;
+  border-bottom: 1px solid var(--border) !important;
+  color: var(--text-muted);
+  font-weight: 600;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+table.dataTable tbody tr { background-color: transparent !important; }
+table.dataTable tbody tr:hover { background-color: var(--accent-primary-bg) !important; }
+table.dataTable td { border-color: var(--border) !important; }
+
+/* Soften the DT search/control row */
+.dataTables_wrapper .dataTables_filter input,
+.dataTables_wrapper .dataTables_length select {
+  border-color: var(--border-strong) !important;
+  background-color: var(--surface) !important;
+  color: var(--body-text) !important;
+  border-radius: 8px;
+}
+/* Paginate as soft pills */
+.dataTables_wrapper .dataTables_paginate .paginate_button {
+  border-radius: 8px !important;
+  margin: 0 2px !important;
+}
+.dataTables_wrapper .dataTables_paginate .paginate_button.current,
+.dataTables_wrapper .dataTables_paginate .paginate_button.current:hover {
+  background: var(--wfp-blue) !important;
+  border-color: var(--wfp-blue) !important;
+  color: #fff !important;
+}
+/* Under Bootstrap 5 DT renders the pager as .page-item/.page-link instead of
+   .paginate_button, and the Bootswatch dark preset colours those green. Pin
+   them to tokens so the pager matches the app in both themes. */
+.dataTables_wrapper .pagination .page-link,
+.dataTables_wrapper .page-link {
+  background-color: transparent !important;
+  border-color: var(--border) !important;
+  color: var(--body-text) !important;
+  border-radius: 8px !important;
+  margin: 0 2px !important;
+}
+.dataTables_wrapper .pagination .page-link:hover {
+  background-color: var(--accent-primary-bg) !important;
+  color: var(--wfp-blue) !important;
+}
+.dataTables_wrapper .pagination .page-item.active .page-link {
+  background-color: var(--wfp-blue) !important;
+  border-color: var(--wfp-blue) !important;
+  color: #fff !important;
+}
+.dataTables_wrapper .pagination .page-item.disabled .page-link {
+  color: var(--text-muted) !important;
+  opacity: 0.65;
+}
+
+/* --- Premium table rendering -------------------------------------------
+   Hairline row rules instead of a full grid, roomier cells, an opaque sticky
+   header so column labels survive scrolling, and tabular numerals so figures
+   line up digit-for-digit down a column. */
+table.dataTable {
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+  width: 100% !important;
+}
+table.dataTable thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: 0.6rem 0.75rem !important;
+  white-space: nowrap;
+}
+table.dataTable tbody td {
+  padding: 0.5rem 0.75rem !important;
+  border-top: 1px solid var(--border) !important;
+  border-bottom: 0 !important;
+  vertical-align: middle;
+  font-variant-numeric: tabular-nums;
+}
+table.dataTable tbody tr:first-child > td { border-top: 0 !important; }
+/* Zebra goes on the cell, not the row: the row background is pinned
+   transparent above, so striping it there would never show. */
+table.dataTable tbody tr:nth-child(even) > td {
+  background-color: rgba(128, 128, 128, 0.035);
+}
+table.dataTable tbody tr:hover > td { background-color: transparent; }
+/* DT's own sort arrows are heavy; quieten them */
+table.dataTable thead th.sorting:before,
+table.dataTable thead th.sorting:after,
+table.dataTable thead th.sorting_asc:before,
+table.dataTable thead th.sorting_asc:after,
+table.dataTable thead th.sorting_desc:before,
+table.dataTable thead th.sorting_desc:after { opacity: 0.35 !important; }
+
+/* --- Tighter control rows: DT ships generous Bootstrap gutters that leave a
+   band of dead space above and below every table. --- */
+.dataTables_wrapper { margin-bottom: 0 !important; }
+.dataTables_wrapper .dataTables_length,
+.dataTables_wrapper .dataTables_filter { margin-bottom: 0.5rem !important; }
+.dataTables_wrapper .dataTables_info,
+.dataTables_wrapper .dataTables_paginate {
+  padding-top: 0.5rem !important;
+  margin-top: 0 !important;
+}
+.dataTables_wrapper .row { margin-left: 0 !important; margin-right: 0 !important; }
+.dataTables_wrapper .row > div { padding-left: 0 !important; padding-right: 0 !important; }
+
+/* --- Table loading: a shimmer sweep across the table's own shape, rather than
+   the generic ring. The table keeps its footprint while refreshing, which
+   reads as deliberate instead of broken. --- */
+.datatables.recalculating { opacity: 1 !important; }
+.datatables.recalculating::after { display: none !important; }
+.datatables.recalculating .dataTables_wrapper { opacity: 0.3; transition: opacity 200ms ease; }
+.datatables.recalculating::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+  border-radius: var(--card-radius-sm);
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--accent-primary-bg) 45%,
+    var(--accent-primary-bg) 55%,
+    transparent 100%
+  );
+  background-size: 220% 100%;
+  animation: wfp-shimmer 1.15s ease-in-out infinite;
+}
+@keyframes wfp-shimmer {
+  0%   { background-position: 220% 0; }
+  100% { background-position: -220% 0; }
+}
+
+/* ==========================================================================
+   10. Modals — soft rounded, refined header
+   ========================================================================== */
+.modal-content {
+  border: 1px solid var(--border) !important;
+  border-radius: var(--card-radius) !important;
+  box-shadow: var(--shadow-soft-lg) !important;
+  background-color: var(--surface) !important;
+  color: var(--body-text);
+}
+.modal-header {
+  border-bottom: 1px solid var(--border) !important;
+  border-radius: var(--card-radius) var(--card-radius) 0 0 !important;
+}
+.modal-header .modal-title { font-weight: 600; }
+.modal-footer {
+  border-top: 1px solid var(--border) !important;
+  border-radius: 0 0 var(--card-radius) var(--card-radius) !important;
+  gap: 0.5rem;
+}
+.modal-backdrop.show { opacity: 0.45; }
+
+/* ==========================================================================
+   11. Notifications: compact neutral toasts, a small dot gives the type
+   ========================================================================== */
+.shiny-notification {
+  --dot: #9aa5b1;
+  display: flex; align-items: flex-start; gap: 10px;
+  background: #1f2a37 !important; color: #eef2f7 !important;
+  border: 0 !important; border-radius: 8px !important;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, .16) !important;
+  backdrop-filter: none; opacity: 1 !important;
+  padding: 10px 34px 10px 14px !important; margin-bottom: 8px;
+  font-size: 13.5px; line-height: 1.45; min-width: 0;
+}
+.shiny-notification::before {
+  content: ""; flex: 0 0 8px; height: 8px; margin-top: 6px; border-radius: 50%; background: var(--dot);
+}
+.shiny-notification-message { --dot: #5cb870; }
+.shiny-notification-warning { --dot: #f7b825; }
+.shiny-notification-error   { --dot: #ff6b78; }
+.shiny-notification-content { flex: 1 1 auto; min-width: 0; }
+.shiny-notification-close { color: rgba(238, 242, 247, .55) !important; top: 7px !important; right: 10px !important;
+  font-weight: 400 !important; font-size: 16px; }
+.shiny-notification-close:hover { color: #fff !important; }
+[data-bs-theme="dark"] .shiny-notification { background: #2a3446 !important; box-shadow: 0 0 0 1px rgba(255,255,255,.06), 0 6px 18px rgba(0,0,0,.35) !important; }
+
+/* ==========================================================================
+   12. Loader & waiter overlay
+   --------------------------------------------------------------------------
+   Dual-ring spinner. Used everywhere via waiter_content() -> <div class="loader">.
+   Overrides the legacy loader in custom.css (this file loads later). Themed in
+   WFP colors: ring 1 white, ring 2 WFP amber.
+   ========================================================================== */
+.loader {
+  --color-1: #ffffff;
+  --color-2: var(--wfp-amber);   /* #f7b825 */
+  --size: 1px;
+  width: calc(48 * var(--size));
+  height: calc(48 * var(--size));
+  border-radius: 50%;
+  display: inline-block;
+  position: relative;            /* anchor for ::after */
+  border-top: calc(4 * var(--size)) solid var(--color-1);
+  border-right: calc(4 * var(--size)) solid transparent;
+  box-sizing: border-box;
+  animation: wfp-loader-rotation 1s linear infinite;
+}
+.loader::after {
+  content: '';
+  box-sizing: border-box;
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: calc(48 * var(--size));
+  height: calc(48 * var(--size));
+  border-radius: 50%;
+  border-bottom: calc(4 * var(--size)) solid var(--color-2);
+  border-left: calc(4 * var(--size)) solid transparent;
+}
+@keyframes wfp-loader-rotation {
+  0%   { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Per-output loading state. Shiny toggles `.recalculating` on an output while
+   its value is being computed (including the first render); the content fades
+   and a small ring spinner sits over it. Replaces the old whole-page overlay,
+   which blacked out the app on every filter change. */
+.recalculating {
+  opacity: 0.35 !important;
+  transition: opacity 200ms ease;
+  position: relative;
+}
+.html-widget.recalculating::after,
+.datatables.recalculating::after,
+.shiny-plot-output.recalculating::after,
+.shiny-html-output.recalculating:not(:empty)::after {
+  content: "";
+  position: absolute;
+  top: 50%; left: 50%;
+  width: 28px; height: 28px;
+  margin: -14px 0 0 -14px;
+  border-radius: 50%;
+  border: 3px solid var(--border-strong);
+  border-top-color: var(--wfp-blue);
+  animation: wfp-loader-rotation 0.8s linear infinite;
+  z-index: 5;
+}
+/* Small text outputs (KPI values) just fade — no ring */
+.shiny-text-output.recalculating { opacity: 0.5 !important; }
+
+/* Empty-state hint used before an analysis has been run */
+.wfp-empty-state {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 0.5rem; min-height: 180px; padding: 1.5rem;
+  color: var(--text-muted); text-align: center;
+  border: 1px dashed var(--border-strong); border-radius: var(--card-radius-sm);
+  background: var(--surface-2);
+}
+.wfp-empty-state svg.bi { width: 1.6rem; height: 1.6rem; color: var(--wfp-blue); opacity: 0.8; }
+.wfp-empty-state .fw-semibold { color: var(--body-text); }
+
+/* Inline stat strip — a couple of headline numbers above a chart, for figures
+   that would otherwise have to be annotated inside the plot area (where they
+   collide with axes). Quiet by design: the chart stays the focus. */
+.wfp-stat-strip {
+  display: flex; flex-wrap: wrap; gap: 1.75rem;
+  padding: 0 var(--card-padding) 0.5rem;
+}
+.wfp-stat-strip > div { display: flex; flex-direction: column; line-height: 1.15; }
+.wfp-stat-value {
+  font-size: 1.5rem; font-weight: 700; color: var(--body-text);
+  font-variant-numeric: tabular-nums;
+}
+.wfp-stat-label {
+  font-size: 0.72rem; font-weight: 600; letter-spacing: 0.04em;
+  text-transform: uppercase; color: var(--text-muted);
+}
+
+/* Per-row Details button inside a record listing: small and quiet, so a column
+   of them reads as one control rather than a wall of buttons. */
+.wfp-details-btn {
+  --bs-btn-padding-y: 0.1rem;
+  --bs-btn-padding-x: 0.55rem;
+  --bs-btn-font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+/* Record detail modal: a responsive label/value grid rather than a long
+   single-column list, so a 200-field household stays scannable. */
+.wfp-record-detail {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 0.15rem 1.25rem;
+}
+.wfp-record-field {
+  padding: 0.4rem 0;
+  border-bottom: 1px solid var(--border);
+  min-width: 0;
+}
+.wfp-record-label {
+  font-size: 0.68rem; font-weight: 600; letter-spacing: 0.04em;
+  text-transform: uppercase; color: var(--text-muted);
+}
+.wfp-record-value { color: var(--body-text); word-break: break-word; }
+.wfp-record-detail + details > summary { cursor: pointer; }
+
+#waiter-screen,
+.waiter-overlay {
+  background: rgba(10, 30, 50, 0.55) !important;
+  backdrop-filter: blur(6px) !important;
+  -webkit-backdrop-filter: blur(6px) !important;
+}
+.waiter-loader {
+  display: flex !important; justify-content: center !important; align-items: center !important;
+}
+
+/* ==========================================================================
+   13. Layout gaps — tighter, more consistent rhythm (compact)
+   ========================================================================== */
+.bslib-layout-columns > * { margin-bottom: 0.85rem; }
+
+/* Navset tabs (DQ sub-tabs) — soft pill-style tabs */
+.nav.nav-tabs .nav-link {
+  color: var(--text-muted);
+  border-radius: 10px 10px 0 0;
+  border-color: transparent !important;
+  font-weight: 500;
+  padding: 0.4rem 0.8rem !important;
+}
+.nav.nav-tabs .nav-link.active {
+  color: var(--wfp-blue);
+  background-color: var(--surface);
+  border: 1px solid var(--border) !important;
+  border-bottom-color: var(--surface) !important;
+  font-weight: 600;
+}
+.navset-card-tab .nav-link.active { border-bottom-color: var(--surface) !important; }
+
+/* radioGroupButtons (map mode, profile view) — softer */
+.btn-group-toggle .btn { border-radius: 8px !important; }
+
+/* Scrollbars — brand-tinted */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: var(--wfp-blue); }
+
+/* Map "Color by" picker sits inline in the card header; kill the default
+   form-group bottom margin so it lines up with the mode toggle. */
+.wfp-map-var .form-group,
+.wfp-map-var .shiny-input-container { margin-bottom: 0; }
+.wfp-map-var select { font-size: 0.85rem; padding-block: 0.25rem; }
+
+/* fileInput inside a button row: strip the block layout so Import sits on the
+   same baseline as the neighbouring buttons. */
+.wfp-inline-file .form-group,
+.wfp-inline-file .shiny-input-container { margin-bottom: 0; }
+.wfp-inline-file .input-group { flex-wrap: nowrap; }
+.wfp-inline-file .form-control,
+.wfp-inline-file .input-group-text,
+.wfp-inline-file .btn { font-size: 0.8rem; padding-block: 0.25rem; }
+.wfp-inline-file .progress { display: none; }
+
+/* ===========================================================================
+   PREMIUM PASS
+   ---------------------------------------------------------------------------
+   A finishing layer over the tokens above. Everything here is presentation
+   only: no component is restructured, so it lifts every page at once instead
+   of touching a dozen module files. Dark mode is handled alongside each rule
+   rather than in a separate block, so the two cannot drift apart.
+   ======================================================================== */
+
+:root {
+  /* Depth. Three steps, each a close pair (contact shadow + ambient) so
+     surfaces read as lifted rather than outlined. */
+  --elev-1: 0 1px 2px rgba(15, 40, 70, .05), 0 1px 3px rgba(15, 40, 70, .04);
+  --elev-2: 0 2px 4px rgba(15, 40, 70, .05), 0 8px 20px rgba(15, 40, 70, .07);
+  --elev-3: 0 4px 8px rgba(15, 40, 70, .06), 0 20px 44px rgba(15, 40, 70, .12);
+
+  --ring: 0 0 0 3px rgba(10, 110, 180, .18);
+  --hairline: rgba(10, 110, 180, .10);
+
+  /* One brand gradient, reused by the hero and the navbar. */
+  --grad-brand: linear-gradient(135deg, #0A6EB4 0%, #0d5c95 45%, #07456f 100%);
+}
+
+[data-bs-theme="dark"] {
+  --elev-1: 0 1px 2px rgba(0, 0, 0, .40), 0 1px 3px rgba(0, 0, 0, .30);
+  --elev-2: 0 2px 4px rgba(0, 0, 0, .40), 0 8px 20px rgba(0, 0, 0, .45);
+  --elev-3: 0 4px 8px rgba(0, 0, 0, .45), 0 20px 44px rgba(0, 0, 0, .55);
+  --ring: 0 0 0 3px rgba(38, 189, 226, .25);
+  --hairline: rgba(255, 255, 255, .08);
+  --grad-brand: linear-gradient(135deg, #0b3f66 0%, #0a3457 45%, #072336 100%);
+}
+
+/* --- Typography ---------------------------------------------------------- */
+
+h1, .h1 { font-weight: 700; letter-spacing: -.022em; line-height: 1.15; }
+h2, .h2, h3, .h3 { font-weight: 650; letter-spacing: -.015em; line-height: 1.2; }
+h4, .h4, h5, .h5, h6, .h6 { font-weight: 600; letter-spacing: -.008em; }
+.lead { font-weight: 400; line-height: 1.6; }
+
+/* Micro-labels: the uppercase text above values and inside card headers. */
+.text-uppercase { letter-spacing: .07em; font-weight: 650; }
+
+/* --- Cards --------------------------------------------------------------- */
+
+.card {
+  border: 1px solid var(--hairline);
+  box-shadow: var(--elev-1);
+  transition: box-shadow var(--transition), transform var(--transition),
+              border-color var(--transition);
+}
+
+/* Lift only where the whole card is a target. A card holding a form or a
+   table must not move under the cursor while it is being used. */
+.wfp-lift:hover {
+  box-shadow: var(--elev-3);
+  transform: translateY(-3px);
+  border-color: var(--border-strong);
+}
+
+.card-header {
+  border-bottom: 1px solid var(--hairline);
+  font-weight: 600;
+  letter-spacing: -.005em;
+  background: transparent;
+}
+
+/* --- Value boxes --------------------------------------------------------- */
+
+.bslib-value-box {
+  border: 1px solid var(--hairline);
+  box-shadow: var(--elev-1);
+  overflow: hidden;
+  position: relative;
+}
+
+/* A hairline of the accent along the top edge. This is what makes a row of
+   value boxes read as a dashboard rather than as five grey rectangles. */
+.bslib-value-box::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 3px;
+  background: currentColor;
+  opacity: .55;
+}
+
+.bslib-value-box .value-box-value {
+  font-weight: 700;
+  letter-spacing: -.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.bslib-value-box .value-box-title {
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  font-size: .72rem;
+  font-weight: 650;
+  opacity: .78;
+}
+
+.bslib-value-box .value-box-showcase { opacity: .85; }
+
+/* --- Navbar -------------------------------------------------------------- */
+
+.navbar {
+  background-image: var(--grad-brand) !important;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, .10) inset, var(--elev-2);
+  border: 0;
+}
+
+.navbar .nav-link {
+  font-weight: 550;
+  letter-spacing: -.005em;
+  border-radius: var(--control-radius);
+  transition: background-color var(--transition), color var(--transition);
+}
+
+.navbar .nav-link:hover { background: rgba(255, 255, 255, .10); }
+
+.navbar .nav-link.active,
+.navbar .show > .nav-link {
+  background: rgba(255, 255, 255, .16);
+  font-weight: 650;
+}
+
+.navbar .dropdown-menu {
+  border: 1px solid var(--hairline);
+  box-shadow: var(--elev-3);
+  border-radius: var(--card-radius-sm);
+  padding: .35rem;
+}
+
+.navbar .dropdown-item {
+  border-radius: var(--control-radius);
+  font-weight: 500;
+  padding: .45rem .7rem;
+}
+
+/* --- Buttons ------------------------------------------------------------- */
+
+.btn {
+  font-weight: 600;
+  letter-spacing: -.005em;
+  border-radius: var(--control-radius);
+  transition: transform var(--transition), box-shadow var(--transition),
+              background-color var(--transition), border-color var(--transition);
+}
+
+.btn:not(.btn-link):hover { transform: translateY(-1px); box-shadow: var(--elev-2); }
+.btn:not(.btn-link):active { transform: translateY(0); box-shadow: var(--elev-1); }
+.btn:focus-visible { box-shadow: var(--ring); outline: none; }
+
+/* --- Form controls ------------------------------------------------------- */
+
+.form-control, .form-select, .selectize-input {
+  border-radius: var(--control-radius);
+  border-color: var(--border);
+  transition: border-color var(--transition), box-shadow var(--transition);
+}
+
+.form-control:hover, .form-select:hover, .selectize-input:hover {
+  border-color: var(--border-strong);
+}
+
+.form-control:focus, .form-select:focus, .selectize-input.focus {
+  border-color: var(--wfp-blue);
+  box-shadow: var(--ring);
+}
+
+.form-label, .control-label { font-weight: 600; font-size: .875rem; }
+
+/* --- Sidebar ------------------------------------------------------------- */
+
+.bslib-sidebar-layout > .sidebar { border-right: 1px solid var(--hairline); }
+
+.bslib-sidebar-layout > .sidebar .sidebar-title {
+  font-weight: 650;
+  letter-spacing: -.01em;
+  border-bottom: 1px solid var(--hairline);
+  padding-bottom: .6rem;
+}
+
+/* --- Navset pills (the scorecard stepper) -------------------------------- */
+
+.nav-pills {
+  gap: .25rem;
+  padding: .25rem;
+  border-radius: var(--pill-radius);
+  background: var(--surface-3);
+}
+
+[data-bs-theme="dark"] .nav-pills { background: rgba(255, 255, 255, .05); }
+
+.nav-pills .nav-link {
+  border-radius: var(--pill-radius);
+  font-weight: 600;
+  font-size: .85rem;
+  letter-spacing: .01em;
+  transition: background-color var(--transition), color var(--transition),
+              box-shadow var(--transition);
+}
+
+.nav-pills .nav-link.active { box-shadow: var(--elev-1); }
+
+/* --- Alerts (the design and implementation verdicts) --------------------- */
+
+/* Flat and quiet: body-coloured text on a faint tint, the colour kept for the
+   icon. No stripe, no shadow. */
+.alert {
+  --tone: var(--accent-secondary);
+  --bs-alert-color: var(--body-text);
+  --bs-alert-link-color: var(--body-text);
+  color: var(--body-text);
+  background: color-mix(in srgb, var(--tone) 6%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--tone) 22%, var(--hairline));
+  border-radius: 8px;
+  box-shadow: none;
+  padding: .7rem .95rem;
+  font-size: .9rem;
+  line-height: 1.5;
+}
+.alert-success   { --tone: var(--accent-success); }
+.alert-warning   { --tone: var(--accent-warning); }
+.alert-danger    { --tone: var(--accent-danger); }
+.alert-info      { --tone: var(--accent-info); }
+.alert-secondary { --tone: var(--accent-secondary); }
+.alert > .bi:first-child, .alert > svg:first-child, .alert strong > .bi:first-child,
+.alert strong > svg:first-child, .alert .fa:first-child { color: var(--tone); }
+.alert strong { font-weight: 600; }
+.alert .text-muted { color: var(--text-muted) !important; }
+
+/* --- Tables -------------------------------------------------------------- */
+
+table.dataTable thead th {
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  font-size: .72rem;
+  font-weight: 700;
+}
+
+table.dataTable tbody tr { transition: background-color 120ms linear; }
+
+/* --- Scrollbars ---------------------------------------------------------- */
+
+* { scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; }
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  background-color: var(--border-strong);
+  border-radius: var(--pill-radius);
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-thumb:hover { background-color: var(--wfp-blue); background-clip: content-box; }
+
+/* ===========================================================================
+   LANDING PAGE
+   ======================================================================== */
+
+.wfp-hero {
+  position: relative;
+  background-image: var(--grad-brand);
+  border-radius: var(--card-radius);
+  padding: 3rem 2rem 2.75rem;
+  margin-bottom: 2rem;
+  overflow: hidden;
+  box-shadow: var(--elev-3);
+  color: #fff;
+}
+
+/* A faint radial wash so the flat gradient gains a light source. */
+.wfp-hero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(900px 320px at 12% -20%, rgba(255, 255, 255, .20), transparent 60%),
+    radial-gradient(700px 300px at 105% 120%, rgba(247, 184, 37, .18), transparent 60%);
+  pointer-events: none;
+}
+
+.wfp-hero > * { position: relative; z-index: 1; }
+
+.wfp-hero .wfp-eyebrow {
+  text-transform: uppercase;
+  letter-spacing: .16em;
+  font-size: .72rem;
+  font-weight: 700;
+  opacity: .82;
+  margin-bottom: .6rem;
+}
+
+.wfp-hero h1 {
+  color: #fff;
+  font-size: clamp(1.9rem, 3.4vw, 2.9rem);
+  margin-bottom: .75rem;
+}
+
+.wfp-hero .wfp-hero-lead {
+  color: rgba(255, 255, 255, .88);
+  font-size: clamp(.98rem, 1.25vw, 1.1rem);
+  line-height: 1.65;
+  max-width: 62ch;
+  margin: 0 auto;
+}
+
+.wfp-hero .wfp-hero-rule {
+  width: 64px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--wfp-amber);
+  margin: 1.25rem auto 0;
+}
+
+/* Phase cards ------------------------------------------------------------- */
+
+.wfp-phase { position: relative; }
+
+.wfp-phase .card { height: 100%; }
+
+.wfp-phase-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  background: var(--grad-brand);
+  color: #fff;
+  font-weight: 700;
+  font-size: .95rem;
+  flex: 0 0 auto;
+  box-shadow: var(--elev-1);
+}
+
+/* The connector between the three phase cards, drawn only where there is a
+   next card to point at (wide screens, and not after the last one). */
+@media (min-width: 992px) {
+  .wfp-phase:not(:last-child)::after {
+    content: "";
+    position: absolute;
+    top: 2.15rem;
+    right: -1.15rem;
+    width: 1.5rem;
+    height: 2px;
+    background: linear-gradient(90deg, var(--border-strong), transparent);
+    z-index: 2;
+  }
+}
+
+.wfp-phase-dataset {
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  padding: .28rem .6rem;
+  border-radius: var(--pill-radius);
+  background: var(--accent-primary-bg);
+  color: var(--accent-primary);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  font-size: .68rem;
+  font-weight: 700;
+}
+
+[data-bs-theme="dark"] .wfp-phase-dataset { color: #7fc4f0; }
+
+/* Credits ----------------------------------------------------------------- */
+
+.wfp-credits { border-top: 3px solid var(--wfp-blue); }
+
+.wfp-credits .wfp-credit-name {
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: -.01em;
+  margin-bottom: .15rem;
+}
+
+.wfp-credits .wfp-credit-role {
+  font-size: .82rem;
+  color: var(--text-muted);
+  margin-bottom: .1rem;
+}
+
+.wfp-credits .wfp-credit-label {
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  font-size: .68rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  margin-bottom: .35rem;
+}
+
+/* A citation is read as a block, so it gets a monospace-ish measure and a
+   rule rather than being another muted paragraph. */
+.wfp-citation {
+  border-left: 3px solid var(--border-strong);
+  padding: .5rem 0 .5rem .85rem;
+  font-size: .82rem;
+  line-height: 1.55;
+  color: var(--text-muted);
+}
+
+.wfp-welcome { max-width: 1280px; margin: 0 auto; padding: 0 16px 2rem; }
+.wfp-import-panel { max-width: 1040px; margin: 0 auto; padding: 0 16px 2rem; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition-duration: .01ms !important; animation-duration: .01ms !important; }
+  .btn:not(.btn-link):hover, .wfp-lift:hover { transform: none; }
+}
+
+/* ===========================================================================
+   SELECTED STATES — quieter
+   ---------------------------------------------------------------------------
+   The first premium pass outlined selected things (a filled box in the navbar,
+   a heavy bar across the top of every value box). Outlines read as borders and
+   made the chrome noisy. Selection is now shown with weight and a single thin
+   accent, never with a box.
+   ======================================================================== */
+
+/* The accent bar across the top of every value box used currentColor, which is
+   the TEXT colour, so it rendered as a heavy dark rule rather than an accent.
+   Removed outright: the tinted showcase icon already carries the semantics. */
+.bslib-value-box::before { content: none; }
+
+.bslib-value-box {
+  border: 1px solid var(--hairline);
+  box-shadow: var(--elev-1);
+  overflow: hidden;
+}
+
+/* Navbar: an underline, not a filled tab. */
+.navbar .nav-link {
+  position: relative;
+  background: transparent !important;
+  border-radius: 0;
+  opacity: .82;
+  transition: opacity var(--transition), color var(--transition);
+}
+
+.navbar .nav-link::after {
+  content: "";
+  position: absolute;
+  left: .55rem;
+  right: .55rem;
+  bottom: .15rem;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--wfp-amber);
+  transform: scaleX(0);
+  transform-origin: center;
+  transition: transform var(--transition);
+}
+
+.navbar .nav-link:hover { opacity: 1; }
+
+.navbar .nav-link.active,
+.navbar .show > .nav-link {
+  opacity: 1;
+  font-weight: 650;
+}
+
+.navbar .nav-link.active::after { transform: scaleX(1); }
+
+/* Dropdown items inside the navbar menus: tint, no outline. */
+.navbar .dropdown-item.active,
+.navbar .dropdown-item:active {
+  background: var(--accent-primary-bg);
+  color: inherit;
+  font-weight: 650;
+}
+
+/* Stepper pills: filled, flat, no ring. */
+.nav-pills { background: transparent; padding: 0; gap: .35rem; }
+.nav-pills .nav-link { box-shadow: none !important; }
+.nav-pills .nav-link:not(.active) { color: var(--text-muted); }
+.nav-pills .nav-link:not(.active):hover { background: var(--surface-3); }
+
+[data-bs-theme="dark"] .nav-pills .nav-link:not(.active):hover {
+  background: rgba(255, 255, 255, .06);
+}
+
+/* Selected table rows: a tint and a thin left accent, not a full outline. */
+table.dataTable tbody tr.selected > * {
+  box-shadow: none !important;
+  background-color: var(--accent-primary-bg) !important;
+  color: inherit !important;
+}
+
+table.dataTable tbody tr.selected > *:first-child {
+  box-shadow: inset 3px 0 0 var(--wfp-blue) !important;
+}
+
+/* Radio/checkbox button groups (Points / Choropleth, profile views). */
+.btn-group .btn.active,
+.btn-group .btn:active,
+.btn-group-toggle .btn.active {
+  box-shadow: none;
+  border-color: transparent;
+}
+
+/* ===========================================================================
+   DESIGN ERROR MATRIX  (Targeting Advisory 2/2025)
+   ======================================================================== */
+
+.wfp-matrix {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 4px;
+  table-layout: fixed;
+}
+
+.wfp-matrix th {
+  font-weight: 650;
+  font-size: .82rem;
+  vertical-align: bottom;
+  padding: .25rem .4rem;
+}
+
+.wfp-matrix tbody th[scope="row"] {
+  text-align: left;
+  vertical-align: middle;
+  width: 24%;
+}
+
+.wfp-matrix-head {
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  font-size: .7rem;
+}
+
+.wfp-matrix-subhead {
+  font-weight: 400;
+  font-size: .7rem;
+  color: var(--text-muted);
+}
+
+.wfp-matrix-cell {
+  border-radius: var(--control-radius);
+  padding: .6rem .7rem;
+  text-align: center;
+  border: 1px solid transparent;
+}
+
+.wfp-matrix-cell.ok        { background: var(--accent-success-bg); }
+.wfp-matrix-cell.err-incl  { background: var(--accent-danger-bg); }
+.wfp-matrix-cell.err-excl  { background: var(--accent-warning-bg); }
+
+.wfp-matrix-count {
+  font-size: 1.28rem;
+  font-weight: 700;
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+}
+
+.wfp-matrix-share {
+  font-size: .78rem;
+  font-weight: 600;
+  opacity: .75;
+  font-variant-numeric: tabular-nums;
+}
+
+.wfp-matrix-label {
+  font-size: .68rem;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  font-weight: 650;
+  opacity: .7;
+  margin-top: .2rem;
+}
+
+.wfp-matrix-total {
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+  color: var(--text-muted);
+  font-size: .85rem;
+}
+
+.wfp-matrix-totals-row th, .wfp-matrix-totals-row td {
+  border-top: 1px solid var(--hairline);
+  padding-top: .4rem;
+}
+
+.wfp-matrix-formulas {
+  margin-top: .85rem;
+  padding-top: .75rem;
+  border-top: 1px solid var(--hairline);
+  font-size: .82rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.wfp-matrix-chip {
+  display: inline-block;
+  padding: .1rem .45rem;
+  border-radius: var(--pill-radius);
+  font-size: .7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+
+.wfp-matrix-chip.err-incl { background: var(--accent-danger-bg);  color: var(--accent-danger); }
+.wfp-matrix-chip.err-excl { background: var(--accent-warning-bg); color: #8a6100; }
+
+[data-bs-theme="dark"] .wfp-matrix-chip.err-incl { color: #ff8a97; }
+[data-bs-theme="dark"] .wfp-matrix-chip.err-excl { color: #ffd77a; }
+
+/* ===========================================================================
+   ERGONOMICS
+   ---------------------------------------------------------------------------
+   Less dead space, tighter vertical rhythm, and dropdowns that are not clipped
+   by the card they sit in.
+   ======================================================================== */
+
+/* A picker opening inside a card was being cut off by the card's own
+   overflow. Cards clip only horizontally, which is all the rounded corners
+   ever needed. */
+.card, .card-body, .bslib-card { overflow: visible; }
+.card { border-radius: var(--card-radius); }
+
+/* ...except where a table genuinely needs to scroll inside its card. */
+.card .dataTables_wrapper { overflow-x: auto; }
+
+/* Bootstrap-select menus render in place; lift them above sibling cards. */
+.bootstrap-select .dropdown-menu { z-index: 1080; }
+.selectize-dropdown { z-index: 1080; }
+
+/* Sidebar rhythm: the hr()s between sections were costing ~2rem each. */
+.bslib-sidebar-layout > .sidebar hr {
+  margin-block: .85rem;
+  opacity: .5;
+}
+
+.bslib-sidebar-layout > .sidebar .form-group,
+.bslib-sidebar-layout > .sidebar .shiny-input-container {
+  margin-bottom: .75rem;
+}
+
+/* Tighter card padding on dense analysis pages. */
+.bslib-sidebar-layout .card-body { padding: var(--card-padding); }
+
+/* Stop short pages leaving a large empty well below the content. */
+.bslib-sidebar-layout:not(.fillable) > .main { align-content: start; }
+
+/* Section spacing between stacked layout_columns rows. */
+.bslib-grid + .bslib-grid { margin-top: .85rem; }
+
+/* Modals: match the card language rather than Bootstrap defaults. */
+.modal-content {
+  border: 1px solid var(--hairline);
+  border-radius: var(--card-radius);
+  box-shadow: var(--elev-3);
+}
+
+.modal-header, .modal-footer { border-color: var(--hairline); }
+
+/* Notifications sit over the navbar on the welcome page; pull them clear. */
+#shiny-notification-panel { top: auto !important; bottom: 1rem !important; right: 1rem; left: auto; transform: none; width: 360px; max-width: calc(100vw - 2rem); }
+
+/* ---------------------------------------------------------------------------
+   bootstrap-select (shinyWidgets pickerInput)
+   ---------------------------------------------------------------------------
+   Its default toggle is a .btn-light, so next to the app's other inputs it
+   reads as a disabled control rather than a field. Make it a form control.
+   ------------------------------------------------------------------------ */
+
+.bootstrap-select > .dropdown-toggle,
+.bootstrap-select > .dropdown-toggle.btn-light,
+.bootstrap-select > .dropdown-toggle.bs-placeholder {
+  background: var(--bs-body-bg, #fff);
+  color: var(--body-text);
+  border: 1px solid var(--border);
+  border-radius: var(--control-radius);
+  box-shadow: none;
+  font-weight: 400;
+  text-align: left;
+  padding: .4rem .7rem;
+  transition: border-color var(--transition), box-shadow var(--transition);
+}
+
+.bootstrap-select > .dropdown-toggle:hover { border-color: var(--border-strong); }
+
+.bootstrap-select > .dropdown-toggle:focus,
+.bootstrap-select.show > .dropdown-toggle {
+  border-color: var(--wfp-blue);
+  box-shadow: var(--ring);
+  outline: none !important;
+}
+
+/* "Nothing selected" is a placeholder, not disabled text. */
+.bootstrap-select > .dropdown-toggle.bs-placeholder .filter-option-inner-inner {
+  color: var(--text-muted);
+}
+
+[data-bs-theme="dark"] .bootstrap-select > .dropdown-toggle,
+[data-bs-theme="dark"] .bootstrap-select > .dropdown-toggle.btn-light {
+  background: rgba(255, 255, 255, .04);
+  color: var(--bs-body-color);
+  border-color: var(--hairline);
+}
+
+.bootstrap-select .dropdown-menu {
+  border: 1px solid var(--hairline);
+  border-radius: var(--card-radius-sm);
+  box-shadow: var(--elev-3);
+  padding: .3rem;
+}
+
+.bootstrap-select .dropdown-menu li a {
+  border-radius: var(--control-radius);
+  padding: .35rem .6rem;
+}
+
+.bootstrap-select .dropdown-menu li a.selected,
+.bootstrap-select .dropdown-menu li a:hover {
+  background: var(--accent-primary-bg);
+}
+
+.bootstrap-select .bs-searchbox .form-control { border-radius: var(--control-radius); }
+
+/* The Select All / Deselect All strip. */
+.bootstrap-select .bs-actionsbox .btn-group button {
+  border-radius: var(--control-radius);
+  font-size: .78rem;
+}
+
+/* Date-range picker, for the same reason. */
+.datepicker, .air-datepicker {
+  border-radius: var(--card-radius-sm);
+  box-shadow: var(--elev-3);
+  border: 1px solid var(--hairline);
+}
+
+/* ===========================================================================
+   CONTRAST
+   ---------------------------------------------------------------------------
+   Every rule here comes from a measured WCAG failure, not from taste. The
+   ratio each one fixes is recorded so the next person can check the sum rather
+   than trusting it.
+   ======================================================================== */
+
+/* bslib lightens $primary for buttons to #277FBD, which puts white text at
+   4.30:1 -- just under the 4.5 needed for body-size text. The brand blue
+   itself is 5.38:1. */
+.btn-primary,
+.btn-primary:disabled,
+.btn-primary.disabled {
+  background-color: var(--wfp-blue);
+  border-color: var(--wfp-blue);
+  color: #fff;
+}
+
+.btn-primary:hover, .btn-primary:focus, .btn-primary:active {
+  background-color: var(--wfp-blue-600);
+  border-color: var(--wfp-blue-600);
+  color: #fff;
+}
+
+/* Dark mode lightens $success to #5AA661 for text legibility, but white on
+   that is 2.97:1. Buttons keep the darker green (4.91:1 with white); only
+   text and icons use the lighter one. */
+[data-bs-theme="dark"] .btn-success,
+[data-bs-theme="dark"] .btn-success:disabled {
+  background-color: #3f7e44;
+  border-color: #3f7e44;
+  color: #fff;
+}
+
+[data-bs-theme="dark"] .btn-success:hover,
+[data-bs-theme="dark"] .btn-success:focus {
+  background-color: #35693a;
+  border-color: #35693a;
+}
+
+[data-bs-theme="dark"] .btn-danger {
+  background-color: #b5162a;
+  border-color: #b5162a;
+  color: #fff;
+}
+
+/* Outline buttons put brand-blue text straight onto the page background. On
+   the dark surface that is 3.29:1; a light blue is 9.34:1. */
+[data-bs-theme="dark"] .btn-outline-primary {
+  color: #7fc4f0;
+  border-color: rgba(127, 196, 240, .45);
+}
+
+[data-bs-theme="dark"] .btn-outline-primary:hover,
+[data-bs-theme="dark"] .btn-outline-primary:focus {
+  background-color: rgba(127, 196, 240, .16);
+  color: #a9d8f6;
+  border-color: rgba(127, 196, 240, .70);
+}
+
+[data-bs-theme="dark"] .btn-outline-secondary { color: #c3ccd8; border-color: rgba(195, 204, 216, .35); }
+[data-bs-theme="dark"] .btn-outline-secondary:hover { background-color: rgba(195, 204, 216, .14); color: #e6ebf2; }
+[data-bs-theme="dark"] .btn-outline-danger { color: #ff8a97; border-color: rgba(255, 138, 151, .45); }
+[data-bs-theme="dark"] .btn-outline-danger:hover { background-color: rgba(255, 138, 151, .16); color: #ffb0b9; }
+
+/* downloadButton renders as .btn-default and inherits nothing. Scoped to the
+   download link on purpose: Shiny's actionButton emits BOTH btn-default and
+   its variant ("btn btn-default action-button btn-primary"), so an unscoped
+   .btn-default colour repaints every filled button -- which put pale blue
+   text on the primary and success grounds at 2.6-2.8:1. */
+.btn-default.shiny-download-link {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--wfp-blue);
+}
+
+[data-bs-theme="dark"] .btn-default.shiny-download-link {
+  color: #7fc4f0;
+  border-color: rgba(127, 196, 240, .45);
+}
+
+[data-bs-theme="dark"] .btn-default.shiny-download-link:hover {
+  background: rgba(127, 196, 240, .14);
+  color: #a9d8f6;
+}
+
+/* Filled buttons state their own text colour so nothing can repaint it. */
+.btn-primary, .btn-success, .btn-danger, .btn-info, .btn-dark,
+[data-bs-theme="dark"] .btn-primary, [data-bs-theme="dark"] .btn-success,
+[data-bs-theme="dark"] .btn-danger, [data-bs-theme="dark"] .btn-info {
+  color: #fff !important;
+}
+
+.btn-warning, [data-bs-theme="dark"] .btn-warning { color: #1f2a37 !important; }
+
+/* Navbar text: the toolbar labels inherited the muted body foreground
+   (#E6EBF2) and sat at 4.49:1 on the bar. */
+.navbar, .navbar .mini-theme-selector > span, .navbar .session-toolbar span,
+.navbar .nav-link, .navbar .navbar-brand { color: #fff; }
+
+.navbar .nav-link { color: rgba(255, 255, 255, .92); }
+.navbar .nav-link.active { color: #fff; }
+
+/* Links on dark surfaces. */
+[data-bs-theme="dark"] a:not(.btn):not(.nav-link):not(.dropdown-item) { color: #7fc4f0; }
+[data-bs-theme="dark"] a:not(.btn):not(.nav-link):not(.dropdown-item):hover { color: #a9d8f6; }
+
+/* Muted text is used for most secondary copy; the Bootstrap default is too
+   faint on both surfaces at small sizes. */
+.text-muted { color: var(--text-muted) !important; }
+[data-bs-theme="dark"] { --text-muted: #a8b6c6; }
+[data-bs-theme="dark"] .text-muted { color: #a8b6c6 !important; }
+
+/* Badges and the matrix chips keep their own pairs. */
+[data-bs-theme="dark"] .badge.bg-secondary { background-color: #55637a !important; color: #fff; }
+
+/* Value-box showcase icons on tinted grounds. */
+[data-bs-theme="dark"] .bslib-value-box { --bs-card-bg: #161d2c; }
+
+/* ===========================================================================
+   DROPDOWNS MUST NEVER BE CLIPPED BY THEIR OWN CONTAINER
+   ---------------------------------------------------------------------------
+   A sidebar scrolls, so anything opening inside it is cut at the sidebar edge.
+   Pickers are moved to the body in R (pickerOptions(container = "body")) and
+   selectize inputs by the shim in www/dropdowns.js; these rules cover the rest
+   and make sure the moved menus paint above everything.
+   ======================================================================== */
+
+.bslib-sidebar-layout > .sidebar { overflow: visible; }
+.bslib-sidebar-layout > .sidebar > .sidebar-content { overflow-y: auto; overflow-x: visible; }
+
+/* Stacking, in order. Only the menus that were re-parented to the body need
+   lifting: they are siblings of the modal, so without this they paint behind
+   it. An in-flow navbar menu must NOT be lifted -- a blanket z-index here put
+   an open navbar dropdown on top of an open modal. */
+.bslib-sidebar-layout .bootstrap-select .dropdown-menu,
+.bslib-sidebar-layout .selectize-dropdown { z-index: 1045; }
+
+body > .bootstrap-select .dropdown-menu,
+body > .selectize-dropdown,
+.modal .bootstrap-select .dropdown-menu,
+.modal .selectize-dropdown,
+.datepicker, .air-datepicker { z-index: 1060 !important; }
+
+/* Session toolbar chips: a 12% WHITE wash over the brand blue lands white
+   text at 4.30:1, just under the threshold. Darkening instead of lightening
+   takes it to 6.1:1 and reads as a recessed chip on the bar. */
+.session-toolbar .btn,
+.session-toolbar .btn[class*="btn-"] {
+  background-color: rgba(0, 0, 0, 0.18) !important;
+  border: 1px solid rgba(255, 255, 255, 0.28) !important;
+}
+.session-toolbar .btn:hover { background-color: rgba(0, 0, 0, 0.30) !important; }
+
+/* WFP amber is a fill colour, not a text colour: #F7B825 on white is 1.77:1.
+   Text that needs to read as "secondary brand" uses a darkened amber (5.4:1);
+   on dark surfaces the bright amber is already 9.9:1 and stays. */
+.text-secondary { color: #8a6100 !important; }
+[data-bs-theme="dark"] .text-secondary { color: #f7b825 !important; }
+
+/* Same for the amber used on badges and links over light ground. */
+.badge.bg-secondary { color: #1f2a37; }
+[data-bs-theme="dark"] .badge.bg-secondary { color: #fff; }
+
+/* ---- Model tables (screening, estimates, comparison) -------------------- */
+.wfp-model-table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--card-radius-sm); }
+.wfp-model-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: .875rem; }
+.wfp-model-table th {
+  position: sticky; top: 0; background: var(--surface-3); color: var(--text-muted);
+  font-size: .72rem; font-weight: 600; letter-spacing: .04em; text-transform: uppercase;
+  padding: .6rem .75rem; border-bottom: 1px solid var(--border-strong); white-space: nowrap;
+}
+.wfp-model-table td { padding: .55rem .75rem; border-bottom: 1px solid var(--border); vertical-align: middle; }
+.wfp-model-table tbody tr:last-child td { border-bottom: 0; }
+.wfp-model-table tbody tr:hover td { background: var(--accent-primary-bg); }
+.wfp-model-table .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.wfp-model-table tr.is-dropped td { opacity: .6; }
+.wfp-model-table tr.is-best td { background: var(--accent-success-bg); }
+
+.wfp-p { display: inline-block; min-width: 4.2rem; padding: .12rem .5rem; border-radius: var(--pill-radius);
+  font-size: .78rem; font-weight: 600; text-align: center; font-variant-numeric: tabular-nums; }
+.wfp-p-p001 { background: #1e6b2a; color: #ffffff; }
+.wfp-p-p01  { background: #3f7e44; color: #ffffff; }
+.wfp-p-p05  { background: #cfe6d1; color: #1e4b24; }
+.wfp-p-p10  { background: #fdf0d5; color: #8a6100; }
+.wfp-p-ns, .wfp-p-na { background: #eef1f4; color: #5b6b7e; }
+.wfp-p-legend { margin-top: .5rem; display: flex; flex-wrap: wrap; gap: .35rem; align-items: center; }
+.wfp-p-legend .wfp-p { min-width: 0; }
+
+.wfp-dir { display: inline-block; padding: .1rem .5rem; border-radius: var(--pill-radius); font-size: .75rem; font-weight: 600; }
+.wfp-dir.is-incl { background: var(--accent-primary-bg); color: var(--accent-primary); }
+.wfp-dir.is-excl { background: var(--accent-danger-bg); color: var(--accent-danger); }
+.wfp-kept { color: var(--accent-success); font-weight: 600; font-size: .8rem; }
+
+.wfp-or { min-width: 11rem; }
+.wfp-or-ci { color: var(--text-muted); font-size: .78rem; }
+.wfp-or-track { position: relative; height: 8px; margin-top: .3rem; border-radius: 4px; background: var(--surface-3); }
+.wfp-or-one { position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: var(--text-muted); opacity: .5; }
+.wfp-or-whisker { position: absolute; top: 3px; height: 2px; border-radius: 1px; }
+.wfp-or-dot { position: absolute; top: 0; width: 8px; height: 8px; margin-left: -4px; border-radius: 50%; }
+.wfp-or-track.is-incl .wfp-or-whisker, .wfp-or-track.is-incl .wfp-or-dot { background: var(--accent-primary); }
+.wfp-or-track.is-excl .wfp-or-whisker, .wfp-or-track.is-excl .wfp-or-dot { background: var(--accent-danger); }
+
+.wfp-auc { position: relative; min-width: 9rem; height: 1.4rem; border-radius: 4px; background: var(--surface-3); overflow: hidden; }
+.wfp-auc-bar { position: absolute; left: 0; top: 0; bottom: 0; background: var(--accent-primary-bg); border-right: 2px solid var(--accent-primary); }
+.wfp-auc-num { position: relative; padding-left: .5rem; line-height: 1.4rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+[data-bs-theme="dark"] .wfp-p-p05 { background: #2c5a32; color: #e3f2e5; }
+[data-bs-theme="dark"] .wfp-p-p10 { background: #5c4510; color: #fde9b8; }
+[data-bs-theme="dark"] .wfp-p-ns, [data-bs-theme="dark"] .wfp-p-na { background: #2a3445; color: #b6c2d1; }
+.wfp-model-table .wfp-points-input .form-group,
+.wfp-model-table .wfp-review-checks .form-group { margin: 0; }
+.wfp-model-table .wfp-points-input input { text-align: right; margin-left: auto; }
+.wfp-model-table .wfp-review-checks { display: flex; flex-direction: column; gap: .1rem; font-size: .8rem; white-space: nowrap; }
+.wfp-model-table .wfp-review-checks .checkbox, .wfp-model-table .wfp-review-checks .form-check { margin: 0; }
+
+/* ---- Design flow stepper ------------------------------------------------- */
+.wfp-flow { background: var(--surface); border: 1px solid var(--border); border-radius: var(--card-radius); padding: .9rem 1rem; box-shadow: var(--shadow-soft); }
+.wfp-flow-track { display: flex; align-items: flex-start; gap: 0; }
+.wfp-flow-step { flex: 1 1 0; position: relative; display: flex; flex-direction: column; align-items: center; gap: .35rem;
+  background: none; border: 0; padding: 0 .25rem; color: var(--text-muted); font-size: .78rem; font-weight: 600; cursor: pointer; }
+.wfp-flow-step:not(:last-child)::after { content: ""; position: absolute; top: 15px; left: calc(50% + 18px); right: calc(-50% + 18px);
+  height: 2px; background: var(--border-strong); }
+.wfp-flow-step.is-done:not(:last-child)::after { background: var(--accent-success); }
+.wfp-flow-dot { width: 30px; height: 30px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+  background: var(--surface-3); color: var(--text-muted); border: 2px solid var(--border-strong); font-size: .8rem; transition: var(--transition); }
+.wfp-flow-step.is-done .wfp-flow-dot { background: var(--accent-success); border-color: var(--accent-success); color: #fff; }
+.wfp-flow-step.is-next .wfp-flow-dot { border-color: var(--accent-primary); color: var(--accent-primary); box-shadow: 0 0 0 4px var(--accent-primary-bg); }
+.wfp-flow-step.is-current .wfp-flow-label { color: var(--accent-primary); }
+.wfp-flow-step.is-current .wfp-flow-dot { outline: 2px solid var(--accent-primary); outline-offset: 2px; }
+.wfp-flow-label { text-align: center; line-height: 1.2; }
+.wfp-flow-step:hover .wfp-flow-label { color: var(--accent-primary); }
+.wfp-flow-next { margin-top: .75rem; padding-top: .6rem; border-top: 1px solid var(--border); font-size: .875rem; display: flex; align-items: center; flex-wrap: wrap; gap: .25rem; }
+.wfp-runs tr.is-current td { background: var(--accent-primary-bg); }
+@media (max-width: 640px) { .wfp-flow-label { font-size: .68rem; } }
+
+/* ---- Design error matrix: restrained report table -------------------------
+   Neutral surfaces and hairlines; colour only marks the two error cells (a
+   thin rule and the label) and an error rate outside the tolerance band. */
+.wfp-cm-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--card-radius-sm); }
+.wfp-matrix.wfp-cm { border-spacing: 0; border-collapse: collapse; table-layout: auto; font-variant-numeric: tabular-nums; margin: 0; }
+.wfp-cm th, .wfp-cm td { padding: .6rem .8rem; border: 1px solid var(--border); }
+.wfp-cm tr:first-child th { border-top: 0; }
+.wfp-cm tr > :first-child { border-left: 0; }
+.wfp-cm tr > :last-child { border-right: 0; }
+.wfp-cm tbody tr:last-child > * { border-bottom: 0; }
+.wfp-cm thead th { background: var(--surface-3); color: var(--text-muted); font-size: .72rem; font-weight: 600;
+  letter-spacing: .05em; text-transform: uppercase; text-align: center; vertical-align: middle; }
+.wfp-cm-corner { text-align: left !important; vertical-align: bottom !important; }
+.wfp-cm-axis { font-size: .66rem; font-weight: 500; text-transform: none; letter-spacing: 0; }
+.wfp-cm-group strong { color: var(--body-text); text-transform: none; letter-spacing: 0; }
+.wfp-cm-col { color: var(--body-text) !important; }
+.wfp-cm-rowgroup { background: var(--surface-3); width: 2rem; padding: 0 !important; text-align: center; color: var(--text-muted); }
+.wfp-cm-rowgroup span { writing-mode: vertical-rl; transform: rotate(180deg); font-size: .68rem; font-weight: 600;
+  letter-spacing: .06em; text-transform: uppercase; }
+.wfp-cm-row { background: var(--surface-3); text-align: left; font-size: .85rem; font-weight: 600; white-space: nowrap; color: var(--body-text); }
+.wfp-cm-sub { font-size: .7rem; font-weight: 400; color: var(--text-muted); text-transform: none; letter-spacing: 0; }
+.wfp-cm-cell { text-align: center; min-width: 9rem; background: var(--surface); color: var(--body-text); }
+.wfp-cm-cell.err-incl { box-shadow: inset 3px 0 0 #c5192d; }
+.wfp-cm-cell.err-excl { box-shadow: inset 3px 0 0 #d99a00; }
+.wfp-cm-label { font-size: .68rem; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--text-muted); }
+.wfp-cm-cell.ok .wfp-cm-label .bi { color: var(--accent-success); }
+.wfp-cm-cell.err-incl .wfp-cm-label { color: #b3172a; }
+.wfp-cm-cell.err-excl .wfp-cm-label { color: #8a6100; }
+.wfp-cm-count { font-size: 1.5rem; font-weight: 700; line-height: 1.25; }
+.wfp-cm-share { display: flex; justify-content: center; gap: .6rem; font-size: .72rem; color: var(--text-muted); }
+.wfp-cm-tot { background: var(--surface-3); text-align: center; font-weight: 600; color: var(--body-text); }
+.wfp-cm-tot-label { text-align: right !important; }
+.wfp-cm-grand { font-weight: 700; }
+
+.wfp-cm-gauges { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: .75rem; margin-top: .9rem; }
+.wfp-cm-gauge { border: 1px solid var(--border); border-radius: var(--card-radius-sm); padding: .6rem .8rem; }
+.wfp-cm-gauge-head { display: flex; justify-content: space-between; align-items: baseline; }
+.wfp-cm-gauge-title { font-size: .72rem; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--text-muted); }
+.wfp-cm-gauge-value { font-size: 1.3rem; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--body-text); }
+.wfp-cm-gauge-value.review { color: #8a6100; }
+.wfp-cm-gauge-value.bad { color: #b3172a; }
+.wfp-cm-track { position: relative; height: 6px; border-radius: 3px; margin: .45rem 0 .35rem; background: var(--surface-3); }
+.wfp-cm-zone { position: absolute; top: 0; bottom: 0; }
+.wfp-cm-zone.good { left: 0; background: rgba(128, 128, 128, .22); border-radius: 3px 0 0 3px; }
+.wfp-cm-zone.review { background: rgba(128, 128, 128, .12); }
+.wfp-cm-marker { position: absolute; top: -4px; width: 3px; height: 14px; margin-left: -1.5px; border-radius: 2px; background: var(--body-text); }
+.wfp-cm-gauge-foot { font-size: .74rem; color: var(--text-muted); }
+
+[data-bs-theme="dark"] .wfp-cm-cell.err-incl .wfp-cm-label, [data-bs-theme="dark"] .wfp-cm-gauge-value.bad { color: #ff8a97; }
+[data-bs-theme="dark"] .wfp-cm-cell.err-excl .wfp-cm-label, [data-bs-theme="dark"] .wfp-cm-gauge-value.review { color: #f5c75a; }
+
+/* Buttons that sit on a row of labelled inputs: align with the inputs. */
+.wfp-inline-action { display: flex; flex-direction: column; }
+.wfp-inline-action .btn { min-height: calc(1.5em + .75rem + 2px); }
+
+/* Error-rate tracks used as KPI tiles: no border, same surface as the page
+   cards, full height of the KPI row. */
+.wfp-cm-gauge.is-kpi { border: 0; background: var(--surface); border-radius: var(--card-radius);
+  padding: 1rem 1.1rem; height: 100%; display: flex; flex-direction: column; justify-content: center; }
+.wfp-cm-gauge.is-kpi .wfp-cm-gauge-value { font-size: 1.75rem; }
+.wfp-cm-gauge.is-kpi .wfp-cm-track { height: 8px; margin: .6rem 0 .45rem; }
+/* Threshold KPI row: four flat tiles, no borders or shadows. */
+.wfp-kpi-flat .bslib-value-box,
+.wfp-kpi-flat .wfp-cm-gauge.is-kpi { border: 0 !important; box-shadow: none !important; background: var(--surface-3) !important; }
+.wfp-kpi-flat > .shiny-html-output { height: 100%; }
+
+/* ===========================================================================
+   DATA INPUTS — one clean, modern style for every control
+   Soft filled fields with a hairline, 10px radius, 40px height; white with a
+   brand ring on focus. Applies to text/number inputs, selects, selectize,
+   pickers, textareas and file inputs, in light and dark.
+   ======================================================================== */
+:root { --field-bg: #f3f6fa; --field-bg-hover: #edf2f8; --field-radius: 10px; --field-h: 40px; }
+[data-bs-theme="dark"] { --field-bg: #182031; --field-bg-hover: #1d2638; }
+
+.form-label, .control-label {
+  font-size: .78rem !important; font-weight: 600 !important; color: var(--text-muted);
+  letter-spacing: .01em; margin-bottom: .35rem;
+}
+.shiny-input-container:not(.shiny-input-container-inline) { margin-bottom: .85rem; }
+
+.form-control, .form-select, .selectize-input,
+.bootstrap-select > .dropdown-toggle {
+  background-color: var(--field-bg) !important;
+  border: 1px solid transparent !important;
+  border-radius: var(--field-radius) !important;
+  min-height: var(--field-h);
+  padding: .5rem .8rem;
+  font-size: .9rem;
+  color: var(--body-text) !important;
+  box-shadow: none !important;
+  transition: background-color var(--transition), border-color var(--transition), box-shadow var(--transition);
+}
+.form-control:hover, .form-select:hover, .selectize-input:hover,
+.bootstrap-select > .dropdown-toggle:hover {
+  background-color: var(--field-bg-hover) !important;
+  border-color: var(--border) !important;
+}
+.form-control:focus, .form-select:focus, .selectize-input.focus,
+.bootstrap-select.show > .dropdown-toggle, .bootstrap-select > .dropdown-toggle:focus {
+  background-color: var(--surface) !important;
+  border-color: var(--wfp-blue) !important;
+  box-shadow: 0 0 0 3px var(--accent-primary-bg) !important;
+  outline: none !important;
+}
+.form-control::placeholder { color: var(--text-muted); opacity: .75; }
+textarea.form-control { min-height: 5rem; line-height: 1.45; }
+.selectize-input { display: flex !important; align-items: center; flex-wrap: wrap; gap: .25rem; }
+.selectize-input > input { font-size: .9rem; }
+.selectize-control.multi .selectize-input > div {
+  background: var(--accent-primary-bg) !important; color: var(--accent-primary) !important;
+  border: 0 !important; border-radius: 6px; padding: .1rem .45rem; font-size: .8rem;
+}
+.bootstrap-select > .dropdown-toggle { display: flex; align-items: center; }
+.bootstrap-select > .dropdown-toggle .filter-option-inner-inner { font-size: .9rem; }
+
+/* File inputs: one pill-shaped field; the Browse button is a quiet tinted
+   segment, and the upload bar is a thin line under it instead of a block. */
+.shiny-input-container .input-group { flex-wrap: nowrap; border-radius: var(--field-radius); }
+.shiny-input-container .input-group > .input-group-btn .btn-file,
+.shiny-input-container .input-group > label.input-group-btn .btn {
+  background: var(--accent-primary-bg) !important; color: var(--accent-primary) !important;
+  border: 0 !important; border-radius: var(--field-radius) 0 0 var(--field-radius) !important;
+  min-height: var(--field-h); font-weight: 600; font-size: .85rem; padding: .5rem .9rem;
+  box-shadow: none !important; transform: none !important;
+}
+.shiny-input-container .input-group > .input-group-btn .btn-file:hover { filter: brightness(.97); }
+.shiny-input-container .input-group > .form-control {
+  border-radius: 0 var(--field-radius) var(--field-radius) 0 !important;
+}
+.shiny-file-input-progress {
+  height: 3px !important; margin-top: .35rem; background: var(--border) !important;
+  border-radius: 2px; overflow: hidden;
+}
+.shiny-file-input-progress .progress-bar { background: var(--wfp-blue) !important; font-size: 0; }
+
+/* Checkboxes and radios: brand accent, a touch larger, aligned with text. */
+.form-check-input, input[type="checkbox"], input[type="radio"] { accent-color: var(--wfp-blue); }
+.form-check-input { width: 1.05em; height: 1.05em; margin-top: .2em; border-color: var(--border-strong); }
+.form-check-input:checked { background-color: var(--wfp-blue); border-color: var(--wfp-blue); }
+.form-check-input:focus { box-shadow: 0 0 0 3px var(--accent-primary-bg); border-color: var(--wfp-blue); }
+
+/* Sliders: slimmer track, brand bar, round handle. */
+.irs--shiny .irs-line { height: 6px; top: 25px; background: var(--field-bg); border: 0; border-radius: 3px; }
+.irs--shiny .irs-bar { height: 6px; top: 25px; background: var(--wfp-blue); border: 0; }
+.irs--shiny .irs-handle { top: 19px; width: 18px; height: 18px; border: 2px solid var(--wfp-blue); background: var(--surface); box-shadow: var(--elev-1); }
+.irs--shiny .irs-single, .irs--shiny .irs-from, .irs--shiny .irs-to { background: var(--wfp-blue); border-radius: 6px; font-size: .72rem; }
+.irs--shiny .irs-min, .irs--shiny .irs-max { background: transparent; color: var(--text-muted); font-size: .7rem; }
+.irs.irs--shiny { background: transparent !important; border: 0 !important; }
+
+/* Inside tinted parameter rows the fields sit on the page surface. */
+.bg-body-tertiary .form-control, .bg-body-tertiary .form-select, .bg-body-tertiary .selectize-input,
+.bg-body-tertiary .bootstrap-select > .dropdown-toggle { background-color: var(--surface) !important; }
+/* Labels on dense parameter rows stay on one line. */
+.bslib-grid .form-label, .bslib-grid .control-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+
+/* ---- Variable selection: correlation matrix ------------------------------ */
+.wfp-corr td, .wfp-corr th { padding: .4rem .5rem; }
+.wfp-corr-cell { text-align: center; font-variant-numeric: tabular-nums; font-size: .8rem; color: var(--body-text); min-width: 3.2rem; }
+.wfp-corr-cell.is-dark { color: #fff; }
+.wfp-corr-cell.is-high { box-shadow: inset 0 0 0 2px var(--body-text); font-weight: 700; }
+.wfp-corr-diag { text-align: center; color: var(--text-muted); background: var(--surface-3); }
+.wfp-corr-row { text-align: left; font-weight: 600; font-size: .82rem; white-space: nowrap; }
+.wfp-corr-idx { display: inline-block; min-width: 1.4rem; color: var(--text-muted); font-weight: 500; }
+.wfp-corr-key { display: inline-block; width: .8rem; height: .8rem; border-radius: 3px; margin: 0 .2rem 0 .5rem; vertical-align: -1px; }
+.wfp-corr-key.pos { background: rgba(10,110,180,.6); }
+.wfp-corr-key.neg { background: rgba(197,25,45,.6); }
+.wfp-model-table tr.is-flagged td { background: var(--accent-warning-bg); }
+.wfp-model-table td .shiny-input-container { margin: 0 !important; }
+.wfp-model-table td .checkbox, .wfp-model-table td .form-check { margin: 0; }
+.wfp-eff-pos { color: var(--accent-primary); font-weight: 600; }
+.wfp-eff-neg { color: var(--accent-danger); font-weight: 600; }
+
+/* Error tracks: tolerance zones in colour, the marker is where we are. */
+.wfp-cm-track { background: rgba(197, 25, 45, .22) !important; }
+.wfp-cm-zone.good { background: rgba(63, 126, 68, .45) !important; }
+.wfp-cm-zone.review { background: rgba(247, 184, 37, .45) !important; }
+.wfp-cm-marker { width: 4px !important; height: 18px !important; top: -5px !important; margin-left: -2px !important;
+  background: var(--body-text) !important; box-shadow: 0 0 0 2px var(--surface) !important; }
+.wfp-cm-marker::after { content: attr(data-label); position: absolute; top: -1.35rem; left: 50%; transform: translateX(-50%);
+  font-size: .68rem; font-weight: 700; white-space: nowrap; color: var(--body-text); }
+.wfp-cm-gauge.is-kpi .wfp-cm-track { margin-top: 1.4rem !important; }
+[data-bs-theme="dark"] .wfp-cm-track { background: rgba(239, 82, 96, .30) !important; }
+[data-bs-theme="dark"] .wfp-cm-zone.good { background: rgba(91, 180, 106, .45) !important; }
+[data-bs-theme="dark"] .wfp-cm-zone.review { background: rgba(247, 184, 37, .40) !important; }
+.wfp-corr { width: auto !important; }
+
+/* Variable calculator: categories / range under each condition row. */
+.wfp-calc-hint { grid-column: 1 / -1; margin: -.45rem 0 .6rem; }
+.wfp-calc-chip { display: inline-flex; align-items: center; gap: .3rem; margin: .15rem .2rem 0 0; padding: .12rem .5rem;
+  border: 1px solid var(--border); border-radius: var(--pill-radius); background: var(--surface); color: var(--body-text);
+  font-size: .75rem; cursor: pointer; transition: var(--transition); }
+.wfp-calc-chip:hover { border-color: var(--wfp-blue); color: var(--wfp-blue); background: var(--accent-primary-bg); }
+.wfp-calc-chip-n { color: var(--text-muted); font-size: .68rem; }
+
+/* Compact correlation matrix (lower triangle). */
+.wfp-corr-wrap { overflow-x: auto; display: inline-block; max-width: 100%; border: 1px solid var(--border); border-radius: var(--card-radius-sm); }
+table.wfp-corr { border-collapse: collapse; font-size: .72rem; font-variant-numeric: tabular-nums; }
+table.wfp-corr th, table.wfp-corr td { padding: .22rem .35rem !important; border: 1px solid var(--surface); }
+table.wfp-corr .wfp-corr-cell { min-width: 2.4rem !important; font-size: .72rem !important; }
+table.wfp-corr .wfp-corr-colh { color: var(--text-muted); font-weight: 600; text-align: center; background: var(--surface-3); }
+table.wfp-corr thead th:first-child { background: var(--surface-3); }
+table.wfp-corr .wfp-corr-row { max-width: 13rem; overflow: hidden; text-overflow: ellipsis; background: var(--surface-3);
+  font-size: .72rem !important; padding-right: .6rem !important; }
+table.wfp-corr .wfp-corr-empty { background: transparent; }
+/* Info tooltips next to labels. */
+.wfp-tip { color: var(--text-muted); margin-left: .3rem; cursor: help; vertical-align: -1px; }
+.wfp-tip:hover { color: var(--wfp-blue); }
+
+.wfp-calc-hint { display: block; margin: -.5rem 0 .75rem; }
+.wfp-corr-wrap { width: fit-content; }
+.wfp-qs-group { margin-bottom: .75rem; }
+.wfp-qs-chip { display: inline-flex; align-items: center; gap: .3rem; margin: .2rem .25rem 0 0; padding: .18rem .6rem;
+  border-radius: var(--pill-radius); font-size: .8rem; border: 1px solid var(--border); background: var(--surface); }
+.wfp-qs-chip.is-assoc { border-color: transparent; background: var(--accent-primary-bg); color: var(--body-text); }
+.wfp-qs-chip .bi { font-size: .8rem; }
+.wfp-qs-chip .up { color: var(--accent-primary); }
+.wfp-qs-chip .down { color: var(--accent-danger); }
+.wfp-qs-how { background: var(--surface-3); border-radius: var(--card-radius-sm); padding: .6rem .9rem; }
+.wfp-qs-how summary { cursor: pointer; }
+.wfp-qs-how li { margin-bottom: .25rem; }
+
+/* Step footer: Back | status | Continue, identical on every design step. */
+.wfp-stepnav { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap;
+  margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+.wfp-stepnav-status { flex: 1 1 280px; text-align: center; }
+
+/* Tooltips: a clean card -- dark on light pages, light on dark pages. */
+.tooltip { --bs-tooltip-max-width: 360px; --bs-tooltip-padding-x: .85rem; --bs-tooltip-padding-y: .65rem;
+  --bs-tooltip-font-size: .8rem; --bs-tooltip-border-radius: 10px; --bs-tooltip-opacity: 1;
+  --bs-tooltip-bg: #1f2a37; --bs-tooltip-color: #eef2f7; }
+.tooltip .tooltip-inner { text-align: left; line-height: 1.45; box-shadow: 0 8px 24px rgba(15, 40, 70, .22);
+  font-family: inherit; font-weight: 400; }
+[data-bs-theme="dark"] .tooltip { --bs-tooltip-bg: #eef2f7; --bs-tooltip-color: #1f2a37; }
+.wfp-tip-body { display: flex; flex-direction: column; gap: .45rem; }
+.wfp-tip-title { font-weight: 700; font-size: .8rem; letter-spacing: .01em; padding-bottom: .3rem;
+  border-bottom: 1px solid rgba(128, 128, 128, .35); }
+.wfp-tip-item strong { font-weight: 700; }
+.wfp-tip-ref { font-size: .7rem; opacity: .7; font-style: italic; margin-top: .1rem; }
+.wfp-tip { opacity: .75; }
+.tooltip.show { opacity: 1 !important; }
+.tooltip .tooltip-inner { background-color: #1f2a37 !important; color: #eef2f7 !important; }
+.tooltip .tooltip-arrow::before { border-top-color: #1f2a37 !important; border-bottom-color: #1f2a37 !important; }
+[data-bs-theme="dark"] .tooltip .tooltip-inner { background-color: #eef2f7 !important; color: #1f2a37 !important; }
+
+/* ---------------------------------------------------------------------------
+   Verdict card: archery animation (verdict_card() in utils_helpers.R)
+   ------------------------------------------------------------------------- */
+.wfp-verdict { --vd: #6c757d; display: flex; gap: 18px; align-items: center; margin-top: .5rem;
+  padding: 14px 18px; border-radius: var(--card-radius, 12px); border: 1px solid transparent;
+  background: color-mix(in srgb, var(--vd) 9%, transparent); border-color: color-mix(in srgb, var(--vd) 28%, transparent); }
+.wfp-verdict.is-good { --vd: #3f7e44; }
+.wfp-verdict.is-review { --vd: #d08a00; }
+.wfp-verdict.is-redesign { --vd: #c5192d; }
+.wfp-verdict .vd-stage { position: relative; flex: 0 0 120px; height: 92px; }
+.wfp-verdict .vd-svg { width: 120px; height: 92px; overflow: visible; }
+.wfp-verdict .vd-text { min-width: 0; }
+.wfp-verdict .vd-head { font-size: 1.15rem; font-weight: 700; color: var(--vd); line-height: 1.2; }
+.wfp-verdict .vd-sub { display: block; font-size: .8rem; font-weight: 500; opacity: .85; margin-top: 2px; }
+.wfp-verdict .vd-interp { font-weight: 600; margin-top: 6px; }
+.wfp-verdict .vd-action { margin-top: 2px; }
+.wfp-verdict .vd-q { font: 700 38px Commissioner, sans-serif; fill: #1f2a37; }
+.wfp-verdict.is-unknown .vd-target { filter: grayscale(1); opacity: .35; }
+.wfp-verdict .vd-target { transform-box: fill-box; transform-origin: center; }
+.wfp-verdict .vd-arrow { transform-box: view-box; }
+
+/* the arrow flies in from the left */
+@keyframes vd-fly { 0% { transform: translateX(-110px); opacity: 0; } 15% { opacity: 1; } 100% { transform: translateX(0); } }
+/* ...and quivers when it sticks */
+@keyframes vd-quiver { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(-4deg); } 75% { transform: rotate(3deg); } }
+/* a miss: flies past, then drops */
+@keyframes vd-miss { 0% { transform: translateX(-130px); opacity: 0; } 15% { opacity: 1; }
+  60% { transform: translateX(0); } 80% { transform: translate(2px, 4px) rotate(8deg); } 100% { transform: translate(0, 2px) rotate(4deg); } }
+@keyframes vd-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.1); } }
+@keyframes vd-wobble { 0%, 100% { transform: rotate(0); } 30% { transform: rotate(-5deg); } 60% { transform: rotate(4deg); } }
+@keyframes vd-shake { 0%, 100% { transform: translateX(0); } 20%, 60% { transform: translateX(-3px); } 40%, 80% { transform: translateX(3px); } }
+@keyframes vd-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+@keyframes vd-burst { 0% { transform: translate(0, 0) rotate(0) scale(.4); opacity: 1; }
+  100% { transform: translate(var(--dx), var(--dy)) rotate(var(--r)) scale(1); opacity: 0; } }
+@keyframes vd-pop { 0% { transform: scale(.6); opacity: 0; } 60% { transform: scale(1.08); opacity: 1; } 100% { transform: scale(1); } }
+
+.wfp-verdict .vd-head { animation: vd-pop .45s ease-out .5s both; transform-origin: left center; }
+.wfp-verdict.is-good .vd-arrow { animation: vd-fly .5s cubic-bezier(.2,.8,.3,1) both, vd-quiver .35s ease-in-out .5s 2; }
+.wfp-verdict.is-good .vd-target { animation: vd-pulse .5s ease-in-out .5s; }
+.wfp-verdict.is-review .vd-arrow { animation: vd-fly .5s cubic-bezier(.2,.8,.3,1) both, vd-quiver .35s ease-in-out .5s 2; }
+.wfp-verdict.is-review .vd-target { animation: vd-wobble .6s ease-in-out .5s; }
+.wfp-verdict.is-redesign .vd-arrow { animation: vd-miss 1s ease-in both; }
+.wfp-verdict.is-redesign .vd-target { animation: vd-shake .45s ease-in-out .55s; }
+.wfp-verdict.is-unknown .vd-q { animation: vd-bob 1.6s ease-in-out infinite; }
+.wfp-verdict .vd-confetti { position: absolute; left: 58%; top: 50%; pointer-events: none; }
+.wfp-verdict .vd-confetti i { position: absolute; width: 7px; height: 11px; border-radius: 2px; background: var(--c);
+  opacity: 0; animation: vd-burst .9s ease-out .5s both; }
+
+/* final frame only: when the verdict is unchanged, or motion is unwanted */
+.wfp-verdict.no-anim *, .wfp-verdict.no-anim .vd-head { animation: none !important; }
+.wfp-verdict.no-anim .vd-confetti { display: none; }
+@media (prefers-reduced-motion: reduce) {
+  .wfp-verdict *, .wfp-verdict .vd-head { animation: none !important; }
+  .wfp-verdict .vd-confetti { display: none; }
+}
+@media (max-width: 575px) { .wfp-verdict { flex-direction: column; align-items: flex-start; } }
+
+/* ==========================================================================
+   Density & polish (last, so it wins over the earlier layers)
+   Smaller type, compact cards, one table style everywhere, quiet motion.
+   ========================================================================== */
+body { font-size: .875rem; }
+.form-label, .control-label, .shiny-input-container > label { font-size: .78rem; font-weight: 600; color: var(--text-muted); margin-bottom: .3rem; }
+.form-control, .form-select, .selectize-input, .bootstrap-select > .dropdown-toggle { font-size: .84rem !important; min-height: 34px; }
+.shiny-input-container { margin-bottom: .75rem; }
+.bslib-sidebar-layout > .sidebar h4, .bslib-sidebar-layout > .sidebar h5, .sidebar-title { font-size: .95rem !important; font-weight: 700; }
+.bslib-sidebar-layout > .sidebar hr { margin: .6rem 0; opacity: .6; }
+.btn { font-size: .82rem; }
+.btn-sm { font-size: .76rem; padding: .25rem .6rem; }
+
+/* Navbar: fits one line at laptop widths */
+.navbar .nav-link { font-size: .8rem !important; padding: .45rem .55rem !important; }
+.navbar-brand { font-size: .95rem !important; }
+.navbar .session-toolbar > span, .navbar .mini-theme-selector > span { font-size: .72rem !important; text-transform: uppercase; letter-spacing: .06em; opacity: .8; }
+.navbar .session-toolbar .btn { padding: .2rem .5rem; font-size: .74rem; }
+.navbar .mini-theme-selector select { font-size: .78rem; padding: .2rem .5rem; height: 30px; }
+.wfp-co-btn { background: rgba(255,255,255,.10) !important; color: #fff !important; border: 1px solid rgba(255,255,255,.25) !important;
+  font-size: .74rem !important; padding: .2rem .6rem !important; border-radius: 999px !important; white-space: nowrap; }
+.wfp-co-btn:hover { background: rgba(255,255,255,.18) !important; }
+.navbar .navbar-collapse { flex-wrap: nowrap; min-width: 0; }
+
+/* Cards and value boxes: compact, hairline, gentle lift on hover */
+.card { transition: box-shadow var(--transition), border-color var(--transition), transform var(--transition); }
+.card:hover { border-color: var(--border-strong); }
+.card-header { font-size: .72rem !important; padding: .65rem 1rem !important; }
+.card-body { padding: .85rem 1rem; }
+.bslib-value-box { min-height: 0 !important; }
+.bslib-value-box .value-box-grid { padding: .75rem .9rem !important; }
+.bslib-value-box .value-box-area { padding: .25rem .5rem !important; }
+.bslib-value-box .value-box-title { font-size: .68rem !important; margin-bottom: .15rem !important; }
+.bslib-value-box .value-box-value { font-size: 1.45rem !important; line-height: 1.15 !important; }
+.bslib-value-box .value-box-showcase { max-height: 56px; }
+.bslib-value-box .value-box-showcase .bi, .bslib-value-box .value-box-showcase svg { width: 1.1rem; height: 1.1rem; }
+.nav-tabs .nav-link, .nav-underline .nav-link, .nav-pills .nav-link { font-size: .82rem; padding: .45rem .75rem; }
+
+/* Tables: one clean style for DataTables, Bootstrap and the app's HTML tables */
+table.dataTable, .table, .wfp-model-table { font-size: .78rem !important; }
+table.dataTable thead th, .table thead th, .wfp-model-table th {
+  background: var(--surface-3) !important; color: var(--text-muted) !important;
+  font-size: .68rem !important; font-weight: 600 !important; letter-spacing: .05em; text-transform: uppercase;
+  padding: .5rem .65rem !important; border-bottom: 1px solid var(--border-strong) !important; border-top: 0 !important;
+  white-space: nowrap;
+}
+table.dataTable tbody td, .table tbody td, .wfp-model-table td {
+  padding: .42rem .65rem !important; border-top: 0 !important; border-bottom: 1px solid var(--border) !important;
+  vertical-align: middle; line-height: 1.35;
+}
+table.dataTable tbody tr > td, table.dataTable.stripe tbody tr.odd > td, table.dataTable.display tbody tr.odd > td,
+.table-striped > tbody > tr:nth-of-type(odd) > * { background: transparent !important; box-shadow: none !important; }
+table.dataTable tbody tr:hover > td, .table tbody tr:hover > td { background: var(--accent-primary-bg) !important; }
+table.dataTable.no-footer { border-bottom: 0 !important; }
+table.dataTable tbody td .btn { font-size: .72rem; padding: .15rem .5rem; }
+.dataTables_wrapper { font-size: .76rem; }
+.dataTables_wrapper .dataTables_length select, .dataTables_wrapper .dataTables_filter input {
+  font-size: .76rem !important; height: 28px; padding: .1rem .45rem !important; border-radius: 6px; }
+.dataTables_wrapper .dataTables_info { color: var(--text-muted); padding-top: .6rem !important; }
+.dataTables_wrapper .dataTables_paginate .paginate_button { font-size: .74rem; padding: .2rem .55rem !important; border-radius: 6px !important; }
+.dataTables_wrapper .dataTables_scrollHead, .dataTables_wrapper .dataTables_scrollBody { border-color: var(--border) !important; }
+.dataTables_wrapper .dataTables_scroll { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+
+/* Motion: panels fade in when shown; outputs cross-fade while recalculating */
+@keyframes wfp-fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+.tab-content > .tab-pane.active { animation: wfp-fade-in .22s ease-out; }
+.shiny-bound-output { transition: opacity .2s ease; }
+@media (prefers-reduced-motion: reduce) { .tab-content > .tab-pane.active { animation: none; } .card { transition: none; } }
+
+/* Row "Details" buttons: a quiet pill that fills on hover, chevron nudges */
+.wfp-details-btn {
+  display: inline-flex !important; align-items: center; gap: .35rem;
+  padding: .2rem .45rem .2rem .55rem !important; border-radius: 999px !important;
+  font-size: .72rem !important; font-weight: 600; line-height: 1.2; white-space: nowrap; cursor: pointer;
+  color: var(--accent-primary) !important; background: var(--accent-primary-bg) !important;
+  border: 1px solid transparent !important; box-shadow: none !important;
+  transition: background var(--transition), color var(--transition), border-color var(--transition);
+}
+.wfp-details-btn svg { width: 13px; height: 13px; flex: none; }
+.wfp-details-btn .wfp-details-chev { width: 11px; height: 11px; opacity: .7; transition: transform var(--transition), opacity var(--transition); }
+.wfp-details-btn:hover { background: var(--accent-primary) !important; color: #fff !important; }
+.wfp-details-btn:hover .wfp-details-chev { transform: translateX(2px); opacity: 1; }
+.wfp-details-btn:focus-visible { outline: 2px solid var(--accent-primary); outline-offset: 2px; }
+
+/* Loading: a small card over a light scrim (waiter_content()) */
+.waiter-overlay { background-color: rgba(15, 23, 42, .28) !important; backdrop-filter: blur(1.5px); }
+.wfp-wait { display: flex; flex-direction: column; align-items: stretch; gap: .6rem; min-width: 280px; max-width: 420px;
+  padding: 1rem 1.15rem; border-radius: 12px; background: var(--surface); color: var(--body-text);
+  border: 1px solid var(--border); box-shadow: var(--shadow-soft-lg); text-align: left; animation: wfp-fade-in .18s ease-out; }
+.wfp-wait-row { display: flex; align-items: center; gap: .7rem; }
+.wfp-wait-ring { width: 18px; height: 18px; flex: none; border-radius: 50%; border: 2px solid var(--accent-primary-bg);
+  border-top-color: var(--accent-primary); animation: wfp-spin .8s linear infinite; }
+.wfp-wait-msg { font-size: .86rem; font-weight: 600; flex: 1 1 auto; }
+.wfp-wait-pct { font-size: .78rem; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.wfp-wait-bar { height: 4px; border-radius: 2px; background: var(--surface-3); overflow: hidden; }
+.wfp-wait-bar span { display: block; height: 100%; background: var(--accent-primary); transition: width .3s ease; }
+.wfp-wait-sub { font-size: .76rem; color: var(--text-muted); }
+.wfp-wait .btn { align-self: flex-end; }
+@keyframes wfp-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .wfp-wait-ring { animation-duration: 2.4s; } }
+
+/* Navbar on laptop screens: tools collapse to icons before anything wraps */
+.navbar .mini-theme-selector select { width: 96px !important; }
+@media (max-width: 1700px) {
+  .navbar .session-toolbar > span, .navbar .mini-theme-selector > span { display: none; }
+  .navbar .session-toolbar .btn .action-label { display: none; }
+  .navbar .session-toolbar .btn { padding: .3rem .5rem !important; }
+}
+@media (max-width: 1440px) {
+  .navbar-brand .brand-text { display: none; }
+  .navbar .nav-link { padding: .4rem .45rem !important; }
+  .wfp-co-btn { max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
+}
+
+/* HTML tables scroll inside their frame too; the header stays (sticky th) */
+.wfp-model-table-wrap { max-height: 480px; overflow: auto; }
+.wfp-model-table thead th { z-index: 2; }
+
+/* Beneficiary Selection sidebar: numbered steps in process order.
+   Hidden steps (conditionalPanel -> display:none) are not counted. */
+.wfp-ben-sidebar .sidebar-content { counter-reset: sbstep; }
+.wfp-sb-step { counter-increment: sbstep; padding: .7rem 0 .4rem; border-top: 1px solid var(--border); }
+.wfp-sb-step:first-of-type { border-top: 0; padding-top: .2rem; }
+.wfp-sb-head { display: flex; align-items: center; gap: .5rem; margin-bottom: .55rem;
+  font-size: .74rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--body-text); }
+.wfp-sb-num { width: 20px; height: 20px; border-radius: 50%; flex: none; display: inline-flex; align-items: center; justify-content: center;
+  background: var(--accent-primary-bg); color: var(--accent-primary); font-size: .7rem; letter-spacing: 0; }
+.wfp-sb-num::before { content: counter(sbstep); }
+.wfp-sb-step .shiny-input-container { margin-bottom: .55rem; }
+.wfp-sb-step .radio label, .wfp-sb-step .form-check-label { font-size: .82rem; }
+.wfp-sb-actions { position: sticky; bottom: 0; z-index: 3; margin: .5rem -1rem -1rem; padding: .75rem 1rem 1rem;
+  background: var(--surface-2); border-top: 1px solid var(--border); }
+
+/* ---- Overview map --------------------------------------------------------- */
+.wfp-map-card .card-header .shiny-text-output { text-transform: none; letter-spacing: 0; }
+.wfp-map-toolbar { display: flex; align-items: center; justify-content: space-between; gap: .75rem; flex-wrap: wrap;
+  padding: .55rem 1rem; border-bottom: 1px solid var(--border); }
+.wfp-map-toolbar-label { font-size: .72rem; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--text-muted); white-space: nowrap; }
+.wfp-map-var { flex: 0 1 220px; min-width: 160px; }
+.wfp-map-var .shiny-input-container { margin: 0 !important; width: 100% !important; }
+.wfp-map-var select { height: 32px; font-size: .82rem !important; padding: .2rem 2rem .2rem .6rem; }
+.wfp-map-toolbar .btn-group-toggle, .wfp-map-toolbar .form-group { margin: 0; }
+.wfp-map-note:empty { display: none; }
+.wfp-map-note { padding: .4rem 1rem 0; }
+.wfp-map-card .leaflet-container { background: var(--surface-3); font-family: inherit; min-height: 520px; }
+
+/* Map controls: flat, hairline, follow the theme */
+.leaflet-bar, .leaflet-control-layers { border: 1px solid var(--border) !important; border-radius: 8px !important;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, .12) !important; overflow: hidden; }
+.leaflet-bar a { background: var(--surface) !important; color: var(--body-text) !important; border-bottom-color: var(--border) !important;
+  width: 30px !important; height: 30px !important; line-height: 30px !important; }
+.leaflet-bar a:hover { background: var(--surface-3) !important; color: var(--accent-primary) !important; }
+.leaflet-control-layers { background: var(--surface) !important; color: var(--body-text); }
+.leaflet-control-layers-expanded { padding: .5rem .75rem !important; font-size: .8rem; }
+.leaflet-control-layers-toggle { width: 34px !important; height: 34px !important; background-size: 18px 18px !important; }
+.leaflet-control-scale-line { background: rgba(255,255,255,.75); border-color: #5b6b7e; color: #1f2a37; font-size: 10px; }
+.leaflet .legend, .leaflet-control .info.legend { background: var(--surface) !important; color: var(--body-text) !important;
+  border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 2px 8px rgba(15, 23, 42, .12);
+  padding: .5rem .7rem !important; font-size: .74rem; line-height: 1.5; }
+.leaflet .legend .legend-title, .leaflet .info.legend strong { font-weight: 700; font-size: .72rem; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); }
+.leaflet .legend i, .leaflet .legend svg { border-radius: 50%; }
+.leaflet-popup-content-wrapper { border-radius: 10px; box-shadow: 0 6px 18px rgba(15, 23, 42, .18); }
+.leaflet-popup-content { margin: .6rem .8rem; font-family: inherit; }
+.wfp-map-pop { display: flex; flex-direction: column; gap: .1rem; min-width: 150px; font-size: .78rem; color: #1f2a37; }
+.wfp-map-pop b { font-size: .84rem; }
+.wfp-map-pop span { color: #5b6b7e; }
+.wfp-map-pop strong { font-size: .95rem; color: #0A6EB4; }
+.wfp-map-label { font-family: inherit; font-size: .74rem; font-weight: 600; border-radius: 6px; padding: .15rem .45rem; }
+.leaflet-control-attribution { font-size: 9px; opacity: .7; }
+[data-bs-theme="dark"] .leaflet-control-scale-line { background: rgba(18, 24, 38, .75); color: #e6ebf2; border-color: #94a3b8; }
+
+/* ---- Overview summary card --------------------------------------------- */
+.wfp-profile-bar { display: flex; align-items: center; justify-content: space-between; gap: .75rem; flex-wrap: wrap;
+  margin: .5rem 0 .25rem; padding-top: .75rem; border-top: 1px solid var(--border); }
+.wfp-profile-title { font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--text-muted); }
+.wfp-profile-bar .form-group { margin: 0; }
+
+/* ---- Selectors sized for their text ------------------------------------ */
+.dataTables_wrapper .dataTables_length select { min-width: 64px; padding-right: 1.6rem !important; background-position: right .4rem center; }
+.navbar .mini-theme-selector select { width: 112px !important; }
+.air-datepicker-global-container ~ *, .airdatepicker input, input.airdatepicker { font-size: .8rem !important; }
+.bslib-sidebar-layout .sidebar input[type="text"] { text-overflow: ellipsis; }
+.bootstrap-select > .dropdown-toggle .filter-option-inner-inner { overflow: hidden; text-overflow: ellipsis; }
+.bootstrap-select .dropdown-menu { min-width: 100% !important; font-size: .82rem; }
+.bootstrap-select .dropdown-menu li a { padding: .3rem .75rem; white-space: normal; }
+.selectize-dropdown, .selectize-input { font-size: .84rem !important; }
+.selectize-input { min-height: 34px; padding: .35rem .6rem !important; }
+.form-select { padding-right: 2rem; }
+
+/* Beneficiary Selection: the design tab, numbered step cards in a grid */
+.wfp-design-grid { counter-reset: sbstep; display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem; align-items: start; }
+.wfp-design-grid > div > .wfp-sb-step, .wfp-design-grid > .wfp-sb-step {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--card-radius, 12px);
+  padding: 1rem 1.1rem .6rem; box-shadow: var(--shadow-soft); }
+.wfp-design-grid > div:empty { display: none; }
+.wfp-design-foot { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap;
+  margin-top: 1rem; padding: .75rem 1rem; border: 1px dashed var(--border-strong); border-radius: var(--card-radius, 12px); }
+
+/* Location normalisation: what is selected, and easy-to-hit rows */
+.wfp-norm-bar { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; margin: .5rem 0 .75rem; padding: .5rem .75rem;
+  border: 1px solid var(--border); border-radius: 8px; background: var(--accent-primary-bg); font-size: .8rem; }
+.wfp-norm-bar.is-empty { background: transparent; border-style: dashed; }
+.wfp-norm-chip { display: inline-flex; align-items: center; gap: .35rem; padding: .1rem .5rem; border-radius: 999px;
+  background: var(--surface); border: 1px solid var(--border-strong); font-weight: 600; }
+.wfp-norm-chip em { font-style: normal; font-weight: 500; color: var(--text-muted); font-size: .72rem; }
+table.dataTable tbody tr { cursor: pointer; }
+table.dataTable tbody tr.selected > td, table.dataTable tbody tr.selected:hover > td,
+table.dataTable.display tbody tr.odd.selected > td, table.dataTable.display tbody tr.even.selected > td,
+table.dataTable.stripe tbody tr.odd.selected > td, table.dataTable tbody tr.odd.selected > td, table.dataTable tbody tr.even.selected > td {
+  background: var(--accent-primary) !important; color: #fff !important; box-shadow: none !important; }
+table.dataTable tbody tr.selected > td a { color: #fff !important; }
+
+/* Targeting Monitoring: report items and builder */
+.wfp-section-title { font-size: .78rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--text-muted); }
+.wfp-item { border: 1px solid var(--border); border-radius: 10px; padding: .65rem .8rem; margin-bottom: .6rem; background: var(--surface); }
+.wfp-item-head { display: flex; align-items: center; gap: .65rem; }
+.wfp-item-num { width: 24px; height: 24px; border-radius: 50%; flex: none; display: inline-flex; align-items: center; justify-content: center;
+  background: var(--accent-primary-bg); color: var(--accent-primary); font-size: .75rem; font-weight: 700; }
+.wfp-item strong { font-size: .86rem; }
+.wfp-cb-field { flex: 1 1 0; min-width: 0; }
+.wfp-cb-add { border-top: 1px solid var(--border); margin-top: .75rem; padding-top: .75rem; }
+
+/* downloadButton() always adds btn-default; let the intended class win */
+.btn.btn-default.btn-primary { background: var(--accent-primary) !important; border-color: var(--accent-primary) !important; color: #fff !important; }
+.btn.btn-default.btn-primary:hover { filter: brightness(.94); }
+.wfp-pdm-grid { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+.wfp-pdm-grid .shiny-input-container { width: 100% !important; }
+
+/* Welcome page tagline */
+/* Welcome tagline: its own line, amber, as wide as the TargetWise title;
+   the amber rule below sets it apart from the description */
+.wfp-hero .wfp-hero-tagline { margin: .15rem 0 .9rem; color: #f7b825; font-size: 1.447rem; font-weight: 700;
+  line-height: 1.2; letter-spacing: 0; }
+.wfp-hero .wfp-hero-rule { margin: 0 auto 1.1rem !important; }
+.wfp-hero .wfp-hero-lead { font-size: 1rem !important; opacity: .82; max-width: 760px; margin-left: auto; margin-right: auto; }
+
+/* Startup splash (waiterPreloader) */
+.tw-splash { display: flex; flex-direction: column; align-items: center; gap: .35rem; color: #fff; text-align: center;
+  font-family: Commissioner, 'Segoe UI', system-ui, sans-serif; animation: wfp-fade-in .4s ease-out; }
+.tw-splash-logo { height: 64px; margin-bottom: 1.1rem; opacity: .95; }
+.tw-splash-name { font-size: 3rem; font-weight: 800; letter-spacing: -.03em; line-height: 1; }
+.tw-splash-tagline { font-size: 1.56rem; font-weight: 600; color: #f7b825; margin-top: .35rem; }
+.tw-splash-bar { width: 220px; height: 3px; margin: 1.6rem 0 .6rem; border-radius: 3px; background: rgba(255,255,255,.18); overflow: hidden; }
+.tw-splash-bar span { display: block; width: 40%; height: 100%; border-radius: 3px; background: #f7b825;
+  animation: tw-splash-slide 1.2s ease-in-out infinite; }
+.tw-splash-sub { font-size: .85rem; opacity: .7; }
+@keyframes tw-splash-slide { 0% { transform: translateX(-110%); } 100% { transform: translateX(260%); } }
+@media (prefers-reduced-motion: reduce) { .tw-splash-bar span { animation: none; width: 100%; } }
+/* The startup overlay keeps its own deep blue, not the light scrim used while working */
+.waiter-overlay:has(.tw-splash) { background-color: #07456f !important; backdrop-filter: none; }

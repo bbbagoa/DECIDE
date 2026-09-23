@@ -1,0 +1,23 @@
+.Rproj.user
+.Renviron
+renv/library/
+renv/staging/
+node_modules/
+package-lock.json
+manifest.json
+rsconnect/
+.quarto/
+**/*.quarto_ipynb
+TargetWise.Rcheck/
+*.tar.gz
+.kimi/
+
+# shinytest2 debug artefacts
+tests/testthat/_snaps/**/*.new.*
+dist/
+
+# Never publish household data
+data/
+*.sav
+*.dta
+*.rds

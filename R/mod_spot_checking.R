@@ -1,0 +1,918 @@
+#' Spot Checking Module UI
+#'
+#' @param id module id
+#' @import shiny
+#' @noRd
+mod_spot_checking_ui <- function(id) {
+  ns <- NS(id)
+  tagList(
+    bslib::layout_sidebar(
+      fillable = FALSE,
+      sidebar = bslib::sidebar(
+        title = "Spot Check Filters",
+        width = 300,
+        shinyWidgets::pickerInput(
+          inputId = ns("sc_admin1"), label = "Admin 1:",
+          choices = character(0), multiple = TRUE,
+          options = shinyWidgets::pickerOptions(actionsBox = TRUE, liveSearch = TRUE)
+        ),
+        shinyWidgets::pickerInput(
+          inputId = ns("sc_admin2"), label = "Admin 2:",
+          choices = character(0), multiple = TRUE,
+          options = shinyWidgets::pickerOptions(actionsBox = TRUE, liveSearch = TRUE)
+        ),
+        shinyWidgets::pickerInput(
+          inputId = ns("sc_admin3"), label = "Admin 3:",
+          choices = character(0), multiple = TRUE,
+          options = shinyWidgets::pickerOptions(actionsBox = TRUE, liveSearch = TRUE)
+        ),
+        textInput(ns("sc_search"), "Search in records:", placeholder = "e.g. household ID"),
+        hr(),
+        tags$h6("Sampling"),
+        radioButtons(ns("sc_mode"), "Interview mode",
+                     choices = c("Face to face" = "face", "Remote (phone)" = "remote"), selected = "face", inline = TRUE),
+        conditionalPanel(
+          condition = sprintf("input['%s'] === 'remote'", ns("sc_mode")),
+          selectInput(ns("sc_phone_col"), "Phone number column", choices = character(0), width = "100%"),
+          tags$div(class = "small text-muted mb-2", "Only households with a valid phone number are sampled.")
+        ),
+        numericInput(ns("sc_sample_size"), "Sample size:", value = 30, min = 1, max = 100000, step = 1),
+        selectInput(ns("sc_per_unit"), "Sample size applies to",
+                    choices = c("The whole scope" = "all", "Each Admin 1" = "admin1", "Each Admin 2" = "admin2",
+                                "Each Admin 3" = "admin3", "Each village" = "village"),
+                    selected = "all", width = "100%"),
+        shinyWidgets::pickerInput(
+          inputId = ns("sc_sample_method"),
+          label = "Method:",
+          choices = c(
+            "Simple Random" = "random",
+            "Systematic" = "systematic",
+            "PPS (size = hh size or weight)" = "pps"
+          ),
+          selected = "random"
+        ),
+        numericInput(ns("sc_seed"), "Random seed:", value = 12345, min = 1, step = 1),
+        hr(),
+        tags$div(
+          class = "d-flex gap-2 mt-2",
+          actionButton(ns("sc_apply"), "Apply", class = "btn-primary btn-sm flex-fill", icon = icon("filter")),
+          actionButton(ns("sc_clear"), label = NULL, icon = icon("xmark"), class = "btn-outline-secondary btn-sm")
+        ),
+        hr(),
+        downloadButton(ns("download_spot"), "Export Sample", class = "btn-outline-primary w-100")
+      ),
+      bslib::layout_columns(
+        bslib::value_box(
+          title = "Population Records",
+          value = textOutput(ns("sc_pop_total")),
+          showcase = bsicons::bs_icon("database"),
+          theme = "primary"
+        ),
+        bslib::value_box(
+          title = "Share sampled",
+          value = textOutput(ns("sc_share")),
+          showcase = bsicons::bs_icon("pie-chart"),
+          theme = "info"
+        ),
+        bslib::value_box(
+          title = "Sample Size",
+          value = textOutput(ns("sc_sample_n")),
+          showcase = bsicons::bs_icon("list-ol"),
+          theme = "secondary"
+        ),
+        bslib::value_box(
+          title = "Back-check agreement",
+          value = textOutput(ns("sc_agreement")),
+          showcase = bsicons::bs_icon("check-circle"),
+          theme = "success"
+        ),
+        col_widths = c(3, 3, 3, 3)
+      ),
+      uiOutput(ns("sc_pool_note")),
+      # Two steps, two tabs: draw the sample to check, then verify it.
+      bslib::navset_underline(
+        id = ns("sc_tabs"),
+        bslib::nav_panel(
+          value = "sample", title = tagList(bsicons::bs_icon("list-check"), " 1. Sample for checking"),
+          bslib::card(
+            class = "mt-3", full_screen = TRUE,
+            bslib::card_header(
+              tags$div(class = "d-flex justify-content-between align-items-center gap-2",
+                       tags$span("Sampled households"),
+                       actionButton(ns("sc_go_verify"), "Continue to verification", icon = icon("arrow-right"),
+                                    class = "btn-outline-primary btn-sm"))),
+            tags$p(class = "small text-muted mb-2",
+                   "Export this list, re-visit these households, then load what the team collected in the Verification tab."),
+            DT::DTOutput(ns("spot_table"), fill = FALSE)
+          )
+        ),
+        bslib::nav_panel(
+          value = "verify", title = tagList(bsicons::bs_icon("clipboard-check"), " 2. Verification"),
+
+      # ---------------------------------------------------------------------
+      # Back-check: the sample is re-collected in the field, then compared
+      # field-by-field against what was originally recorded.
+      # ---------------------------------------------------------------------
+      bslib::card(
+        class = "mt-3", full_screen = TRUE,
+        bslib::card_header(bsicons::bs_icon("clipboard-check"), " Back-check comparison"),
+        bslib::card_body(
+          tags$p(
+            class = "text-muted small",
+            "Export the sample above, re-collect those households, then load the results here to measure how far the two rounds agree."
+          ),
+          tags$div(
+            class = "d-flex flex-wrap align-items-end gap-3",
+            tags$div(
+              style = "flex: 0 1 220px;",
+              shinyWidgets::pickerInput(
+                ns("verif_source"), "Verification data from:",
+                choices = c("File upload" = "file", "MODA form" = "moda"),
+                selected = "file", width = "100%"
+              )
+            ),
+            conditionalPanel(
+              condition = sprintf("input['%s'] == 'file'", ns("verif_source")),
+              tags$div(
+                style = "flex: 1 1 320px;",
+                fileInput(
+                  ns("verif_file"), "Verification dataset",
+                  accept = c(".xlsx", ".xls", ".sav", ".dta", ".csv", ".parquet"),
+                  width = "100%"
+                )
+              )
+            ),
+            conditionalPanel(
+              condition = sprintf("input['%s'] == 'moda'", ns("verif_source")),
+              tags$div(
+                class = "d-flex flex-wrap align-items-end gap-2",
+                style = "flex: 1 1 420px;",
+                tags$div(
+                  style = "flex: 1 1 150px;",
+                  textInput(ns("verif_form_id"), "Verification Form ID:", placeholder = "e.g. 123456", width = "100%")
+                ),
+                tags$div(
+                  style = "flex: 1 1 200px;",
+                  passwordInput(ns("verif_token"), "API Gateway Key:", width = "100%")
+                ),
+                tags$div(
+                  class = "pb-3",
+                  actionButton(ns("verif_fetch"), "Fetch", class = "btn-outline-primary",
+                               icon = icon("cloud-arrow-down"))
+                )
+              )
+            )
+          ),
+          uiOutput(ns("verif_status")),
+          tags$div(
+            class = "d-flex flex-wrap align-items-end gap-3 mt-2",
+            tags$div(
+              style = "flex: 0 1 240px;",
+              shinyWidgets::pickerInput(
+                ns("verif_key"), "Match records on:", choices = NULL, width = "100%",
+                options = shinyWidgets::pickerOptions(liveSearch = TRUE)
+              )
+            ),
+            tags$div(
+              style = "flex: 1 1 340px; max-width: 560px;",
+              shinyWidgets::pickerInput(
+                ns("verif_cols"), "Fields to compare:", choices = NULL, multiple = TRUE, width = "100%",
+                options = shinyWidgets::pickerOptions(actionsBox = TRUE, liveSearch = TRUE)
+              )
+            ),
+            tags$div(
+              style = "flex: 0 1 150px;",
+              numericInput(ns("verif_tolerance"), "Numeric tolerance:", value = 0, min = 0, step = 0.1, width = "100%")
+            ),
+            tags$div(
+              class = "d-flex align-items-end gap-2 ms-auto pb-3",
+              actionButton(ns("verif_run"), "Run comparison", class = "btn-primary", icon = icon("code-compare")),
+              downloadButton(ns("verif_report"), "Verification report (HTML)", class = "btn-outline-primary"),
+              downloadButton(ns("verif_download"), "Excel", class = "btn-outline-secondary")
+            )
+          ),
+          uiOutput(ns("verif_hint")),
+          uiOutput(ns("verif_results"))
+        )
+      )
+        )
+      )
+    )
+  )
+}
+
+#' Spot Checking Module Server
+#'
+#' @param id module id
+#' @param uploaded_df reactive data
+#' @param user_setup reactive values
+#' @import shiny
+#' @noRd
+mod_spot_checking_server <- function(id, uploaded_df, user_setup, workspace = NULL) {
+  moduleServer(id, function(input, output, session) {
+    # moduleServer does NOT provide `ns`; server-side UI (renderUI) that builds
+    # namespaced output ids needs it explicitly or it fails with
+    # "could not find function \"ns\"".
+    ns <- session$ns
+
+    applied <- reactiveValues(
+      admin1 = NULL, admin2 = NULL, admin3 = NULL, search = "",
+      sample_size = 30, sample_method = "random", seed = 12345,
+      mode = "face", phone_col = NULL, per_unit = "all"
+    )
+
+    # Saved with the session: the applied sample and the back-check. The
+    # sample is seeded, so the same filters redraw the same households.
+    workspace_register(workspace, "spot_checking",
+      snapshot = function() if (is.null(uploaded_df())) NULL else list(
+        applied = reactiveValuesToList(applied), verification = verification_df(),
+        comparison = comparison(),
+        inputs = list(verif_key = input$verif_key, verif_cols = input$verif_cols,
+                      verif_tolerance = input$verif_tolerance)),
+      restore = function(s) {
+        # after the data-load observer has reset the filters
+        after_flush(session, function() {
+          for (k in names(s$applied)) applied[[k]] <- s$applied[[k]]
+          for (lvl in c("admin1", "admin2", "admin3")) {
+            shinyWidgets::updatePickerInput(session, paste0("sc_", lvl), selected = s$applied[[lvl]] %||% character(0))
+          }
+          updateTextInput(session, "sc_search", value = s$applied$search %||% "")
+          updateNumericInput(session, "sc_sample_size", value = s$applied$sample_size)
+          updateNumericInput(session, "sc_seed", value = s$applied$seed)
+          shinyWidgets::updatePickerInput(session, "sc_sample_method", selected = s$applied$sample_method)
+          updateRadioButtons(session, "sc_mode", selected = s$applied$mode %||% "face")
+          updateSelectInput(session, "sc_per_unit", selected = s$applied$per_unit %||% "all")
+          if (shiny::isTruthy(s$applied$phone_col)) updateSelectInput(session, "sc_phone_col", selected = s$applied$phone_col)
+          verification_df(s$verification)
+          # and after the back-check pickers have been refilled
+          after_flush(session, function() {
+            comparison(s$comparison)
+            shinyWidgets::updatePickerInput(session, "verif_key", selected = s$inputs$verif_key)
+            shinyWidgets::updatePickerInput(session, "verif_cols", selected = s$inputs$verif_cols)
+            if (!is.null(s$inputs$verif_tolerance)) updateNumericInput(session, "verif_tolerance", value = s$inputs$verif_tolerance)
+          })
+        })
+      })
+
+    observe({
+      df <- uploaded_df(); req(df)
+      cols <- names(df)
+      guess <- c(user_setup$phone_avail, grep("phone|tel|mobile|portable|numero", cols, ignore.case = TRUE, value = TRUE))
+      guess <- intersect(guess, cols)
+      updateSelectInput(session, "sc_phone_col", choices = c("Choose a column" = "", unique(c(guess, cols))),
+                        selected = isolate(input$sc_phone_col) %||% if (length(guess)) guess[1] else NULL)
+    })
+
+    # Update filter choices when data or mappings change
+    observe({
+      req(uploaded_df())
+      df <- uploaded_df()
+      for (lvl in c("admin1", "admin2", "admin3")) {
+        col <- user_setup[[lvl]]
+        if (!is.null(col) && col %in% names(df)) {
+          shinyWidgets::updatePickerInput(
+            session = session,
+            inputId = paste0("sc_", lvl),
+            choices = sort(unique(as.character(df[[col]]))),
+            selected = character(0)
+          )
+        }
+      }
+      applied$admin1 <- NULL
+      applied$admin2 <- NULL
+      applied$admin3 <- NULL
+      applied$search <- ""
+      updateTextInput(session, "sc_search", value = "")
+    })
+
+    observeEvent(input$sc_apply, {
+      waiter::waiter_show(
+        html = waiter_content(),
+        color = "rgba(10, 30, 50, 0.65)"
+      )
+      on.exit(waiter::waiter_hide(), add = TRUE)
+
+      applied$admin1 <- input$sc_admin1
+      applied$admin2 <- input$sc_admin2
+      applied$admin3 <- input$sc_admin3
+      applied$search <- input$sc_search
+      applied$sample_size <- max(1, as.integer(input$sc_sample_size))
+      applied$sample_method <- input$sc_sample_method
+      applied$seed <- as.integer(input$sc_seed)
+      applied$mode <- input$sc_mode %||% "face"
+      applied$phone_col <- input$sc_phone_col
+      applied$per_unit <- input$sc_per_unit %||% "all"
+      showNotification("Spot check filters and sample applied.", type = "message")
+    })
+
+    observeEvent(input$sc_clear, {
+      waiter::waiter_show(
+        html = waiter_content(),
+        color = "rgba(10, 30, 50, 0.65)"
+      )
+      on.exit(waiter::waiter_hide(), add = TRUE)
+
+      for (lvl in c("sc_admin1", "sc_admin2", "sc_admin3")) {
+        shinyWidgets::updatePickerInput(session, lvl, selected = character(0))
+      }
+      updateTextInput(session, "sc_search", value = "")
+      updateNumericInput(session, "sc_sample_size", value = 30)
+      updateNumericInput(session, "sc_seed", value = 12345)
+      applied$admin1 <- NULL
+      applied$admin2 <- NULL
+      applied$admin3 <- NULL
+      applied$search <- ""
+      applied$sample_size <- 30
+      applied$sample_method <- "random"
+      applied$seed <- 12345
+      showNotification("Spot check filters cleared.", type = "message")
+    })
+
+    filtered_data <- reactive({
+      req(uploaded_df())
+      df <- uploaded_df()
+
+      if (shiny::isTruthy(user_setup$admin1) && shiny::isTruthy(applied$admin1)) {
+        df <- df[df[[user_setup$admin1]] %in% applied$admin1, , drop = FALSE]
+      }
+      if (shiny::isTruthy(user_setup$admin2) && shiny::isTruthy(applied$admin2)) {
+        df <- df[df[[user_setup$admin2]] %in% applied$admin2, , drop = FALSE]
+      }
+      if (shiny::isTruthy(user_setup$admin3) && shiny::isTruthy(applied$admin3)) {
+        df <- df[df[[user_setup$admin3]] %in% applied$admin3, , drop = FALSE]
+      }
+
+      if (shiny::isTruthy(applied$search)) {
+        txt <- tolower(applied$search)
+        # Column by column: apply(df, 1, ...) coerced the whole frame to a
+        # character matrix, which at 1 GB is the page freezing.
+        matches <- Reduce(`|`, lapply(df, function(col) grepl(txt, tolower(as.character(col)), fixed = TRUE)),
+                          rep(FALSE, nrow(df)))
+        df <- df[matches, , drop = FALSE]
+      }
+
+      df
+    })
+
+    # The households that can be reached: all of them face to face, only
+    # those with a valid phone number for a remote check.
+    sample_pool <- reactive({
+      df <- filtered_data(); req(df)
+      pc <- applied$phone_col
+      if (identical(applied$mode, "remote")) {
+        # No phone column, no remote sample: never fall back to everyone.
+        keep <- if (shiny::isTruthy(pc) && pc %in% names(df)) which(valid_phone(df[[pc]])) else integer(0)
+        df <- df[keep, , drop = FALSE]
+      }
+      df
+    })
+
+    sampled_data <- reactive({
+      df <- sample_pool()
+      n <- applied$sample_size
+      if (!nrow(df) || !isTRUE(n > 0)) return(df[0, , drop = FALSE])
+
+      # A blank seed used to leave the RNG untouched, so the sample was
+      # re-drawn on every invalidation and the list the team went to the field
+      # with no longer matched. Always seed; fall back to the default.
+      seed <- applied$seed
+      set.seed(if (is.na(seed)) 12345L else seed)
+
+      draw <- function(d, k) {
+        k <- min(k, nrow(d))
+        if (k <= 0) return(integer(0))
+        switch(applied$sample_method,
+               "systematic" = sample_systematic(nrow(d), k),
+               "pps" = sample_pps(d, k, user_setup),
+               sample_random(nrow(d), k))
+      }
+      # "Sample size applies to" a level: the same number in every unit.
+      unit_col <- if (!identical(applied$per_unit %||% "all", "all")) user_setup[[applied$per_unit]] else NULL
+      if (shiny::isTruthy(unit_col) && unit_col %in% names(df)) {
+        groups <- split(seq_len(nrow(df)), as.character(df[[unit_col]]))
+        idx <- sort(unlist(lapply(groups, function(g) g[draw(df[g, , drop = FALSE], n)]), use.names = FALSE))
+      } else {
+        idx <- draw(df, n)
+      }
+      df[idx, , drop = FALSE]
+    })
+
+    output$sc_pool_note <- renderUI({
+      if (!identical(applied$mode, "remote")) return(NULL)
+      tot <- nrow(filtered_data()); ok <- nrow(sample_pool())
+      if (!shiny::isTruthy(applied$phone_col)) {
+        return(tags$div(class = "alert alert-warning mt-2", bsicons::bs_icon("telephone-x"),
+                        " Remote check: choose the column holding the phone numbers in the sidebar, then Apply."))
+      }
+      tags$div(class = "wfp-norm-bar mt-2", bsicons::bs_icon("telephone"),
+               sprintf(" Remote check: %s of %s households in scope have a valid phone number in %s.",
+                       format(ok, big.mark = ","), format(tot, big.mark = ","), applied$phone_col %||% "?"))
+    })
+
+    output$sc_pop_total <- renderText({
+      req(sample_pool())
+      format(nrow(sample_pool()), big.mark = ",")
+    })
+
+    output$sc_share <- renderText({
+      req(sample_pool(), sampled_data())
+      n <- nrow(sample_pool())
+      if (!n) "\u2014" else sprintf("%.1f%%", 100 * nrow(sampled_data()) / n)
+    })
+
+    observeEvent(input$sc_go_verify, bslib::nav_select("sc_tabs", "verify", session = session))
+
+    output$sc_sample_n <- renderText({
+      req(sampled_data())
+      format(nrow(sampled_data()), big.mark = ",")
+    })
+
+    output$sc_agreement <- renderText({
+      r <- comparison()
+      if (is.null(r) || is.na(r$overall_agreement)) "\u2014" else sprintf("%.1f%%", 100 * r$overall_agreement)
+    })
+
+    # Identification columns only; everything else is behind Details.
+    output$spot_table <- DT::renderDT({
+      req(sampled_data())
+      record_table(sampled_data(), user_setup, session$ns, "spot_view")
+    })
+
+    observeEvent(input$spot_view, {
+      showModal(record_detail_modal(
+        find_record(sampled_data(), user_setup, input$spot_view),
+        title = paste("Sampled record:", input$spot_view)
+      ))
+    })
+
+    # How the sample was drawn, in words: used by the exports and the report.
+    sample_description <- function() {
+      methods <- c(random = "Simple random", systematic = "Systematic", pps = "PPS (size = household size or weight)")
+      flt <- c(if (length(applied$admin1)) paste("Admin 1:", paste(applied$admin1, collapse = ", ")),
+               if (length(applied$admin2)) paste("Admin 2:", paste(applied$admin2, collapse = ", ")),
+               if (length(applied$admin3)) paste("Admin 3:", paste(applied$admin3, collapse = ", ")),
+               if (shiny::isTruthy(applied$search)) paste0("search \"", applied$search, "\""))
+      per <- applied$per_unit %||% "all"
+      c("Method" = methods[[applied$sample_method %||% "random"]],
+        "Interview mode" = if (identical(applied$mode, "remote"))
+          sprintf("Remote (phone): only valid numbers in %s", applied$phone_col %||% "?") else "Face to face",
+        "Sample size" = if (identical(per, "all")) sprintf("%s households", applied$sample_size)
+                        else sprintf("%s households per %s", applied$sample_size, per),
+        "Random seed" = as.character(applied$seed),
+        "Filters" = if (length(flt)) paste(flt, collapse = "; ") else "none")
+    }
+
+    # The sample as a field-ready workbook: how it was drawn, then the list
+    # with the identification columns first and blank columns for the team.
+    output$download_spot <- downloadHandler(
+      filename = function() paste0("Targeting_SpotCheck_", format(Sys.time(), "%Y-%m-%d_%Hh%M"), ".xlsx"),
+      content = function(file) {
+        smp <- sampled_data()
+        pool <- sample_pool()
+        keys <- c("unique_id", "admin1", "admin2", "admin3", "admin4", "village", "hh_size", "hhh_sex")
+        id_cols <- unique(unlist(lapply(keys, function(k) { cl <- user_setup[[k]]; if (shiny::isTruthy(cl) && cl %in% names(smp)) cl })))
+        if (identical(applied$mode, "remote") && shiny::isTruthy(applied$phone_col) && applied$phone_col %in% names(smp)) {
+          id_cols <- unique(c(id_cols, applied$phone_col))
+        }
+        smp <- smp[, c(id_cols, setdiff(names(smp), id_cols)), drop = FALSE]
+        field <- c("Visited (yes/no)", "Date of visit", "Checked by", "Comments")
+        for (f in field) smp[[f]] <- NA_character_
+        smp <- smp[, c(id_cols, field, setdiff(names(smp), c(id_cols, field))), drop = FALSE]
+
+        wb <- openxlsx::createWorkbook()
+        xl_summary_sheet(wb, "Summary", "Spot-check sample",
+                         paste(c(user_setup$country_office, format(Sys.Date())), collapse = " \u00b7 "),
+                         list(
+                           "Sample" = c(
+                             "Country office" = user_setup$country_office %||% "not set",
+                             "Exported" = format(Sys.time(), "%Y-%m-%d %H:%M"),
+                             "Exported by" = Sys.getenv("USERNAME", Sys.getenv("USER", "")),
+                             sample_description(),
+                             "Households in scope" = format(nrow(pool), big.mark = ","),
+                             "Households sampled" = format(nrow(smp), big.mark = ","),
+                             "Share sampled" = if (nrow(pool)) sprintf("%.1f%%", 100 * nrow(smp) / nrow(pool)) else "n/a"),
+                           "For the field team" = c(
+                             "What to do" = "Re-visit (or call) each household, fill in the four highlighted columns, and re-ask the questions to verify.",
+                             "Back-check" = "Load what the team collected in Spot Checking > Verification to measure how far the two rounds agree.",
+                             "Keep" = "Do not change the household identifier: the comparison matches on it.")))
+        xl_data_sheet(wb, "Sample", sanitize_for_excel(smp))
+        # the columns the team fills in stand out
+        fcols <- match(field, names(smp))
+        openxlsx::addStyle(wb, "Sample", openxlsx::createStyle(fontSize = 10, textDecoration = "bold", fontColour = "#1F2A37",
+                                                               fgFill = "#F7B825", border = "bottom", borderColour = "#B88600"),
+                           rows = 1, cols = fcols, gridExpand = TRUE)
+        if (nrow(smp)) {
+          openxlsx::addStyle(wb, "Sample", openxlsx::createStyle(fontSize = 10, fgFill = "#FFF8E1"),
+                             rows = 2:(nrow(smp) + 1), cols = fcols, gridExpand = TRUE)
+        }
+        openxlsx::setColWidths(wb, "Sample", cols = fcols, widths = c(16, 14, 16, 36))
+        openxlsx::saveWorkbook(wb, file, overwrite = TRUE)
+      }
+    )
+
+    # -----------------------------------------------------------------------
+    # Back-check comparison
+    # -----------------------------------------------------------------------
+    verification_df <- reactiveVal(NULL)
+    verif_source <- reactiveVal(NA_character_)
+    comparison <- reactiveVal(NULL)
+
+    # --- Source A: uploaded file ---
+    observeEvent(input$verif_file, {
+      req(input$verif_file)
+      ext <- tolower(tools::file_ext(input$verif_file$name))
+      if (!ext %in% c("xlsx", "xls", "sav", "dta", "csv", "parquet")) {
+        showNotification(paste("Unsupported file type:", ext), type = "error", duration = 10)
+        return()
+      }
+      w <- waiter::Waiter$new(html = waiter_content("Reading verification data..."),
+                              color = "rgba(10, 30, 50, 0.65)")
+      w$show()
+      on.exit(w$hide(), add = TRUE)
+
+      df <- tryCatch(
+        read_import_file(input$verif_file$datapath, ext),
+        error = function(e) {
+          showNotification(paste("Could not read file:", conditionMessage(e)), type = "error", duration = 10)
+          NULL
+        }
+      )
+      req(df)
+      verification_df(df)
+      verif_source(sprintf("file %s", input$verif_file$name))
+      comparison(NULL)
+    })
+
+    # --- Source B: a second MODA form ---
+    observeEvent(input$verif_fetch, {
+      if (!shiny::isTruthy(input$verif_form_id) || !shiny::isTruthy(input$verif_token)) {
+        showNotification("Enter both the verification Form ID and the API key.", type = "warning")
+        return()
+      }
+      moda_async_fetch(
+        form_id = input$verif_form_id,
+        token = input$verif_token,
+        existing_df = NULL,
+        page_size = MODA_PAGE_SIZE,
+        session = session,
+        on_success = function(result) {
+          verification_df(result$df)
+          verif_source(sprintf("MODA form %s", input$verif_form_id))
+          comparison(NULL)
+          showNotification(
+            paste0(format(nrow(result$df), big.mark = ","), " verification records downloaded."),
+            type = "message"
+          )
+        },
+        on_error = function(msg) showNotification(paste("MODA:", msg), type = "error", duration = 12)
+      )
+    })
+
+    # Refresh the key / field pickers whenever either side changes
+    observe({
+      v <- verification_df()
+      s <- tryCatch(sampled_data(), error = function(e) NULL)
+      req(v, s)
+      shared <- intersect(names(s), names(v))
+      req(length(shared) > 0)
+
+      uid <- user_setup$unique_id
+      key_default <- if (shiny::isTruthy(uid) && uid %in% shared) uid else shared[1]
+      shinyWidgets::updatePickerInput(session, "verif_key", choices = shared, selected = key_default)
+      shinyWidgets::updatePickerInput(
+        session, "verif_cols",
+        choices = setdiff(shared, key_default),
+        selected = setdiff(shared, key_default)
+      )
+    })
+
+    output$verif_status <- renderUI({
+      v <- verification_df()
+      if (is.null(v)) return(NULL)
+      s <- tryCatch(sampled_data(), error = function(e) NULL)
+      shared <- if (is.null(s)) character(0) else intersect(names(s), names(v))
+      tags$p(
+        class = if (length(shared) > 0) "text-success small mb-0" else "text-danger small mb-0",
+        paste0(
+          format(nrow(v), big.mark = ","), " verification records loaded \u2014 ",
+          length(shared), " column(s) in common with the sample."
+        )
+      )
+    })
+
+    observeEvent(input$verif_run, {
+      v <- verification_df()
+      if (is.null(v)) {
+        showNotification("Load the verification data first.", type = "warning")
+        return()
+      }
+      s <- sampled_data()
+      req(nrow(s) > 0, input$verif_key)
+
+      w <- waiter::Waiter$new(html = waiter_content("Comparing rounds..."),
+                              color = "rgba(10, 30, 50, 0.65)")
+      w$show()
+      on.exit(w$hide(), add = TRUE)
+
+      tol <- suppressWarnings(as.numeric(input$verif_tolerance))
+      if (is.na(tol) || tol < 0) tol <- 0
+
+      res <- compare_verification(
+        original = s,
+        verification = v,
+        key_col = input$verif_key,
+        cols = input$verif_cols,
+        numeric_tolerance = tol
+      )
+      if (is.null(res)) {
+        showNotification("The chosen key column is not present in both datasets.", type = "error")
+        return()
+      }
+      comparison(res)
+      if (res$matched_n == 0) {
+        showNotification(
+          "No households matched on the chosen key. Check that the verification round carries the same identifier.",
+          type = "warning", duration = 12
+        )
+      } else {
+        showNotification("Back-check comparison complete.", type = "message")
+      }
+    })
+
+    output$verif_hint <- renderUI({
+      if (is.null(verification_df())) {
+        return(empty_state(
+          "No verification data yet",
+          "Upload the re-collected dataset, or fetch the verification form from MODA, then run the comparison.",
+          icon = "clipboard-check"
+        ))
+      }
+      if (is.null(comparison())) {
+        return(empty_state(
+          "Ready to compare",
+          "Confirm the matching key and the fields to compare, then click Run comparison.",
+          icon = "code-slash"
+        ))
+      }
+      NULL
+    })
+
+    output$verif_results <- renderUI({
+      req(comparison())
+      tagList(
+        hr(),
+        bslib::layout_columns(
+          bslib::value_box(title = "Matched Records", value = textOutput(ns("verif_matched")),
+                           showcase = bsicons::bs_icon("link"), theme = "primary"),
+          bslib::value_box(title = "Overall Agreement", value = textOutput(ns("verif_agreement")),
+                           showcase = bsicons::bs_icon("check2-circle"), theme = "success"),
+          bslib::value_box(title = "Records w/ Discordance", value = textOutput(ns("verif_bad_records")),
+                           showcase = bsicons::bs_icon("exclamation-triangle"), theme = "warning"),
+          bslib::value_box(title = "Unmatched", value = textOutput(ns("verif_unmatched")),
+                           showcase = bsicons::bs_icon("question-circle"), theme = "secondary"),
+          col_widths = c(3, 3, 3, 3)
+        ),
+        bslib::layout_columns(
+          bslib::card(
+            full_screen = TRUE,
+            bslib::card_header("Agreement by field"),
+            plotly::plotlyOutput(ns("verif_plot"), height = "340px")
+          ),
+          bslib::card(
+            full_screen = TRUE,
+            bslib::card_header("Field summary"),
+            DT::DTOutput(ns("verif_field_table"), fill = FALSE)
+          ),
+          col_widths = c(6, 6)
+        ),
+        bslib::card(
+          full_screen = TRUE,
+          bslib::card_header("Discordances"),
+          DT::DTOutput(ns("verif_disc_table"), fill = FALSE)
+        )
+      )
+    })
+
+    output$verif_matched <- renderText({
+      r <- comparison(); if (is.null(r)) "\u2014" else format(r$matched_n, big.mark = ",")
+    })
+    output$verif_agreement <- renderText({
+      r <- comparison()
+      if (is.null(r) || is.na(r$overall_agreement)) "\u2014" else paste0(round(r$overall_agreement * 100, 1), "%")
+    })
+    output$verif_bad_records <- renderText({
+      r <- comparison(); if (is.null(r)) "\u2014" else format(r$records_with_discordance, big.mark = ",")
+    })
+    output$verif_unmatched <- renderText({
+      r <- comparison()
+      if (is.null(r)) "\u2014" else format(r$only_original_n + r$only_verification_n, big.mark = ",")
+    })
+
+    output$verif_plot <- render_wfp_plotly({
+      r <- comparison(); req(r, nrow(r$field_summary) > 0)
+      fs <- r$field_summary
+      fs$pct <- fs$agreement_rate * 100
+      # Worst-agreeing fields first, so the problems are at the top of the bar chart
+      fs <- fs[order(fs$pct), , drop = FALSE]
+      plotly::plot_ly(
+        fs, x = ~pct, y = ~factor(variable, levels = fs$variable), type = "bar",
+        orientation = "h",
+        marker = list(color = "#0A6EB4"),
+        hovertemplate = "%{y}: %{x:.1f}% agreement<extra></extra>"
+      ) |>
+        plotly::layout(
+          xaxis = list(title = "% agreement", range = c(0, 100), gridcolor = "rgba(128,128,128,0.2)"),
+          yaxis = list(title = ""),
+          margin = list(l = 140)
+        )
+    })
+
+    output$verif_field_table <- DT::renderDT({
+      r <- comparison(); req(r)
+      fs <- r$field_summary
+      req(nrow(fs) > 0)
+      out <- data.frame(
+        Field = fs$variable,
+        Compared = fs$compared,
+        Agree = fs$agree,
+        Disagree = fs$disagree,
+        `Agreement` = paste0(round(fs$agreement_rate * 100, 1), "%"),
+        check.names = FALSE,
+        stringsAsFactors = FALSE
+      )
+      DT::datatable(out, rownames = FALSE,
+                    options = list(pageLength = 10, scrollX = TRUE, order = list()))
+    })
+
+    output$verif_disc_table <- DT::renderDT({
+      r <- comparison(); req(r)
+      d <- r$discordances
+      if (nrow(d) == 0) {
+        return(DT::datatable(
+          data.frame(Message = "No discordances found on the compared fields."),
+          rownames = FALSE, options = list(dom = "t")
+        ))
+      }
+      out <- d
+      colnames(out) <- c(r$key_col, "Field", "Original round", "Verification round")
+      DT::datatable(out, rownames = FALSE, options = list(pageLength = 15, scrollX = TRUE))
+    })
+
+    output$verif_report <- downloadHandler(
+      filename = function() paste0("Verification_report_", format(Sys.time(), "%Y-%m-%d_%Hh%M"), ".html"),
+      content = function(file) {
+        methods <- c(random = "Simple random", systematic = "Systematic", pps = "PPS (size = household size or weight)")
+        flt <- c(if (length(applied$admin1)) paste("Admin 1:", paste(applied$admin1, collapse = ", ")),
+                 if (length(applied$admin2)) paste("Admin 2:", paste(applied$admin2, collapse = ", ")),
+                 if (length(applied$admin3)) paste("Admin 3:", paste(applied$admin3, collapse = ", ")),
+                 if (shiny::isTruthy(applied$search)) paste0("search \"", applied$search, "\""))
+        lang <- session$rootScope()$input$lang_selector
+        write_verification_report(file, list(
+          country_office = user_setup$country_office,
+          sample = list(method = paste0(methods[[applied$sample_method %||% "random"]],
+                                        if (identical(applied$mode, "remote")) sprintf(", remote (phone, valid numbers in %s)", applied$phone_col) else ", face to face",
+                                        if (!identical(applied$per_unit %||% "all", "all")) sprintf(", %s per %s", applied$sample_size, applied$per_unit) else ""),
+                        n = nrow(sampled_data()), population = nrow(sample_pool()),
+                        seed = applied$seed, filters = if (length(flt)) paste(flt, collapse = "; ") else "none"),
+          source = verif_source(), n_verification = if (is.null(verification_df())) NA else nrow(verification_df()),
+          tolerance = input$verif_tolerance, comparison = comparison()),
+          lang = if (identical(lang, "fr")) "fr" else "en")
+      }
+    )
+
+    output$verif_download <- downloadHandler(
+      filename = function() paste0("Targeting_BackCheck_", format(Sys.time(), "%Y-%m-%d_%Hh%M"), ".xlsx"),
+      content = function(file) {
+        r <- comparison()
+        wb <- openxlsx::createWorkbook()
+        pct <- function(v) if (is.null(v) || is.na(v)) "n/a" else sprintf("%.1f%%", 100 * v)
+        sections <- list("Sample" = c("Country office" = user_setup$country_office %||% "not set",
+                                      "Exported" = format(Sys.time(), "%Y-%m-%d %H:%M"),
+                                      sample_description(),
+                                      "Households sampled" = format(nrow(sampled_data()), big.mark = ",")))
+        if (is.null(r)) {
+          sections[["Comparison"]] <- c("Status" = "No comparison has been run yet.")
+        } else {
+          sections[["Comparison"]] <- c(
+            "Verification data" = verif_source() %||% "n/a",
+            "Matched on" = r$key_col,
+            "Households matched" = format(r$matched_n, big.mark = ","),
+            "Sampled but not re-visited" = format(r$only_original_n, big.mark = ","),
+            "Re-visited but not in the sample" = format(r$only_verification_n, big.mark = ","),
+            "Fields compared" = as.character(length(r$cols)),
+            "Numeric tolerance" = fmt5(input$verif_tolerance %||% 0),
+            "Overall agreement" = pct(r$overall_agreement),
+            "Households with a discordance" = sprintf("%s (%s of matched)", format(r$records_with_discordance, big.mark = ","),
+                                                      pct(r$records_with_discordance / max(1, r$matched_n))))
+          sections[["Reading the agreement"]] <- c("95% or more" = "sound",
+                                                   "90-95%" = "look at how the question is asked",
+                                                   "Below 90%" = "follow up with the enumerators")
+        }
+        xl_summary_sheet(wb, "Summary", "Spot-check back-check",
+                         paste(c(user_setup$country_office, format(Sys.Date())), collapse = " \u00b7 "), sections)
+        if (!is.null(r)) {
+          fs <- r$field_summary
+          by_field <- data.frame(Field = fs$variable, Compared = fs$compared, Agree = fs$agree, Disagree = fs$disagree,
+                                 `Agreement (%)` = round(100 * fs$agreement_rate, 1), check.names = FALSE)
+          xl_data_sheet(wb, "By_field", by_field)
+          if (nrow(by_field)) {
+            rows <- 2:(nrow(by_field) + 1)
+            band <- function(rule, fill, font) openxlsx::conditionalFormatting(
+              wb, "By_field", cols = 5, rows = rows, rule = rule,
+              style = openxlsx::createStyle(bgFill = fill, fontColour = font))
+            band(">=95", "#D4EDDA", "#0F5132"); band("<90", "#F8D7DA", "#842029")
+            openxlsx::conditionalFormatting(wb, "By_field", cols = 5, rows = rows, type = "between", rule = c(90, 94.999),
+                                            style = openxlsx::createStyle(bgFill = "#FFF3CD", fontColour = "#664D03"))
+          }
+          d <- r$discordances
+          names(d) <- c("Household", "Field", "First round", "Back-check")[seq_along(d)]
+          xl_data_sheet(wb, "Discordances", sanitize_for_excel(d))
+        }
+        openxlsx::saveWorkbook(wb, file, overwrite = TRUE)
+      }
+    )
+  })
+}
+
+#' Simple random sample indices
+#'
+#' @param N Population size.
+#' @param n Sample size.
+#' @return Integer vector of sampled row indices.
+#' @noRd
+sample_random <- function(N, n) {
+  if (n >= N) return(seq_len(N))
+  sort(sample.int(N, size = n, replace = FALSE))
+}
+
+#' Systematic sample indices
+#'
+#' @param N Population size.
+#' @param n Sample size.
+#' @return Integer vector of sampled row indices.
+#' @noRd
+sample_systematic <- function(N, n) {
+  if (n >= N) return(seq_len(N))
+  interval <- N / n
+  start <- sample(interval, 1)
+  sort(unique(floor(seq(from = start, to = N, length.out = n))))
+}
+
+#' Probability-proportional-to-size sample indices
+#'
+#' Uses household size if mapped, otherwise the sampling weight. Falls back to
+#' simple random sampling when no size information is available.
+#'
+#' @param df A data.frame.
+#' @param n Sample size.
+#' @param settings Setup settings list.
+#' @return Integer vector of sampled row indices.
+#' @importFrom stats runif
+#' @noRd
+sample_pps <- function(df, n, settings) {
+  N <- nrow(df)
+  if (n >= N) return(seq_len(N))
+
+  size_col <- settings$hh_size
+  if (isTruthy(size_col) && size_col %in% names(df)) {
+    sizes <- suppressWarnings(as.numeric(as.character(df[[size_col]])))
+  } else {
+    sizes <- NULL
+  }
+
+  if (is.null(sizes) || all(is.na(sizes)) || sum(sizes, na.rm = TRUE) <= 0) {
+    sizes <- get_weights(df, settings)
+  }
+
+  sizes[is.na(sizes) | sizes < 0] <- 0
+  if (sum(sizes) <= 0) return(sample_random(N, n))
+
+  # Systematic PPS: cumulative sizes and a random start
+  cum <- cumsum(sizes)
+  total <- cum[N]
+  interval <- total / n
+  start <- runif(1, 0, interval)
+  points <- start + (seq_len(n) - 1) * interval
+  idx <- findInterval(points, cum, rightmost.closed = TRUE) + 1
+  idx[idx > N] <- N
+  sort(unique(idx))
+}
+
+#' Which values are usable phone numbers
+#'
+#' A number column: 8 to 15 digits once spaces, dashes and a leading + are
+#' dropped, and not one digit repeated (00000000). A yes/no "phone available"
+#' column: the yes values.
+#' @noRd
+valid_phone <- function(x) {
+  s <- trimws(as.character(x))
+  s[is.na(s)] <- ""
+  digits <- gsub("[^0-9]", "", s)
+  filled <- nzchar(s)
+  looks_numbers <- any(filled) && mean(nchar(digits[filled]) >= 8) > 0.5
+  if (looks_numbers) {
+    nchar(digits) >= 8 & nchar(digits) <= 15 & !grepl("^(\\d)\\1+$", digits, perl = TRUE)
+  } else {
+    tolower(s) %in% c("yes", "oui", "y", "1", "true", "si", "s\u00ed")
+  }
+}

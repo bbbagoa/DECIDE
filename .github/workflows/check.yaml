@@ -1,0 +1,61 @@
+# Regression gate. The app decides who receives assistance, so a change that
+# breaks the analytics or the module wiring must not reach a branch silently.
+name: check
+
+on:
+  push:
+    branches: [main, boosted_ai]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    runs-on: ${{ matrix.config.os }}
+    name: ${{ matrix.config.os }} (R ${{ matrix.config.r }})
+
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          - {os: ubuntu-latest,  r: 'release'}
+          - {os: windows-latest, r: 'release'}
+
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+      R_KEEP_PKG_SOURCE: yes
+      # The app writes sessions to R_user_dir by default; keep CI out of it.
+      TARGETWISE_SESSION_DIR: ${{ runner.temp }}/targeting-sessions
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: r-lib/actions/setup-pandoc@v2
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: ${{ matrix.config.r }}
+          use-public-rspm: true
+
+      # sf and its friends need system libraries on Ubuntu; setup-r-dependencies
+      # resolves those from the DESCRIPTION rather than a hand-kept apt list.
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          extra-packages: |
+            any::rcmdcheck
+            any::testthat
+            any::shinytest2
+            any::withr
+          needs: check
+
+      # shinytest2 drives a real browser for the end-to-end tests.
+      - uses: browser-actions/setup-chrome@v1
+
+      - uses: r-lib/actions/check-r-package@v2
+        with:
+          upload-snapshots: true
+          args: 'c("--no-manual", "--as-cran")'
+          error-on: '"error"'
