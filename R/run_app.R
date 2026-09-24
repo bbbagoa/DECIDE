@@ -42,9 +42,11 @@ run_app <- function(
     options(shiny.maxRequestSize = 2 * 1024^3)
   }
 
-  # Open directly in the user's default browser, ignoring IDE viewer settings
-  options(shiny.launch.browser = TRUE)
-  options$launch.browser <- TRUE
+  # Open in the system's default browser. `TRUE` is not enough: it goes through
+  # getOption("browser"), which RStudio and Positron replace with their own
+  # viewer. Handing the URL to the OS file association bypasses both.
+  options(shiny.launch.browser = open_in_default_browser)
+  options$launch.browser <- open_in_default_browser
 
   with_golem_options(
     app = shinyApp(
@@ -57,4 +59,14 @@ run_app <- function(
     ),
     golem_opts = list(...)
   )
+}
+
+#' Open a URL in the operating system's default browser
+#'
+#' `browser = NULL` on Windows uses the file association (shell.exec); macOS
+#' and Linux have `open` / `xdg-open` for the same job.
+#' @noRd
+open_in_default_browser <- function(url) {
+  browser <- switch(Sys.info()[["sysname"]], Windows = NULL, Darwin = "open", "xdg-open")
+  utils::browseURL(url, browser = browser)
 }

@@ -87,7 +87,8 @@ dq_spelling_server <- function(input, output, session, ns, core) {
   observeEvent(
     dq_filtered_data(),
     {
-      char_logic <- sapply(dq_filtered_data(), function(x) is.character(x))
+      # Text-like columns: .sav/.dta imports hold their names as factors.
+      char_logic <- vapply(dq_filtered_data(), function(x) is.character(x) || is.factor(x), logical(1))
       all_char_cols <- names(dq_filtered_data())[char_logic]
 
       shinyWidgets::updatePickerInput(
@@ -96,8 +97,9 @@ dq_spelling_server <- function(input, output, session, ns, core) {
         choices = all_char_cols,
         selected = input$dq_name_cols %||% NULL
       )
-    },
-    ignoreInit = TRUE # ignoreInit prevents it from firing before data is ready
+    }
+    # No ignoreInit: when the data was already loaded (a restored session),
+    # skipping the first run left the list empty until the data next changed.
   )
 
   # 2. Reactive table for "Bad Names"

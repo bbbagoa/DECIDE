@@ -63,7 +63,9 @@ record_detail_buttons <- function(keys, input_id) {
   safe <- gsub("'", "&#39;", htmltools::htmlEscape(as.character(keys)), fixed = TRUE)
   sprintf(
     paste0("<button type='button' class='wfp-details-btn' title='Open this record' ",
-           "onclick=\"Shiny.setInputValue('%s', '%s', {priority:'event'})\">",
+           # stopPropagation: in a table with row selection the click would
+           # also select the row.
+           "onclick=\"event.stopPropagation(); Shiny.setInputValue('%s', '%s', {priority:'event'})\">",
            # eye, label, chevron (inline SVG: no icon font needed inside DT)
            "<svg viewBox='0 0 16 16' aria-hidden='true'><path d='M1 8s2.6-4.5 7-4.5S15 8 15 8s-2.6 4.5-7 4.5S1 8 1 8z' ",
            "fill='none' stroke='currentColor' stroke-width='1.4'/><circle cx='8' cy='8' r='2' fill='currentColor'/></svg>",

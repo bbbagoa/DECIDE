@@ -19,6 +19,17 @@ dq_enumerator_ui <- function(ns) {
             ),
             bslib::navset_underline(
               bslib::nav_panel(
+                title = tagList(bsicons::bs_icon("flag"), " Flagged enumerators"),
+                tags$div(
+                  class = "mt-3",
+                  tags$div(
+                    class = "d-flex flex-wrap align-items-center gap-2 mb-2",
+                    uiOutput(ns("enum_rules"), class = "small text-muted flex-grow-1"),
+                    downloadButton(ns("enum_flag_download"), "Export flagged", class = "btn-outline-secondary btn-sm")),
+                  uiOutput(ns("enum_flagged_ui"))
+                )
+              ),
+              bslib::nav_panel(
                 title = tagList(bsicons::bs_icon("bar-chart"), " Workload and speed"),
                 bslib::layout_columns(
                   class = "mt-3", col_widths = c(6, 6),
@@ -97,7 +108,7 @@ dq_enumerator_server <- function(input, output, session, ns, core) {
     miss_cols <- setdiff(names(df), c(enum_col, user_setup$weight))
     row_missing <- rowMeans(is.na(df[, miss_cols, drop = FALSE]))
 
-    data.frame(
+    m <- data.frame(
       enumerator_id = df[[enum_col]],
       w = w,
       valid_dur = valid_dur,
@@ -125,28 +136,82 @@ dq_enumerator_server <- function(input, output, session, ns, core) {
         ),
         .groups = "drop"
       ) |>
-      dplyr::arrange(dplyr::desc(.data$interviews)) |>
-      # --- D1: flag poor performers against cohort thresholds.
-      # An enumerator is flagged "Review" when their mean interview duration or
-      # missingness rate is an outlier among peers. Durations outside the IQR
-      # band suggest rushed or inefficient work; missingness above the cohort
-      # mean + 2 SD suggests sloppy capture. Robust to extreme enumerators.
-      dplyr::mutate(flag = {
-        dur_ok <- !is.na(.data$avg_duration)
-        dur_out <- rep(FALSE, dplyr::n())
-        if (sum(dur_ok) >= 4) {
-          qs <- stats::quantile(.data$avg_duration[dur_ok], c(0.25, 0.75))
-          iqr <- qs[2] - qs[1]
-          dur_out <- dur_ok & (.data$avg_duration < (qs[1] - 1.5 * iqr) |
-                                 .data$avg_duration > (qs[2] + 1.5 * iqr))
-        }
-        miss_mean <- stats::weighted.mean(.data$missingness_rate, .data$interviews, na.rm = TRUE)
-        miss_sd <- stats::sd(.data$missingness_rate, na.rm = TRUE)
-        miss_high <- !is.na(miss_sd) && miss_sd > 0 &
-          .data$missingness_rate > (miss_mean + 2 * miss_sd)
-        ifelse(dur_out | miss_high, "Review", "OK")
-      })
+      dplyr::arrange(dplyr::desc(.data$interviews))
+
+    # Busiest day per enumerator, when a date is mapped.
+    date_col <- user_setup$date
+    per_day <- NULL
+    if (shiny::isTruthy(date_col) && date_col %in% names(df)) {
+      day <- suppressWarnings(as.Date(df[[date_col]]))
+      ok <- !is.na(day) & !is.na(df[[enum_col]]) & as.character(df[[enum_col]]) != ""
+      if (any(ok)) {
+        per_day <- as.data.frame(table(enumerator_id = as.character(df[[enum_col]][ok]), day = as.character(day[ok])),
+                                 stringsAsFactors = FALSE)
+        per_day <- per_day[per_day$Freq > 0, , drop = FALSE]
+      }
+    }
+    enumerator_flags(m, per_day)
   })
+
+  output$enum_rules <- renderUI({
+    m <- enum_metrics(); req(m)
+    th <- attr(m, "thresholds")
+    fmt <- function(x, d = 1) if (is.na(x)) "n/a" else format(round(x, d), nsmall = d)
+    tags$span(bsicons::bs_icon("info-circle"), " Flagged against the other enumerators: average interview under ",
+              fmt(th$dur_lo), " or over ", fmt(th$dur_hi), " min (outside the IQR fences), missing answers over ",
+              fmt(100 * th$miss_hi), "% (mean + 2 SD)",
+              if (!is.na(th$day_hi)) paste0(", or more than ", fmt(th$day_hi, 0), " interviews in one day") else "", ".")
+  })
+
+  output$enum_flagged_ui <- renderUI({
+    m <- enum_metrics(); req(m)
+    f <- m[m$flag == "Review", , drop = FALSE]
+    if (!nrow(f)) {
+      return(empty_state("No enumerator flagged", "Everyone's speed, completeness and daily load are in line with the team.",
+                         icon = "check2-circle"))
+    }
+    tags$div(class = "wfp-enum-grid", lapply(seq_len(nrow(f)), function(i) {
+      id <- as.character(f$enumerator_id[i])
+      tags$div(
+        class = "wfp-insight",
+        tags$div(class = "d-flex align-items-center gap-2",
+                 tags$strong(id),
+                 tags$span(class = "small text-muted ms-auto", format(round(f$interviews[i]), big.mark = ","), " interviews")),
+        tags$ul(class = "wfp-enum-reasons", lapply(strsplit(f$reasons[i], "; ", fixed = TRUE)[[1]], tags$li)),
+        tags$button(type = "button", class = "btn btn-link btn-sm p-0",
+                    onclick = sprintf("Shiny.setInputValue('%s', %s, {priority: 'event'})", ns("enum_open"),
+                                      jsonlite::toJSON(id, auto_unbox = TRUE)),
+                    "See their interviews"))
+    }))
+  })
+
+  observeEvent(input$enum_open, {
+    df <- dq_filtered_data(); req(df, user_setup$enumerator_id)
+    recs <- df[which(as.character(df[[user_setup$enumerator_id]]) == input$enum_open), , drop = FALSE]
+    m <- enum_metrics()
+    why <- m$reasons[as.character(m$enumerator_id) == input$enum_open][1]
+    output$enum_recs <- DT::renderDT(record_table(recs, user_setup, session$ns, "enum_view", page_length = 10))
+    showModal(modalDialog(
+      title = tagList(bsicons::bs_icon("person-badge"), " ", input$enum_open, sprintf(": %s interviews", format(nrow(recs), big.mark = ","))),
+      size = "xl", easyClose = TRUE,
+      if (!is.na(why) && nzchar(why)) tags$div(class = "alert alert-warning small", why),
+      DT::DTOutput(ns("enum_recs"), fill = FALSE),
+      footer = modalButton("Close")
+    ))
+  })
+  observeEvent(input$enum_view, {
+    showModal(record_detail_modal(find_record(dq_filtered_data(), user_setup, input$enum_view),
+                                  title = paste("Interview:", input$enum_view)))
+  })
+
+  output$enum_flag_download <- downloadHandler(
+    filename = function() paste0("Targeting_Flagged_enumerators_", format(Sys.time(), "%Y-%m-%d_%Hh%M"), ".csv"),
+    content = function(file) {
+      m <- enum_metrics()
+      f <- if (is.null(m)) NULL else m[m$flag == "Review", , drop = FALSE]
+      write_csv_utf8(if (is.null(f) || !nrow(f)) data.frame(Message = "No enumerator flagged") else f, file)
+    }
+  )
 
   output$enum_active <- renderText({
     req(enum_metrics())
@@ -300,4 +365,65 @@ dq_enumerator_server <- function(input, output, session, ns, core) {
         color = "#FFFFFF", fontWeight = "bold"
       )
   })
+}
+
+#' Flag enumerators against their cohort, with the reason in words
+#'
+#' Durations outside the IQR fences suggest rushed or padded interviews;
+#' missingness above the cohort mean + 2 SD suggests sloppy capture; a day far
+#' busier than the team's usual (Q3 + 1.5 IQR of enumerator-days) suggests
+#' interviews that were not all really held.
+#'
+#' @param m One row per enumerator: enumerator_id, interviews, avg_duration,
+#'   missingness_rate.
+#' @param per_day Optional data.frame(enumerator_id, day, Freq).
+#' @return `m` with `flag` ("OK"/"Review") and `reasons`; the thresholds in
+#'   attr(, "thresholds").
+#' @noRd
+enumerator_flags <- function(m, per_day = NULL) {
+  n <- nrow(m)
+  reasons <- vector("list", n)
+  add <- function(i, txt) for (k in seq_along(i)) reasons[[i[k]]] <<- c(reasons[[i[k]]], txt[k])
+
+  dur_lo <- dur_hi <- NA_real_
+  ok <- !is.na(m$avg_duration)
+  if (sum(ok) >= 4) {
+    qs <- stats::quantile(m$avg_duration[ok], c(0.25, 0.5, 0.75), names = FALSE)
+    iqr <- qs[3] - qs[1]
+    dur_lo <- max(0, qs[1] - 1.5 * iqr); dur_hi <- qs[3] + 1.5 * iqr
+    lo <- which(ok & m$avg_duration < dur_lo)
+    hi <- which(ok & m$avg_duration > dur_hi)
+    if (length(lo)) add(lo, sprintf("Short interviews: %.1f min on average, under the team's %.1f (team median %.1f)",
+                                    m$avg_duration[lo], dur_lo, qs[2]))
+    if (length(hi)) add(hi, sprintf("Long interviews: %.1f min on average, over the team's %.1f (team median %.1f)",
+                                    m$avg_duration[hi], dur_hi, qs[2]))
+  }
+
+  miss_hi <- NA_real_
+  miss_sd <- stats::sd(m$missingness_rate, na.rm = TRUE)
+  if (!is.na(miss_sd) && miss_sd > 0) {
+    miss_mean <- stats::weighted.mean(m$missingness_rate, m$interviews, na.rm = TRUE)
+    miss_hi <- miss_mean + 2 * miss_sd
+    hi <- which(m$missingness_rate > miss_hi)
+    if (length(hi)) add(hi, sprintf("Missing answers: %.1f%% of fields left empty, over the team's %.1f%% (average %.1f%%)",
+                                    100 * m$missingness_rate[hi], 100 * miss_hi, 100 * miss_mean))
+  }
+
+  day_hi <- NA_real_
+  if (!is.null(per_day) && nrow(per_day) >= 4) {
+    qs <- stats::quantile(per_day$Freq, c(0.25, 0.5, 0.75), names = FALSE)
+    day_hi <- max(qs[3] + 1.5 * (qs[3] - qs[1]), qs[2] + 2)
+    busy <- per_day[per_day$Freq > day_hi, , drop = FALSE]
+    busy <- busy[order(-busy$Freq), , drop = FALSE]
+    busy <- busy[!duplicated(busy$enumerator_id), , drop = FALSE]
+    i <- match(busy$enumerator_id, as.character(m$enumerator_id))
+    keep <- !is.na(i)
+    if (any(keep)) add(i[keep], sprintf("Busy day: %d interviews on %s, over the team's usual maximum of %.0f",
+                                        busy$Freq[keep], busy$day[keep], day_hi))
+  }
+
+  m$reasons <- vapply(reasons, function(r) paste(r, collapse = "; "), character(1))
+  m$flag <- ifelse(nzchar(m$reasons), "Review", "OK")
+  attr(m, "thresholds") <- list(dur_lo = dur_lo, dur_hi = dur_hi, miss_hi = miss_hi, day_hi = day_hi)
+  m
 }

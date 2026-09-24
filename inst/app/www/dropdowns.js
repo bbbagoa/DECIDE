@@ -11,6 +11,10 @@
 
   function reparent(el) {
     var st = el && el.selectize;
+    // selectize lists at most 1,000 options by default, so on a wide form
+    // (MODA exports often pass 1,000 columns) every variable after that was
+    // simply absent from the list. Read at search time, so this is enough.
+    if (st) st.settings.maxOptions = 100000;
     if (!st || st._wfpReparented) return;
     st._wfpReparented = true;
 

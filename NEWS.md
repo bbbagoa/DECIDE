@@ -1,3 +1,15 @@
+# TargetWise 0.2.0
+
+* The app opens in your default browser, not the RStudio/Positron viewer.
+* Column lists show every variable: wide forms (over 1,000 columns), sparsely answered number columns and factor name columns were missing from some lists.
+* Outliers: any numeric variable can be checked; an allowed range per variable flags impossible values whatever the distribution; new corrections (cap at the limits, set to missing); the Most extreme values tab gives insights (direction, concentration on an enumerator or area, 99-style codes) and acts on selected rows (correct, set a value, mark as verified); an All numeric variables tab checks every column at once.
+* Duplicates: groups shown as bands with the columns that differ, exact copies marked, side-by-side comparison, and deletion of selected records with a reason.
+* Enumerator performance: a Flagged enumerators tab says why each one is flagged (short or long interviews, missing answers, an unusually busy day) and opens their interviews.
+* Beneficiary selection: the Household criteria filters were removed (the eligibility rules cover them); variable calculator in the sidebar; a download button on the Beneficiary list; a richer Composition tab (who is served, by area, selected vs not selected); a By_area sheet in the Excel export.
+* Variable calculator: an R code mode for multi-line calculations, checked before it runs.
+* Targeting Monitoring pages and the sidebars scroll again, so every option and the Add to report button can be reached.
+* Report error cards have a quieter, more professional look.
+
 # TargetWise 0.1.0
 
 ## Latest changes

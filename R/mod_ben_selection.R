@@ -32,9 +32,6 @@ mod_ben_selection_ui <- function(id) {
              picker("ben_admin2", "Admin 2"),
              picker("ben_admin3", "Admin 3"),
              condition = approach_js(ns, c("hybrid", "scorecard", "categorical", "community", "geographic"))),
-        step("Household criteria",
-             uiOutput(ns("extra_criteria_ui")),
-             condition = approach_js(ns, c("hybrid", "categorical"))),
         tags$div(
           class = "wfp-sb-actions",
           tags$div(
@@ -43,7 +40,11 @@ mod_ben_selection_ui <- function(id) {
             actionButton(ns("ben_clear"), label = NULL, icon = icon("xmark"), class = "btn-outline-secondary btn-sm",
                          title = "Clear the selection criteria")),
           actionButton(ns("export_open"), "Export selection (Excel)", icon = icon("download"),
-                       class = "btn-outline-primary btn-sm w-100 mt-2")
+                       class = "btn-outline-primary btn-sm w-100 mt-2"),
+          # New criteria built from the registration data (e.g. a dependency
+          # ratio), usable at once in the eligibility rules.
+          tags$div(class = "mt-2",
+                   mod_var_calc_ui(ns("calc"), "Variable calculator", class = "btn-outline-secondary btn-sm w-100"))
         )
       ),
       bslib::layout_columns(
@@ -147,17 +148,37 @@ mod_ben_selection_ui <- function(id) {
         ),
         bslib::nav_panel(
           value = "composition", title = tagList(bsicons::bs_icon("bar-chart"), " Composition"),
+          tags$div(class = "mt-3", uiOutput(ns("comp_insights"))),
+          bslib::layout_columns(
+            col_widths = c(6, 6),
+            bslib::card(
+              full_screen = TRUE,
+              bslib::card_header(bsicons::bs_icon("bar-chart"), " Eligibility and vulnerability mix"),
+              bslib::card_body(plotly::plotlyOutput(ns("ben_validation_plot"), height = "360px"))
+            ),
+            bslib::card(
+              full_screen = TRUE,
+              bslib::card_header(bsicons::bs_icon("geo-alt"), " By area: served, excluded by design, not eligible"),
+              bslib::card_body(plotly::plotlyOutput(ns("ben_area_plot"), height = "360px"))
+            )
+          ),
           bslib::card(
-            class = "mt-3", full_screen = TRUE,
-            bslib::card_header(bsicons::bs_icon("bar-chart"), " What the selected list is made of"),
-            bslib::card_body(plotly::plotlyOutput(ns("ben_validation_plot"), height = "380px"))
+            full_screen = TRUE,
+            bslib::card_header(bsicons::bs_icon("people"), " Who is selected, compared with who is not"),
+            bslib::card_body(uiOutput(ns("ben_profile")))
           )
         ),
         bslib::nav_panel(
           value = "list", title = tagList(bsicons::bs_icon("list-ul"), " Beneficiary list"),
           bslib::card(
             class = "mt-3", full_screen = TRUE,
-            bslib::card_header(bsicons::bs_icon("people"), " Selected beneficiaries"),
+            bslib::card_header(
+              class = "d-flex align-items-center",
+              tags$span(bsicons::bs_icon("people"), " Selected beneficiaries"),
+              # Same export as the sidebar button: the list plus its metadata.
+              tags$button(type = "button", class = "btn btn-outline-primary btn-sm ms-auto",
+                          onclick = sprintf("document.getElementById('%s').click()", ns("export_open")),
+                          icon("file-excel"), " Download the list (Excel)")),
             DT::DTOutput(ns("ben_table"), fill = FALSE)
           )
         ),
@@ -188,8 +209,6 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
     applied <- reactiveValues(
       admin1 = NULL, admin2 = NULL, admin3 = NULL,
       score_min = 0, score_max = 100,
-      groups = NULL, eligibility = NULL,
-      childU5 = NULL, disability = NULL, residency = NULL, hhh_sex = NULL,
       approach = "hybrid", combine = "both", comm_col = NULL, comm_vals = NULL,
       prio_mode = "none", prio_n = NA, quota_unit = "admin1"
     )
@@ -202,8 +221,7 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
         # after the data-load observer has reset the filters
         after_flush(session, function() {
           for (k in names(s)) applied[[k]] <- s[[k]]
-          for (k in c("admin1", "admin2", "admin3", "groups", "eligibility", "childU5",
-                      "disability", "residency", "hhh_sex")) {
+          for (k in c("admin1", "admin2", "admin3")) {
             shinyWidgets::updatePickerInput(session, paste0("ben_", k), selected = s[[k]] %||% character(0))
           }
           updateSliderInput(session, "ben_score_min", value = s$score_min)
@@ -219,6 +237,8 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
         })
       })
     pending_comm_vals <- reactiveVal(NULL)
+
+    mod_var_calc_server("calc", uploaded_df, function(df) uploaded_df(df), modification_log)
 
     output$approach_desc <- renderUI({
       a <- targeting_approaches()[[input$ben_approach %||% "hybrid"]]
@@ -243,90 +263,20 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
 
     score_range <- reactiveValues(min = 0, max = 100)
 
-    # Helper: build picker choices from a mapped column
-    picker_choices <- function(col) {
-      df <- uploaded_df()
-      if (is.null(df) || !col %in% names(df)) return(character(0))
-      sort(unique(as.character(df[[col]])))
-    }
-
-    # Dynamic extra criteria inputs
-    output$extra_criteria_ui <- renderUI({
-      req(uploaded_df())
-      ns <- session$ns
-      ui_list <- list()
-
-      if (shiny::isTruthy(user_setup$v_groups) && user_setup$v_groups != "") {
-        ui_list[["groups"]] <- shinyWidgets::pickerInput(
-          inputId = ns("ben_groups"),
-          label = "Vulnerability group",
-          choices = picker_choices(user_setup$v_groups),
-          multiple = TRUE,
-          options = shinyWidgets::pickerOptions(container = "body", actionsBox = TRUE, liveSearch = TRUE)
-        )
-      }
-      if (shiny::isTruthy(user_setup$eligibility) && user_setup$eligibility != "") {
-        ui_list[["eligibility"]] <- shinyWidgets::pickerInput(
-          inputId = ns("ben_eligibility"),
-          label = "Eligibility",
-          choices = picker_choices(user_setup$eligibility),
-          multiple = TRUE,
-          options = shinyWidgets::pickerOptions(container = "body", actionsBox = TRUE, liveSearch = TRUE)
-        )
-      }
-      if (shiny::isTruthy(user_setup$childU5) && user_setup$childU5 != "") {
-        ui_list[["childU5"]] <- shinyWidgets::pickerInput(
-          inputId = ns("ben_childU5"),
-          label = "Children under 5",
-          choices = picker_choices(user_setup$childU5),
-          multiple = TRUE,
-          options = shinyWidgets::pickerOptions(container = "body", actionsBox = TRUE, liveSearch = TRUE)
-        )
-      }
-      if (shiny::isTruthy(user_setup$disability) && user_setup$disability != "") {
-        ui_list[["disability"]] <- shinyWidgets::pickerInput(
-          inputId = ns("ben_disability"),
-          label = "Disability / chronic illness",
-          choices = picker_choices(user_setup$disability),
-          multiple = TRUE,
-          options = shinyWidgets::pickerOptions(container = "body", actionsBox = TRUE, liveSearch = TRUE)
-        )
-      }
-      if (shiny::isTruthy(user_setup$residency) && user_setup$residency != "") {
-        ui_list[["residency"]] <- shinyWidgets::pickerInput(
-          inputId = ns("ben_residency"),
-          label = "Residency status",
-          choices = picker_choices(user_setup$residency),
-          multiple = TRUE,
-          options = shinyWidgets::pickerOptions(container = "body", actionsBox = TRUE, liveSearch = TRUE)
-        )
-      }
-      if (shiny::isTruthy(user_setup$hhh_sex) && user_setup$hhh_sex != "") {
-        ui_list[["hhh_sex"]] <- shinyWidgets::pickerInput(
-          inputId = ns("ben_hhh_sex"),
-          label = "Head of household sex",
-          choices = picker_choices(user_setup$hhh_sex),
-          multiple = TRUE,
-          options = shinyWidgets::pickerOptions(container = "body", actionsBox = TRUE, liveSearch = TRUE)
-        )
-      }
-
-      do.call(tagList, ui_list)
-    })
-
-    # Update choices and score range when data loads
+    # Update choices and score range when data loads. The data also changes
+    # when a column is added (variable calculator) or a record edited, so the
+    # applied area and score are kept wherever they still fit the data.
     observe({
       req(uploaded_df())
       df <- uploaded_df()
       for (lvl in c("admin1", "admin2", "admin3")) {
         col <- user_setup[[lvl]]
         if (!is.null(col) && col %in% names(df)) {
-          shinyWidgets::updatePickerInput(
-            session = session,
-            inputId = paste0("ben_", lvl),
-            choices = sort(unique(as.character(df[[col]]))),
-            selected = character(0)
-          )
+          ch <- sort(unique(as.character(df[[col]])))
+          keep <- intersect(isolate(applied[[lvl]]) %||% character(0), ch)
+          shinyWidgets::updatePickerInput(session = session, inputId = paste0("ben_", lvl),
+                                          choices = ch, selected = keep)
+          applied[[lvl]] <- if (length(keep)) keep else NULL
         }
       }
 
@@ -335,24 +285,17 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
         vals <- suppressWarnings(as.numeric(as.character(df[[score_col]])))
         vals <- vals[!is.na(vals)]
         if (length(vals) > 0) {
-          score_range$min <- floor(min(vals))
-          score_range$max <- ceiling(max(vals))
-          updateSliderInput(session, "ben_score_min", min = score_range$min, max = score_range$max, value = score_range$min)
-          updateSliderInput(session, "ben_score_max", min = score_range$min, max = score_range$max, value = score_range$max)
+          lo <- floor(min(vals)); hi <- ceiling(max(vals))
+          if (!identical(c(lo, hi), isolate(c(score_range$min, score_range$max)))) {
+            score_range$min <- lo
+            score_range$max <- hi
+            updateSliderInput(session, "ben_score_min", min = lo, max = hi, value = lo)
+            updateSliderInput(session, "ben_score_max", min = lo, max = hi, value = hi)
+            applied$score_min <- lo
+            applied$score_max <- hi
+          }
         }
       }
-
-      applied$admin1 <- NULL
-      applied$admin2 <- NULL
-      applied$admin3 <- NULL
-      applied$score_min <- score_range$min
-      applied$score_max <- score_range$max
-      applied$groups <- NULL
-      applied$eligibility <- NULL
-      applied$childU5 <- NULL
-      applied$disability <- NULL
-      applied$residency <- NULL
-      applied$hhh_sex <- NULL
     })
 
     observeEvent(input$ben_apply, {
@@ -367,12 +310,6 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
       applied$admin3 <- input$ben_admin3
       applied$score_min <- input$ben_score_min
       applied$score_max <- input$ben_score_max
-      applied$groups <- input$ben_groups
-      applied$eligibility <- input$ben_eligibility
-      applied$childU5 <- input$ben_childU5
-      applied$disability <- input$ben_disability
-      applied$residency <- input$ben_residency
-      applied$hhh_sex <- input$ben_hhh_sex
       applied$approach <- input$ben_approach %||% "hybrid"
       applied$combine <- input$ben_combine %||% "both"
       applied$comm_col <- input$ben_comm_col
@@ -398,23 +335,11 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
       updateSliderInput(session, "ben_score_min", value = score_range$min)
       updateSliderInput(session, "ben_score_max", value = score_range$max)
 
-      for (id in c("ben_groups", "ben_eligibility", "ben_childU5", "ben_disability", "ben_residency", "ben_hhh_sex")) {
-        if (id %in% names(input)) {
-          shinyWidgets::updatePickerInput(session, id, selected = character(0))
-        }
-      }
-
       applied$admin1 <- NULL
       applied$admin2 <- NULL
       applied$admin3 <- NULL
       applied$score_min <- score_range$min
       applied$score_max <- score_range$max
-      applied$groups <- NULL
-      applied$eligibility <- NULL
-      applied$childU5 <- NULL
-      applied$disability <- NULL
-      applied$residency <- NULL
-      applied$hhh_sex <- NULL
       applied$comm_vals <- NULL
       applied$prio_mode <- "none"
       applied$prio_n <- NA
@@ -988,9 +913,9 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
         df, user_setup,
         approach = applied$approach,
         area = list(admin1 = applied$admin1, admin2 = applied$admin2, admin3 = applied$admin3),
-        filters = list(v_groups = applied$groups, eligibility = applied$eligibility,
-                       childU5 = applied$childU5, disability = applied$disability,
-                       residency = applied$residency, hhh_sex = applied$hhh_sex),
+        # The sidebar's household-criteria pickers were dropped: the
+        # eligibility rules express the same conditions, on any column.
+        filters = list(),
         ruleset = active_ruleset(),
         scorecard = sc,
         score_range = c(applied$score_min, applied$score_max),
@@ -1076,6 +1001,90 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
                        yaxis = list(title = "", automargin = TRUE),
                        bargap = 0.35, margin = list(r = 60),
                        legend = list(orientation = "h", x = 0, y = 1.08, xanchor = "left", yanchor = "bottom"))
+    })
+
+    # --- composition insights ------------------------------------------------
+    col_of <- function(k) {
+      cl <- as.character(user_setup[[k]] %||% "")[1]
+      df <- uploaded_df()
+      if (!is.na(cl) && nzchar(cl) && !is.null(df) && cl %in% names(df)) cl else NULL
+    }
+
+    output$comp_insights <- renderUI({
+      s <- selection(); df <- uploaded_df(); req(s, df)
+      sel <- s$prioritized
+      n_sel <- sum(sel)
+      if (!n_sel) return(empty_state("Nobody selected", "Apply a selection to see what the list is made of.", icon = "people"))
+      cards <- list(ben_insight("people", "Households served",
+                                sprintf("%.1f%%", 100 * n_sel / nrow(df)),
+                                sprintf("%s of %s households", format(n_sel, big.mark = ","), format(nrow(df), big.mark = ","))))
+      hs <- col_of("hh_size")
+      if (!is.null(hs)) {
+        sz <- as_number(df[[hs]])
+        cards <- c(cards, list(ben_insight("person-lines-fill", "People served",
+          sprintf("%.1f%%", 100 * sum(sz[sel], na.rm = TRUE) / sum(sz, na.rm = TRUE)),
+          sprintf("Average household: %.1f people selected, %.1f not selected",
+                  mean(sz[sel], na.rm = TRUE), mean(sz[!sel], na.rm = TRUE)))))
+      }
+      sx <- col_of("hhh_sex")
+      if (!is.null(sx)) {
+        fem <- is_female(df[[sx]])
+        if (any(fem)) cards <- c(cards, list(ben_insight("gender-female", "Female-headed households",
+          sprintf("%.0f%% of the selected", 100 * mean(fem[sel])),
+          sprintf("against %.0f%% of all households", 100 * mean(fem)))))
+      }
+      cut <- sum(s$eligible & !sel)
+      if (cut) cards <- c(cards, list(ben_insight("dash-circle", "Unmet need",
+        format(cut, big.mark = ","), "eligible households not served for lack of resources (excluded by design)")))
+      a1 <- col_of("admin1")
+      if (!is.null(a1)) {
+        u <- as.character(df[[a1]])
+        none <- setdiff(unique(u[s$eligible]), unique(u[sel]))
+        if (length(none)) cards <- c(cards, list(ben_insight("geo-alt", "Areas with eligible households, nobody served",
+          length(none), paste(utils::head(none, 5), collapse = ", "))))
+      }
+      tags$div(class = "wfp-insights", cards)
+    })
+
+    output$ben_area_plot <- render_wfp_plotly({
+      s <- selection(); df <- uploaded_df(); req(s, df)
+      a <- col_of("admin1")
+      validate(need(!is.null(a), "Map Admin 1 to see the selection by area."))
+      status <- ifelse(s$prioritized, "Served", ifelse(s$eligible, "Excluded by design", "Not eligible"))
+      d <- as.data.frame(table(area = as.character(df[[a]]), status = status), stringsAsFactors = FALSE)
+      tot <- tapply(d$Freq * (d$status != "Not eligible"), d$area, sum)
+      top <- utils::head(names(sort(tot, decreasing = TRUE)), 25)
+      d <- d[d$area %in% top, , drop = FALSE]
+      d$area <- factor(d$area, levels = rev(top))
+      d$status <- factor(d$status, levels = c("Served", "Excluded by design", "Not eligible"))
+      plotly::plot_ly(d, x = ~Freq, y = ~area, color = ~status, type = "bar", orientation = "h",
+                      colors = c("#0A6EB4", "#f7b825", "rgba(128,128,128,0.35)"),
+                      hovertemplate = "%{y}: %{x:,} households<extra></extra>") |>
+        plotly::layout(barmode = "stack", xaxis = list(title = "Households"), yaxis = list(title = "", automargin = TRUE),
+                       legend = list(orientation = "h", x = 0, y = 1.08, xanchor = "left", yanchor = "bottom"))
+    })
+
+    output$ben_profile <- renderUI({
+      s <- selection(); df <- uploaded_df(); req(s, df)
+      sel <- s$prioritized
+      if (!any(sel) || all(sel)) return(tags$div(class = "small text-muted", "Needs both selected and non-selected households."))
+      keys <- c(hh_size = "Household size", hhh_age = "Head of household age", childU5 = "Children under 5",
+                v_score = "Vulnerability score", hhh_sex = "Head of household sex", residency = "Residency status",
+                disability = "Disability / chronic illness", v_groups = "Vulnerability group")
+      cols <- Filter(Negate(is.null), lapply(stats::setNames(names(keys), names(keys)), col_of))
+      p <- selection_profile(df, unlist(cols), keys, sel)
+      if (is.null(p)) return(tags$div(class = "small text-muted", "Map household variables (size, age, sex...) to compare the groups."))
+      tagList(
+        tags$div(class = "wfp-model-table-wrap", tags$table(
+          class = "wfp-model-table",
+          tags$thead(tags$tr(tags$th("Indicator"), tags$th(class = "num", "Selected"), tags$th(class = "num", "Not selected"),
+                             tags$th(class = "num", "Difference"))),
+          tags$tbody(lapply(seq_len(nrow(p)), function(i) tags$tr(
+            tags$td(p$indicator[i]), tags$td(class = "num", p$selected[i]), tags$td(class = "num", p$not_selected[i]),
+            tags$td(class = "num", style = if (isTRUE(p$notable[i])) "font-weight:600;color:var(--wfp-blue)" else NULL,
+                    p$difference[i])))))),
+        tags$div(class = "small text-muted mt-1",
+                 "Means for numbers, shares for categories. Bold: a gap of 10 points or 20% or more, where the selection tells the groups apart."))
     })
 
     # Identification columns only; everything else is behind Details.
@@ -1232,7 +1241,7 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
                "The Summary and Audit trail sheets are always included."),
         shinyWidgets::pickerInput(
           ns("export_vars"), "Variables to export", width = "100%",
-          choices = list(`Mapped fields` = mapped, `Other columns` = setdiff(ordered, mapped)),
+          choices = col_choice_groups(`Mapped fields` = mapped, `Other columns` = setdiff(ordered, mapped)),
           selected = sel, multiple = TRUE,
           options = shinyWidgets::pickerOptions(actionsBox = TRUE, liveSearch = TRUE, container = "body",
                                                 selectedTextFormat = "count > 4",
@@ -1351,6 +1360,8 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
         xl_summary_sheet(wb, "Summary", "Beneficiary selection",
                          paste(c(user_setup$country_office, format(Sys.Date())), collapse = " \u00b7 "), sections)
         xl_data_sheet(wb, "Selected", sanitize_for_excel(sel))
+        by_area <- selection_by_area(df_all, user_setup, s)
+        if (!is.null(by_area)) xl_data_sheet(wb, "By_area", by_area)
         if (!is.null(ex)) xl_data_sheet(wb, "Excluded_by_design", sanitize_for_excel(ex))
         if (!is.null(lg) && nrow(lg)) {
           xl_data_sheet(wb, "Audit_trail", sanitize_for_excel(data.frame(phase = audit_phase(lg$action), lg,
@@ -1360,4 +1371,82 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
       }
     )
   })
+}
+
+#' Insight tile (the same look as the data-quality insights)
+#' @noRd
+ben_insight <- function(icon_name, label, value, sub = NULL) {
+  tags$div(class = "wfp-insight",
+           tags$div(class = "wfp-insight-label", bsicons::bs_icon(icon_name), " ", label),
+           tags$div(class = "wfp-insight-value", value),
+           if (!is.null(sub)) tags$div(class = "wfp-insight-sub", sub))
+}
+
+#' Female head of household, from the usual codings
+#' @noRd
+is_female <- function(x) {
+  tolower(trimws(as.character(x))) %in% c("f", "female", "femme", "feminin", "woman", "women", "fille")
+}
+
+#' Selected vs not selected, indicator by indicator
+#'
+#' @param df The full registration data.
+#' @param cols Named character: setup key -> column.
+#' @param labels Named character: setup key -> label.
+#' @param sel Logical, TRUE for selected households.
+#' @return data.frame(indicator, selected, not_selected, difference, notable),
+#'   formatted for display; NULL when there is nothing to compare.
+#' @noRd
+selection_profile <- function(df, cols, labels, sel) {
+  rows <- list()
+  for (k in names(cols)) {
+    x <- df[[cols[[k]]]]
+    num <- as_number(x)
+    if (mean(!is.na(num[!is.na(x)])) > 0.9 && length(unique(stats::na.omit(num))) > 2) {
+      a <- mean(num[sel], na.rm = TRUE); b <- mean(num[!sel], na.rm = TRUE)
+      rows[[length(rows) + 1]] <- data.frame(
+        indicator = paste(labels[[k]], "(mean)"), selected = sprintf("%.1f", a), not_selected = sprintf("%.1f", b),
+        difference = sprintf("%+.1f", a - b), notable = is.finite(a) && is.finite(b) && b != 0 && abs(a - b) / abs(b) >= 0.2,
+        stringsAsFactors = FALSE)
+    } else {
+      v <- as.character(x)
+      lv <- utils::head(names(sort(table(v), decreasing = TRUE)), 6)
+      for (l in lv) {
+        a <- 100 * mean(v[sel] == l, na.rm = TRUE); b <- 100 * mean(v[!sel] == l, na.rm = TRUE)
+        rows[[length(rows) + 1]] <- data.frame(
+          indicator = sprintf("%s: %s", labels[[k]], l), selected = sprintf("%.0f%%", a), not_selected = sprintf("%.0f%%", b),
+          difference = sprintf("%+.0f pts", a - b), notable = is.finite(a - b) && abs(a - b) >= 10,
+          stringsAsFactors = FALSE)
+      }
+    }
+  }
+  if (!length(rows)) NULL else do.call(rbind, rows)
+}
+
+#' Households and people served per area, for the export
+#' @noRd
+selection_by_area <- function(df, settings, s) {
+  lv <- Filter(function(k) {
+    cl <- as.character(settings[[k]] %||% "")[1]
+    !is.na(cl) && nzchar(cl) && cl %in% names(df)
+  }, c("admin1", "admin2", "admin3"))
+  if (!length(lv)) return(NULL)
+  cols <- vapply(lv, function(k) as.character(settings[[k]])[1], character(1))
+  key <- df[cols]
+  key[] <- lapply(key, as.character)
+  hs <- as.character(settings$hh_size %||% "")[1]
+  size <- if (!is.na(hs) && nzchar(hs) && hs %in% names(df)) as_number(df[[hs]]) else rep(NA_real_, nrow(df))
+  g <- interaction(key, drop = TRUE, lex.order = TRUE)
+  agg <- function(v) as.numeric(tapply(v, g, sum, na.rm = TRUE))
+  first <- !duplicated(g)
+  out <- key[first, , drop = FALSE][order(g[first]), , drop = FALSE]
+  names(out) <- c(admin1 = "Admin 1", admin2 = "Admin 2", admin3 = "Admin 3")[lv]
+  out$Households <- agg(rep(1, nrow(df)))
+  out$Eligible <- agg(s$eligible)
+  out$Served <- agg(s$prioritized)
+  out$`Excluded by design` <- agg(s$eligible & !s$prioritized)
+  out$`People served` <- agg(ifelse(s$prioritized, size, 0))
+  out$`Served (%)` <- round(100 * out$Served / out$Households, 1)
+  rownames(out) <- NULL
+  out
 }

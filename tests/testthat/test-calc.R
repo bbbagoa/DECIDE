@@ -35,3 +35,20 @@ test_that("new names must be valid and not clash", {
   expect_error(tm("calc_check_name")("size", names(df)), "already exists")
   expect_equal(tm("calc_check_name")("size", names(df), replace = TRUE), "size")
 })
+
+test_that("an R code block computes a column and refuses anything unsafe", {
+  df <- data.frame(dep = c(4, 1, 2, 5), work = c(2, 1, 0, 5), size = c(6, 2, NA, 10))
+  code <- "ratio <- dep / pmax(work, 1)\nratio[is.na(size)] <- 0\nifelse(ratio >= 2, 1, 0)"
+  expect_equal(tm("calc_code")(df, code), c(1, 0, 0, 0))
+  expect_equal(tm("calc_code")(df, "x = size\nif (TRUE) x * 2"), c(12, 4, NA, 20))
+  expect_equal(df$dep, c(4, 1, 2, 5))   # the data is never modified
+  expect_error(tm("calc_code")(df, "system('whoami')"), "not allowed")
+  expect_error(tm("calc_code")(df, "f <- function() 1"), "not allowed")
+  expect_error(tm("calc_code")(df, "for (i in 1:3) dep"), "not allowed")
+  expect_error(tm("calc_code")(df, "df$dep"), "not allowed")
+  expect_error(tm("calc_code")(df, "base::sum(dep)"), "not allowed")
+  expect_error(tm("calc_code")(df, "do.call('system', list('whoami'))"), "not allowed")
+  expect_error(tm("calc_code")(df, "y[1] <- 2"), "Unknown")
+  expect_error(tm("calc_code")(df, "names(x) <- 'a'"), "not allowed|plain name")
+  expect_error(tm("calc_code")(df, "c(1, 2)"), "one value per row")
+})

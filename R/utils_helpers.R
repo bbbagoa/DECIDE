@@ -296,6 +296,69 @@ count_duplicate_rows <- function(df) {
 
 #' Small info icon with a hover tooltip, for labels of technical inputs
 #' @noRd
+#' Columns that hold numbers
+#'
+#' Numeric columns, plus text or factor columns whose non-missing values are
+#' (almost) all numbers: CSV and MODA exports often arrive as text. Missing
+#' values do not count against a column (a sparsely answered count is still a
+#' count), and only the first 2,000 answers are parsed so a wide 1 GB frame is
+#' scanned quickly.
+#' @noRd
+quantitative_cols <- function(df, min_share = 0.9) {
+  if (is.null(df) || !ncol(df)) return(character(0))
+  ok <- vapply(df, function(v) {
+    if (is.logical(v) || inherits(v, c("Date", "POSIXt", "difftime"))) return(FALSE)
+    if (is.numeric(v)) return(TRUE)
+    if (!is.character(v) && !is.factor(v)) return(FALSE)
+    v <- utils::head(v[!is.na(v)], 5000)
+    v <- as.character(v)
+    v <- utils::head(v[nzchar(trimws(v))], 2000)
+    length(v) > 0 && mean(!is.na(suppressWarnings(as.numeric(v)))) >= min_share
+  }, logical(1))
+  names(df)[ok]
+}
+
+#' Columns on which the records of each duplicate group disagree
+#'
+#' One pass per column (not per group and column): a group disagrees on a
+#' column when it holds more than one distinct (group, value) pair.
+#' @param df The duplicated records (only the data columns).
+#' @param groups Group number of each record.
+#' @return List named by group, each a character vector of column names
+#'   (empty: the records are exact copies).
+#' @noRd
+duplicate_group_diffs <- function(df, groups) {
+  ug <- unique(groups)
+  gi <- match(groups, ug)
+  m <- vapply(names(df), function(cl) {
+    x <- as.character(df[[cl]])
+    x[is.na(x)] <- "\001NA"
+    first <- !duplicated(paste(gi, x, sep = "\r"))
+    tabulate(gi[first], nbins = length(ug)) > 1
+  }, logical(length(ug)))
+  m <- matrix(m, nrow = length(ug), dimnames = list(NULL, names(df)))
+  stats::setNames(lapply(seq_along(ug), function(i) colnames(m)[m[i, ]]), ug)
+}
+
+#' Grouped choices for a column picker
+#'
+#' Each group goes in as a list: Shiny shows a group holding a single column
+#' as one option labelled with the group's name, not as a group.
+#' @param ... Named character vectors (names, if any, are the labels).
+#' @noRd
+col_choice_groups <- function(...) {
+  g <- list(...)
+  g <- g[lengths(g) > 0]
+  lapply(g, function(x) {
+    if (is.null(names(x))) names(x) <- x
+    as.list(x)
+  })
+}
+
+#' Numbers from any column (via as.character: a factor's codes are not its values)
+#' @noRd
+as_number <- function(x) suppressWarnings(as.numeric(as.character(x)))
+
 info_tip <- function(text) {
   bslib::tooltip(bsicons::bs_icon("info-circle", class = "wfp-tip", `aria-label` = "More information"), text)
 }

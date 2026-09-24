@@ -1672,7 +1672,15 @@ table.dataTable tbody tr.selected > *:first-child {
    ======================================================================== */
 
 .bslib-sidebar-layout > .sidebar { overflow: visible; }
-.bslib-sidebar-layout > .sidebar > .sidebar-content { overflow-y: auto; overflow-x: visible; }
+/* The scroll moved from .sidebar to its content, but without a height the
+   content just grew past the window and the lower filters and buttons could
+   not be reached. Bound it by the sidebar and by the window (sticky, so it
+   stays in view when the page itself scrolls). */
+.bslib-sidebar-layout > .sidebar > .sidebar-content {
+  overflow-y: auto; overflow-x: visible;
+  height: 100%; max-height: calc(100vh - 72px);
+  position: sticky; top: 0;
+}
 
 /* Stacking, in order. Only the menus that were re-parented to the body need
    lifting: they are siblings of the modal, so without this they paint behind
@@ -2331,3 +2339,24 @@ table.dataTable tbody tr.selected > td a { color: #fff !important; }
 @media (prefers-reduced-motion: reduce) { .tw-splash-bar span { animation: none; width: 100%; } }
 /* The startup overlay keeps its own deep blue, not the light scrim used while working */
 .waiter-overlay:has(.tw-splash) { background-color: #07456f !important; backdrop-filter: none; }
+
+/* --------------------------------------------------------------------------
+   Insight tiles (Outliers, Selection composition), flagged enumerators,
+   duplicate comparison, and the scrolling monitoring page.
+   -------------------------------------------------------------------------- */
+.wfp-insights { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: .75rem; margin-bottom: .9rem; }
+.wfp-insight { border: 1px solid var(--border); border-radius: var(--card-radius-sm); padding: .7rem .85rem;
+  background: var(--surface); box-shadow: var(--shadow-soft); }
+.wfp-insight-label { font-size: .72rem; text-transform: uppercase; letter-spacing: .05em; color: var(--text-muted); }
+.wfp-insight-label .bi { color: var(--wfp-blue); }
+.wfp-insight-value { font-weight: 600; font-size: 1.1rem; margin-top: .15rem; overflow-wrap: anywhere; }
+.wfp-insight-sub { font-size: .8rem; color: var(--text-muted); margin-top: .15rem; }
+.wfp-enum-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: .75rem; }
+.wfp-enum-reasons { margin: .45rem 0 .3rem; padding-left: 1.1rem; font-size: .82rem; }
+.wfp-enum-reasons li { margin-bottom: .2rem; }
+.wfp-dup-compare { max-height: 60vh; overflow: auto; }
+.wfp-dup-compare th:first-child { position: sticky; left: 0; background: var(--surface-3); }
+.wfp-dup-compare tr.wfp-dup-diff td { background: var(--accent-warning-bg); font-weight: 600; }
+.wfp-dup-compare tr.wfp-dup-same td { color: var(--text-muted); }
+table.dataTable tr.dtrg-group td { background: var(--surface-3) !important; font-weight: 600; font-size: .8rem; }
+.wfp-scroll-page { overflow-y: auto; min-height: 0; padding-bottom: 2rem; }

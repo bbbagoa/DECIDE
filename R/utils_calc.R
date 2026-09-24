@@ -151,3 +151,70 @@ calc_check_name <- function(name, columns, replace = FALSE) {
   }
   name
 }
+
+#' Functions an R code block may call: the formula list, plus assignment,
+#' braces, if/else, indexing and a few text helpers. Nothing that reaches the
+#' file system, the network, the environment or other code (no `$`, `::`,
+#' `function`, loops, `eval`, `get`, `do.call`...).
+#' @noRd
+calc_code_functions <- function() {
+  c(calc_allowed_functions(), "{", "<-", "=", "if", "[", "[<-", "length", "any", "all", "xor",
+    "is.finite", "paste", "paste0", "grepl", "sub", "gsub", "substr", "startsWith", "endsWith", "quantile")
+}
+
+#' Check an R code block: several lines, local variables, the last value is
+#' the new column. Returns the parsed expressions or stops with a message.
+#' @noRd
+calc_check_code <- function(code, columns) {
+  ex <- tryCatch(parse(text = code, keep.source = FALSE),
+                 error = function(e) stop("The code does not parse: ", conditionMessage(e), call. = FALSE))
+  if (!length(ex)) stop("Write some code.", call. = FALSE)
+  ok_fun <- calc_code_functions()
+  known <- c(columns, "TRUE", "FALSE", "T", "F", "NA", "Inf", "NaN")
+  walk <- function(node) {
+    if (is.call(node)) {
+      fn <- node[[1]]
+      if (!is.symbol(fn) || !as.character(fn) %in% ok_fun) {
+        stop("Function not allowed in code: ", deparse(fn)[1], call. = FALSE)
+      }
+      if (as.character(fn) %in% c("<-", "=")) {
+        lhs <- node[[2]]
+        indexed <- is.call(lhs) && identical(lhs[[1]], as.name("[")) && is.symbol(lhs[[2]])
+        if (!is.symbol(lhs) && !indexed) stop("Assign to a plain name, e.g. ratio <- a / b.", call. = FALSE)
+        walk(node[[3]])
+        target <- as.character(if (indexed) lhs[[2]] else lhs)
+        if (indexed) {
+          if (!target %in% known) stop("Unknown column or variable: ", target, call. = FALSE)
+          for (a in as.list(lhs)[-(1:2)]) walk(a)
+        }
+        known <<- unique(c(known, target))
+        return(invisible(TRUE))
+      }
+      for (a in as.list(node)[-1]) walk(a)
+    } else if (is.symbol(node)) {
+      nm <- as.character(node)
+      if (nzchar(nm) && !nm %in% known) stop("Unknown column or variable: ", nm, call. = FALSE)
+    }
+    invisible(TRUE)
+  }
+  for (e in ex) walk(e)
+  ex
+}
+
+#' Run a checked R code block on the data; the last line's value is the column
+#' @noRd
+calc_code <- function(df, code) {
+  ex <- calc_check_code(code, names(df))
+  fns <- calc_code_functions()
+  fenv <- list2env(mget(fns, envir = asNamespace("stats"), inherits = TRUE), parent = emptyenv())
+  fenv$`TRUE` <- TRUE; fenv$`FALSE` <- FALSE; fenv$T <- TRUE; fenv$F <- FALSE
+  # Columns are read from here; the code's own variables land one level up,
+  # so an assignment never touches the data.
+  work <- new.env(parent = list2env(as.list(df), parent = fenv))
+  out <- NULL
+  for (e in ex) out <- eval(e, work)
+  if (is.factor(out)) out <- as.character(out)
+  if (length(out) == 1) out <- rep(out, nrow(df))
+  if (length(out) != nrow(df)) stop("The last line must give one value per row.", call. = FALSE)
+  round5(out)
+}

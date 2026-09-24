@@ -1035,7 +1035,11 @@ mod_overview_server <- function(id, uploaded_df, user_setup) {
         vals[nzchar(vals) & vals %in% names(filtered_data())]
       }
       mapped_cols <- unique(c(pick(preferred_keys), pick(setdiff(names(setup_list), skip_keys))))
-      if (length(mapped_cols) >= 2) {
+      # Every other column is offered too, after the mapped ones.
+      xtab_choices <- col_choice_groups(`Mapped fields` = mapped_cols,
+                                        `Other columns` = setdiff(names(filtered_data()), mapped_cols))
+      xtab_all <- unlist(xtab_choices, use.names = FALSE)
+      if (length(xtab_all) >= 2) {
         block_list <- c(block_list, list(
           hr(),
           bslib::layout_columns(
@@ -1044,8 +1048,8 @@ mod_overview_server <- function(id, uploaded_df, user_setup) {
               bslib::card_header(bsicons::bs_icon("table"), " Cross-Tabulation Explorer"),
               bslib::card_body(
                 bslib::layout_columns(
-                  shinyWidgets::pickerInput(ns("xtab_row"), "Rows:", choices = mapped_cols, selected = mapped_cols[1], width = "100%", options = shinyWidgets::pickerOptions(container = "body", liveSearch = TRUE)),
-                  shinyWidgets::pickerInput(ns("xtab_col"), "Columns:", choices = mapped_cols, selected = mapped_cols[2], width = "100%", options = shinyWidgets::pickerOptions(container = "body", liveSearch = TRUE))
+                  shinyWidgets::pickerInput(ns("xtab_row"), "Rows:", choices = xtab_choices, selected = xtab_all[1], width = "100%", options = shinyWidgets::pickerOptions(container = "body", liveSearch = TRUE)),
+                  shinyWidgets::pickerInput(ns("xtab_col"), "Columns:", choices = xtab_choices, selected = xtab_all[2], width = "100%", options = shinyWidgets::pickerOptions(container = "body", liveSearch = TRUE))
                 ),
                 DT::DTOutput(ns("xtab_table"), fill = FALSE),
                 tags$div(class = "text-muted small", textOutput(ns("xtab_chi")))

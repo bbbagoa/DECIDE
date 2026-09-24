@@ -10,7 +10,11 @@
 #' @noRd
 mod_monitoring_ui <- function(id) {
   ns <- NS(id)
-  bslib::navset_underline(
+  # The page is a fill container, so the tabs were squeezed to the window
+  # height and the lower half (the chart builder's Add to report, the report
+  # items) could not be scrolled to. This box takes the window height and
+  # scrolls; nothing inside it is stretched.
+  htmltools::bindFillRole(item = TRUE, tags$div(class = "wfp-scroll-page", bslib::navset_underline(
     id = ns("tabs"),
     bslib::nav_panel(
       value = "pdm", title = tagList(bsicons::bs_icon("bullseye"), " 1. PDM analysis"),
@@ -64,7 +68,7 @@ mod_monitoring_ui <- function(id) {
         )
       )
     )
-  )
+  )))
 }
 
 #' @noRd

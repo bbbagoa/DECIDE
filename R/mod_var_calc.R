@@ -51,7 +51,7 @@ mod_var_calc_server <- function(id, get_data, set_data, log = NULL, phase = "Sel
             textInput(ns("name"), "New variable name", placeholder = "e.g. Targ_HHDepRatio2plus", width = "100%")),
           radioButtons(ns("type"), "Build from",
                        choices = c("Conditions (yes/no)" = "condition", "Formula" = "formula",
-                                   "Bulk binarise" = "bulk"),
+                                   "R code" = "code", "Bulk binarise" = "bulk"),
                        inline = TRUE),
           tags$div(class = "pt-4", checkboxInput(ns("replace"), "Replace if it exists", FALSE))
         ),
@@ -89,6 +89,23 @@ mod_var_calc_server <- function(id, get_data, set_data, log = NULL, phase = "Sel
                    "Allowed: + - * / ^, comparisons, & | !, ifelse, is.na, round, abs, sqrt, log, pmin, pmax, ",
                    "rowSums(cbind(a, b), na.rm = TRUE), cut(x, breaks = c(0, 3, 6, Inf)), %in%. ",
                    "Column names only; no other functions.")
+        ),
+        # R code: several lines with intermediate variables, checked against
+        # the same kind of whitelist as a formula before anything runs.
+        conditionalPanel(
+          condition = sprintf("input['%s'] === 'code'", ns("type")),
+          textAreaInput(ns("code"), "R code", rows = 8, width = "100%",
+                        placeholder = paste("dep <- n_children + n_elderly",
+                                            "ratio <- dep / pmax(n_adults, 1)",
+                                            "ratio[is.na(ratio)] <- 0",
+                                            "ifelse(ratio >= 2, 1, 0)   # the last line is the new column", sep = "\n")) |>
+            tagAppendAttributes(class = "font-monospace", .cssSelector = "textarea"),
+          tags$div(class = "small text-muted",
+                   "Paste R code working on the columns by name. Use intermediate variables (", tags$code("x <- ..."),
+                   ", ", tags$code("x[cond] <- ..."), ") and ", tags$code("if / else"), "; the last line gives the new column. ",
+                   "The formula functions are allowed, plus paste, paste0, grepl, sub, gsub, substr, quantile. ",
+                   "No loops, no function definitions, no package calls: the code runs on the server, so anything that ",
+                   "could reach files, the network or other code is refused.")
         ),
         # Bulk: one rule applied to many similar columns, one 0/1 variable each.
         conditionalPanel(
@@ -221,6 +238,12 @@ mod_var_calc_server <- function(id, get_data, set_data, log = NULL, phase = "Sel
     # Returns list(values, description) or stops with a readable message.
     compute <- function() {
       df <- get_data()
+      if (identical(input$type, "code")) {
+        txt <- trimws(input$code %||% "")
+        if (!nzchar(txt)) stop("Paste or write the R code.", call. = FALSE)
+        return(list(values = calc_code(df, txt),
+                    description = paste("R code:", gsub("\\s*\n\\s*", "; ", txt))))
+      }
       if (identical(input$type, "formula")) {
         txt <- trimws(input$formula %||% "")
         if (!nzchar(txt)) stop("Write a formula.", call. = FALSE)

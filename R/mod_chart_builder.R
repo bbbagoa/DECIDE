@@ -75,7 +75,9 @@ mod_chart_builder_server <- function(id, data, source, dataset_name = reactive("
     observeEvent(data(), {
       df <- data(); req(df)
       cols <- names(df)
-      num <- cols[vapply(df, function(v) mean(!is.na(suppressWarnings(as.numeric(as.character(v))))) > 0.8, logical(1))]
+      # Judged on the answered values: counting NA against a column dropped
+      # every sparsely answered number from the list.
+      num <- quantitative_cols(df, min_share = 0.8)
       # Start on a column worth charting: a category, not an identifier.
       few <- cols[vapply(df, function(v) { k <- length(unique(v)); k >= 2 && k <= 30 }, logical(1))]
       updateSelectInput(session, "x", choices = cols, selected = if (length(few)) few[1] else cols[1])
