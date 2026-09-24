@@ -24,6 +24,9 @@
 * Selection report: area summary at Admin 3 (or 2) instead of a long list, a beneficiary profile (female-headed, displacement, disability, chronic illness, marital status, household size) with pictograms and donut charts, and an OpenStreetMap background that needs no API key.
 * Stepwise selection (AIC or BIC) is an option for every model, not a model of its own.
 * Targeting Design: "How the design works" guide (seven steps, methods, technical details, references) replaces the reload button.
+* Selection report: area summary grouped Admin 1 > Admin 2 with highlighted subtotals and total; compact table rows in every report; selection rates across socio-demographic groups (head's sex, residency, marital status, disability, chronic illness, age and household-size bands) with the widest gaps in words; no information repeated between the profile tiles and charts; an explained accuracy section (inclusion and exclusion errors with their matrix, as designed and after prioritisation, coverage, precision, recall); a square map on the Overview's Esri basemaps (light, terrain, satellite), which also work when the report is opened from a file.
+* The "By area" chart of the Composition tab no longer fails ("unknown colour name").
+* The country-office settings file is no longer listed as a saved session.
 * Sessions also keep the Data Quality settings (filters, outlier variable, method and allowed ranges, duplicate columns, missing-data analysis) and the quick-screening result; after a restore, "Refresh MODA" fetches only the new submissions (the API key is asked for, never saved).
 
 # TargetWise 0.1.0

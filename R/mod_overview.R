@@ -371,9 +371,7 @@ mod_overview_server <- function(id, uploaded_df, user_setup) {
   })
   base_group <- function() base_choice() %||% if (isTRUE(dark_mode())) "Dark" else "Light"
 
-  esri_canvas <- function(layer) sprintf(
-    "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_%s/MapServer/tile/{z}/{y}/{x}", layer)
-  esri_attr <- "Tiles &copy; Esri &mdash; Esri, HERE, Garmin, &copy; OpenStreetMap contributors"
+  esri_attr <- ESRI_ATTRIBUTION
 
   base_map <- function(bounds = NULL) {
     keep <- isolate(base_group())

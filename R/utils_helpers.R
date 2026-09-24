@@ -561,3 +561,11 @@ gate_button <- function(id, ok, reason, session = shiny::getDefaultReactiveDomai
   session$sendCustomMessage("tw-gate", list(id = session$ns(id), ok = isTRUE(ok), reason = reason))
   invisible(NULL)
 }
+
+#' Esri canvas basemaps (keyless): the Overview map and the report map
+#' @noRd
+esri_canvas <- function(layer) sprintf(
+  "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_%s/MapServer/tile/{z}/{y}/{x}", layer)
+
+#' @noRd
+ESRI_ATTRIBUTION <- "Tiles &copy; Esri &mdash; Esri, HERE, Garmin, &copy; OpenStreetMap contributors"

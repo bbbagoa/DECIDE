@@ -315,7 +315,9 @@ write_design_report <- function(file, x, plots = list(), lang = "en") {
 #' households; totals on the right and at the bottom. The two error cells are
 #' marked by their label in bold, not by colour.
 #' @noRd
-report_error_matrix <- function(e, threshold = NULL, outcome = NULL, outcome_pos = NULL, lang = "en") {
+report_error_matrix <- function(e, threshold = NULL, outcome = NULL, outcome_pos = NULL, lang = "en",
+                                row_title = "Scorecard decision", row_labels = c("Eligible", "Not eligible"),
+                                col_title = "Outcome", col_value = outcome, col_labels = c("Vulnerable", "Not vulnerable")) {
   if (is.null(e) || is.null(e$n) || e$n == 0) return("")
   tr <- function(t) htmltools::htmlEscape(i18n_lookup(t, lang))
   esc <- function(t) htmltools::htmlEscape(t %||% "")
@@ -332,16 +334,16 @@ report_error_matrix <- function(e, threshold = NULL, outcome = NULL, outcome_pos
   tot <- function(x) sprintf('<td class="m-tot"><div class="m-count">%s</div><div class="m-share">%s</div></td>', num(x), pct(x, e$n))
   paste0(
     '<div class="err-matrix-wrap"><table class="err-matrix"><thead>',
-    '<tr><th class="m-corner" rowspan="2">', tr("Scorecard decision"), '</th>',
-    '<th colspan="2">', tr("Outcome"), if (nzchar(outcome %||% "")) paste0(": <code>", esc(outcome), "</code>") else "", '</th>',
+    '<tr><th class="m-corner" rowspan="2">', tr(row_title), '</th>',
+    '<th colspan="2">', tr(col_title), if (nzchar(col_value %||% "")) paste0(": <code>", esc(col_value), "</code>") else "", '</th>',
     '<th class="m-tot-head" rowspan="2">', tr("Total"), '</th></tr>',
-    '<tr><th>', tr("Vulnerable"), if (nzchar(outcome_pos %||% "")) paste0('<div class="m-sub">', esc(outcome_pos), '</div>') else "",
-    '</th><th>', tr("Not vulnerable"), '</th></tr></thead><tbody>',
-    '<tr><th class="m-row">', tr("Eligible"),
+    '<tr><th>', tr(col_labels[1]), if (nzchar(outcome_pos %||% "")) paste0('<div class="m-sub">', esc(outcome_pos), '</div>') else "",
+    '</th><th>', tr(col_labels[2]), '</th></tr></thead><tbody>',
+    '<tr><th class="m-row">', tr(row_labels[1]),
     if (!is.null(threshold)) sprintf('<div class="m-sub">%s > %s</div>', tr("score"), fmt5(threshold)) else "", '</th>',
     cell(e$correctly_included, n_elig, "Correctly included"),
     cell(e$included_not_in_need, n_elig, "Inclusion error", err = TRUE), tot(n_elig), '</tr>',
-    '<tr><th class="m-row">', tr("Not eligible"), '</th>',
+    '<tr><th class="m-row">', tr(row_labels[2]), '</th>',
     cell(e$excluded_in_need, n_not, "Exclusion error", err = TRUE),
     cell(e$correctly_excluded, n_not, "Correctly excluded"), tot(n_not), '</tr>',
     '<tr class="m-total"><th class="m-row">', tr("Total"), '</th>', tot(n_vuln), tot(n_novuln),
@@ -550,6 +552,8 @@ design_report_css <- function() {
   .kpi-value { font-size: 26px; font-weight: 700; color: var(--ink); line-height: 1.2; margin-top: 4px; font-variant-numeric: tabular-nums; }
   .kpi-sub { font-size: 12px; color: var(--muted); }
   .fig .leaflet-container { border-radius: 6px; }
+  /* The map is square: as tall as it is wide, whatever the page width. */
+  .fig .leaflet.html-widget { aspect-ratio: 1 / 1; height: auto !important; max-height: 90vh; }
   .ptiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin: 12px 0 16px; }
   .ptile { display: flex; gap: 12px; align-items: center; background: var(--tint); border-radius: 8px; padding: 12px 14px; }
   .ptile-ico { flex: none; width: 44px; height: 44px; border-radius: 50%; background: var(--blue); display: flex; align-items: center; justify-content: center; }
@@ -558,6 +562,14 @@ design_report_css <- function() {
   .ptile-label { font-size: 12px; font-weight: 600; color: var(--ink); }
   .ptile-sub { font-size: 11.5px; color: var(--muted); }
   .err-matrix-wrap { overflow-x: auto; margin: 10px 0 12px; }
+  .area-sum-wrap { overflow-x: auto; margin: 8px 0 14px; }
+  .area-sum { border-collapse: collapse; width: 100%; font-size: 12px; font-variant-numeric: tabular-nums; }
+  .area-sum th, .area-sum td { padding: 3px 8px; border-bottom: 1px solid var(--line); line-height: 1.35; white-space: nowrap; }
+  .area-sum th { background: var(--tint); font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); text-align: left; }
+  .area-sum .num { text-align: right; }
+  .area-sum tr.a-unit td:first-child { padding-left: 22px; color: var(--ink); }
+  .area-sum tr.a-group td { background: #eef3f9; font-weight: 700; border-top: 1px solid #c9d3de; }
+  .area-sum tr.a-total td { background: #dfe8f2; font-weight: 700; border-top: 2px solid #9fb2c8; }
   .err-matrix { border-collapse: collapse; width: 100%; max-width: 760px; font-size: 13px; font-variant-numeric: tabular-nums; }
   .err-matrix th, .err-matrix td { border: 1px solid var(--line); padding: 8px 12px; text-align: left; vertical-align: top; }
   .err-matrix thead th { background: var(--tint); font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
@@ -615,10 +627,10 @@ design_report_css <- function() {
   em { color: var(--muted); }
   code { background: var(--tint); padding: 1px 5px; border-radius: 4px; font-size: 13px; }
   blockquote { margin: 10px 0; padding: 10px 14px; background: var(--tint); border-left: 3px solid var(--blue); border-radius: 0 6px 6px 0; }
-  table { border-collapse: collapse; width: 100%; margin: 10px 0 18px; font-size: 13px; font-variant-numeric: tabular-nums; }
+  table { border-collapse: collapse; width: 100%; margin: 8px 0 16px; font-size: 12.5px; font-variant-numeric: tabular-nums; }
   th { background: var(--tint); color: var(--muted); text-align: left; font-size: 11px; text-transform: uppercase;
-       letter-spacing: .05em; padding: 8px 10px; border-bottom: 1px solid var(--line); }
-  td { padding: 7px 10px; border-bottom: 1px solid var(--line); }
+       letter-spacing: .05em; padding: 5px 10px; border-bottom: 1px solid var(--line); }
+  td { padding: 3px 10px; line-height: 1.4; border-bottom: 1px solid var(--line); }
   tr:last-child td { border-bottom: 0; }
   img { display: block; max-width: 100%; margin: 12px auto 22px; border: 1px solid var(--line); border-radius: 8px; }
   figure img { width: 100%; max-width: 860px; }

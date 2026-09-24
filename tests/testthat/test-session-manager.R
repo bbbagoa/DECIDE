@@ -150,3 +150,10 @@ test_that("a session keeps the original import only when it differs from the wor
   TargetWise:::save_session(orig, list(), NULL, name = "o2", original_df = orig)
   expect_null(TargetWise:::load_session("o2")$original_df)   # not stored twice
 })
+
+test_that("the country-office settings file is not listed as a saved session", {
+  withr::local_envvar(TARGETWISE_SESSION_DIR = withr::local_tempdir())
+  TargetWise:::save_session(data.frame(a = 1), list(), NULL, name = "real")
+  TargetWise:::app_setting_set("country_office", "Mali")
+  expect_equal(TargetWise:::list_saved_sessions()$name, "real")
+})

@@ -1068,7 +1068,8 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
       d$area <- factor(d$area, levels = rev(top))
       d$status <- factor(d$status, levels = c("Served", "Excluded by design", "Not eligible"))
       plotly::plot_ly(d, x = ~Freq, y = ~area, color = ~status, type = "bar", orientation = "h",
-                      colors = c("#0A6EB4", "#f7b825", "rgba(128,128,128,0.35)"),
+                      # plotly's colour list takes hex or names, not rgba().
+                      colors = c("#0A6EB4", "#f7b825", "#b8c0ca"),
                       hovertemplate = "%{y}: %{x:,} households<extra></extra>") |>
         plotly::layout(barmode = "stack", xaxis = list(title = "Households"), yaxis = list(title = "", automargin = TRUE),
                        legend = list(orientation = "h", x = 0, y = 1.08, xanchor = "left", yanchor = "bottom"))
@@ -1391,6 +1392,8 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
           by_area = selection_by_area(df_all, user_setup, s),
           profile = if (any(sel) && !all(sel)) current_profile(df_all, sel),
           beneficiary_profile = beneficiary_profile(df_all[which(sel), , drop = FALSE], user_setup),
+          rates = selection_rates(df_all, user_setup, sel),
+          accuracy = selection_accuracy(df_all, user_setup, s),
           map = mp, map_n = attr(mp, "n_total")),
           lang = if (identical(lang, "fr")) "fr" else "en")
         audit_add(modification_log, "Selection", "Selection report exported",
@@ -1509,12 +1512,14 @@ selection_profile <- function(df, cols, labels, sel) {
     num <- as_number(x)
     if (mean(!is.na(num[!is.na(x)])) > 0.9 && length(unique(stats::na.omit(num))) > 2) {
       a <- mean(num[sel], na.rm = TRUE); b <- mean(num[!sel], na.rm = TRUE)
+      f1 <- function(z, fmt) if (is.finite(z)) sprintf(fmt, z) else "\u2013"
       rows[[length(rows) + 1]] <- data.frame(
-        indicator = paste(labels[[k]], "(mean)"), selected = sprintf("%.1f", a), not_selected = sprintf("%.1f", b),
-        difference = sprintf("%+.1f", a - b), notable = is.finite(a) && is.finite(b) && b != 0 && abs(a - b) / abs(b) >= 0.2,
+        indicator = paste(labels[[k]], "(mean)"), selected = f1(a, "%.1f"), not_selected = f1(b, "%.1f"),
+        difference = f1(a - b, "%+.1f"), notable = is.finite(a) && is.finite(b) && b != 0 && abs(a - b) / abs(b) >= 0.2,
         stringsAsFactors = FALSE)
     } else {
       v <- as.character(x)
+      v[is.na(v) | !nzchar(trimws(v))] <- "Not answered"
       lv <- utils::head(names(sort(table(v), decreasing = TRUE)), 6)
       for (l in lv) {
         a <- 100 * mean(v[sel] == l, na.rm = TRUE); b <- 100 * mean(v[!sel] == l, na.rm = TRUE)
@@ -1585,4 +1590,16 @@ area_file_suffix <- function(areas) {
   x <- gsub("^_+|_+$", "", x)
   x[!nzchar(x)] <- "area"
   make.unique(x, sep = "_")
+}
+
+#' Selection against the mapped eligibility, as designed and as served
+#' @return list(column, design, served) of `design_errors()` results, or NULL
+#'   when no binary eligibility column is mapped.
+#' @noRd
+selection_accuracy <- function(df, settings, s) {
+  el <- as.character(settings$eligibility %||% "")[1]
+  if (is.na(el) || !nzchar(el) || !el %in% names(df)) return(NULL)
+  f <- eligibility_flag(df[[el]])
+  if (!any(!is.na(f))) return(NULL)
+  list(column = el, design = design_errors(s$eligible, f), served = design_errors(s$prioritized, f))
 }

@@ -30,14 +30,22 @@ write_selection_report <- function(file, x, lang = "en") {
   for (nm in intersect(c("Selection", "Filters and rules", "Scorecard"), names(sec))) add(paste("###", nm), "", kv(sec[[nm]]), "")
 
   add("## 3. Who was selected", "")
-  sm <- area_summary(x$by_area)
-  if (!is.null(sm)) {
-    add(sprintf("### Summary by %s", attr(sm, "level")), "",
-        sprintf("%s units. The household-level list, with every area, is in the Excel export.", nrow(sm)), "",
-        md_table(sm), "", "@@FIG:area@@", "")
+  ga <- area_summary_grouped(x$by_area)
+  if (!is.null(ga)) {
+    add("### By area", "",
+        "Each Admin 1 subtotal is followed by its Admin 2 units; the household-level list is in the Excel export.", "",
+        "@@AREAS@@", "", "@@FIG:area@@", "")
+  }
+  rt <- x$rates
+  if (!is.null(rt) && nrow(rt)) {
+    add("### Selected across groups", "",
+        sprintf("Share of households selected in each group, against %s overall. A group far above or below the overall rate is where the selection concentrates, or leaves people out.",
+                sprintf("%.1f%%", 100 * attr(rt, "overall"))), "",
+        paste0("- ", selection_rate_insights(rt)), "",
+        "@@FIG:rates@@", "")
   }
   if (!is.null(x$profile) && nrow(x$profile)) {
-    add("### Selected compared with not selected", "",
+    add("### Profile of the selected against the not selected", "",
         "Means for numbers, shares for categories. A wide gap shows where the selection tells the two groups apart.", "",
         md_table(data.frame(Indicator = x$profile$indicator, Selected = x$profile$selected,
                             `Not selected` = x$profile$not_selected, Difference = x$profile$difference,
@@ -56,32 +64,69 @@ write_selection_report <- function(file, x, lang = "en") {
 
   if (!is.null(x$map) && nrow(x$map)) {
     add(sprintf("## %d. Map", if (is.null(bp)) 4 else 5), "",
-        sprintf("%s households with coordinates%s. The background map (OpenStreetMap) needs an internet connection; the points do not.",
+        sprintf("%s households with coordinates%s. The background map (Esri, as on the Overview page) needs an internet connection; the points do not.",
                 format(x$map_n %||% nrow(x$map), big.mark = ","),
                 if (isTRUE(x$map_n > nrow(x$map))) sprintf(", %s of them drawn (an even sample, to keep the file light)",
                                                            format(nrow(x$map), big.mark = ",")) else ""), "",
         "@@FIG:map@@", "")
   }
 
-  add(sprintf("## %d. Accuracy and notes", 4 + !is.null(bp) + (!is.null(x$map) && nrow(x$map) > 0)), "")
-  for (nm in intersect(c("Accuracy against mapped eligibility", "Notes"), names(sec))) add(paste("###", nm), "", kv(sec[[nm]]), "")
+  add(sprintf("## %d. Accuracy of the selection", 4 + (!is.null(bp)) + (!is.null(x$map) && nrow(x$map) > 0)), "")
+  acc <- x$accuracy
+  if (is.null(acc)) {
+    add("_Not measured: no eligibility column is mapped in the variable setup, so there is nothing to compare the selection with._", "")
+  } else {
+    ed <- acc$design; es <- acc$served
+    pc <- function(v) if (is.na(v)) "n/a" else sprintf("%.1f%%", 100 * v)
+    add(sprintf("The list is compared with the eligibility recorded in the registration data (column `%s`), household by household (%s households with a known eligibility).",
+                acc$column, format(ed$n, big.mark = ",")), "",
+        "@@ACC_CARDS@@", "",
+        "### What the two errors mean", "",
+        sprintf("- **Inclusion error %s** = %s / %s: of the households the selection made eligible, the share the eligibility column says are not eligible. They would receive assistance they may not need.",
+                pc(ed$inclusion_error), format(ed$included_not_in_need, big.mark = ","), format(ed$correctly_included + ed$included_not_in_need, big.mark = ",")),
+        sprintf("- **Exclusion error %s** = %s / %s: of the households the eligibility column says are eligible, the share the selection left out. They need assistance and would not get it.",
+                pc(ed$exclusion_error), format(ed$excluded_in_need, big.mark = ","), format(ed$correctly_included + ed$excluded_in_need, big.mark = ",")),
+        "- Both are read from the matrix below. They are computed on the **eligible-by-design** list, before prioritisation: households cut only because resources ran out are excluded by design, not wrongly excluded (Targeting Advisory 2/2025).",
+        "- The eligibility column is itself an assessment (for example a verification visit or a proxy score); the errors say how far the approach, rules and scorecard agree with it, not whether it is right.", "",
+        "### Selection against eligibility", "", "@@ACC_MATRIX@@", "")
+    if (!is.null(es) && !identical(es$exclusion_error, ed$exclusion_error)) {
+      add("### After prioritisation", "",
+          sprintf("Counting only the households actually served, the exclusion error is %s (%s eligible households not served), %s points more than as designed: that difference is the unmet need left by the caseload, reported separately from the design error.",
+                  pc(es$exclusion_error), format(es$excluded_in_need, big.mark = ","),
+                  sprintf("%+.1f", 100 * (es$exclusion_error - ed$exclusion_error))), "")
+    }
+    add("### Other measures", "",
+        sprintf("- **Coverage** %s: share of all households with a known eligibility that the selection makes eligible.", pc(ed$coverage)),
+        sprintf("- **Precision** %s = 1 - inclusion error; **recall** %s = 1 - exclusion error.",
+                pc(1 - ed$inclusion_error), pc(1 - ed$exclusion_error)), "")
+  }
+  add("## Notes", "")
+  for (nm in intersect("Notes", names(sec))) add(kv(sec[[nm]]), "")
   if ("Variable mapping" %in% names(sec)) add("### Variable mapping", "", kv(sec[["Variable mapping"]]), "")
 
   plots <- list()
-  if (!is.null(sm)) {
-    top <- utils::head(sm[order(-sm$Served), , drop = FALSE], 25)
+  if (!is.null(ga)) {
+    top <- ga[ga$.kind == "group", , drop = FALSE]
+    top <- utils::head(top[order(-top$Served), , drop = FALSE], 25)
     lab <- vapply(c("Served", "Excluded by design"), function(t) i18n_lookup(t, lang), character(1))
-    d <- data.frame(area = top[[1]], top$Served, top$`Excluded by design`)
+    d <- data.frame(area = top$Area, top$Served, top$`Excluded by design`)
     names(d)[2:3] <- lab
     plots$area <- rp_hbars(d, stats::setNames(c("#0A6EB4", "#f7b825"), lab),
                            i18n_lookup("Households", lang), stacked = TRUE)
   }
   if (!is.null(bp)) for (nm in names(bp$vars)) plots[[nm]] <- rp_donut(bp$vars[[nm]])
+  if (!is.null(rt) && nrow(rt)) {
+    d <- data.frame(group = paste(rt$variable, rt$category, sep = " \u00b7 "), rate = round(100 * rt$rate, 1))
+    names(d)[2] <- i18n_lookup("Selected (%)", lang)
+    plots$rates <- rp_hbars(d, stats::setNames("#0A6EB4", names(d)[2]), i18n_lookup("Selected (%)", lang)) |>
+      billboarder::bb_legend(show = FALSE)
+  }
   if (!is.null(x$map) && nrow(x$map)) plots$map <- selection_map(x$map, lang)
 
   report_write_page(
     file, paste(L, collapse = "\n"), plots,
-    captions = c(area = "Households served and excluded by design (the 25 units serving most)",
+    captions = c(area = "Households served and excluded by design, by Admin 1",
+                 rates = "Share of households selected, by group",
                  map = "Selected and non-selected households",
                  if (!is.null(bp)) stats::setNames(vapply(bp$vars, function(v) attr(v, "label"), character(1)), names(bp$vars))),
     lang = lang, title = "Beneficiary selection report", record = "Beneficiary selection record",
@@ -90,7 +135,12 @@ write_selection_report <- function(file, x, lang = "en") {
              "Served" = format(x$totals[["served"]] %||% NA, big.mark = ",")),
     footer = "This record documents the selection so it can be reviewed, explained and challenged.",
     blocks = list("@@KPI@@" = selection_kpis(x$totals, lang),
-                  "@@PROFILE@@" = profile_tiles(bp$tiles, lang)))
+                  "@@PROFILE@@" = profile_tiles(bp$tiles, lang),
+                  "@@AREAS@@" = area_summary_html(ga),
+                  "@@ACC_CARDS@@" = if (is.null(acc)) "" else report_error_cards(list(errors = acc$design, tolerance = acc$tolerance %||% c(0.05, 0.20)), lang),
+                  "@@ACC_MATRIX@@" = if (is.null(acc)) "" else report_error_matrix(
+                    acc$design, lang = lang, row_title = "Selection", row_labels = c("Eligible by design", "Not selected"),
+                    col_title = "Eligibility column", col_value = acc$column, col_labels = c("Eligible", "Not eligible"))))
 }
 
 #' Headline figures of the selection, as quiet tiles
@@ -121,9 +171,19 @@ selection_map <- function(d, lang = "en") {
   labs <- vapply(lv, function(t) i18n_lookup(t, lang), character(1))
   # Not selected first, so the served points are drawn on top.
   d <- d[order(-as.integer(d$status)), , drop = FALSE]
-  leaflet::leaflet(d, width = "100%", height = 480) |>
-    # OpenStreetMap's own tiles: no account or API key needed.
-    leaflet::addTiles(attribution = "\u00a9 OpenStreetMap contributors") |>
+  leaflet::leaflet(d, width = "100%", height = 760) |>   # squared by the report CSS
+    # The Overview's basemaps: Esri light-grey canvas with its place names,
+    # terrain and satellite to switch to. Keyless, and unlike the
+    # OpenStreetMap servers Esri serves a page opened from a local file (no
+    # Referer header), which is how a downloaded report is read.
+    leaflet::addTiles(esri_canvas("Light_Gray_Base"), attribution = ESRI_ATTRIBUTION, group = "Light") |>
+    leaflet::addTiles(esri_canvas("Light_Gray_Reference"), group = "Light") |>
+    leaflet::addProviderTiles(leaflet::providers$Esri.WorldTopoMap, group = "Terrain") |>
+    leaflet::addProviderTiles(leaflet::providers$Esri.WorldImagery, group = "Satellite") |>
+    leaflet::hideGroup(c("Terrain", "Satellite")) |>
+    leaflet::addLayersControl(baseGroups = c("Light", "Terrain", "Satellite"), position = "topright",
+                              options = leaflet::layersControlOptions(collapsed = TRUE)) |>
+    leaflet::addScaleBar(position = "bottomleft", options = leaflet::scaleBarOptions(imperial = FALSE)) |>
     leaflet::addCircleMarkers(~lon, ~lat, radius = 3.5, stroke = FALSE, fillOpacity = 0.8,
                               fillColor = ~pal(status), label = ~label) |>
     leaflet::addLegend("bottomright", colors = cols, labels = labs, opacity = 0.9)
@@ -210,35 +270,18 @@ beneficiary_profile <- function(df, settings) {
   yes_share <- function(v) { f <- eligibility_flag(v); if (all(is.na(f))) NA_real_ else mean(f, na.rm = TRUE) }
 
   vars <- list(); tiles <- list()
+  # Categories get a chart; the tiles below carry only what has no chart,
+  # so nothing is said twice.
   sx <- col("hhh_sex")
-  if (!is.null(sx)) {
-    vars$sex <- shares(df[[sx]], "Head of household sex")
-    fem <- mean(is_female(df[[sx]]))
-    tiles[[length(tiles) + 1]] <- list(icon = "female", label = "Female-headed", value = pct(fem),
-                                       sub = sprintf("%s male-headed", pct(1 - fem)))
-  }
+  if (!is.null(sx)) vars$sex <- shares(df[[sx]], "Head of household sex")
   rs <- col("residency")
-  if (!is.null(rs)) {
-    vars$residency <- shares(df[[rs]], "Residency status")
-    v <- tolower(as.character(df[[rs]]))
-    idp <- mean(grepl("idp|displac|d\u00e9plac|deplac", v)); ref <- mean(grepl("refug|r\u00e9fug", v))
-    if (idp > 0 || ref > 0) tiles[[length(tiles) + 1]] <- list(icon = "shelter", label = "Displaced", value = pct(idp + ref),
-                                                               sub = sprintf("IDP %s \u00b7 refugee %s", pct(idp), pct(ref)))
-  }
+  if (!is.null(rs)) vars$residency <- shares(df[[rs]], "Residency status")
   ms <- find("marital|matrimon|civil_status|etat_civil|statut_mat")
   if (!is.null(ms)) vars$marital <- shares(df[[ms]], "Marital status of the head")
   ds <- col("disability") %||% find("disab|handicap")
-  if (!is.null(ds)) {
-    vars$disability <- shares(df[[ds]], "Disability")
-    y <- yes_share(df[[ds]])
-    if (!is.na(y)) tiles[[length(tiles) + 1]] <- list(icon = "disability", label = "With a disability", value = pct(y), sub = "households")
-  }
+  if (!is.null(ds)) vars$disability <- shares(df[[ds]], "Disability")
   ci <- find("chronic|chroniq")
-  if (!is.null(ci)) {
-    vars$chronic <- shares(df[[ci]], "Chronic illness")
-    y <- yes_share(df[[ci]])
-    if (!is.na(y)) tiles[[length(tiles) + 1]] <- list(icon = "health", label = "Chronic illness", value = pct(y), sub = "households")
-  }
+  if (!is.null(ci)) vars$chronic <- shares(df[[ci]], "Chronic illness")
   hs <- col("hh_size")
   if (!is.null(hs)) {
     z <- as_number(df[[hs]])
@@ -284,4 +327,118 @@ profile_tiles <- function(tiles, lang = "en") {
   paste0('<div class="ptiles">', paste(vapply(tiles, function(t) sprintf(
     '<div class="ptile"><div class="ptile-ico">%s</div><div><div class="ptile-value">%s</div><div class="ptile-label">%s</div><div class="ptile-sub">%s</div></div></div>',
     profile_icon(t$icon), htmltools::htmlEscape(t$value), tr(t$label), htmltools::htmlEscape(t$sub)), character(1)), collapse = ""), '</div>')
+}
+
+#' The per-area table grouped Admin 1 > Admin 2, with subtotals and a total
+#'
+#' @param by_area Output of `selection_by_area()`.
+#' @return data.frame with `Area`, `.kind` ("group", "unit", "total") and the
+#'   counts and rates, or NULL.
+#' @noRd
+area_summary_grouped <- function(by_area) {
+  if (is.null(by_area) || !nrow(by_area) || !"Admin 1" %in% names(by_area)) return(NULL)
+  metrics <- function(d) {
+    h <- sum(d$Households); e <- sum(d$Eligible); s <- sum(d$Served)
+    data.frame(Households = h, Eligible = e, Served = s, `Excluded by design` = sum(d$`Excluded by design`),
+               `People served` = sum(d$`People served`), `Served (%)` = round(100 * s / max(h, 1), 1),
+               `Eligible served (%)` = if (e > 0) round(100 * s / e, 1) else NA, check.names = FALSE)
+  }
+  a1 <- as.character(by_area[["Admin 1"]])
+  a2 <- if ("Admin 2" %in% names(by_area)) as.character(by_area[["Admin 2"]]) else NULL
+  rows <- list()
+  for (g in unique(a1)[order(-tapply(by_area$Served, a1, sum)[unique(a1)])]) {
+    d1 <- by_area[a1 == g, , drop = FALSE]
+    rows[[length(rows) + 1]] <- cbind(data.frame(Area = g, .kind = "group", stringsAsFactors = FALSE), metrics(d1))
+    if (!is.null(a2)) {
+      sub <- a2[a1 == g]
+      for (u in unique(sub)[order(-tapply(d1$Served, sub, sum)[unique(sub)])]) {
+        rows[[length(rows) + 1]] <- cbind(data.frame(Area = u, .kind = "unit", stringsAsFactors = FALSE),
+                                          metrics(d1[sub == u, , drop = FALSE]))
+      }
+    }
+  }
+  rows[[length(rows) + 1]] <- cbind(data.frame(Area = "Total", .kind = "total", stringsAsFactors = FALSE), metrics(by_area))
+  out <- do.call(rbind, rows)
+  rownames(out) <- NULL
+  out
+}
+
+#' The grouped area table as compact HTML, subtotals and total highlighted
+#' @noRd
+area_summary_html <- function(ga, max_rows = 400) {
+  if (is.null(ga)) return("")
+  more <- nrow(ga) > max_rows
+  if (more) ga <- rbind(utils::head(ga[ga$.kind != "total", , drop = FALSE], max_rows - 1), ga[ga$.kind == "total", , drop = FALSE])
+  cols <- setdiff(names(ga), c("Area", ".kind"))
+  fmt <- function(v, k) if (is.na(v)) "\u2013" else if (grepl("%", k, fixed = TRUE)) sprintf("%.1f%%", v) else format(v, big.mark = ",")
+  head <- paste0('<tr><th>', "Area", '</th>', paste0('<th class="num">', htmltools::htmlEscape(cols), '</th>', collapse = ""), '</tr>')
+  body <- vapply(seq_len(nrow(ga)), function(i) {
+    r <- ga[i, ]
+    paste0('<tr class="', c(group = "a-group", unit = "a-unit", total = "a-total")[[r$.kind]], '"><td>',
+           htmltools::htmlEscape(r$Area), '</td>',
+           paste0('<td class="num">', vapply(cols, function(k) fmt(r[[k]], k), character(1)), '</td>', collapse = ""), '</tr>')
+  }, character(1))
+  paste0('<div class="area-sum-wrap"><table class="area-sum"><thead>', head, '</thead><tbody>', paste(body, collapse = ""),
+         '</tbody></table></div>',
+         if (more) sprintf('<p class="note">The first %d rows are shown; the Excel export has every area.</p>', max_rows) else "")
+}
+
+#' Share of households selected in each socio-demographic group
+#'
+#' Mapped fields and columns found by name, plus age and household-size
+#' bands. Groups under 10 households are left out (too few to read a rate).
+#' @param df The full registration data; `sel` TRUE for selected households.
+#' @return data.frame(variable, category, households, selected, rate) with
+#'   attr "overall", or NULL.
+#' @noRd
+selection_rates <- function(df, settings, sel, min_n = 10) {
+  if (is.null(df) || !nrow(df) || !any(sel)) return(NULL)
+  col <- function(k) { v <- as.character(settings[[k]] %||% "")[1]; if (!is.na(v) && nzchar(v) && v %in% names(df)) v else NULL }
+  find <- function(pat) { hit <- grep(pat, names(df), ignore.case = TRUE, value = TRUE); hit <- hit[!grepl("^@?_", hit)]; if (length(hit)) hit[1] else NULL }
+  groups <- list()
+  add <- function(label, v) if (!is.null(v)) groups[[label]] <<- v
+  sx <- col("hhh_sex"); if (!is.null(sx)) add("Head of household", ifelse(is_female(df[[sx]]), "female-headed", "male-headed"))
+  rs <- col("residency"); if (!is.null(rs)) add("Residency", as.character(df[[rs]]))
+  ms <- find("marital|matrimon|civil_status|etat_civil|statut_mat"); if (!is.null(ms)) add("Marital status", as.character(df[[ms]]))
+  ds <- col("disability") %||% find("disab|handicap")
+  if (!is.null(ds)) { f <- eligibility_flag(df[[ds]]); add("Disability", ifelse(is.na(f), NA, ifelse(f, "with a disability", "without"))) }
+  ci <- find("chronic|chroniq")
+  if (!is.null(ci)) { f <- eligibility_flag(df[[ci]]); add("Chronic illness", ifelse(is.na(f), NA, ifelse(f, "with a chronic illness", "without"))) }
+  ag <- col("hhh_age")
+  if (!is.null(ag)) add("Head's age", as.character(cut(as_number(df[[ag]]), c(-Inf, 29, 44, 59, Inf), labels = c("under 30", "30-44", "45-59", "60 and over"))))
+  hs <- col("hh_size")
+  if (!is.null(hs)) add("Household size", as.character(cut(as_number(df[[hs]]), c(-Inf, 3, 6, 9, Inf), labels = c("1-3 people", "4-6 people", "7-9 people", "10 or more"))))
+  if (!length(groups)) return(NULL)
+  rows <- lapply(names(groups), function(g) {
+    v <- groups[[g]]; ok <- !is.na(v) & nzchar(trimws(v))
+    if (!any(ok)) return(NULL)
+    n <- tapply(rep(1, sum(ok)), v[ok], sum); k <- tapply(sel[ok], v[ok], sum)
+    d <- data.frame(variable = g, category = names(n), households = as.integer(n), selected = as.integer(k[names(n)]),
+                    stringsAsFactors = FALSE)
+    d <- d[d$households >= min_n, , drop = FALSE]
+    if (nrow(d) < 2) return(NULL)
+    d <- utils::head(d[order(-d$households), , drop = FALSE], 6)
+    d$rate <- d$selected / d$households
+    d
+  })
+  out <- do.call(rbind, rows)
+  if (is.null(out) || !nrow(out)) return(NULL)
+  rownames(out) <- NULL
+  attr(out, "overall") <- mean(sel)
+  out
+}
+
+#' The widest gap in each group, in words
+#' @noRd
+selection_rate_insights <- function(rt) {
+  vapply(unique(rt$variable), function(g) {
+    d <- rt[rt$variable == g, , drop = FALSE]
+    d <- d[order(-d$rate, -d$households), , drop = FALSE]
+    hi <- d[1, ]; lo <- d[nrow(d), ]
+    gap <- 100 * (hi$rate - lo$rate)
+    if (abs(gap) < 0.5) return(sprintf("**%s**: every group is selected at about the same rate (%.0f%%).", g, 100 * hi$rate))
+    sprintf("**%s**: %s households are selected at %.0f%%, %s at %.0f%% (%s%.0f points)%s", g, hi$category, 100 * hi$rate,
+            lo$category, 100 * lo$rate, if (gap >= 0) "+" else "", gap,
+            if (gap >= 15) ": a large gap, check it is intended by the design." else ".")
+  }, character(1), USE.NAMES = FALSE)
 }

@@ -182,9 +182,38 @@ test_that("the beneficiary profile reads mapped fields and found columns", {
                    marital_status = c("married", "widow", "married", "single"), size = c(5, 3, 7, 4))
   bp <- TargetWise:::beneficiary_profile(df, list(hhh_sex = "sex", residency = "res", disability = "dis", hh_size = "size"))
   expect_setequal(names(bp$vars), c("sex", "residency", "marital", "disability", "chronic"))
+  # Categories are charts; tiles only carry what has no chart.
   labs <- vapply(bp$tiles, `[[`, character(1), "label")
-  expect_equal(bp$tiles[[which(labs == "Female-headed")]]$value, "75%")
-  expect_equal(bp$tiles[[which(labs == "Displaced")]]$value, "75%")
-  expect_equal(bp$tiles[[which(labs == "Chronic illness")]]$value, "25%")
+  expect_equal(labs, "Household size")
+  expect_equal(bp$tiles[[1]]$value, "4.8")
   expect_null(TargetWise:::beneficiary_profile(df[0, ], list()))
+})
+
+test_that("the area summary groups Admin 2 under Admin 1 with subtotals and a total", {
+  by_area <- data.frame(`Admin 1` = c("N", "N", "S"), `Admin 2` = c("a", "b", "c"),
+                        Households = c(10, 20, 30), Eligible = c(5, 10, 15), Served = c(4, 10, 12),
+                        `Excluded by design` = c(1, 0, 3), `People served` = c(20, 50, 60), check.names = FALSE)
+  ga <- TargetWise:::area_summary_grouped(by_area)
+  expect_equal(ga$.kind, c("group", "unit", "unit", "group", "unit", "total"))
+  expect_equal(ga$Area, c("N", "b", "a", "S", "c", "Total"))
+  expect_equal(ga$Served[ga$.kind == "group"], c(14, 12))
+  expect_equal(ga$Served[ga$.kind == "total"], 26)
+  html <- TargetWise:::area_summary_html(ga)
+  expect_match(html, 'class="a-total"')
+})
+
+test_that("selection rates compare groups and name the widest gap", {
+  df <- data.frame(sex = rep(c("F", "M"), each = 20), size = rep(c(2, 8), 20))
+  sel <- c(rep(TRUE, 15), rep(FALSE, 5), rep(TRUE, 5), rep(FALSE, 15))
+  rt <- TargetWise:::selection_rates(df, list(hhh_sex = "sex", hh_size = "size"), sel)
+  r <- rt[rt$variable == "Head of household", ]
+  expect_equal(r$rate[r$category == "female-headed"], 0.75)
+  expect_equal(r$rate[r$category == "male-headed"], 0.25)
+  expect_equal(attr(rt, "overall"), 0.5)
+  expect_match(TargetWise:::selection_rate_insights(rt)[1], "female-headed households are selected at 75%")
+})
+
+test_that("a tie between groups is said as such, not as a group against itself", {
+  rt <- data.frame(variable = "Residency", category = c("host", "IDP"), households = c(10, 10), selected = c(10, 10), rate = c(1, 1))
+  expect_match(TargetWise:::selection_rate_insights(rt), "same rate")
 })

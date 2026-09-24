@@ -116,6 +116,9 @@ list_saved_sessions <- function(user = NULL) {
   files <- list.files(dir, pattern = "\\.rds$", full.names = TRUE)
   # Audit-log companions (<name>_audit.rds) are not sessions
   files <- files[!grepl("_audit\\.rds$", files)]
+  # The per-install settings (country office) live next to the sessions and
+  # are not one.
+  files <- files[basename(files) != "settings.rds"]
   if (length(files) == 0) {
     return(data.frame(name = character(), saved_at = as.POSIXct(character()), stringsAsFactors = FALSE))
   }
