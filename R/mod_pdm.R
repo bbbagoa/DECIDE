@@ -625,7 +625,7 @@ mod_pdm_server <- function(id, workspace = NULL, country_office = reactive(NULL)
             write_data(wb, "By_Unit", sanitize_for_excel(r$by_unit))
           }
         }
-        openxlsx::saveWorkbook(wb, file, overwrite = TRUE)
+        save_workbook_readonly(wb, file)
       }
     )
 

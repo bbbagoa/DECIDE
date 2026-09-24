@@ -137,3 +137,30 @@ test_that("other analytical mappings are excluded from name detection", {
   expect_false("name_of_head_sex" %in% cols)
   expect_true("Nom_cm" %in% cols)
 })
+
+test_that("exported workbooks are locked and per-area file names are safe", {
+  f <- tempfile(fileext = ".xlsx")
+  TargetWise:::write_xlsx_readonly(data.frame(a = 1:2), f, "Data")
+  x <- paste(readLines(unz(f, "xl/worksheets/sheet1.xml"), warn = FALSE), collapse = "")
+  expect_match(x, "sheetProtection")
+  w <- paste(readLines(unz(f, "xl/workbook.xml"), warn = FALSE), collapse = "")
+  expect_match(w, "workbookProtection")
+  expect_equal(TargetWise:::area_file_suffix(c("Nord-Kivu", "Sud Kivu", "Sud/Kivu", NA, "")),
+               c("Nord-Kivu", "Sud_Kivu", "Sud_Kivu_1", "area", "area_1"))
+})
+
+test_that("the per-area summary goes down to the lowest mapped level", {
+  df <- data.frame(a1 = c("N", "N", "S"), a4 = c("x", "y", "z"), v = c("v1", "v2", "v3"), sz = c(5, 7, 3))
+  st <- list(admin1 = "a1", admin4 = "a4", village = "v", hh_size = "sz")
+  s <- list(eligible = c(TRUE, TRUE, FALSE), prioritized = c(TRUE, FALSE, FALSE))
+  out <- TargetWise:::selection_by_area(df, st, s)
+  expect_equal(names(out)[1:3], c("Admin 1", "Admin 4", "Village"))
+  expect_equal(out$Served, c(1, 0, 0))
+  expect_equal(out$`Excluded by design`, c(0, 1, 0))
+})
+
+test_that("area file names add the parent only when names clash", {
+  expect_equal(TargetWise:::area_short_names(c("N / Beni / Kasenga", "S / Uvira / Kasenga", "S / Uvira / Luvungi")),
+               c("Beni_Kasenga", "Uvira_Kasenga", "Luvungi"))
+  expect_equal(TargetWise:::area_short_names(c("Ituri", "Nord-Kivu")), c("Ituri", "Nord-Kivu"))
+})

@@ -1542,9 +1542,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
         f <- fitted()
         b <- tryCatch(live_bench(), error = function(e) NULL)
         wts <- if (is.null(f)) NULL else tryCatch(current_weights(), error = function(e) f$weights)
-        openxlsx::saveWorkbook(
-          model_tables_workbook(NULL, wts, if (is.null(b)) NULL else b$table),
-          file, overwrite = TRUE)
+        save_workbook_readonly(model_tables_workbook(NULL, wts, if (is.null(b)) NULL else b$table), file)
       }
     )
     output$dl_model_tables <- model_tables_dl
@@ -2323,7 +2321,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
                        Quintiles = score_bands(s$score, 5L)),
           roc = r$curve
         )
-        openxlsx::saveWorkbook(wb, file, overwrite = TRUE)
+        save_workbook_readonly(wb, file)
       }
     )
 

@@ -1,4 +1,4 @@
-# TargetWise 0.2.0
+# TargetWise 1.0.0
 
 * The app opens in your default browser, not the RStudio/Positron viewer.
 * Column lists show every variable: wide forms (over 1,000 columns), sparsely answered number columns and factor name columns were missing from some lists.
@@ -9,6 +9,9 @@
 * Variable calculator: an R code mode for multi-line calculations, checked before it runs.
 * Targeting Monitoring pages and the sidebars scroll again, so every option and the Add to report button can be reached.
 * Report error cards have a quieter, more professional look.
+* Restoring a session brings back every dataset (registration, assessment, PDM, process monitoring, and the original import used by Reset), and the variable setup reopens on the restored mapping.
+* Every Excel export is locked for editing (set `TARGETWISE_EXPORT_PASSWORD` to require a password to unlock); the exports that were CSV are now locked Excel workbooks.
+* Beneficiary list export: the audit trail is optional (tick box), and the list can be exported as one workbook per area (Admin 1, 2 or 3) in a zip, each file named after its area.
 
 # TargetWise 0.1.0
 

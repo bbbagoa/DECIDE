@@ -408,7 +408,7 @@ dq_location_server <- function(input, output, session, ns, core) {
       )
 
       # 6. Save
-      openxlsx::saveWorkbook(wb, file, overwrite = TRUE)
+      save_workbook_readonly(wb, file)
     }
   )
 

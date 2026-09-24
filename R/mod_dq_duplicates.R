@@ -334,15 +334,15 @@ dq_duplicates_server <- function(input, output, session, ns, core) {
   })
 
   output$download_duplicates <- downloadHandler(
-    filename = function() paste0("Targeting_Duplicates_", format(Sys.time(), "%Y-%m-%d_%Hh%Mm%Ss"), ".csv"),
+    filename = function() paste0("Targeting_Duplicates_", format(Sys.time(), "%Y-%m-%d_%Hh%Mm%Ss"), ".xlsx"),
     content = function(file) {
       a <- analysis_or_null()
       if (is.null(a) || nrow(a$dup_df) == 0) {
-        write_csv_utf8(data.frame(Message = "No duplicates found"), file)
+        write_xlsx_readonly(data.frame(Message = "No duplicates found"), file, "Duplicates")
       } else {
         d <- a$dup_df
         names(d)[match(c(".dup_group", ".differs"), names(d))] <- c("duplicate_group", "differs_in")
-        write_csv_utf8(d[, setdiff(names(d), c(".group_size", ".n_differs", ".exact")), drop = FALSE], file)
+        write_xlsx_readonly(d[, setdiff(names(d), c(".group_size", ".n_differs", ".exact")), drop = FALSE], file, "Duplicates")
       }
     }
   )

@@ -506,7 +506,7 @@ mod_spot_checking_server <- function(id, uploaded_df, user_setup, workspace = NU
                              rows = 2:(nrow(smp) + 1), cols = fcols, gridExpand = TRUE)
         }
         openxlsx::setColWidths(wb, "Sample", cols = fcols, widths = c(16, 14, 16, 36))
-        openxlsx::saveWorkbook(wb, file, overwrite = TRUE)
+        save_workbook_readonly(wb, file)
       }
     )
 
@@ -828,7 +828,7 @@ mod_spot_checking_server <- function(id, uploaded_df, user_setup, workspace = NU
           names(d) <- c("Household", "Field", "First round", "Back-check")[seq_along(d)]
           xl_data_sheet(wb, "Discordances", sanitize_for_excel(d))
         }
-        openxlsx::saveWorkbook(wb, file, overwrite = TRUE)
+        save_workbook_readonly(wb, file)
       }
     )
   })

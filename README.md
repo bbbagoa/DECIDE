@@ -259,6 +259,7 @@ Set these environment variables, for example in `.Renviron` or in your hosting p
 | `TARGETWISE_SESSION_DIR` | Where encrypted sessions are stored. Default: `tools::R_user_dir("TargetWise", "data")`. |
 | `TARGETWISE_REQUIRE_AUTH` | `true` on any shared deployment: the app refuses anonymous use and keeps one session store per signed-in user. |
 | `TARGETWISE_USER` | Fixed user name when the platform does not provide one (single-user installs). |
+| `TARGETWISE_EXPORT_PASSWORD` | Password needed to unlock the exported Excel files. Without it, exports are still locked against accidental edits but Excel's *Unprotect Sheet* opens them. |
 | `TARGETWISE_UPDATE_CHECK` | `false` turns off the start-up check for a newer version (e.g. on a server whose administrator manages updates). |
 | `TARGETWISE_RELEASES_URL` | An organisation's own copy of the releases (a web address, or a `file:///` path to a shared drive), checked for updates instead of GitHub. |
 | `GITHUB_PAT` | Optional GitHub token. Not needed (the repository is public); it only raises GitHub's limit on anonymous downloads for offices sharing one connection. |

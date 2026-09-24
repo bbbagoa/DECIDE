@@ -1233,12 +1233,14 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
       })))
       ordered <- c(mapped, setdiff(cols, mapped))
       sel <- intersect(export_cols() %||% ordered, ordered)
+      lv <- c("Admin 1" = "admin1", "Admin 2" = "admin2", "Admin 3" = "admin3", "Admin 4" = "admin4", "Village" = "village")
+      split_levels <- lv[vapply(lv, function(k) shiny::isTruthy(user_setup[[k]]) && user_setup[[k]] %in% cols, logical(1))]
       showModal(modalDialog(
         title = tagList(bsicons::bs_icon("download"), " Export the selection"),
         size = "m", easyClose = TRUE,
         tags$p(class = "small text-muted",
                "Choose the variables to include in the Selected and Excluded-by-design sheets. ",
-               "The Summary and Audit trail sheets are always included."),
+               "The Summary sheet is always included. Workbooks are locked for editing."),
         shinyWidgets::pickerInput(
           ns("export_vars"), "Variables to export", width = "100%",
           choices = col_choice_groups(`Mapped fields` = mapped, `Other columns` = setdiff(ordered, mapped)),
@@ -1250,8 +1252,18 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
                  actionButton(ns("export_mapped"), "Mapped fields only", class = "btn-outline-secondary btn-sm"),
                  actionButton(ns("export_all"), "All variables", class = "btn-outline-secondary btn-sm")),
         checkboxInput(ns("export_score"), "Add the selection score column", value = TRUE),
+        checkboxInput(ns("export_audit"), "Include the audit trail (Audit_trail sheet)", value = FALSE),
+        radioButtons(ns("export_split"), "Files", inline = TRUE,
+                     choices = c("One workbook" = "one", "One workbook per area (zipped)" = "area"),
+                     selected = "one"),
+        conditionalPanel(
+          sprintf("input['%s'] === 'area'", ns("export_split")),
+          selectInput(ns("export_split_level"), "Area level", width = "100%", selectize = FALSE,
+                      choices = split_levels),
+          tags$div(class = "small text-muted",
+                   "One workbook per area, each named after its area (e.g. ..._Ituri.xlsx), in one .zip file.")),
         footer = tagList(modalButton("Cancel"),
-                         downloadButton(ns("download_selection"), "Download Excel", class = "btn-primary"))
+                         downloadButton(ns("download_selection"), "Download", class = "btn-primary"))
       ))
       session$userData$export_mapped <- mapped
       session$userData$export_all <- ordered
@@ -1263,7 +1275,8 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
     # Self-documenting export: rows + a metadata sheet (filters, totals, accuracy)
     output$download_selection <- downloadHandler(
       filename = function() {
-        paste0("Targeting_BeneficiarySelection_", format(Sys.time(), "%Y-%m-%d_%Hh%Mm%Ss"), ".xlsx")
+        paste0("Targeting_BeneficiarySelection_", format(Sys.time(), "%Y-%m-%d_%Hh%Mm%Ss"),
+               if (identical(input$export_split, "area")) ".zip" else ".xlsx")
       },
       content = function(file) {
         sel <- selected_data()
@@ -1318,7 +1331,7 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
             "Reset to the original data" = if (count_act("Reset to original")) "yes" else "no",
             "Calculated variables" = if (is.null(calc) || !nrow(calc)) "none" else
               paste(sprintf("%s = %s", calc$column, calc$new_value), collapse = "; "),
-            "Full history" = "see the Audit_trail sheet"),
+            "Full history" = if (isTRUE(input$export_audit)) "see the Audit_trail sheet" else "in the app's Audit Trail (not exported)"),
           "Selection" = c(
             "Country office" = user_setup$country_office %||% "not set",
             "Exported" = format(Sys.time(), "%Y-%m-%d %H:%M"),
@@ -1356,18 +1369,56 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
                       "Excluded by design" = "Eligible households not served for lack of resources: unmet need, not counted as exclusion error (Targeting Advisory 2/2025).")
         )
 
-        wb <- openxlsx::createWorkbook()
-        xl_summary_sheet(wb, "Summary", "Beneficiary selection",
-                         paste(c(user_setup$country_office, format(Sys.Date())), collapse = " \u00b7 "), sections)
-        xl_data_sheet(wb, "Selected", sanitize_for_excel(sel))
-        by_area <- selection_by_area(df_all, user_setup, s)
-        if (!is.null(by_area)) xl_data_sheet(wb, "By_area", by_area)
-        if (!is.null(ex)) xl_data_sheet(wb, "Excluded_by_design", sanitize_for_excel(ex))
-        if (!is.null(lg) && nrow(lg)) {
-          xl_data_sheet(wb, "Audit_trail", sanitize_for_excel(data.frame(phase = audit_phase(lg$action), lg,
-                                                                         stringsAsFactors = FALSE)))
+        subtitle <- paste(c(user_setup$country_office, format(Sys.Date())), collapse = " \u00b7 ")
+        make_wb <- function(sel_df, ex_df, area = NULL) {
+          wb <- openxlsx::createWorkbook()
+          xl_summary_sheet(wb, "Summary", "Beneficiary selection",
+                           if (is.null(area)) subtitle else paste(subtitle, area[["Area"]], sep = " \u00b7 "),
+                           c(if (!is.null(area)) list("This file" = area), sections))
+          xl_data_sheet(wb, "Selected", sanitize_for_excel(sel_df))
+          if (is.null(area)) {
+            by_area <- selection_by_area(df_all, user_setup, s)
+            if (!is.null(by_area)) xl_data_sheet(wb, "By_area", by_area)
+          }
+          if (!is.null(ex_df) && nrow(ex_df)) xl_data_sheet(wb, "Excluded_by_design", sanitize_for_excel(ex_df))
+          if (isTRUE(input$export_audit) && !is.null(lg) && nrow(lg)) {
+            xl_data_sheet(wb, "Audit_trail", sanitize_for_excel(data.frame(phase = audit_phase(lg$action), lg,
+                                                                           stringsAsFactors = FALSE)))
+          }
+          wb
         }
-        openxlsx::saveWorkbook(wb, file, overwrite = TRUE)
+
+        level <- input$export_split_level %||% "admin1"
+        acol <- user_setup[[level]]
+        if (identical(input$export_split, "area") && shiny::isTruthy(acol) && acol %in% names(df_all)) {
+          # One locked workbook per area, named after it, in one zip.
+          lab <- AREA_LEVELS[[level]]
+          # An area is its whole path (a village name can repeat in two
+          # districts); the file is named after the area itself, with its
+          # parent added only when two names clash.
+          path_cols <- vapply(names(AREA_LEVELS)[seq_len(match(level, names(AREA_LEVELS)))],
+                              function(k) as.character(user_setup[[k]] %||% "")[1], character(1))
+          path_cols <- path_cols[!is.na(path_cols) & nzchar(path_cols) & path_cols %in% names(df_all)]
+          area_of <- function(d) do.call(paste, c(lapply(d[path_cols], function(x) {
+            x <- as.character(x); x[is.na(x) | !nzchar(trimws(x))] <- "Missing"; x }), sep = " / "))
+          sel_area <- area_of(full)
+          ex_area <- area_of(df_all[cut, , drop = FALSE])
+          areas <- sort(unique(c(sel_area, ex_area)))
+          dir <- tempfile("selection_"); dir.create(dir)
+          fnames <- paste0("Targeting_BeneficiarySelection_", area_file_suffix(area_short_names(areas)), ".xlsx")
+          for (i in seq_along(areas)) {
+            a <- areas[i]
+            ex_a <- if (is.null(ex)) NULL else ex[ex_area == a, , drop = FALSE]
+            wb <- make_wb(sel[sel_area == a, , drop = FALSE], ex_a,
+                          area = c("Area level" = lab, "Area" = a,
+                                   "Selected (served)" = format(sum(sel_area == a), big.mark = ","),
+                                   "Excluded by design" = format(sum(ex_area == a), big.mark = ",")))
+            save_workbook_readonly(wb, file.path(dir, fnames[i]))
+          }
+          zip::zipr(file, file.path(dir, fnames))
+        } else {
+          save_workbook_readonly(make_wb(sel, ex), file)
+        }
       }
     )
   })
@@ -1423,13 +1474,17 @@ selection_profile <- function(df, cols, labels, sel) {
   if (!length(rows)) NULL else do.call(rbind, rows)
 }
 
+#' The area levels, top to bottom, down to the lowest mapped one
+#' @noRd
+AREA_LEVELS <- c(admin1 = "Admin 1", admin2 = "Admin 2", admin3 = "Admin 3", admin4 = "Admin 4", village = "Village")
+
 #' Households and people served per area, for the export
 #' @noRd
 selection_by_area <- function(df, settings, s) {
   lv <- Filter(function(k) {
     cl <- as.character(settings[[k]] %||% "")[1]
     !is.na(cl) && nzchar(cl) && cl %in% names(df)
-  }, c("admin1", "admin2", "admin3"))
+  }, names(AREA_LEVELS))
   if (!length(lv)) return(NULL)
   cols <- vapply(lv, function(k) as.character(settings[[k]])[1], character(1))
   key <- df[cols]
@@ -1440,7 +1495,7 @@ selection_by_area <- function(df, settings, s) {
   agg <- function(v) as.numeric(tapply(v, g, sum, na.rm = TRUE))
   first <- !duplicated(g)
   out <- key[first, , drop = FALSE][order(g[first]), , drop = FALSE]
-  names(out) <- c(admin1 = "Admin 1", admin2 = "Admin 2", admin3 = "Admin 3")[lv]
+  names(out) <- AREA_LEVELS[lv]
   out$Households <- agg(rep(1, nrow(df)))
   out$Eligible <- agg(s$eligible)
   out$Served <- agg(s$prioritized)
@@ -1449,4 +1504,31 @@ selection_by_area <- function(df, settings, s) {
   out$`Served (%)` <- round(100 * out$Served / out$Households, 1)
   rownames(out) <- NULL
   out
+}
+
+#' Shortest unambiguous name for each area path ("A / B / C"): the last part,
+#' with parents prefixed only where the last parts clash
+#' @noRd
+area_short_names <- function(paths) {
+  parts <- strsplit(paths, " / ", fixed = TRUE)
+  depth <- rep(1L, length(parts))
+  repeat {
+    nm <- vapply(seq_along(parts), function(i) {
+      p <- parts[[i]]; paste(utils::tail(p, min(depth[i], length(p))), collapse = "_")
+    }, character(1))
+    clash <- nm %in% nm[duplicated(nm)] & depth < lengths(parts)
+    if (!any(clash)) return(nm)
+    depth[clash] <- depth[clash] + 1L
+  }
+}
+
+#' File-name suffix for an area: ASCII letters, digits, - and _ only, unique
+#' @noRd
+area_file_suffix <- function(areas) {
+  x <- iconv(as.character(areas), to = "ASCII//TRANSLIT", sub = "")
+  x[is.na(x)] <- ""
+  x <- gsub("[^A-Za-z0-9_-]+", "_", trimws(x))
+  x <- gsub("^_+|_+$", "", x)
+  x[!nzchar(x)] <- "area"
+  make.unique(x, sep = "_")
 }

@@ -430,6 +430,12 @@ mod_setup_server <- function(id, r_data, parent_session, trigger_open = reactive
 
         )
       ))
+      # A mapping already made, or brought back with a restored session, wins
+      # over the name guesses: reopening the setup must show what is in use.
+      for (k in PROFILE_KEYS) {
+        v <- settings[[k]]
+        if (is.character(v) && length(v) == 1 && v %in% cols) updateSelectInput(session, k, selected = v)
+      }
     }
 
     observeEvent(input$open_modal, {

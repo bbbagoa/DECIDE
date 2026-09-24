@@ -72,10 +72,9 @@ mod_session_manager_server <- function(
 
       if (!is.null(saved$uploaded_df)) {
         uploaded_df(saved$uploaded_df)
-        # The pristine import is not persisted (it would double the file size
-        # for large datasets), so the restored data becomes the Reset baseline
-        # unless one is already in memory.
-        if (is.function(original_df)) original_df(saved$uploaded_df)
+        # The pristine import comes back as the Reset baseline; sessions saved
+        # before it was stored fall back to the restored data.
+        if (is.function(original_df)) original_df(saved$original_df %||% saved$uploaded_df)
       }
       if (!is.null(saved$user_setup)) {
         for (nm in names(saved$user_setup)) {
@@ -290,7 +289,8 @@ mod_session_manager_server <- function(
         name = name,
         user = who,
         workspace = work,
-        ui = current_ui()
+        ui = current_ui(),
+        original_df = if (is.function(original_df)) original_df()
       )
       last_sig(workspace_signature(work))
       current_session_name(name)
@@ -390,7 +390,8 @@ mod_session_manager_server <- function(
         any(vapply(state$setup, function(x) is.character(x) && length(x) == 1 && nzchar(x), logical(1)))
       if (!has_work || (is.null(state$df) && !length(work))) return()
 
-      size <- as.numeric(utils::object.size(state$df)) + as.numeric(utils::object.size(work))
+      size <- as.numeric(utils::object.size(state$df)) + as.numeric(utils::object.size(work)) +
+        if (is.function(original_df)) as.numeric(utils::object.size(isolate(original_df()))) else 0
       if (size > autosave_max_bytes()) {
         if (!autosave_skip_notified()) {
           autosave_skip_notified(TRUE)
@@ -410,7 +411,8 @@ mod_session_manager_server <- function(
         name = persist_name(),
         user = who,
         workspace = work,
-        ui = current_ui()
+        ui = current_ui(),
+        original_df = if (is.function(original_df)) isolate(original_df())
       )
       last_sig(workspace_signature(work))
     }

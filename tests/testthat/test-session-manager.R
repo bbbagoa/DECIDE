@@ -140,3 +140,13 @@ test_that("app_user falls back through platform, env, then anonymous", {
   # A platform-supplied user always wins over the environment fallback.
   expect_equal(TargetWise:::app_user(list(user = "carla@wfp.org")), "carla@wfp.org")
 })
+
+test_that("a session keeps the original import only when it differs from the working data", {
+  withr::local_envvar(TARGETWISE_SESSION_DIR = withr::local_tempdir())
+  orig <- data.frame(id = 1:3, x = c(1, 2, 3))
+  edited <- orig[-2, ]
+  TargetWise:::save_session(edited, list(), NULL, name = "o1", original_df = orig)
+  expect_equal(TargetWise:::load_session("o1")$original_df, orig)
+  TargetWise:::save_session(orig, list(), NULL, name = "o2", original_df = orig)
+  expect_null(TargetWise:::load_session("o2")$original_df)   # not stored twice
+})

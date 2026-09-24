@@ -1,6 +1,6 @@
 Package: TargetWise
 Title: Evidence-Based Humanitarian Targeting: Design, Selection and Monitoring
-Version: 0.2.0
+Version: 1.0.0
 Authors@R: 
     person("Brice Baem", "BAGOA", , "brice.bagoa@outlook.com", role = c("aut", "cre"))
 Author: Brice Baem BAGOA [aut, cre]
@@ -51,7 +51,8 @@ Imports:
     tidyr,
     tools,
     VIM,
-    waiter
+    waiter,
+    zip
 Suggests:
     e1071,
     gitcreds,

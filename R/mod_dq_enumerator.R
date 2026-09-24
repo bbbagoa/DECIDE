@@ -205,11 +205,11 @@ dq_enumerator_server <- function(input, output, session, ns, core) {
   })
 
   output$enum_flag_download <- downloadHandler(
-    filename = function() paste0("Targeting_Flagged_enumerators_", format(Sys.time(), "%Y-%m-%d_%Hh%M"), ".csv"),
+    filename = function() paste0("Targeting_Flagged_enumerators_", format(Sys.time(), "%Y-%m-%d_%Hh%M"), ".xlsx"),
     content = function(file) {
       m <- enum_metrics()
       f <- if (is.null(m)) NULL else m[m$flag == "Review", , drop = FALSE]
-      write_csv_utf8(if (is.null(f) || !nrow(f)) data.frame(Message = "No enumerator flagged") else f, file)
+      write_xlsx_readonly(if (is.null(f) || !nrow(f)) data.frame(Message = "No enumerator flagged") else f, file, "Flagged")
     }
   )
 

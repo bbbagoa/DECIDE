@@ -241,7 +241,7 @@ decrypt_session <- function(cipher, passphrase = session_passphrase(), user = NU
 #' @noRd
 save_session <- function(uploaded_df, user_setup, modification_log, theme = "wfp",
                           moda_credentials = NULL, name = "default", user = NULL,
-                          workspace = NULL, ui = NULL) {
+                          workspace = NULL, ui = NULL, original_df = NULL) {
   session_file <- get_session_file(name, user)
 
   # Never persist the MODA API token in session files
@@ -251,6 +251,9 @@ save_session <- function(uploaded_df, user_setup, modification_log, theme = "wfp
 
   state <- list(
     uploaded_df = uploaded_df,
+    # The pristine import (Reset baseline), kept only once it differs from the
+    # working data, so an unedited session does not store the data twice.
+    original_df = if (!is.null(original_df) && !identical(original_df, uploaded_df)) original_df,
     user_setup = user_setup,
     modification_log = modification_log,
     theme = theme,
@@ -465,6 +468,7 @@ session_contents <- function(saved) {
   sc <- saved$user_setup$scorecard
   c(
     if (!is.null(saved$uploaded_df)) sprintf("Registration data: %s households", format(nrow(saved$uploaded_df), big.mark = ",")),
+    if (!is.null(saved$original_df)) sprintf("Original import (Reset baseline): %s households", format(nrow(saved$original_df), big.mark = ",")),
     if (!is.null(w$scorecard)) paste0("Targeting Design: ",
       if (!is.null(w$scorecard$data)) sprintf("assessment data (%s rows)", format(nrow(w$scorecard$data), big.mark = ",")) else "",
       if (length(w$scorecard$runs)) sprintf(", %d model run(s)", length(w$scorecard$runs)) else "",

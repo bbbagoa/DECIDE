@@ -74,12 +74,12 @@ mod_audit_server <- function(id, modification_log) {
 
     output$download_full_log <- downloadHandler(
       filename = function() {
-        paste0("Targeting_Audit_Log_", format(Sys.time(), "%Y-%m-%d_%Hh%Mm%Ss"), ".csv")
+        paste0("Targeting_Audit_Log_", format(Sys.time(), "%Y-%m-%d_%Hh%Mm%Ss"), ".xlsx")
       },
       content = function(file) {
         dat <- modification_log()
         if (!is.null(dat)) dat <- data.frame(phase = audit_phase(dat$action), dat, stringsAsFactors = FALSE)
-        write_csv_utf8(dat %||% data.frame(Message = "Nothing logged yet."), file)
+        write_xlsx_readonly(dat %||% data.frame(Message = "Nothing logged yet."), file, "Audit_trail")
       }
     )
   })

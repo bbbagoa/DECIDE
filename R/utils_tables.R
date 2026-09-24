@@ -296,3 +296,32 @@ write_csv_utf8 <- function(df, file) {
   data.table::fwrite(export_text(as.data.frame(df)), file, bom = TRUE, na = "")
   invisible(file)
 }
+
+#' Save a workbook locked for editing
+#'
+#' A browser download is always a plain, editable file, so the protection has
+#' to live inside it: every sheet is locked (reading, selecting, filtering and
+#' widening columns still work) and sheets cannot be added, removed or renamed.
+#' Set TARGETWISE_EXPORT_PASSWORD to require a password to unlock; without it
+#' Excel's Unprotect Sheet opens them, which still stops accidental edits.
+#' @noRd
+save_workbook_readonly <- function(wb, file) {
+  pw <- tw_env("EXPORT_PASSWORD", "")
+  pw <- if (nzchar(pw)) pw else NULL
+  for (sh in names(wb)) {
+    openxlsx::protectWorksheet(wb, sh, protect = TRUE, password = pw,
+                               lockSelectingLockedCells = FALSE, lockSelectingUnlockedCells = FALSE,
+                               lockAutoFilter = FALSE, lockFormattingColumns = FALSE)
+  }
+  openxlsx::protectWorkbook(wb, protect = TRUE, password = pw, lockStructure = TRUE)
+  openxlsx::saveWorkbook(wb, file, overwrite = TRUE)
+  invisible(file)
+}
+
+#' One table as a formatted, locked workbook (the exports that used to be CSV)
+#' @noRd
+write_xlsx_readonly <- function(df, file, sheet = "Data") {
+  wb <- openxlsx::createWorkbook()
+  xl_data_sheet(wb, sheet, sanitize_for_excel(as.data.frame(df)))
+  save_workbook_readonly(wb, file)
+}
