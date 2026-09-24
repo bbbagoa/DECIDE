@@ -239,3 +239,14 @@ rp_corr_table <- function(cm) {
                                              lapply(nm[-length(nm)], function(x) htmltools::tags$th(htmltools::tags$span(x))))),
     htmltools::tags$tbody(rows)))
 }
+
+# Donut of shares (category, n): the profile charts of the selection report.
+rp_donut <- function(d, height = 260) {
+  cols <- stats::setNames(rep_len(c("#0A6EB4", "#f7b825", "#26bde2", "#3f7e44", "#c5192d", "#8a96a3"), nrow(d)), d$category)
+  rp_base(height) |>
+    billboarder::bb_donutchart(data.frame(category = d$category, n = d$n)) |>
+    rp_colors(cols) |>
+    billboarder::bb_donut(label = list(format = htmlwidgets::JS("function(v, r) { return (r * 100).toFixed(0) + '%'; }")),
+                          width = 34) |>
+    billboarder::bb_legend(position = "right")
+}

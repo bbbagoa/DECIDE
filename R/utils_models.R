@@ -27,8 +27,9 @@ NULL
 #' Model choices offered in the UI
 #' @noRd
 scorecard_model_choices <- function() {
+  # Stepwise selection is not a model of its own: it is an option that
+  # applies to every model (see `stepwise` in fit_scorecard_advanced()).
   out <- c("Logistic regression (all retained criteria)" = "logit",
-           "Stepwise logistic (backward, AIC)" = "stepwise",
            "Weight of evidence (criterion by criterion)" = "woe")
   # Boosted stumps are still additive (one split per tree), so they give a
   # card like the others -- but only when xgboost is installed.
@@ -52,7 +53,6 @@ scorecard_model_choices <- function() {
 scorecard_model_note <- function(method) {
   switch(method,
     logit = "One logistic model on every retained criterion; each criterion's effect is net of the others.",
-    stepwise = "Logistic, then backward selection on AIC: criteria that add nothing once the others are known are dropped, giving a shorter card.",
     woe = "Each criterion's effect is its own log odds ratio against the outcome (weight of evidence, as in credit scorecards). Never fails on separation or collinearity; effects are not net of the other criteria, so overlapping criteria count twice.",
     stumps = "Gradient boosting restricted to one split per tree. With yes/no criteria that model is exactly additive, so each criterion still gets fixed points, but it can capture effects a logistic fit misses when criteria are unstable together.",
     rf = "Random forest (500 trees). Each criterion's points are its average marginal effect: how much the forest's prediction moves, on the log-odds scale, when a household meets the criterion rather than not. The card is additive; the forest's interactions are averaged out.",
@@ -247,7 +247,9 @@ scorecard_weights <- function(coef, scheme = "odds_ratio") {
 #' @noRd
 fit_scorecard_advanced <- function(df, outcome, criteria, outcome_positive = NULL,
                                    method = "logit", scheme = "odds_ratio",
-                                   rows = NULL, weights = NULL) {
+                                   rows = NULL, weights = NULL, stepwise = "none") {
+  # "stepwise" was once a model; it is now logistic with AIC selection.
+  if (identical(method, "stepwise")) { method <- "logit"; if (identical(stepwise, "none")) stepwise <- "aic" }
   y <- as_binary_outcome(df[[outcome]], outcome_positive)
   if (is.null(y)) stop("The outcome must be binary (two levels).", call. = FALSE)
   if (length(criteria) == 0) stop("No criteria to model.", call. = FALSE)
@@ -270,6 +272,23 @@ fit_scorecard_advanced <- function(df, outcome, criteria, outcome_positive = NUL
   # look significant.
   X$.w <- X$.w / mean(X$.w)
 
+  # Stepwise selection, for any model: backward elimination on a logistic
+  # fit, by AIC (k = 2) or BIC (k = log n, stricter, so a shorter card),
+  # decides which criteria go into the chosen model.
+  step_dropped <- character(0)
+  step_model <- NULL
+  if (stepwise %in% c("aic", "bic")) {
+    k <- if (identical(stepwise, "bic")) log(nrow(X)) else 2
+    full0 <- suppressWarnings(stats::glm(stats::reformulate(criteria, response = ".y"), data = X,
+                                         family = stats::binomial(), weights = .w))
+    step_model <- withCallingHandlers(stats::step(full0, direction = "backward", trace = 0, k = k),
+                                      warning = function(w) invokeRestart("muffleWarning"))
+    sel <- intersect(criteria, attr(stats::terms(step_model), "term.labels"))
+    if (length(sel) == 0) stop("Stepwise selection removed every criterion: none adds information over the others.", call. = FALSE)
+    step_dropped <- setdiff(criteria, sel)
+    criteria <- sel
+  }
+
   if (method %in% c("woe", "stumps", "rf", "xgb", "svm", "nb", "nnet")) {
     coef <- switch(method,
                    woe = woe_effects(X, criteria),
@@ -285,8 +304,8 @@ fit_scorecard_advanced <- function(df, outcome, criteria, outcome_positive = NUL
     out$weight <- scorecard_weights(out$coefficient, scheme)
     out <- out[order(-abs(out$coefficient)), , drop = FALSE]
     rownames(out) <- NULL
-    return(list(weights = round5(out), dropped = setdiff(criteria, kept), model = NULL,
-                n = nrow(X), converged = TRUE, method = method, scheme = scheme))
+    return(list(weights = round5(out), dropped = c(step_dropped, setdiff(criteria, kept)), model = NULL,
+                n = nrow(X), converged = TRUE, method = method, scheme = scheme, stepwise = stepwise))
   }
 
   converged <- TRUE
@@ -303,18 +322,11 @@ fit_scorecard_advanced <- function(df, outcome, criteria, outcome_positive = NUL
     )
   }
 
-  full <- fit_once(stats::reformulate(criteria, response = ".y"))
-  model <- full
-  if (identical(method, "stepwise")) {
-    model <- withCallingHandlers(
-      stats::step(full, direction = "backward", trace = 0),
-      warning = function(w) invokeRestart("muffleWarning")
-    )
-  }
+  model <- fit_once(stats::reformulate(criteria, response = ".y"))
 
   cf <- summary(model)$coefficients
   kept <- setdiff(rownames(cf), "(Intercept)")
-  dropped <- setdiff(criteria, kept)
+  dropped <- c(step_dropped, setdiff(criteria, kept))
   if (length(kept) == 0) {
     stop("Stepwise selection removed every criterion: none adds information over the others.",
          call. = FALSE)
@@ -338,7 +350,7 @@ fit_scorecard_advanced <- function(df, outcome, criteria, outcome_positive = NUL
 
   list(weights = round5(out), dropped = dropped, model = model, n = nrow(X),
        converged = converged && isTRUE(model$converged),
-       method = method, scheme = scheme)
+       method = method, scheme = scheme, stepwise = stepwise)
 }
 
 #' Benchmark the scorecard against models that cannot be written as one
@@ -444,7 +456,7 @@ model_effects <- function(df, outcome, criteria, outcome_positive = NULL,
   ch <- scorecard_model_choices()
   # Only the models asked for: each one is a full fit.
   if (!is.null(methods)) ch <- ch[ch %in% methods]
-  short <- c(logit = "Logistic", stepwise = "Stepwise", woe = "Weight of evidence",
+  short <- c(logit = "Logistic", woe = "Weight of evidence",
              stumps = "Boosted stumps", rf = "Random forest", xgb = "XGBoost", svm = "SVM",
              nb = "Naive Bayes", nnet = "Neural network")
   out <- lapply(names(ch), function(full) {
@@ -460,4 +472,13 @@ model_effects <- function(df, outcome, criteria, outcome_positive = NULL,
                stringsAsFactors = FALSE)
   })
   round5(do.call(rbind, out))
+}
+
+#' What the stepwise option does, shown under the model settings
+#' @noRd
+stepwise_note <- function(ic) {
+  switch(ic %||% "none",
+    aic = "Stepwise (AIC): criteria that add nothing once the others are known are dropped first, on a logistic fit, then the chosen model is fitted on the rest.",
+    bic = "Stepwise (BIC): as AIC but with a heavier penalty per criterion (log of the sample size), so it keeps fewer criteria: a shorter card.",
+    "")
 }

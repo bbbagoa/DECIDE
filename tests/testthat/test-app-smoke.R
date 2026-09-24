@@ -7,6 +7,9 @@
 # app: import a file, map the variables, and check the tabs and the headline
 # numbers come out right.
 
+# The first page load builds the theme and can pass chromote's default 10 s.
+options(chromote.timeout = 120)
+
 skip_if_no_app_driver <- function() {
   testthat::skip_if_not_installed("shinytest2")
   testthat::skip_if_not_installed("chromote")
@@ -14,6 +17,11 @@ skip_if_no_app_driver <- function() {
     is.null(tryCatch(chromote::find_chrome(), error = function(e) NULL)),
     "no Chrome available for shinytest2"
   )
+  # The first page load builds the theme and can pass chromote's default
+  # 10 s; the option alone is read too late once the browser object exists.
+  cm <- tryCatch(chromote::default_chromote_object(), error = function(e) NULL)
+  testthat::skip_if(is.null(cm), "Chrome could not be started for shinytest2")
+  cm$default_timeout <- 120
 }
 
 # The mapping the fixture needs. Keys are the setup inputs.

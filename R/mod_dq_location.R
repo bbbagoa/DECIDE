@@ -244,7 +244,7 @@ dq_location_server <- function(input, output, session, ns, core) {
   observeEvent(input$btn_apply_norm, {
     # 1. Identify what needs to be changed
     selected_rows <- input$tab_location_norm_rows_selected
-    req(selected_rows, input$correct_name)
+    need_ok(length(selected_rows) > 0 && shiny::isTruthy(input$correct_name), "Select the names to merge and type the correct name first.")
 
     # 2. Check if anything is selected
     if (length(selected_rows) == 0) {

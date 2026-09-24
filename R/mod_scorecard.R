@@ -56,11 +56,12 @@ mod_scorecard_ui <- function(id) {
             fileInput(ns("assessment_file"), "Load assessment data",
                       accept = c(".xlsx", ".xls", ".sav", ".dta", ".csv", ".parquet"),
                       width = "100%"),
+            # Reloading data is the session's job; this explains the method.
             tags$div(
               class = "wfp-inline-action",
-              tags$label(class = "form-label", "Already loaded?"),
-              actionButton(ns("use_loaded"), "Use the dataset currently loaded",
-                           icon = icon("arrow-turn-down"),
+              tags$label(class = "form-label", "New to the design?"),
+              actionButton(ns("open_guide"), "How the design works",
+                           icon = icon("book-open"),
                            class = "btn-outline-secondary w-100")
             ),
             tags$div(
@@ -201,7 +202,7 @@ mod_scorecard_ui <- function(id) {
                   shinyWidgets::pickerInput(
                     ns("compare_models"),
                     tagList("Also compare per variable", info_tip("Models fitted next to the chosen one to show each variable's effect under every model. Machine-learning models are slow on large data: add them only when you need them.")),
-                    choices = scorecard_model_choices(), selected = c("logit", "stepwise", "woe"),
+                    choices = scorecard_model_choices(), selected = intersect(c("logit", "woe", "stumps"), scorecard_model_choices()),
                     multiple = TRUE, width = "100%",
                     options = shinyWidgets::pickerOptions(container = "body", actionsBox = TRUE,
                                                           selectedTextFormat = "count > 2",
@@ -217,6 +218,15 @@ mod_scorecard_ui <- function(id) {
                                                    list(name = "Why.", text = "If they barely beat the card on the held-out households, a simple additive card loses little (Targeting Advisory 3/2025)."))))),
                                          value = TRUE))
                 ),
+                tags$div(
+                  class = "d-flex flex-wrap align-items-center gap-3",
+                  checkboxInput(ns("stepwise_on"),
+                                tagList("Stepwise selection of the criteria",
+                                        info_tip("Backward elimination before fitting, for any model: a criterion is dropped when the fit it loses is smaller than the complexity it costs. AIC is the usual choice; BIC penalises each criterion more (log of the sample size) and keeps fewer.")),
+                                value = FALSE),
+                  conditionalPanel(sprintf("input['%s']", ns("stepwise_on")),
+                                   radioButtons(ns("stepwise_ic"), NULL, inline = TRUE,
+                                                choices = c("AIC" = "aic", "BIC" = "bic"), selected = "aic"))),
                 tags$div(class = "small text-muted",
                          textOutput(ns("model_note"), inline = TRUE), " ",
                          textOutput(ns("scheme_note"), inline = TRUE))
@@ -427,20 +437,20 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
                        type = "message")
     })
 
-    observeEvent(input$use_loaded, {
-      df <- uploaded_df()
-      if (is.null(df)) {
-        showNotification("No dataset is loaded yet.", type = "error")
-        return()
-      }
-      assessment_df(df)
-      assessment_source("the dataset loaded on the Welcome page")
-      audit_add(modification_log, "Design", "Assessment data loaded",
-                sprintf("registration dataset (%s rows)", nrow(df)))
-      reset_build()
-      go_step("outcome")
-      showNotification("Using the currently loaded dataset as the assessment data.",
-                       type = "message")
+    observeEvent(input$open_guide, showModal(design_guide_modal()))
+
+    # Buttons that need an earlier step are frozen until it is done.
+    observe({
+      gate_button("run_fit", !is.null(assessment_df()) && !is.null(screened()),
+           "Load the assessment data, choose the outcome and the candidate criteria first.")
+      todo <- tryCatch(missing_steps(), error = function(e) "finish the earlier steps")
+      why <- paste0("Before adopting, ", paste(todo, collapse = ", "), ".")
+      gate_button("btn_use", !length(todo), why)
+      gate_button("nav_adopt", !length(todo), why)
+      has_fit <- !is.null(fitted())
+      gate_button("thr_youden", has_fit, "Fit a model first.")
+      gate_button("thr_balanced", has_fit, "Fit a model first.")
+      gate_button("thr_caseload", has_fit, "Fit a model first.")
     })
 
     calc_vars <- mod_var_calc_server("calc", assessment_df, function(df) assessment_df(df),
@@ -486,6 +496,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
     rs_in <- function(k) isolate(restoring())$inputs[[k]]
     sc_inputs <- c("outcome_col", "outcome_pos", "criteria", "model_method", "model_scheme",
                    "holdout_pct", "split_seed", "model_weights", "run_benchmarks", "fit_criteria", "compare_models",
+                   "stepwise_on", "stepwise_ic",
                    "corr_cutoff", "tol_lower", "tol_upper", "tol_rationale", "caseload_pct")
 
     workspace_register(workspace, "scorecard",
@@ -498,11 +509,12 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
              selection_set = selection_set(), selection_applied = selection_applied(),
              fitted = fitted(), split = split_state(), bench = bench(), effects = effects(),
              runs = runs(), current_run = current_run(), points = pts,
-             threshold = input$threshold, step = input$steps)
+             threshold = input$threshold, step = input$steps, quick_screen = qs_result())
       },
       restore = function(s) {
         restoring(s)
         assessment_df(s$data); assessment_source(s$source)
+        qs_result(s$quick_screen)
         if (!is.null(s$calc)) calc_vars(s$calc)
         screened(s$screened); collinear(s$collinear); analyst_dropped(s$analyst_dropped %||% character(0))
         selection_set(s$selection_set); selection_applied(isTRUE(s$selection_applied))
@@ -529,6 +541,13 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
         }
         if (!is.null(i$run_benchmarks)) updateCheckboxInput(session, "run_benchmarks", value = i$run_benchmarks)
         if (!is.null(i$compare_models)) shinyWidgets::updatePickerInput(session, "compare_models", selected = i$compare_models)
+        if (!is.null(i$stepwise_on)) updateCheckboxInput(session, "stepwise_on", value = i$stepwise_on)
+        if (!is.null(i$stepwise_ic)) updateRadioButtons(session, "stepwise_ic", selected = i$stepwise_ic)
+        # A session from before stepwise became an option.
+        if (identical(i$model_method, "stepwise")) {
+          updateSelectInput(session, "model_method", selected = "logit")
+          updateCheckboxInput(session, "stepwise_on", value = TRUE)
+        }
         if (!is.null(i$tol_rationale)) updateTextAreaInput(session, "tol_rationale", value = i$tol_rationale)
         if (!is.null(s$threshold)) {
           thr_pending(s$threshold)
@@ -837,7 +856,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
     analyst_dropped <- reactiveVal(character(0))
 
     observeEvent(input$select_vars, {
-      res <- screened(); req(res)
+      res <- screened(); need_ok(!is.null(res), "Choose the outcome and the candidate criteria first.")
       use <- vapply(seq_len(nrow(res)), function(i) isTRUE(input[[paste0("sv_", i)]]), logical(1))
       if (!any(use)) {
         showNotification("Tick at least one variable in the Use column.", type = "warning")
@@ -896,7 +915,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
     })
 
     observeEvent(input$apply_selection, {
-      si <- selection_info(); res <- screened(); req(si, res)
+      si <- selection_info(); res <- screened(); need_ok(!is.null(si) && !is.null(res), "Tick the variables and click Select ticked variables first.")
       chosen <- si$prof$criterion
       drop <- chosen[vapply(seq_along(chosen), function(i) isTRUE(input[[paste0("dv_", i)]]), logical(1))]
       keep <- setdiff(chosen, drop)
@@ -969,7 +988,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
     })
 
     observeEvent(input$qs_run, {
-      df <- assessment_df(); res <- screened(); req(df, res)
+      df <- assessment_df(); res <- screened(); need_ok(!is.null(df) && !is.null(res), "Load the assessment data and choose the outcome and criteria first.")
       r <- tryCatch(screen_criteria(df, input$outcome_col, res$criterion,
                                     alpha = input$qs_alpha %||% 0.05, adjust = input$qs_adjust %||% "BH",
                                     outcome_positive = input$outcome_pos),
@@ -1118,7 +1137,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
     observeEvent(input$run_fit, {
       df <- assessment_df()
       res <- screened()
-      req(df, res)
+      need_ok(!is.null(df) && !is.null(res), "Load the assessment data, choose the outcome and the criteria, and select the variables first.")
       # The picker lets the model be iterated on a different set than the
       # screening retained; it starts from the retained set.
       keep <- input$fit_criteria %||% res$criterion[res$retained]
@@ -1141,6 +1160,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
         fit_scorecard_advanced(df, input$outcome_col, keep,
                                outcome_positive = input$outcome_pos,
                                method = input$model_method %||% "logit",
+                               stepwise = if (isTRUE(input$stepwise_on)) input$stepwise_ic %||% "aic" else "none",
                                scheme = input$model_scheme %||% "odds_ratio",
                                rows = sp$train, weights = wts_vec),
         error = function(e) {
@@ -1185,6 +1205,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
         id = length(rl) + 1, at = format(Sys.time(), "%H:%M:%S"),
         fit = out, split = sp, bench = bench(), criteria = keep, effects = effects(),
         settings = list(method = input$model_method, scheme = input$model_scheme,
+                        stepwise = if (isTRUE(input$stepwise_on)) input$stepwise_ic %||% "aic" else "none",
                         holdout = input$holdout_pct, seed = input$split_seed),
         auc = roc_curve(sc_score[auc_rows], yb[auc_rows])$auc,
         held_out = length(sp$test) > 0
@@ -1242,7 +1263,8 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
     })
 
 
-    output$model_note <- renderText(scorecard_model_note(input$model_method %||% "logit"))
+    output$model_note <- renderText(paste(scorecard_model_note(input$model_method %||% "logit"),
+                                          if (isTRUE(input$stepwise_on)) stepwise_note(input$stepwise_ic) else ""))
 
     output$runs_ui <- renderUI({
       rl <- runs()
@@ -1283,7 +1305,10 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
       req(r)
       fitted(r$fit); split_state(r$split); bench(r$bench); effects(r$effects)
       current_run(r$id)
-      updateSelectInput(session, "model_method", selected = r$settings$method)
+      updateSelectInput(session, "model_method", selected = if (identical(r$settings$method, "stepwise")) "logit" else r$settings$method)
+      st <- r$settings$stepwise %||% if (identical(r$settings$method, "stepwise")) "aic" else "none"
+      updateCheckboxInput(session, "stepwise_on", value = st %in% c("aic", "bic"))
+      if (st %in% c("aic", "bic")) updateRadioButtons(session, "stepwise_ic", selected = st)
       freezeReactiveValue(input, "model_scheme")
       updateSelectInput(session, "model_scheme", selected = r$settings$scheme)
       updateNumericInput(session, "holdout_pct", value = r$settings$holdout)
@@ -1694,7 +1719,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
           model = if (is.null(f)) NULL else list(
             method = names(scorecard_model_choices())[scorecard_model_choices() == f$method][1],
             scheme = names(scorecard_scheme_choices())[scorecard_scheme_choices() == f$scheme][1],
-            method_code = f$method, scheme_code = f$scheme,
+            method_code = f$method, scheme_code = f$scheme, stepwise = f$stepwise %||% "none",
             n_train = f$n, n_test = length(sp$test), seed = input$split_seed,
             weights = input$model_weights, dropped = f$dropped, converged = f$converged,
             fit_stats = fit_stats),
@@ -1815,7 +1840,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
 
     observeEvent(input$thr_youden, {
       r <- roc()
-      req(is.finite(r$youden))
+      need_ok(is.finite(r$youden), "Fit a model first: the Youden point comes from its ROC curve.")
       t <- max(0, r$youden)
       updateSliderInput(session, "threshold", value = round(t, 5))
       thr_msg(sprintf("Youden's J cut-point: score > %s (maximises recall minus false-positive rate).", fmt5(t)))

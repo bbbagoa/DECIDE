@@ -41,8 +41,10 @@ app_ui <- function(request) {
         tags$img(
           src = "www/wfp-logo-standard-white-en.png",
           height = "35px", # Adjust based on your logo's proportions
-          style = "margin-top: -5px; margin-right: 10px;" # Fine-tune alignment
+          style = "margin-top: -5px;" # Fine-tune alignment
         ),
+        # WFP logo | TargetWise, as on the Welcome page (no tagline here).
+        tags$span(class = "brand-divider"),
         tags$span(class = "brand-text", "TargetWise")
       ),
 

@@ -264,7 +264,7 @@ dq_missing_server <- function(input, output, session, ns, core) {
   # Apply missing-data analysis selections
   observeEvent(input$btn_apply_missing, {
     waiter::waiter_show(
-      html = waiter_content(),
+      html = waiter_content("Analysing missing data\u2026"),
       color = "rgba(10, 30, 50, 0.65)"
     )
     on.exit(waiter::waiter_hide(), add = TRUE)

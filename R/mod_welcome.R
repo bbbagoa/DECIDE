@@ -50,10 +50,15 @@ mod_welcome_ui <- function(tr = function(x) x) {
       tags$div(
         class = "wfp-hero text-center",
         tags$div(class = "wfp-eyebrow", tr("WFP Vulnerability Analysis and Mapping")),
-        h1("TargetWise"),
+        # WFP logo | TargetWise, the tagline below both.
+        tags$div(
+          class = "wfp-hero-brand",
+          tags$img(src = "www/wfp-logo-standard-white-en.png", alt = "World Food Programme", class = "wfp-hero-logo"),
+          tags$span(class = "wfp-hero-divider"),
+          h1("TargetWise")),
         # The tagline stands on its own line, set apart from the description
         # by the rule below it.
-        tags$div(class = "wfp-hero-tagline", tags$span(tr("Reach the right people"))),
+        tags$div(class = "wfp-hero-tagline", tags$span(tr("Reaching the most vulnerable"))),
         tags$div(class = "wfp-hero-rule"),
         tags$p(
           class = "wfp-hero-lead",

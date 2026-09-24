@@ -164,3 +164,27 @@ test_that("area file names add the parent only when names clash", {
                c("Beni_Kasenga", "Uvira_Kasenga", "Luvungi"))
   expect_equal(TargetWise:::area_short_names(c("Ituri", "Nord-Kivu")), c("Ituri", "Nord-Kivu"))
 })
+
+test_that("the report's area summary rolls up to a readable level with a total", {
+  by_area <- data.frame(`Admin 1` = c("N", "N", "S"), `Admin 2` = c("a", "b", "c"),
+                        Households = c(10, 20, 30), Eligible = c(5, 10, 15), Served = c(4, 10, 12),
+                        `Excluded by design` = c(1, 0, 3), `People served` = c(20, 50, 60), check.names = FALSE)
+  sm <- TargetWise:::area_summary(by_area, max_units = 2)          # 3 Admin 2 units > 2: falls back to Admin 1
+  expect_equal(attr(sm, "level"), "Admin 1")
+  expect_equal(sm$Served, c(14, 12, 26))
+  expect_equal(tail(sm[[1]], 1), "Total")
+  expect_equal(attr(TargetWise:::area_summary(by_area), "level"), "Admin 2")
+})
+
+test_that("the beneficiary profile reads mapped fields and found columns", {
+  df <- data.frame(sex = c("F", "F", "M", "F"), res = c("IDP", "Host", "Refugee", "IDP"),
+                   dis = c("yes", "no", "no", "yes"), chronic_illness = c("oui", "non", "non", "non"),
+                   marital_status = c("married", "widow", "married", "single"), size = c(5, 3, 7, 4))
+  bp <- TargetWise:::beneficiary_profile(df, list(hhh_sex = "sex", residency = "res", disability = "dis", hh_size = "size"))
+  expect_setequal(names(bp$vars), c("sex", "residency", "marital", "disability", "chronic"))
+  labs <- vapply(bp$tiles, `[[`, character(1), "label")
+  expect_equal(bp$tiles[[which(labs == "Female-headed")]]$value, "75%")
+  expect_equal(bp$tiles[[which(labs == "Displaced")]]$value, "75%")
+  expect_equal(bp$tiles[[which(labs == "Chronic illness")]]$value, "25%")
+  expect_null(TargetWise:::beneficiary_profile(df[0, ], list()))
+})

@@ -101,7 +101,7 @@ mod_monitoring_server <- function(id, workspace = NULL, country_office = reactiv
       audit_add(modification_log, "Monitoring", "Process-monitoring data loaded", sprintf("%s (%s rows)", f$name, nrow(df)))
     })
     observeEvent(input$pm_remove, {
-      ds <- datasets(); req(length(ds), input$pm_active)
+      ds <- datasets(); need_ok(length(ds) > 0 && shiny::isTruthy(input$pm_active), "No dataset to remove.")
       ds[[input$pm_active]] <- NULL; datasets(ds)
       updateSelectInput(session, "pm_active", choices = names(ds), selected = if (length(ds)) names(ds)[1] else character(0))
     })
@@ -116,6 +116,8 @@ mod_monitoring_server <- function(id, workspace = NULL, country_office = reactiv
     mod_chart_builder_server("pdm_charts", data = pdm$df, source = "pdm", dataset_name = pdm$name, add_item = add_item)
     mod_chart_builder_server("pm_charts", data = active_pm, source = "process",
                              dataset_name = reactive(input$pm_active %||% ""), add_item = add_item)
+
+    observe(gate_button("pm_remove", length(datasets()) > 0, "No dataset loaded yet."))
 
     # --- the report's items: reorder, edit the comment, remove -------------------
     output$items_ui <- renderUI({

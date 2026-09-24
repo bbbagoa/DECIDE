@@ -239,7 +239,7 @@ dq_spelling_server <- function(input, output, session, ns, core) {
 
   observeEvent(input$btn_open_edit, {
     selected_idx <- input$dq_names_redflags_rows_selected
-    req(selected_idx)
+    need_ok(length(selected_idx) > 0, "Select a record in the table first.")
 
     if (is.null(selected_idx)) {
       showNotification(

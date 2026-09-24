@@ -80,7 +80,9 @@ dq_duplicates_server <- function(input, output, session, ns, core) {
   observeEvent(uploaded_df(), {
     req(uploaded_df())
     cols <- names(uploaded_df())
-    cur <- intersect(isolate(input$duplicate_vars) %||% character(0), cols)
+    # A restored session's columns win over whatever the picker holds now:
+    # this observer also runs when the restored data arrives.
+    cur <- intersect(isolate(restored_vars()) %||% isolate(input$duplicate_vars) %||% character(0), cols)
     if (!length(cur) && !is.null(user_setup$unique_id) && user_setup$unique_id %in% cols) {
       cur <- user_setup$unique_id
     }
@@ -89,6 +91,22 @@ dq_duplicates_server <- function(input, output, session, ns, core) {
 
   # Re-run after a deletion so the table shows what is left.
   rerun <- reactiveVal(0)
+  restored_vars <- reactiveVal(NULL)
+
+  # Saved with the session: the columns and the matching settings.
+  workspace_register(core$workspace, "dq_duplicates",
+    snapshot = function() {
+      if (is.null(uploaded_df()) || !length(input$duplicate_vars)) return(NULL)
+      list(vars = input$duplicate_vars, fuzzy = input$duplicate_fuzzy, dist = input$duplicate_fuzzy_dist)
+    },
+    restore = function(s) {
+      restored_vars(s$vars)
+      after_flush(session, function() {
+        shinyWidgets::updatePickerInput(session, "duplicate_vars", selected = s$vars)
+        shinyWidgets::updateAwesomeCheckbox(session, "duplicate_fuzzy", value = isTRUE(s$fuzzy))
+        if (!is.null(s$dist)) updateSliderInput(session, "duplicate_fuzzy_dist", value = s$dist)
+      })
+    })
 
   duplicate_analysis <- eventReactive(list(input$btn_refresh_duplicates, rerun()), {
     req(dq_filtered_data(), input$duplicate_vars)
@@ -214,12 +232,18 @@ dq_duplicates_server <- function(input, output, session, ns, core) {
     if (k) sprintf("%s selected", format(k, big.mark = ",")) else ""
   })
 
+  observe({
+    has <- tryCatch(nrow(analysis_or_null()$dup_df) > 0, error = function(e) FALSE)
+    for (b in c("dup_sel_extra", "dup_sel_exact", "dup_delete", "download_duplicates"))
+      gate_button(b, isTRUE(has), "Click Find duplicates first; there is nothing to act on yet.")
+  })
+
   observeEvent(input$dup_sel_extra, {
-    a <- analysis_or_null(); req(a)
+    a <- analysis_or_null(); need_ok(!is.null(a), "Click Find duplicates first.")
     DT::selectRows(dup_proxy, which(duplicated(a$dup_df$.dup_group)))
   })
   observeEvent(input$dup_sel_exact, {
-    a <- analysis_or_null(); req(a)
+    a <- analysis_or_null(); need_ok(!is.null(a), "Click Find duplicates first.")
     hit <- which(a$dup_df$.exact)
     DT::selectRows(dup_proxy, hit)
     if (!length(hit)) showNotification("No exact copies: every duplicate differs somewhere.", type = "message")

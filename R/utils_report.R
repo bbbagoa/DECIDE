@@ -102,6 +102,8 @@ design_report_md <- function(x, figures = character(0)) {
     m <- x$model
     add(sprintf("- Model: **%s**", m$method),
         sprintf("- Weighting scheme: **%s**", m$scheme),
+        sprintf("- Stepwise selection of the criteria: %s",
+                switch(m$stepwise %||% "none", aic = "**backward, AIC**", bic = "**backward, BIC**", "none")),
         sprintf("- Training households: %s; held out for evaluation: %s (seed %s)",
                 format(m$n_train, big.mark = ","), format(m$n_test, big.mark = ","), m$seed),
         sprintf("- Survey weights: %s", if (shiny::isTruthy(m$weights)) paste0("`", m$weights, "`") else "none"),
@@ -216,6 +218,11 @@ design_report_methods <- function(x) {
     if (shiny::isTruthy(m$weights)) item("Survey weights",
        sprintf("Each household counted in the model by its sampling weight `%s`, normalised to a mean of 1 so the sample size, and therefore the standard errors, keep their scale.", m$weights))
 
+    if ((m$stepwise %||% "none") %in% c("aic", "bic")) item(sprintf("Stepwise selection (%s)", toupper(m$stepwise)),
+       paste("Reference: Venables & Ripley (2002), *Modern Applied Statistics with S*, ch. 6. Before the model is fitted, the criteria go through",
+             "**backward stepwise selection** on a logistic fit: one at a time, the criterion whose removal lowers the information criterion most is dropped,",
+             "until no removal lowers it. AIC = 2k - 2 log L; BIC = k log(n) - 2 log L, a heavier penalty per criterion, so BIC keeps fewer.",
+             "The chosen model is then fitted on the criteria that remain, so every model can be made shorter the same way."))
     item(sprintf("Model: %s", m$method %||% ""), switch(m$method_code %||% "logit",
       logit = paste("Reference: Hosmer, Lemeshow & Sturdivant (2013), *Applied Logistic Regression*, 3rd ed. A **logistic regression** of the outcome on all kept criteria: log(p / (1 - p)) = b0 + b1 x1 + ... + bk xk, where p is the probability of being vulnerable and each x is 0/1. Each coefficient b is the change in log-odds when the criterion is met, **net of the other criteria**; exp(b) is its odds ratio. Standard errors and p-values come from the Wald test; the 95% interval is b +/- 1.96 SE."),
       stepwise = paste("Reference: Venables & Ripley (2002), *Modern Applied Statistics with S*, ch. 6. A logistic regression followed by **backward stepwise selection** on the Akaike Information Criterion (AIC = 2k - 2 log L): criteria are removed one at a time while doing so lowers the AIC, i.e. while the fit lost is smaller than the complexity saved. The result is a shorter card with the criteria that add information once the others are known."),
@@ -398,7 +405,7 @@ report_write_page <- function(file, md, plots = list(), captions = character(0),
     report_inline_deps(deps), '</head><body>',
     '<header class="band"><div class="wrap band-inner">',
     '<div class="band-logo">', report_logo(), '</div>',
-    '<div class="band-title"><div class="eyebrow">', "TargetWise", ' <span class="eyebrow-tag">', tr("Reach the right people"), '</span></div>',
+    '<div class="band-title"><div class="eyebrow">', "TargetWise", ' <span class="eyebrow-tag">', tr("Reaching the most vulnerable"), '</span></div>',
     '<h1>', tr(title), '</h1>',
     '<div class="sub">', if (!is.na(co)) paste0(esc(co), ' \u00b7 '), tr(record), '</div></div>',
     '<dl class="band-meta">',
@@ -543,6 +550,13 @@ design_report_css <- function() {
   .kpi-value { font-size: 26px; font-weight: 700; color: var(--ink); line-height: 1.2; margin-top: 4px; font-variant-numeric: tabular-nums; }
   .kpi-sub { font-size: 12px; color: var(--muted); }
   .fig .leaflet-container { border-radius: 6px; }
+  .ptiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin: 12px 0 16px; }
+  .ptile { display: flex; gap: 12px; align-items: center; background: var(--tint); border-radius: 8px; padding: 12px 14px; }
+  .ptile-ico { flex: none; width: 44px; height: 44px; border-radius: 50%; background: var(--blue); display: flex; align-items: center; justify-content: center; }
+  .ptile-ico svg { width: 26px; height: 26px; fill: #fff; }
+  .ptile-value { font-size: 22px; font-weight: 700; line-height: 1.1; color: var(--ink); font-variant-numeric: tabular-nums; }
+  .ptile-label { font-size: 12px; font-weight: 600; color: var(--ink); }
+  .ptile-sub { font-size: 11.5px; color: var(--muted); }
   .err-matrix-wrap { overflow-x: auto; margin: 10px 0 12px; }
   .err-matrix { border-collapse: collapse; width: 100%; max-width: 760px; font-size: 13px; font-variant-numeric: tabular-nums; }
   .err-matrix th, .err-matrix td { border: 1px solid var(--line); padding: 8px 12px; text-align: left; vertical-align: top; }

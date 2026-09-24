@@ -120,7 +120,8 @@ mod_dq_ui <- function(id) {
 #' @param original_df reactiveVal holding the originally imported data (Reset)
 #' @import shiny
 #' @noRd
-mod_dq_server <- function(id, uploaded_df, user_setup, modification_log, original_df = reactiveVal(NULL)) {
+mod_dq_server <- function(id, uploaded_df, user_setup, modification_log, original_df = reactiveVal(NULL),
+                          workspace = NULL) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
@@ -210,7 +211,7 @@ mod_dq_server <- function(id, uploaded_df, user_setup, modification_log, origina
   # --- Apply DQ Filters ---
   observeEvent(input$btn_apply_dq_filters, {
     waiter::waiter_show(
-      html = waiter_content(),
+      html = waiter_content("Filtering the data-quality view\u2026"),
       color = "rgba(10, 30, 50, 0.65)"
     )
     on.exit(waiter::waiter_hide(), add = TRUE)
@@ -225,7 +226,7 @@ mod_dq_server <- function(id, uploaded_df, user_setup, modification_log, origina
   # --- Clear DQ Filters ---
   observeEvent(input$btn_clear_dq_filters, {
     waiter::waiter_show(
-      html = waiter_content(),
+      html = waiter_content("Clearing the filters\u2026"),
       color = "rgba(10, 30, 50, 0.65)"
     )
     on.exit(waiter::waiter_hide(), add = TRUE)
@@ -285,8 +286,28 @@ mod_dq_server <- function(id, uploaded_df, user_setup, modification_log, origina
     uploaded_df      = uploaded_df,
     user_setup       = user_setup,
     modification_log = modification_log,
-    applied_missing  = applied_missing
+    applied_missing  = applied_missing,
+    workspace        = workspace
   )
+
+  # Saved with the session: the filters and the missing-data analysis that
+  # were applied (each sub-tab registers its own settings).
+  workspace_register(workspace, "dq",
+    snapshot = function() {
+      if (is.null(uploaded_df())) return(NULL)
+      list(filters = reactiveValuesToList(applied_dq_filters), missing = reactiveValuesToList(applied_missing))
+    },
+    restore = function(s) {
+      after_flush(session, function() {
+        for (k in names(s$filters)) applied_dq_filters[[k]] <- s$filters[[k]]
+        for (k in names(s$missing)) applied_missing[[k]] <- s$missing[[k]]
+        for (lvl in c("admin1", "admin2", "admin3")) {
+          shinyWidgets::updatePickerInput(session, paste0("dq_filter_adm", substr(lvl, 6, 6)),
+                                          selected = s$filters[[lvl]] %||% character(0))
+        }
+        if (length(s$missing$vars)) shinyWidgets::updatePickerInput(session, "mandatory_vars", selected = s$missing$vars)
+      })
+    })
 
   # --- Delegate each sub-tab's logic to its own helper (mod_dq_*.R) ---
   dq_spelling_server(input, output, session, ns, core)
@@ -316,7 +337,7 @@ mod_dq_server <- function(id, uploaded_df, user_setup, modification_log, origina
 
   observeEvent(input$confirm_reset, {
     waiter::waiter_show(
-      html = waiter_content(),
+      html = waiter_content("Restoring the original data\u2026"),
       color = "rgba(10, 30, 50, 0.65)"
     )
     on.exit(waiter::waiter_hide(), add = TRUE)

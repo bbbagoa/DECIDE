@@ -1,39 +1,80 @@
-// A "Working..." pill whenever the server takes more than a moment, so a long
-// step (screening, fitting, a large export) never looks like a frozen app.
-// Downloads do not make Shiny busy, so they show it from the click until the
-// server says the file is built (download_handler() sends tw-download-done).
+// Loading feedback for work that does not block the page.
+//
+// Whenever the server takes more than a moment, a small card appears at the
+// bottom of the page -- the same card as the app's full-screen waiter
+// (waiter_content(): ring + one line) -- saying WHAT is running: the button
+// the user pressed ("Fit model..."), or the panels being redrawn ("Updating:
+// Distribution and limits..."). Downloads do not make Shiny busy, so they
+// show it from the click until the server says the file is built
+// (download_handler() sends tw-download-done).
 (function () {
   "use strict";
-  var pill, timer, dlTimer, downloads = 0;
+  var box, timer, dlTimer, downloads = 0;
+  var action = null, actionAt = 0;      // the last button pressed, and when
+  var updating = [];                     // titles of the panels being redrawn
 
   function el() {
-    if (!pill) {
-      pill = document.createElement("div");
-      pill.className = "tw-busy";
-      pill.setAttribute("role", "status");
-      pill.setAttribute("aria-live", "polite");
-      pill.innerHTML = '<span class="tw-busy-spin"></span><span class="tw-busy-text"></span>';
-      document.body.appendChild(pill);
+    if (!box) {
+      box = document.createElement("div");
+      box.className = "tw-busy";
+      box.innerHTML = '<div class="wfp-wait" role="status" aria-live="polite"><div class="wfp-wait-row">' +
+                      '<span class="wfp-wait-ring"></span><span class="wfp-wait-msg"></span></div></div>';
+      document.body.appendChild(box);
     }
-    return pill;
+    return box;
   }
   function show(text) {
-    el().querySelector(".tw-busy-text").textContent = text;
-    pill.classList.add("on");
+    el().querySelector(".wfp-wait-msg").textContent = text;
+    box.classList.add("on");
   }
-  function hide() { if (pill && !downloads) pill.classList.remove("on"); }
+  function hide() { if (box && !downloads) box.classList.remove("on"); }
 
+  function clean(t) { return (t || "").replace(/\s+/g, " ").trim().slice(0, 80); }
+  // What a redrawn output is: its card's header, else its tab, else nothing.
+  function titleOf(node) {
+    var card = node.closest && node.closest(".card");
+    var head = card && card.querySelector(".card-header");
+    if (head && clean(head.textContent)) return clean(head.textContent);
+    var pane = node.closest && node.closest(".tab-pane");
+    if (pane && pane.id) {
+      var tab = document.querySelector('[data-bs-target="#' + pane.id + '"], a[href="#' + pane.id + '"]');
+      if (tab && clean(tab.textContent)) return clean(tab.textContent);
+    }
+    return null;
+  }
+  function message() {
+    if (downloads) return action ? "Preparing: " + action + "…" : "Preparing your file…";
+    if (action && Date.now() - actionAt < 15000) return action + "…";
+    if (updating.length) return "Updating: " + updating.slice(0, 2).join(", ") + (updating.length > 2 ? " and more" : "") + "…";
+    return "Working…";
+  }
+
+  $(document).on("click", "button.action-button, a.action-button", function () {
+    var t = clean(this.textContent) || clean(this.getAttribute("title"));
+    if (t) { action = t; actionAt = Date.now(); }
+  });
+  $(document).on("shiny:recalculating", function (e) {
+    var t = titleOf(e.target);
+    if (t && updating.indexOf(t) < 0) updating.push(t);
+    if (box && box.classList.contains("on")) show(message());
+  });
   $(document).on("shiny:busy", function () {
     clearTimeout(timer);
-    timer = setTimeout(function () { show(downloads ? "Preparing your file…" : "Working…"); }, 700);
+    timer = setTimeout(function () { show(message()); }, 700);
   });
-  $(document).on("shiny:idle", function () { clearTimeout(timer); hide(); });
+  $(document).on("shiny:idle", function () {
+    clearTimeout(timer);
+    updating = [];
+    if (!downloads) action = null;
+    hide();
+  });
 
   $(document).on("click", "a.shiny-download-link", function () {
     downloads++;
-    show("Preparing your file…");
+    action = clean(this.textContent) || null;
+    show(message());
     clearTimeout(dlTimer);
-    // Safety net: never leave the pill up if the message is lost.
+    // Safety net: never leave it up if the message is lost.
     dlTimer = setTimeout(function () { downloads = 0; hide(); }, 180000);
   });
 
@@ -48,13 +89,14 @@
   $(document).on("shiny:busy", function () { clearTimeout(settleTimer); });
 
   $(function () {
+    // Shiny requires handlers that take one argument, or registration fails.
     Shiny.addCustomMessageHandler("tw-when-settled", function (m) {
       settle = m.id; arm();
       setTimeout(function () { if (settle === m.id) { Shiny.setInputValue(m.id, Date.now(), { priority: "event" }); settle = null; } }, 60000);
     });
-    Shiny.addCustomMessageHandler("tw-download-done", function (m) {  // Shiny requires one argument
+    Shiny.addCustomMessageHandler("tw-download-done", function (m) {
       downloads = Math.max(0, downloads - 1);
-      if (!downloads) { clearTimeout(dlTimer); hide(); }
+      if (!downloads) { clearTimeout(dlTimer); action = null; hide(); }
     });
   });
 })();

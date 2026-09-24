@@ -18,6 +18,13 @@
 * Design report: smaller, borderless error cards and the full design error matrix in a neutral table.
 * Targeting Monitoring: PDM or baseline data; crosstabs with row, column or total percentages and a chi-square test in the chart and table builder; report items can be dragged into order and set to half width to sit side by side.
 * PDM analysis: required columns start empty instead of defaulting to the first column; the selected entry of every dropdown is readable.
+* Tagline "Reaching the most vulnerable" (French: "Atteindre les plus vulnerables"); WFP logo | TargetWise on the Welcome page and the navbar; smoother navbar hover and menu animations.
+* Loaders say what is running ("Fit model...", "Updating: ...", "Preparing: ...") and share the full-screen waiter's design; every blocking step names itself.
+* Buttons that need something first are frozen until it is there, with the reason on hover and as a notice when clicked; handlers say what is missing instead of doing nothing.
+* Selection report: area summary at Admin 3 (or 2) instead of a long list, a beneficiary profile (female-headed, displacement, disability, chronic illness, marital status, household size) with pictograms and donut charts, and an OpenStreetMap background that needs no API key.
+* Stepwise selection (AIC or BIC) is an option for every model, not a model of its own.
+* Targeting Design: "How the design works" guide (seven steps, methods, technical details, references) replaces the reload button.
+* Sessions also keep the Data Quality settings (filters, outlier variable, method and allowed ranges, duplicate columns, missing-data analysis) and the quick-screening result; after a restore, "Refresh MODA" fetches only the new submissions (the API key is asked for, never saved).
 
 # TargetWise 0.1.0
 

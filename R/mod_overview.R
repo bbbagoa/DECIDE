@@ -204,7 +204,7 @@ mod_overview_server <- function(id, uploaded_df, user_setup) {
   # --- Apply Filters ---
   observeEvent(input$btn_apply_filters, {
     waiter::waiter_show(
-      html = waiter_content(),
+      html = waiter_content("Filtering the overview\u2026"),
       color = "rgba(10, 30, 50, 0.65)"
     )
     on.exit(waiter::waiter_hide(), add = TRUE)
@@ -219,7 +219,7 @@ mod_overview_server <- function(id, uploaded_df, user_setup) {
   # --- Clear Filters ---
   observeEvent(input$btn_clear_filters, {
     waiter::waiter_show(
-      html = waiter_content(),
+      html = waiter_content("Clearing the filters\u2026"),
       color = "rgba(10, 30, 50, 0.65)"
     )
     on.exit(waiter::waiter_hide(), add = TRUE)

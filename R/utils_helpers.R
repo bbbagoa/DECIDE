@@ -509,7 +509,7 @@ startup_splash <- function() {
     class = "tw-splash",
     tags$img(src = "www/wfp-logo-standard-white-en.png", alt = "WFP", class = "tw-splash-logo"),
     tags$div(class = "tw-splash-name", "TargetWise"),
-    tags$div(class = "tw-splash-tagline", "Reach the right people"),
+    tags$div(class = "tw-splash-tagline", "Reaching the most vulnerable"),
     tags$div(class = "tw-splash-bar", tags$span()),
     tags$div(class = "tw-splash-sub", "Preparing your workspace\u2026")
   )
@@ -534,4 +534,30 @@ download_handler <- function(filename, content, contentType = NULL, outputArgs =
       content(file)
     },
     contentType = contentType, outputArgs = outputArgs)
+}
+
+#' Stop a button's handler with a message instead of silently
+#'
+#' `req()` ends a handler without a word, which looks like a dead button.
+#' Use this at the top of any handler that needs something first: the user is
+#' told what is missing, then the handler stops the same way `req()` would.
+#' @noRd
+need_ok <- function(ok, message) {
+  if (!isTRUE(ok)) {
+    shiny::showNotification(message, type = "warning", duration = 6)
+    shiny::req(FALSE)
+  }
+  invisible(TRUE)
+}
+
+#' Freeze a button until its condition holds (www/gates.js)
+#'
+#' A frozen button is greyed out, shows `reason` on hover, and tells it again
+#' when clicked. Call inside an `observe()` so the state follows the data.
+#' @param id Input id, unnamespaced (the session's namespace is applied).
+#' @noRd
+gate_button <- function(id, ok, reason, session = shiny::getDefaultReactiveDomain()) {
+  if (is.null(session)) return(invisible(NULL))
+  session$sendCustomMessage("tw-gate", list(id = session$ns(id), ok = isTRUE(ok), reason = reason))
+  invisible(NULL)
 }

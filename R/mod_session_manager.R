@@ -169,13 +169,13 @@ mod_session_manager_server <- function(
     })
 
     observeEvent(input$btn_restore_load, {
-      req(input$restore_session_choice)
+      need_ok(shiny::isTruthy(input$restore_session_choice), "Choose a saved session first.")
       removeModal()
       restore_session(input$restore_session_choice)
     })
 
     observeEvent(input$btn_restore_delete, {
-      req(input$restore_session_choice)
+      need_ok(shiny::isTruthy(input$restore_session_choice), "Choose a saved session first.")
       name <- input$restore_session_choice
       delete_session(name, user = who)
       # Re-render the modal with the updated list
@@ -213,10 +213,11 @@ mod_session_manager_server <- function(
     # 2. Session control menu
     # -------------------------------------------------------------------------
     output$session_menu <- renderUI({
+      # A restored session carries the form but never the API key, so the
+      # button shows on the form alone and asks for the key when needed.
       has_moda <- !is.null(moda_credentials()) &&
         is.list(moda_credentials()) &&
-        isTruthy(moda_credentials()$form_id) &&
-        isTruthy(moda_credentials()$token)
+        isTruthy(moda_credentials()$form_id)
 
       tags$div(
         class = "btn-group",
@@ -224,8 +225,8 @@ mod_session_manager_server <- function(
         aria_label = "Session controls",
         if (has_moda) {
           actionButton(
-            ns("btn_sync_moda"), title = "Sync MODA data",
-            "Sync MODA",
+            ns("btn_sync_moda"), title = "Fetch only the MODA submissions that are not in this session yet",
+            "Refresh MODA",
             icon = icon("sync"),
             class = "btn-outline-info btn-sm"
           )
@@ -252,6 +253,23 @@ mod_session_manager_server <- function(
     })
 
     observeEvent(input$btn_sync_moda, {
+      cred <- moda_credentials()
+      if (isTruthy(cred$token)) { sync_trigger(Sys.time()); return() }
+      showModal(modalDialog(
+        title = tagList(icon("sync"), " Refresh MODA data"), size = "s", easyClose = TRUE,
+        tags$p(class = "small", sprintf("Form %s. The data already in this session is kept; only the submissions received since are fetched.",
+                                        cred$form_id)),
+        passwordInput(ns("sync_token"), "API Gateway Key", width = "100%"),
+        tags$p(class = "small text-muted mb-0", "The key is kept in memory for this session only and is never saved."),
+        footer = tagList(modalButton("Cancel"), actionButton(ns("sync_token_go"), "Refresh", class = "btn-primary", icon = icon("sync")))
+      ))
+    })
+    observeEvent(input$sync_token_go, {
+      tok <- trimws(input$sync_token %||% "")
+      if (!nzchar(tok)) { showNotification("Enter the API key.", type = "warning"); return() }
+      cred <- moda_credentials(); cred$token <- tok
+      moda_credentials(cred)
+      removeModal()
       sync_trigger(Sys.time())
     })
 
@@ -324,7 +342,7 @@ mod_session_manager_server <- function(
     })
 
     observeEvent(input$btn_menu_load, {
-      req(input$load_session_choice)
+      need_ok(shiny::isTruthy(input$load_session_choice), "Choose a saved session first.")
       removeModal()
       restore_session(input$load_session_choice)
     })
@@ -353,7 +371,7 @@ mod_session_manager_server <- function(
     })
 
     observeEvent(input$btn_menu_delete, {
-      req(input$delete_session_choice)
+      need_ok(shiny::isTruthy(input$delete_session_choice), "Choose a saved session first.")
       removeModal()
       delete_session(input$delete_session_choice, user = who)
       showNotification(paste("Session", input$delete_session_choice, "deleted."), type = "message")

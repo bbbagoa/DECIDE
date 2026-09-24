@@ -62,7 +62,7 @@ test_that("stepwise drops a criterion that adds nothing and keeps the real drive
   df <- demo_models()
   crit <- c("Targ_Tent", "Targ_NoLight", "Targ_Cattle", "Targ_Noise")
   full <- tm("fit_scorecard_advanced")(df, "FSI", crit, "Food insecure", method = "logit")
-  step <- tm("fit_scorecard_advanced")(df, "FSI", crit, "Food insecure", method = "stepwise")
+  step <- tm("fit_scorecard_advanced")(df, "FSI", crit, "Food insecure", method = "logit", stepwise = "aic")
   expect_setequal(full$weights$criterion, crit)
   expect_true("Targ_Noise" %in% step$dropped)
   expect_setequal(step$weights$criterion, c("Targ_Tent", "Targ_NoLight", "Targ_Cattle"))
@@ -194,4 +194,19 @@ test_that("machine-learning models give additive points in the right direction",
   skip_if_not_installed("e1071")
   s <- fit(df, "y", c("a", "b"), "Food insecure", method = "svm")
   expect_true(all(is.finite(s$weights$weight)))
+})
+
+test_that("stepwise works with every model, and BIC keeps no more than AIC", {
+  df <- demo_models()
+  crit <- c("Targ_Tent", "Targ_NoLight", "Targ_Cattle", "Targ_Noise")
+  woe <- tm("fit_scorecard_advanced")(df, "FSI", crit, "Food insecure", method = "woe", stepwise = "aic")
+  expect_true("Targ_Noise" %in% woe$dropped)
+  expect_false("Targ_Noise" %in% woe$weights$criterion)
+  aic <- tm("fit_scorecard_advanced")(df, "FSI", crit, "Food insecure", stepwise = "aic")
+  bic <- tm("fit_scorecard_advanced")(df, "FSI", crit, "Food insecure", stepwise = "bic")
+  expect_lte(nrow(bic$weights), nrow(aic$weights))
+  expect_equal(bic$stepwise, "bic")
+  # a session saved when stepwise was a model of its own
+  old <- tm("fit_scorecard_advanced")(df, "FSI", crit, "Food insecure", method = "stepwise")
+  expect_equal(old$method, "logit"); expect_equal(old$stepwise, "aic")
 })

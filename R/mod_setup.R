@@ -530,7 +530,7 @@ mod_setup_server <- function(id, r_data, parent_session, trigger_open = reactive
     }
 
     observeEvent(input$profile_apply, {
-      req(shiny::isTruthy(input$profile_choice))
+      need_ok(shiny::isTruthy(input$profile_choice), "Choose a saved profile first.")
       prof <- load_profile(input$profile_choice, who)
       if (is.null(prof)) {
         showNotification("Could not read that profile.", type = "error")
@@ -560,7 +560,7 @@ mod_setup_server <- function(id, r_data, parent_session, trigger_open = reactive
     })
 
     observeEvent(input$profile_delete, {
-      req(shiny::isTruthy(input$profile_choice))
+      need_ok(shiny::isTruthy(input$profile_choice), "Choose a saved profile first.")
       nm <- input$profile_choice
       delete_profile(nm, who)
       profiles_changed(profiles_changed() + 1)
@@ -604,7 +604,7 @@ mod_setup_server <- function(id, r_data, parent_session, trigger_open = reactive
     # invalid, a modal is shown so the user can pick which columns to coerce.
     do_save <- function(force_cols = character()) {
       waiter::waiter_show(
-        html = waiter_content(),
+        html = waiter_content("Checking and saving the variable mapping\u2026"),
         color = "rgba(10, 30, 50, 0.65)"
       )
       on.exit(waiter::waiter_hide(), add = TRUE)

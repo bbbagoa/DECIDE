@@ -287,7 +287,7 @@ mod_spot_checking_server <- function(id, uploaded_df, user_setup, workspace = NU
 
     observeEvent(input$sc_apply, {
       waiter::waiter_show(
-        html = waiter_content(),
+        html = waiter_content("Drawing the spot-check sample\u2026"),
         color = "rgba(10, 30, 50, 0.65)"
       )
       on.exit(waiter::waiter_hide(), add = TRUE)
@@ -307,7 +307,7 @@ mod_spot_checking_server <- function(id, uploaded_df, user_setup, workspace = NU
 
     observeEvent(input$sc_clear, {
       waiter::waiter_show(
-        html = waiter_content(),
+        html = waiter_content("Clearing the sample\u2026"),
         color = "rgba(10, 30, 50, 0.65)"
       )
       on.exit(waiter::waiter_hide(), add = TRUE)
@@ -423,6 +423,7 @@ mod_spot_checking_server <- function(id, uploaded_df, user_setup, workspace = NU
     observeEvent(input$sc_go_verify, bslib::nav_select("sc_tabs", "verify", session = session))
 
     output$sc_sample_n <- renderText({
+      need_ok(!is.null(tryCatch(sampled_data(), error = function(e) NULL)), "Draw the spot-check sample first.")
       req(sampled_data())
       format(nrow(sampled_data()), big.mark = ",")
     })

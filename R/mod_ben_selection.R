@@ -242,6 +242,14 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
 
     mod_var_calc_server("calc", uploaded_df, function(df) uploaded_df(df), modification_log)
 
+    # Exports need a selection to export.
+    observe({
+      has <- !is.null(uploaded_df()) && isTRUE(tryCatch(any(selection()$prioritized), error = function(e) FALSE))
+      why <- "Apply a selection that serves at least one household first."
+      gate_button("export_open", has, why)
+      gate_button("selection_report", has, why)
+    })
+
     output$approach_desc <- renderUI({
       a <- targeting_approaches()[[input$ben_approach %||% "hybrid"]]
       tags$div(class = "small text-muted mb-2", a$description)
@@ -302,7 +310,7 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
 
     observeEvent(input$ben_apply, {
       waiter::waiter_show(
-        html = waiter_content(),
+        html = waiter_content("Applying the selection\u2026"),
         color = "rgba(10, 30, 50, 0.65)"
       )
       on.exit(waiter::waiter_hide(), add = TRUE)
@@ -326,7 +334,7 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
 
     observeEvent(input$ben_clear, {
       waiter::waiter_show(
-        html = waiter_content(),
+        html = waiter_content("Clearing the selection\u2026"),
         color = "rgba(10, 30, 50, 0.65)"
       )
       on.exit(waiter::waiter_hide(), add = TRUE)
@@ -1230,7 +1238,7 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
     # -----------------------------------------------------------------------
     export_cols <- reactiveVal(NULL)
     observeEvent(input$export_open, {
-      df <- uploaded_df(); req(df)
+      df <- uploaded_df(); need_ok(!is.null(df), "Load the registration data and map its variables first.")
       cols <- names(df)
       # Identification and the mapped fields first, the rest after.
       keys <- c("unique_id", "admin1", "admin2", "admin3", "admin4", "village", "hh_size",
@@ -1382,6 +1390,7 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
                      excluded = sum(s$eligible & !sel), people = people),
           by_area = selection_by_area(df_all, user_setup, s),
           profile = if (any(sel) && !all(sel)) current_profile(df_all, sel),
+          beneficiary_profile = beneficiary_profile(df_all[which(sel), , drop = FALSE], user_setup),
           map = mp, map_n = attr(mp, "n_total")),
           lang = if (identical(lang, "fr")) "fr" else "en")
         audit_add(modification_log, "Selection", "Selection report exported",

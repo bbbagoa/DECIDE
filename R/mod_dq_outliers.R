@@ -205,6 +205,24 @@ dq_outliers_server <- function(input, output, session, ns, core) {
 
   # --- allowed range, remembered per variable -------------------------------
   ranges <- reactiveVal(list())
+
+  # Saved with the session: the variable, the method and every allowed range.
+  workspace_register(core$workspace, "dq_outliers",
+    snapshot = function() {
+      if (is.null(uploaded_df())) return(NULL)
+      list(var = input$outlier_var, method = input$outlier_method, threshold = input$outlier_threshold,
+           correction = input$outlier_correction_method, ranges = ranges())
+    },
+    restore = function(s) {
+      ranges(s$ranges %||% list())
+      after_flush(session, function() {
+        updateSelectInput(session, "outlier_method", selected = s$method)
+        updateSelectInput(session, "outlier_correction_method", selected = s$correction)
+        if (shiny::isTruthy(s$var)) shinyWidgets::updatePickerInput(session, "outlier_var", selected = s$var)
+        # The slider is redrawn when the method changes; set it once it exists.
+        if (!is.null(s$threshold)) after_flush(session, function() updateSliderInput(session, "outlier_threshold", value = s$threshold))
+      })
+    })
   observeEvent(input$outlier_var, {
     v <- input$outlier_var
     req(nzchar(v %||% ""))
@@ -521,12 +539,12 @@ dq_outliers_server <- function(input, output, session, ns, core) {
   })
 
   observeEvent(input$ol_select_all, {
-    d <- flagged_df(); req(d)
+    d <- flagged_df(); need_ok(!is.null(d), "Nothing is flagged for this variable.")
     DT::selectRows(ol_proxy, seq_len(nrow(d)))
   })
   observeEvent(input$ol_select_none, DT::selectRows(ol_proxy, NULL))
   observeEvent(input$ol_pick, {
-    d <- flagged_df(); req(d)
+    d <- flagged_df(); need_ok(!is.null(d), "Nothing is flagged for this variable.")
     p <- input$ol_pick
     df <- dq_filtered_data()
     hit <- switch(p$what,
@@ -672,6 +690,14 @@ dq_outliers_server <- function(input, output, session, ns, core) {
     confirm_modal(prop)
   }
 
+  observe({
+    n <- tryCatch(length(outlier_info()$idx), error = function(e) 0)
+    gate_button("btn_apply_outlier_correction", n > 0, "Nothing is flagged for this variable with these settings.")
+    has <- tryCatch(!is.null(flagged_df()), error = function(e) FALSE)
+    for (b in c("ol_select_all", "ol_correct_sel", "ol_set_value", "ol_verify", "ol_download"))
+      gate_button(b, has, "Nothing is flagged for this variable with these settings.")
+  })
+
   observeEvent(input$btn_apply_outlier_correction, {
     info <- outlier_info()
     if (!length(info$idx)) { showNotification("Nothing is flagged.", type = "message"); return() }
@@ -710,7 +736,7 @@ dq_outliers_server <- function(input, output, session, ns, core) {
   observeEvent(input$btn_confirm_outlier_correction, {
     prop <- pending()
     req(prop)
-    waiter::waiter_show(html = waiter_content(), color = "rgba(10, 30, 50, 0.65)")
+    waiter::waiter_show(html = waiter_content("Applying the correction\u2026"), color = "rgba(10, 30, 50, 0.65)")
     on.exit(waiter::waiter_hide(), add = TRUE)
 
     df <- uploaded_df()

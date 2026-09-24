@@ -277,6 +277,11 @@ mod_pdm_server <- function(id, workspace = NULL, country_office = reactive(NULL)
                     format(ncol(df), big.mark = ","), " variables loaded."))
     })
 
+    observe({
+      gate_button("pdm_run", !is.null(pdm_df()), "Load the PDM or baseline data first.")
+      gate_button("pdm_download", !is.null(results()), "Compute the implementation errors first.")
+    })
+
     # --- Compute ----------------------------------------------------------
     observeEvent(input$pdm_run, {
       df <- pdm_df()

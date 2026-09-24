@@ -2370,16 +2370,13 @@ table.dataTable tbody tr.selected > td a { color: #fff !important; }
 table.dataTable tr.dtrg-group td { background: var(--surface-3) !important; font-weight: 600; font-size: .8rem; }
 .wfp-scroll-page { overflow-y: auto; min-height: 0; padding-bottom: 2rem; }
 
-/* "Working..." pill (www/busy.js): bottom-centre, above everything but modals' backdrop. */
-.tw-busy { position: fixed; left: 50%; bottom: 22px; transform: translate(-50%, 12px); z-index: 2000;
-  display: inline-flex; align-items: center; gap: .55rem; padding: .5rem .95rem; border-radius: 999px;
-  background: #1f2a37; color: #fff; font-size: .85rem; font-weight: 500; box-shadow: var(--shadow-soft-lg);
-  opacity: 0; pointer-events: none; transition: opacity 160ms ease, transform 160ms ease; }
+/* Non-blocking loader (www/busy.js): the same card as the full-screen waiter
+   (.wfp-wait), bottom-centre, with no scrim so the page stays usable. */
+.tw-busy { position: fixed; left: 50%; bottom: 22px; z-index: 2000; transform: translate(-50%, 12px);
+  opacity: 0; pointer-events: none; transition: opacity 180ms ease, transform 180ms ease; }
 .tw-busy.on { opacity: 1; transform: translate(-50%, 0); }
-.tw-busy-spin { width: 14px; height: 14px; border-radius: 50%; border: 2px solid rgba(255,255,255,.3);
-  border-top-color: #fff; animation: tw-spin .8s linear infinite; }
-@keyframes tw-spin { to { transform: rotate(360deg); } }
-@media (prefers-reduced-motion: reduce) { .tw-busy-spin { animation-duration: 2.4s; } }
+.tw-busy .wfp-wait { min-width: 240px; max-width: 460px; padding: .7rem 1rem; animation: none; }
+.tw-busy .wfp-wait-msg { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* Monitoring report items: a two-column board; half-width items share a row. */
 .wfp-items { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .6rem; }
@@ -2389,3 +2386,58 @@ table.dataTable tr.dtrg-group td { background: var(--surface-3) !important; font
 .wfp-items .wfp-item.drop-before { box-shadow: inset 3px 0 0 var(--wfp-blue); }
 .wfp-drag { cursor: grab; color: var(--text-muted); display: inline-flex; padding: 0 .1rem; }
 .wfp-drag:active { cursor: grabbing; }
+
+/* Welcome: WFP logo | TargetWise on one line, the tagline under both. */
+.wfp-hero .wfp-hero-brand { display: flex; align-items: center; justify-content: center; gap: 1.25rem; margin-bottom: .5rem; flex-wrap: wrap; }
+.wfp-hero .wfp-hero-logo { height: clamp(44px, 5vw, 62px); width: auto; display: block; }
+.wfp-hero .wfp-hero-divider { width: 1px; align-self: stretch; min-height: 44px; background: rgba(255, 255, 255, .45); }
+.wfp-hero .wfp-hero-brand h1 { margin: 0; line-height: 1; }
+
+/* Navbar brand: WFP logo | TargetWise. */
+.navbar-brand .brand-divider { display: inline-block; width: 1px; height: 26px; margin: 0 12px; vertical-align: middle;
+  background: rgba(255, 255, 255, .45); }
+@media (max-width: 1200px) { .navbar-brand .brand-divider { display: none; } }
+
+/* Navbar motion: the underline grows on hover and fills when active, the
+   icon lifts a touch, menus fade and slide in. Calm, and off for anyone who
+   asks the system for reduced motion. */
+.navbar .nav-link { transition: opacity 220ms ease, color 220ms ease; }
+.navbar .nav-link::after { transition: transform 300ms cubic-bezier(.2, .8, .2, 1); }
+.navbar .nav-link:hover::after,
+.navbar .nav-link:focus-visible::after { transform: scaleX(.55); }
+.navbar .nav-link.active::after,
+.navbar .show > .nav-link::after { transform: scaleX(1); }
+.navbar .nav-link > i, .navbar .nav-link > svg { display: inline-block; transition: transform 240ms cubic-bezier(.2, .8, .2, 1); }
+.navbar .nav-link:hover > i, .navbar .nav-link:hover > svg { transform: translateY(-1px) scale(1.1); }
+.navbar .dropdown-menu.show { animation: tw-menu-in 200ms cubic-bezier(.2, .8, .2, 1); transform-origin: top center; }
+@keyframes tw-menu-in { from { opacity: 0; transform: translateY(-6px) scale(.98); } to { opacity: 1; transform: none; } }
+.navbar .dropdown-item { transition: background-color 160ms ease, transform 160ms ease; }
+.navbar .dropdown-item:hover { transform: translateX(3px); }
+@media (prefers-reduced-motion: reduce) {
+  .navbar .nav-link, .navbar .nav-link::after, .navbar .nav-link > i, .navbar .nav-link > svg,
+  .navbar .dropdown-item { transition: none; }
+  .navbar .dropdown-menu.show { animation: none; }
+  .navbar .nav-link:hover > i, .navbar .nav-link:hover > svg, .navbar .dropdown-item:hover { transform: none; }
+}
+
+/* Frozen until its prerequisite is met (www/gates.js). */
+.tw-frozen { opacity: .45 !important; cursor: not-allowed !important; filter: grayscale(.35); box-shadow: none !important; }
+.tw-frozen:hover { transform: none !important; }
+
+/* "How the design works" guide. */
+.wfp-guide-intro { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--card-radius-sm);
+  padding: .9rem 1.1rem; margin-bottom: 1rem; font-size: .9rem; }
+.wfp-guide .accordion-item { border: 1px solid var(--border); border-radius: var(--card-radius-sm) !important; margin-bottom: .55rem; overflow: hidden; }
+.wfp-guide .accordion-button { padding: .8rem 1rem; background: var(--surface); box-shadow: none; }
+.wfp-guide .accordion-button:not(.collapsed) { background: var(--accent-primary-bg); color: inherit; }
+.wfp-guide-head { display: flex; align-items: center; gap: .8rem; }
+.wfp-guide-num { flex: none; width: 30px; height: 30px; border-radius: 50%; background: var(--wfp-blue); color: #fff;
+  display: inline-flex; align-items: center; justify-content: center; font-weight: 700; font-size: .9rem; }
+.wfp-guide-lead { display: block; font-size: .78rem; color: var(--text-muted); font-weight: 400; }
+.wfp-guide-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .8rem 1.2rem; }
+@media (max-width: 900px) { .wfp-guide-grid { grid-template-columns: 1fr; } }
+.wfp-guide-sec-title { font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--text-muted); margin-bottom: .25rem; }
+.wfp-guide-sec-title .bi { color: var(--wfp-blue); }
+.wfp-guide-sec-body { font-size: .87rem; line-height: 1.55; }
+.wfp-guide-refs { margin-top: .9rem; padding-top: .7rem; border-top: 1px solid var(--border); font-size: .8rem; color: var(--text-muted); }
+.wfp-guide-tip { margin-top: .6rem; padding: .55rem .8rem; border-radius: 8px; background: var(--accent-warning-bg); font-size: .84rem; }

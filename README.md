@@ -1,6 +1,6 @@
 # TargetWise
 
-*Reach the right people.*
+*Reaching the most vulnerable.*
 
 **An R package and Shiny application for humanitarian targeting: design the targeting on assessment data, select beneficiaries on registration data, and monitor what was delivered on post-distribution monitoring (PDM) data.**
 

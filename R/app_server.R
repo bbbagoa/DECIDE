@@ -139,7 +139,7 @@ app_server <- function(input, output, session) {
   # Helper: show a fancy import summary modal with a button to variable setup
   show_import_summary <- function(df, source = "File") {
     waiter::waiter_show(
-      html = waiter_content(),
+      html = waiter_content("Summarising the imported data\u2026"),
       color = "rgba(10, 30, 50, 0.65)"
     )
     on.exit(waiter::waiter_hide(), add = TRUE)
@@ -526,7 +526,7 @@ app_server <- function(input, output, session) {
 
   # Initialize the modification log as a reactiveVal in the global app state
 
-  mod_dq_server("dq_1", uploaded_df, user_setup, modification_log, original_df)
+  mod_dq_server("dq_1", uploaded_df, user_setup, modification_log, original_df, workspace = workspace)
 
   ## ===================================================================================
   #  ------------------- Audit Trail Server Side

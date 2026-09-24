@@ -371,3 +371,105 @@ criterion_reading <- function(prevalence, missing, prev_vuln, prev_not) {
   out[is.na(gap)] <- "Cannot be read: no answers"
   out
 }
+
+#' "How the design works": the design process step by step, with the methods
+#'
+#' One step open at a time; each gives what the analyst does, how the app
+#' does it, why it matters, the technical details and the references.
+#' @noRd
+design_guide_modal <- function() {
+  sec <- function(icon_name, title, ...) tags$div(
+    class = "wfp-guide-sec",
+    tags$div(class = "wfp-guide-sec-title", bsicons::bs_icon(icon_name), " ", title),
+    tags$div(class = "wfp-guide-sec-body", ...))
+  step <- function(n, title, lead, what, how, why, tech, refs, tip = NULL) bslib::accordion_panel(
+    title = tags$span(class = "wfp-guide-head", tags$span(class = "wfp-guide-num", n),
+                      tags$span(tags$strong(title), tags$span(class = "wfp-guide-lead", lead))),
+    value = paste0("g", n),
+    tags$div(
+      class = "wfp-guide-grid",
+      sec("hand-index", "What you do", what),
+      sec("gear", "How it works", how),
+      sec("lightbulb", "Why it matters", why),
+      sec("cpu", "Technical details", tech)),
+    tags$div(class = "wfp-guide-refs", bsicons::bs_icon("journal-text"), " ", tags$strong("References. "), refs),
+    if (!is.null(tip)) tags$div(class = "wfp-guide-tip", bsicons::bs_icon("stars"), " ", tags$strong("Tip. "), tip))
+
+  modalDialog(
+    title = tagList(bsicons::bs_icon("book"), " How the targeting design works"),
+    size = "xl", easyClose = TRUE, footer = modalButton("Close"),
+    tags$div(
+      class = "wfp-guide",
+      tags$div(
+        class = "wfp-guide-intro",
+        tags$p("The design turns a needs assessment into a ", tags$strong("scorecard"), ": a short list of observable household ",
+               "criteria, each worth some points, and a threshold above which a household is eligible. It is built on data where ",
+               "vulnerability is measured, then applied to registration data where it is not."),
+        tags$p(class = "mb-0", "Seven steps, each recorded in the design report so the card can be reviewed, reproduced and ",
+               "challenged. Guidance: WFP Targeting and Prioritisation OGN (2021); Targeting Advisories 1/2025 (outcome indicators), ",
+               "2/2025 (errors and tolerance) and 3/2025 (models and thresholds).")),
+      bslib::accordion(
+        id = "design_guide", open = "g1", multiple = FALSE,
+        step(1, "Assessment data", "the survey the card is learned from",
+             tagList("Load the needs-assessment survey (EFSA, VAM, CFSVA or similar): one row per household, with a food-security ",
+                     "outcome and the candidate criteria. Create missing variables with the ", tags$em("Variable calculator"),
+                     " (conditions, formulas, bulk yes/no, or pasted R code)."),
+             "The file is read into memory and checked (rows, columns, types). Calculated variables are added to it and recorded with their definition, so the report shows exactly how each was built.",
+             "The card can only be as good as the data it learns from: the assessment must cover the population the card will be applied to, with the same questions the registration will ask.",
+             "Excel, SPSS, Stata, CSV (data.table, multi-threaded) or Parquet. Formulas and R code are parsed and checked against a whitelist of functions before they run; nothing can reach files, the network or other code.",
+             "WFP (2021) Targeting and Prioritisation Operational Guidance Note, ch. 4.",
+             "Save the session once the data is loaded: sessions keep the data, every model run and the adopted card."),
+        step(2, "Outcome", "what 'vulnerable' means for this card",
+             "Choose the outcome variable (for example CARI food insecure, or a two-level FCS/rCSI class) and the level that means vulnerable. The share of vulnerable households is shown straight away.",
+             "The outcome is recoded to 1 (vulnerable) and 0 (not). Every later statistic, model and error rate is computed against it.",
+             "Outcome indicators are what the criteria must stand for; they are never used as criteria themselves (Advisory 1/2025). A very unbalanced outcome (under 5% or over 95% vulnerable) is flagged: no card can separate households that barely differ.",
+             "Binary recoding of any categorical or numeric column; missing outcomes are left out of every estimate. Likely outcome columns (CARI, FCS, rCSI, LCSI) are listed first.",
+             "WFP (2021) CARI Technical Guidance; Targeting Advisory 1/2025.",
+             "If the outcome has more than two levels, build the two-level version with the calculator and document the cut in its name."),
+        step(3, "Candidate criteria", "what a registration team can see and verify",
+             "Pick the yes/no criteria that could enter the card: housing, assets, household composition, livelihood, displacement. Only criteria a registration team can observe and verify belong here.",
+             "Each candidate is turned into 0/1. Columns that are outcome indicators, identifiers, constants or not yes/no are blocked with the reason.",
+             "Criteria that cannot be observed at registration, or that households can easily misreport, make a card that is gamed or unfair. Fewer, stronger criteria make a card communities can understand.",
+             "Binarisation of text and numeric answers (yes/no, 1/0, true/false in several languages). Blocking rules are listed next to the picker.",
+             "Targeting OGN (2021) ch. 5; UNHCR-WFP Joint Programme Excellence and Targeting Hub, targeting toolkit.",
+             "Use the calculator's bulk mode to turn a block of asset questions into yes/no criteria in one go."),
+        step(4, "Variable selection", "which candidates carry information, and which repeat each other",
+             "Read each candidate's prevalence, its share among vulnerable and other households, and the plain-language reading; optionally run Quick screening; tick the ones to keep, click Select, and review the correlation matrix and statistics before confirming.",
+             tagList("Quick screening tests each criterion alone against the outcome and reports its odds ratio, adjusted p-value and a verdict. ",
+                     "The correlation matrix shows pairs of criteria that say the same thing; one of each pair above the cut-off is proposed for dropping."),
+             "A criterion met by almost everyone (or no one) separates nobody; two criteria that repeat each other split one effect into two weights and count it twice in the score.",
+             tagList("Screening: likelihood-ratio test of a one-criterion logistic model, or Fisher's exact test on the 2x2 table when that model cannot be estimated; ",
+                     "p-values adjusted by Benjamini-Hochberg (false discovery rate), Holm or Bonferroni; odds ratios with Wald 95% intervals (Haldane correction for empty cells). ",
+                     "Overlap: phi coefficients on complete pairs; pairs at or above |r| = 0.8 flagged, dropping the member with the larger mean absolute correlation (as caret::findCorrelation)."),
+             "Benjamini & Hochberg (1995) JRSS B 57(1); Holm (1979) Scand. J. Stat. 6(2); Agresti (2013) Categorical Data Analysis, 3rd ed.",
+             "A criterion with no clear association on its own can still matter next to others, and the reverse: keep what field knowledge supports and let the model decide the net weights."),
+        step(5, "Model and weights", "how much each criterion points to vulnerability",
+             "Choose a model, a weighting scheme, a hold-out share and, if wanted, stepwise selection (AIC or BIC). Choose which other models to compare. Fit, compare runs, and edit any weight local knowledge disputes.",
+             tagList("The model estimates each criterion's effect on the odds of being vulnerable, net of the others; the weighting scheme turns effects into points. ",
+                     "Every model gives an additive card, so a field team can apply it and a community can check it. Each fit is kept in the run history and can be restored."),
+             "Weights set by a model on real data are defensible; weights set by hand are not, unless the reason is recorded. The hold-out keeps the accuracy figures honest.",
+             tagList("Logistic regression (maximum likelihood, Wald SEs); weight of evidence (log odds ratio per criterion, Haldane correction); boosted stumps (XGBoost, depth 1, exactly additive); ",
+                     "random forest, XGBoost, naive Bayes, SVM, neural network, whose points are average marginal effects on the log-odds scale. ",
+                     "Stepwise: backward elimination on a logistic fit by AIC = 2k - 2 log L or BIC = k log n - 2 log L, then the chosen model on what remains. ",
+                     "Points: odds ratio (APP-FA reference), log-odds, integer points or equal weights. Stratified seeded hold-out; survey weights normalised to a mean of 1."),
+             "Hosmer, Lemeshow & Sturdivant (2013) Applied Logistic Regression; Siddiqi (2017) Intelligent Credit Scoring; Breiman (2001) Machine Learning 45; Chen & Guestrin (2016) KDD; Molnar (2022) Interpretable Machine Learning; Targeting Advisory 3/2025.",
+             "Compare the card's held-out AUC with the random-forest benchmark: if the forest barely beats it, the simple card loses little."),
+        step(6, "Threshold and design errors", "who is eligible, and how wrong that is",
+             "Set the score above which a household is eligible, read the inclusion and exclusion errors against your tolerance band, and record the rationale for the choice.",
+             tagList("Inclusion error: selected households that are not vulnerable, over all selected. Exclusion error: vulnerable households left out, over all vulnerable. ",
+                     "Both come from the design error matrix, measured on the held-out households the model never saw."),
+             "Every threshold trades one error for the other. The tolerance band and the rationale make that trade-off explicit and reviewable (Advisory 2/2025); in emergencies the OGN gives priority to reducing exclusion.",
+             "Helpers: the balanced threshold (minimises the larger of the two errors), Youden's J (maximises recall minus false-positive rate), or a caseload (the top k% of scores). ROC curve and AUC; the verdict compares both errors with the band.",
+             "Targeting Advisory 2/2025; Youden (1950) Cancer 3(1); Fawcett (2006) Pattern Recognition Letters 27(8).",
+             "Write the rationale before adopting: it is printed in the design report and is required by Advisory 2/2025."),
+        step(7, "Adoption and report", "what Beneficiary Selection will apply",
+             "Adopt the card to make it the one Beneficiary Selection uses, then export the design report (HTML), the scorecard (Excel) and its JSON for other tools.",
+             "Adoption freezes this exact design: criteria, points and threshold. Any later change withdraws the adoption until the card is adopted again, and the audit trail records both.",
+             "The list is only as accountable as its card: a card that changed after approval must never select households silently.",
+             "The design report is one self-contained HTML file (charts inlined, works offline): data, outcome, criteria, selection, model, points, threshold, errors, verdict and methods. The scorecard is fingerprinted to detect any change.",
+             "Targeting OGN (2021) ch. 6 (documentation and accountability).",
+             "Share the design report with the targeting committee before adopting; it is written to be read by non-statisticians.")
+      )
+    )
+  )
+}
