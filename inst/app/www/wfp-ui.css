@@ -1526,6 +1526,15 @@ table.dataTable tbody tr.selected > *:first-child {
 .bootstrap-select .dropdown-menu li a:hover {
   background: var(--accent-primary-bg);
 }
+/* The current choice: Bootstrap paints .active white-on-blue, and the pale
+   background above left it white-on-pale, i.e. unreadable. */
+.bootstrap-select .dropdown-menu li.active a,
+.bootstrap-select .dropdown-menu li a.active,
+.bootstrap-select .dropdown-menu li.selected a {
+  background: var(--accent-primary-bg);
+  color: var(--wfp-blue);
+  font-weight: 600;
+}
 
 .bootstrap-select .bs-searchbox .form-control { border-radius: var(--control-radius); }
 
@@ -2360,3 +2369,23 @@ table.dataTable tbody tr.selected > td a { color: #fff !important; }
 .wfp-dup-compare tr.wfp-dup-same td { color: var(--text-muted); }
 table.dataTable tr.dtrg-group td { background: var(--surface-3) !important; font-weight: 600; font-size: .8rem; }
 .wfp-scroll-page { overflow-y: auto; min-height: 0; padding-bottom: 2rem; }
+
+/* "Working..." pill (www/busy.js): bottom-centre, above everything but modals' backdrop. */
+.tw-busy { position: fixed; left: 50%; bottom: 22px; transform: translate(-50%, 12px); z-index: 2000;
+  display: inline-flex; align-items: center; gap: .55rem; padding: .5rem .95rem; border-radius: 999px;
+  background: #1f2a37; color: #fff; font-size: .85rem; font-weight: 500; box-shadow: var(--shadow-soft-lg);
+  opacity: 0; pointer-events: none; transition: opacity 160ms ease, transform 160ms ease; }
+.tw-busy.on { opacity: 1; transform: translate(-50%, 0); }
+.tw-busy-spin { width: 14px; height: 14px; border-radius: 50%; border: 2px solid rgba(255,255,255,.3);
+  border-top-color: #fff; animation: tw-spin .8s linear infinite; }
+@keyframes tw-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .tw-busy-spin { animation-duration: 2.4s; } }
+
+/* Monitoring report items: a two-column board; half-width items share a row. */
+.wfp-items { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .6rem; }
+.wfp-items .wfp-item { grid-column: 1 / -1; margin-bottom: 0; }
+.wfp-items .wfp-item.is-half { grid-column: auto; }
+.wfp-items .wfp-item.dragging { opacity: .45; }
+.wfp-items .wfp-item.drop-before { box-shadow: inset 3px 0 0 var(--wfp-blue); }
+.wfp-drag { cursor: grab; color: var(--text-muted); display: inline-flex; padding: 0 .1rem; }
+.wfp-drag:active { cursor: grabbing; }

@@ -31,7 +31,13 @@ mod_pdm_ui <- function(id, explore = NULL) {
   tagList(
     tags$div(
       class = "wfp-design-grid mt-3 wfp-pdm-grid",
-      step("PDM data",
+      step("Monitoring data",
+           # The same accuracy analysis runs on a post-distribution survey or on
+           # a baseline taken before distribution; the choice names the data in
+           # the results, the exports and the report.
+           radioButtons(ns("data_kind"), NULL, inline = TRUE,
+                        choices = c("PDM (after distribution)" = "PDM", "Baseline (before distribution)" = "Baseline"),
+                        selected = "PDM"),
            tags$p(class = "small text-muted mb-2",
                   "One row per surveyed household, beneficiaries and non-beneficiaries."),
            fileInput(ns("pdm_file"), NULL, width = "100%", accept = c(".xlsx", ".xls", ".sav", ".dta", ".csv", ".parquet")),
@@ -100,7 +106,7 @@ mod_pdm_ui <- function(id, explore = NULL) {
         uiOutput(ns("pdm_details"))
       ),
       if (!is.null(explore)) bslib::nav_panel(
-        value = "explore", title = tagList(bsicons::bs_icon("bar-chart"), " Explore the PDM data"),
+        value = "explore", title = tagList(bsicons::bs_icon("bar-chart"), " Explore the data"),
         tags$div(class = "mt-3", explore)
       )
     )
@@ -130,7 +136,7 @@ mod_pdm_server <- function(id, workspace = NULL, country_office = reactive(NULL)
         if (is.null(pdm_df())) return(NULL)
         list(df = pdm_df(), results = results(),
              inputs = lapply(stats::setNames(pdm_inputs, pdm_inputs), function(k) input[[k]]),
-             options = list(elig_source = input$pdm_elig_source, weight_mode = input$pdm_weight_mode,
+             options = list(data_kind = input$data_kind, elig_source = input$pdm_elig_source, weight_mode = input$pdm_weight_mode,
                             pop_scope = input$pop_scope, pop_benef = input$pop_benef,
                             pop_nonbenef = input$pop_nonbenef, pop_units = pop_units(),
                             tol = c(input$tol_lower, input$tol_upper)))
@@ -140,10 +146,11 @@ mod_pdm_server <- function(id, workspace = NULL, country_office = reactive(NULL)
         results(s$results)
         cols <- names(s$df)
         for (k in pdm_inputs) {
-          ch <- if (k %in% c("pdm_eligibility", "pdm_beneficiary")) cols else c("(none)", cols)
+          ch <- if (k %in% c("pdm_eligibility", "pdm_beneficiary")) c("Choose a column" = "", cols) else c("(none)", cols)
           shinyWidgets::updatePickerInput(session, k, choices = ch, selected = s$inputs[[k]])
         }
         o <- s$options %||% list()
+        if (!is.null(o$data_kind)) updateRadioButtons(session, "data_kind", selected = o$data_kind)
         if (!is.null(o$elig_source)) updateRadioButtons(session, "pdm_elig_source", selected = o$elig_source)
         if (!is.null(o$weight_mode)) updateRadioButtons(session, "pdm_weight_mode", selected = o$weight_mode)
         if (!is.null(o$pop_scope)) updateRadioButtons(session, "pop_scope", selected = o$pop_scope)
@@ -240,7 +247,7 @@ mod_pdm_server <- function(id, workspace = NULL, country_office = reactive(NULL)
       req(df)
       pdm_df(df)
       results(NULL)
-      audit_add(modification_log, "Monitoring", "PDM data loaded",
+      audit_add(modification_log, "Monitoring", paste(input$data_kind %||% "PDM", "data loaded"),
                 sprintf("%s (%s records)", input$pdm_file$name, nrow(df)))
 
       cols <- names(df)
@@ -248,9 +255,11 @@ mod_pdm_server <- function(id, workspace = NULL, country_office = reactive(NULL)
         g <- find_guess(cols, keys)
         if (nzchar(g)) g else NULL
       }
-      shinyWidgets::updatePickerInput(session, "pdm_eligibility", choices = cols,
+      # Required columns start empty when nothing matches: defaulting to the
+      # first column (often the record id) silently computed nonsense.
+      shinyWidgets::updatePickerInput(session, "pdm_eligibility", choices = c("Choose a column" = "", cols),
                                       selected = guess(c("eligib", "eligible", "target")))
-      shinyWidgets::updatePickerInput(session, "pdm_beneficiary", choices = cols,
+      shinyWidgets::updatePickerInput(session, "pdm_beneficiary", choices = c("Choose a column" = "", cols),
                                       selected = guess(c("benef", "assisted", "received", "distribut")))
       shinyWidgets::updatePickerInput(session, "pdm_prioritized", choices = c("(none)", cols),
                                       selected = guess(c("priorit")) %||% "(none)")
@@ -275,7 +284,14 @@ mod_pdm_server <- function(id, workspace = NULL, country_office = reactive(NULL)
         showNotification("Load a PDM dataset first.", type = "warning")
         return()
       }
-      req(input$pdm_beneficiary)
+      if (!shiny::isTruthy(input$pdm_beneficiary)) {
+        showNotification("Choose the beneficiary column first.", type = "warning")
+        return()
+      }
+      if (identical(input$pdm_elig_source %||% "column", "column") && !shiny::isTruthy(input$pdm_eligibility)) {
+        showNotification("Choose the eligibility column first.", type = "warning")
+        return()
+      }
 
       w <- waiter::Waiter$new(html = waiter_content("Computing targeting accuracy..."),
                               color = "rgba(10, 30, 50, 0.65)")
@@ -581,7 +597,7 @@ mod_pdm_server <- function(id, workspace = NULL, country_office = reactive(NULL)
     })
 
     # --- Export -----------------------------------------------------------
-    output$pdm_download <- downloadHandler(
+    output$pdm_download <- download_handler(
       filename = function() paste0("Targeting_PDM_Accuracy_", format(Sys.time(), "%Y-%m-%d_%Hh%Mm%Ss"), ".xlsx"),
       content = function(file) {
         r <- results()
@@ -632,7 +648,8 @@ mod_pdm_server <- function(id, workspace = NULL, country_office = reactive(NULL)
     # For the Targeting Monitoring report and the PDM chart builder.
     list(
       df = pdm_df,
-      name = reactive(if (is.null(input$pdm_file)) "PDM data" else input$pdm_file$name),
+      name = reactive(if (is.null(input$pdm_file)) paste(input$data_kind %||% "PDM", "data") else input$pdm_file$name),
+      kind = reactive(input$data_kind %||% "PDM"),
       results = results,
       tolerance = reactive(c((input$tol_lower %||% 5) / 100, (input$tol_upper %||% 20) / 100))
     )

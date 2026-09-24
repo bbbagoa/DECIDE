@@ -333,7 +333,7 @@ dq_duplicates_server <- function(input, output, session, ns, core) {
     delete_rows(rows, trimws(input$dup_cmp_reason %||% ""))
   })
 
-  output$download_duplicates <- downloadHandler(
+  output$download_duplicates <- download_handler(
     filename = function() paste0("Targeting_Duplicates_", format(Sys.time(), "%Y-%m-%d_%Hh%Mm%Ss"), ".xlsx"),
     content = function(file) {
       a <- analysis_or_null()

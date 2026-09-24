@@ -543,7 +543,7 @@ dq_outliers_server <- function(input, output, session, ns, core) {
                                   title = paste("Flagged record:", input$ol_view)))
   })
 
-  output$ol_download <- downloadHandler(
+  output$ol_download <- download_handler(
     filename = function() paste0("Targeting_Outliers_", input$outlier_var, "_", format(Sys.time(), "%Y-%m-%d_%Hh%M"), ".xlsx"),
     content = function(file) {
       d <- flagged_df()

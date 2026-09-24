@@ -12,6 +12,8 @@
 #' * `mean`  -- average of `value` by `x` (e.g. days to resolve a complaint)
 #' * `share` -- sum of `value` over sum of `den`, in % (e.g. women among participants)
 #' * `trend` -- count (or sum of `value`) per week or month of `date`
+#' * `crosstab` -- records by `x` (rows) and `group` (columns), as row, column
+#'   or total percentages (`pct`), with a chi-square test
 #' @name monitoring_charts
 #' @noRd
 NULL
@@ -19,7 +21,8 @@ NULL
 #' @noRd
 chart_types <- function() {
   c("Count of records" = "count", "Total of a number" = "sum", "Average of a number" = "mean",
-    "Share (%) of two totals" = "share", "Trend over time" = "trend")
+    "Share (%) of two totals" = "share", "Trend over time" = "trend",
+    "Cross-tabulation (rows by columns)" = "crosstab")
 }
 
 #' @noRd
@@ -34,6 +37,20 @@ chart_aggregate <- function(df, spec) {
   lab <- function(v) { v <- as.character(v); v[is.na(v) | !nzchar(trimws(v))] <- "(missing)"; v }
   num <- function(k) suppressWarnings(as.numeric(as.character(df[[spec[[k]]]])))
   type <- spec$type %||% "count"
+
+  if (identical(type, "crosstab")) {
+    if (!has("x") || !has("group")) return(NULL)
+    cnt <- table(lab(df[[spec$x]]), lab(df[[spec$group]]))
+    basis <- spec$pct %||% "row"
+    p <- switch(basis, row = prop.table(cnt, 1), col = prop.table(cnt, 2), total = cnt / sum(cnt), cnt)
+    out <- data.frame(x = rep(rownames(cnt), ncol(cnt)), group = rep(colnames(cnt), each = nrow(cnt)),
+                      value = round(if (identical(basis, "count")) as.numeric(cnt) else 100 * as.numeric(p), 2),
+                      n = as.integer(cnt), stringsAsFactors = FALSE)
+    row_tot <- stats::ave(out$n, out$x, FUN = sum)
+    out <- out[order(-row_tot, out$x, out$group), , drop = FALSE]
+    rownames(out) <- NULL
+    return(out)
+  }
 
   if (identical(type, "trend")) {
     if (!has("date")) return(NULL)
@@ -73,6 +90,7 @@ chart_aggregate <- function(df, spec) {
 #' group, with a total and (for counts and totals) each row's share
 #' @noRd
 chart_table <- function(d, spec) {
+  if (identical(spec$type, "crosstab")) return(crosstab_table(d, spec))
   first <- if (identical(spec$type, "trend")) "Period" else (spec$x %||% "Category")
   groups <- unique(d$group)
   wide <- stats::reshape(d[, c("x", "group", "value")], idvar = "x", timevar = "group", direction = "wide")
@@ -100,6 +118,8 @@ chart_value_label <- function(spec) {
          mean = paste("Average", spec$value),
          share = sprintf("%s as %% of %s", spec$value, spec$den),
          trend = if (shiny::isTruthy(spec$value)) paste("Total", spec$value) else "Records",
+         crosstab = switch(spec$pct %||% "row", row = "% of the row", col = "% of the column",
+                           total = "% of all records", "Records"),
          "Records")
 }
 
@@ -188,7 +208,7 @@ monitoring_item_chart <- function(item, lang = "en") {
              rp_colors(cols) |>
              (\(b) if (length(groups) == 1) billboarder::bb_legend(b, show = FALSE) else b)())
   }
-  b <- rp_hbars(wide, cols, vlab, stacked = length(groups) > 1 && !identical(item$spec$type, "share"))
+  b <- rp_hbars(wide, cols, vlab, stacked = length(groups) > 1 && chart_stacks(item$spec))
   if (length(groups) == 1) b <- billboarder::bb_legend(b, show = FALSE)
   b
 }
@@ -207,19 +227,20 @@ write_monitoring_report <- function(file, x, lang = "en") {
   quote_block <- function(txt) if (shiny::isTruthy(txt)) paste0("> ", gsub("\n", "\n> ", trimws(txt))) else "> _Not written._"
   items <- x$items %||% list()
   p <- x$pdm
+  kind <- x$kind %||% p$kind %||% "PDM"
 
   add("# Targeting monitoring report", "",
       "This report brings together how the targeting was carried out on the ground (process monitoring) and how accurately",
-      "it reached the intended households (post-distribution monitoring).", "")
+      if (identical(kind, "Baseline")) "it reached the intended households (baseline survey)." else "it reached the intended households (post-distribution monitoring).", "")
   if (!is.null(p)) add("## Key results", "", "@@IMPL@@", "")
   add("## 1. Context", "", quote_block(x$context), "")
 
-  add("## 2. Implementation accuracy (PDM)", "")
+  add(sprintf("## 2. Implementation accuracy (%s)", kind), "")
   if (is.null(p)) {
-    add("_No PDM analysis was run._", "")
+    add(sprintf("_No %s analysis was run._", kind), "")
   } else {
     m <- p$metrics
-    add(sprintf("- PDM records analysed: %s", format(p$n %||% NA, big.mark = ",")),
+    add(sprintf("- %s records analysed: %s", kind, format(p$n %||% NA, big.mark = ",")),
         sprintf("- Eligibility from %s", p$elig_source %||% "a PDM column"),
         sprintf("- Weighting: %s", p$weighting %||% "none"),
         if (isTRUE(p$no_nonbenef)) "- **Only beneficiaries were surveyed: the exclusion error and the coverage cannot be measured.**",
@@ -244,25 +265,49 @@ write_monitoring_report <- function(file, x, lang = "en") {
     }
   }
 
+  pairs <- list()
+  esc <- function(t) htmltools::htmlEscape(t %||% "")
+  source_line <- function(it, src) sprintf("Source: %s; %s.", it$dataset %||% src,
+                                            tolower(names(chart_types())[chart_types() == it$spec$type][1] %||% ""))
+  # Two half-width items in a row: one side-by-side block (raw HTML, in which
+  # the figure placeholders are still filled by report_write_page()).
+  pair_html <- function(its, src) paste0('<div class="pair">', paste(vapply(its, function(it) paste0(
+    '<div class="pair-cell"><h3>', esc(it$title), '</h3>',
+    if (identical(it$display, "table")) commonmark::markdown_html(paste(md_table(chart_table(it$data, it$spec)), collapse = "\n"), extensions = TRUE)
+    else sprintf("<p>@@FIG:%s@@</p>", it$id),
+    if (identical(it$spec$type, "crosstab")) sprintf('<p class="note"><em>%s</em></p>', esc(crosstab_test_text(crosstab_test(it$data)))) else "",
+    if (shiny::isTruthy(it$comment)) sprintf("<blockquote><p>%s</p></blockquote>", esc(it$comment)) else "",
+    sprintf('<p class="note"><em>%s</em></p>', esc(source_line(it, src))), '</div>'), character(1)), collapse = ""), '</div>')
   section <- function(num, title, src, empty) {
     its <- Filter(function(it) identical(it$source, src), items)
     add(sprintf("## %d. %s", num, title), "")
     if (!length(its)) { add(sprintf("_%s_", empty), ""); return(invisible()) }
-    for (it in its) {
+    i <- 1
+    while (i <= length(its)) {
+      it <- its[[i]]
+      if (identical(it$width, "half") && i < length(its) && identical(its[[i + 1]]$width, "half")) {
+        ph <- sprintf("@@PAIR%d@@", length(pairs) + 1)
+        pairs[[ph]] <<- pair_html(its[i:(i + 1)], src)
+        add(ph, "")
+        i <- i + 2
+        next
+      }
+      i <- i + 1
       add(sprintf("### %s", it$title), "",
-          if (identical(it$display, "table")) md_table(chart_table(it$data, it$spec)) else sprintf("@@FIG:%s@@", it$id), "")
+          if (identical(it$display, "table")) md_table(chart_table(it$data, it$spec)) else sprintf("@@FIG:%s@@", it$id), "",
+          if (identical(it$spec$type, "crosstab")) c(sprintf("_%s_", crosstab_test_text(crosstab_test(it$data))), "") else NULL)
       if (shiny::isTruthy(it$comment)) add(quote_block(it$comment), "")
       add(sprintf("_Source: %s; %s._", it$dataset %||% src, tolower(names(chart_types())[chart_types() == it$spec$type][1] %||% "")), "")
     }
   }
   section(3, "Process monitoring", "process", "No process-monitoring chart was added.")
-  section(4, "Insights from the PDM", "pdm", "No PDM chart was added.")
+  section(4, sprintf("Insights from the %s data", kind), "pdm", sprintf("No %s chart was added.", kind))
 
   add("## 5. Key findings", "", quote_block(x$findings), "",
       "## 6. Recommendations", "", quote_block(x$recommendations), "",
       "## 7. Method", "",
-      paste("**Implementation errors** are measured on the PDM sample. Eligibility is re-established for each surveyed household",
-            "(from a PDM column, or by applying the adopted scorecard or eligibility rules to its answers).",
+      paste(sprintf("**Implementation errors** are measured on the %s sample.", kind), "Eligibility is re-established for each surveyed household",
+            "(from a column of the survey data, or by applying the adopted scorecard or eligibility rules to its answers).",
             "Inclusion error = beneficiaries who were not eligible / all beneficiaries, from the beneficiary sample.",
             "Exclusion error = eligible households not assisted / all eligible households; it needs the non-beneficiary sample, and",
             "because the PDM surveys set numbers of beneficiaries and non-beneficiaries, each household is weighted by its group's",
@@ -287,7 +332,7 @@ write_monitoring_report <- function(file, x, lang = "en") {
     meta = c("Country office" = x$country_office %||% "", "Generated" = format(Sys.time(), "%Y-%m-%d %H:%M"),
              "Charts" = as.character(length(items))),
     footer = "This record documents how the targeting was implemented so it can be reviewed and improved.",
-    blocks = list("@@IMPL@@" = impl))
+    blocks = c(list("@@IMPL@@" = impl), pairs))
 }
 
 #' Implementation error gauges for the monitoring report
@@ -308,4 +353,60 @@ implementation_cards <- function(p, lang = "en") {
          card("Implementation inclusion error", m$inclusion_error, "Beneficiaries who were not eligible", ico_in),
          card("Implementation exclusion error", m$exclusion_error, "Eligible households who were not assisted", ico_out),
          '</div>')
+}
+
+#' A crosstab as a table: each cell "percent (count)", row and column totals
+#' @noRd
+crosstab_table <- function(d, spec) {
+  rows <- unique(d$x); cols <- unique(d$group)
+  cnt <- matrix(0L, length(rows), length(cols), dimnames = list(rows, cols))
+  cnt[cbind(match(d$x, rows), match(d$group, cols))] <- d$n
+  basis <- spec$pct %||% "row"
+  tot <- sum(cnt)
+  p <- switch(basis, row = cnt / rowSums(cnt), col = t(t(cnt) / colSums(cnt)), total = cnt / tot, NULL)
+  cell <- if (is.null(p)) format(cnt, big.mark = ",") else
+    matrix(sprintf("%.1f%% (%s)", 100 * p, format(cnt, big.mark = ",", trim = TRUE)), nrow(cnt))
+  out <- data.frame(rows, cell, check.names = FALSE, stringsAsFactors = FALSE)
+  names(out) <- c(spec$x %||% "Rows", cols)
+  out$Total <- sprintf("%s (%.1f%%)", format(rowSums(cnt), big.mark = ",", trim = TRUE), 100 * rowSums(cnt) / tot)
+  last <- c("Total", sprintf("%s (%.1f%%)", format(colSums(cnt), big.mark = ",", trim = TRUE), 100 * colSums(cnt) / tot),
+            format(tot, big.mark = ","))
+  out <- rbind(out, stats::setNames(as.list(last), names(out)))
+  rownames(out) <- NULL
+  out
+}
+
+#' Chi-square test of independence on a crosstab, with Cramer's V
+#' @param d Output of `chart_aggregate()` for a crosstab (uses `n`).
+#' @return list(chi2, df, p, cramer_v, low_expected) or NULL (not testable).
+#' @noRd
+crosstab_test <- function(d) {
+  if (is.null(d) || !nrow(d)) return(NULL)
+  cnt <- stats::xtabs(n ~ x + group, d)
+  if (any(dim(cnt) < 2) || sum(cnt) == 0) return(NULL)
+  cnt <- cnt[rowSums(cnt) > 0, colSums(cnt) > 0, drop = FALSE]
+  if (any(dim(cnt) < 2)) return(NULL)
+  t <- suppressWarnings(stats::chisq.test(cnt, correct = FALSE))
+  list(chi2 = unname(t$statistic), df = unname(t$parameter), p = unname(t$p.value),
+       cramer_v = sqrt(unname(t$statistic) / (sum(cnt) * (min(dim(cnt)) - 1))),
+       low_expected = mean(t$expected < 5))
+}
+
+#' The test in words
+#' @noRd
+crosstab_test_text <- function(tt) {
+  if (is.null(tt)) return("Chi-square test: not applicable (needs at least two rows and two columns with records).")
+  strength <- if (tt$cramer_v < 0.1) "negligible" else if (tt$cramer_v < 0.3) "weak" else if (tt$cramer_v < 0.5) "moderate" else "strong"
+  paste0(sprintf("Chi-square = %.2f, df = %d, p %s; Cramer's V = %.2f (%s association). ",
+                 tt$chi2, as.integer(tt$df), if (tt$p < 0.001) "< 0.001" else sprintf("= %.3f", tt$p), tt$cramer_v, strength),
+         if (tt$p < 0.05) "The rows and columns are related: the differences are unlikely to be chance. "
+         else "No evidence that rows and columns are related: the differences may be chance. ",
+         if (tt$low_expected > 0.2) sprintf("%.0f%% of the expected counts are below 5, so read the p-value with caution.", 100 * tt$low_expected) else "")
+}
+
+#' Whether a chart's groups stack: parts of a whole do, rates and column
+#' percentages (each column sums to 100) sit side by side
+#' @noRd
+chart_stacks <- function(spec) {
+  !identical(spec$type, "share") && !(identical(spec$type, "crosstab") && identical(spec$pct, "col"))
 }

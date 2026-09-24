@@ -189,13 +189,23 @@ mod_scorecard_ui <- function(id) {
                 # Iterate: change the criteria (or any setting above) and fit
                 # again; every fit is kept in the run history below.
                 bslib::layout_columns(
-                  col_widths = c(9, 3), fill = FALSE,
+                  col_widths = c(6, 3, 3), fill = FALSE,
                   shinyWidgets::pickerInput(
                     ns("fit_criteria"), "Criteria in the model (untick to drop, then fit again)",
                     choices = character(0), multiple = TRUE, width = "100%",
                     options = shinyWidgets::pickerOptions(container = "body", actionsBox = TRUE,
                                                           liveSearch = TRUE,
                                                           selectedTextFormat = "count > 6")),
+                  # Each extra model is a full fit: the machine-learning ones
+                  # take most of the time, so only the quick ones run by default.
+                  shinyWidgets::pickerInput(
+                    ns("compare_models"),
+                    tagList("Also compare per variable", info_tip("Models fitted next to the chosen one to show each variable's effect under every model. Machine-learning models are slow on large data: add them only when you need them.")),
+                    choices = scorecard_model_choices(), selected = c("logit", "stepwise", "woe"),
+                    multiple = TRUE, width = "100%",
+                    options = shinyWidgets::pickerOptions(container = "body", actionsBox = TRUE,
+                                                          selectedTextFormat = "count > 2",
+                                                          countSelectedText = "{0} models")),
                   tags$div(class = "pt-4",
                            checkboxInput(ns("run_benchmarks"),
                                          tagList("Compare with random forest & boosting",
@@ -475,7 +485,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
     restoring <- reactiveVal(NULL)
     rs_in <- function(k) isolate(restoring())$inputs[[k]]
     sc_inputs <- c("outcome_col", "outcome_pos", "criteria", "model_method", "model_scheme",
-                   "holdout_pct", "split_seed", "model_weights", "run_benchmarks", "fit_criteria",
+                   "holdout_pct", "split_seed", "model_weights", "run_benchmarks", "fit_criteria", "compare_models",
                    "corr_cutoff", "tol_lower", "tol_upper", "tol_rationale", "caseload_pct")
 
     workspace_register(workspace, "scorecard",
@@ -518,6 +528,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
           if (!is.null(i[[k]])) updateNumericInput(session, k, value = i[[k]])
         }
         if (!is.null(i$run_benchmarks)) updateCheckboxInput(session, "run_benchmarks", value = i$run_benchmarks)
+        if (!is.null(i$compare_models)) shinyWidgets::updatePickerInput(session, "compare_models", selected = i$compare_models)
         if (!is.null(i$tol_rationale)) updateTextAreaInput(session, "tol_rationale", value = i$tol_rationale)
         if (!is.null(s$threshold)) {
           thr_pending(s$threshold)
@@ -969,25 +980,46 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
     output$qs_out <- renderUI({
       r <- qs_result()
       if (is.null(r)) return(NULL)
-      chip <- function(i, assoc) tags$span(
-        class = paste("wfp-qs-chip", if (assoc) "is-assoc" else ""),
-        if (assoc) bsicons::bs_icon(if (identical(r$direction[i], "inclusion")) "arrow-up" else "arrow-down",
-                                    class = if (identical(r$direction[i], "inclusion")) "up" else "down"),
-        r$criterion[i])
-      yes <- which(r$significant); no <- which(!r$significant)
+      res <- screened()
+      m <- match(r$criterion, res$criterion)
+      pv <- res$prev_vuln[m]; pn <- res$prev_not[m]
+      yes <- sum(r$significant, na.rm = TRUE)
+      verdict <- ifelse(r$test %in% c("constant", "not binary"),
+                        ifelse(r$test == "constant", "Cannot be tested: every household answers the same",
+                               "Cannot be tested: not a yes/no variable"),
+                 ifelse(r$significant,
+                        ifelse(r$direction == "inclusion", "Associated: points to vulnerability",
+                               "Associated: points away from vulnerability"),
+                        "No clear association on its own"))
+      fmt_p <- function(p) ifelse(is.na(p), "\u2013", ifelse(p < 0.001, "< 0.001", sprintf("%.3f", p)))
+      fmt_or <- function(o, lo, hi) ifelse(is.na(o), "\u2013", sprintf("%.2f (%.2f\u2013%.2f)", o, lo, hi))
+      ord <- order(!r$significant, r$p_adj, na.last = TRUE)
       tagList(
         tags$hr(),
-        tags$div(class = "wfp-qs-group",
-                 tags$div(class = "small fw-bold text-uppercase mb-1",
-                          sprintf("Associated with the outcome (%d)", length(yes))),
-                 if (length(yes)) lapply(yes, chip, assoc = TRUE) else tags$span(class = "small text-muted", "None.")),
-        tags$div(class = "wfp-qs-group",
-                 tags$div(class = "small fw-bold text-uppercase mb-1 text-muted",
-                          sprintf("No clear association (%d)", length(no))),
-                 if (length(no)) lapply(no, chip, assoc = FALSE) else tags$span(class = "small text-muted", "None.")),
-        tags$div(class = "small text-muted",
-                 bsicons::bs_icon("arrow-up", class = "text-primary"), " more common among vulnerable households \u00b7 ",
-                 bsicons::bs_icon("arrow-down", class = "text-danger"), " less common among them")
+        tags$p(class = "small mb-2",
+               tags$strong(sprintf("%d of %d candidates are associated with the outcome", yes, nrow(r))),
+               sprintf(" at the %s level, after %s adjustment.", format(input$qs_alpha %||% 0.05),
+                       c(BH = "Benjamini-Hochberg", bonferroni = "Bonferroni", holm = "Holm", none = "no")[[input$qs_adjust %||% "BH"]])),
+        tags$div(class = "wfp-model-table-wrap", tags$table(
+          class = "wfp-model-table",
+          tags$thead(tags$tr(tags$th("Criterion"), tags$th(class = "num", "Among vulnerable"), tags$th(class = "num", "Among others"),
+                             tags$th(class = "num", "Odds ratio (95% CI)"), tags$th(class = "num", "Adjusted p"), tags$th("Verdict"))),
+          tags$tbody(lapply(ord, function(i) tags$tr(
+            class = if (isTRUE(r$significant[i])) NULL else "is-dropped",
+            tags$td(tags$strong(r$criterion[i])),
+            tags$td(class = "num", if (is.na(pv[i])) "\u2013" else sprintf("%.0f%%", 100 * pv[i])),
+            tags$td(class = "num", if (is.na(pn[i])) "\u2013" else sprintf("%.0f%%", 100 * pn[i])),
+            tags$td(class = "num", fmt_or(r$or[i], r$or_low[i], r$or_high[i])),
+            tags$td(class = "num", fmt_p(r$p_adj[i])),
+            tags$td(class = "small", verdict[i])))))),
+        tags$ul(
+          class = "small text-muted mt-2 mb-0",
+          tags$li(tags$strong("Odds ratio"), ": how much more likely a household meeting the criterion is to be vulnerable. ",
+                  "Above 1 points to vulnerability, below 1 away from it; a range crossing 1 means the direction is not certain."),
+          tags$li(tags$strong("Adjusted p"), ": the chance of seeing such a gap if the criterion had nothing to do with vulnerability, ",
+                  "corrected for testing many candidates. Below the significance level: associated."),
+          tags$li("A criterion with no clear association alone can still matter next to others (and the reverse): ",
+                  "keep the ones the field knowledge supports, and let the model in step 4 decide the net weights."))
       )
     })
 
@@ -1036,19 +1068,35 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
       status <- ifelse(res$retained, "kept",
                 ifelse(res$criterion %in% names(drops),
                        paste("dropped: duplicates", drops[res$criterion]), "dropped after review"))
+      reading <- criterion_reading(res$prevalence, res$missing, res$prev_vuln, res$prev_not)
       rows <- lapply(seq_len(nrow(res)), function(i) tags$tr(
         class = if (isTRUE(res$retained[i])) NULL else "is-dropped",
         tags$td(checkboxInput(ns(paste0("sv_", i)), NULL, value = isTRUE(res$retained[i]))),
         tags$td(tags$strong(res$criterion[i])),
         tags$td(class = "num", sprintf("%.1f%%", 100 * res$prevalence[i])),
+        tags$td(class = "num", sprintf("%.0f%%", 100 * res$prev_vuln[i])),
+        tags$td(class = "num", sprintf("%.0f%%", 100 * res$prev_not[i])),
         tags$td(class = "num", sprintf("%.1f%%", 100 * res$missing[i])),
+        tags$td(class = "small", reading[i]),
         tags$td(class = "small text-muted", status[i])))
       tagList(
         tags$div(class = "wfp-model-table-wrap", tags$table(
           class = "wfp-model-table",
-          tags$thead(tags$tr(tags$th("Use"), tags$th("Criterion"), tags$th(class = "num", "Prevalence"),
-                             tags$th(class = "num", "Missing"), tags$th("Status"))),
+          tags$thead(tags$tr(tags$th(style = "width: 3rem;", "Use"), tags$th("Criterion"), tags$th(class = "num", "Prevalence"),
+                             tags$th(class = "num", "Among vulnerable"), tags$th(class = "num", "Among others"),
+                             tags$th(class = "num", "Missing"), tags$th(style = "min-width: 14rem;", "What it tells"), tags$th("Status"))),
           tags$tbody(rows))),
+        tags$details(
+          class = "wfp-qs-how small mt-2",
+          tags$summary(tags$strong("How to read this table")),
+          tags$ul(
+            class = "mt-2 mb-0",
+            tags$li(tags$strong("Prevalence"), ": share of all households meeting the criterion. Near 0% or 100%, it barely separates anyone."),
+            tags$li(tags$strong("Among vulnerable / among others"), ": the same share within each outcome group. ",
+                    "The wider the gap, the more the criterion points to vulnerability (more common among the vulnerable: an inclusion criterion; less common: an exclusion criterion)."),
+            tags$li(tags$strong("Missing"), ": households with no answer. Above about 20%, check the question: missing answers score nothing."),
+            tags$li("These are descriptive and one criterion at a time. Quick screening tests them statistically; ",
+                    "Select ticked variables then shows how they overlap, and the model in step 4 gives each its net weight."))),
         tags$div(
           class = "d-flex justify-content-end gap-2 mt-3",
           bslib::tooltip(
@@ -1107,7 +1155,8 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
       # Every additive model on the same rows, for the per-variable view.
       w$update(html = waiter_content("Comparing models per variable..."))
       effects(tryCatch(model_effects(df, input$outcome_col, keep, input$outcome_pos,
-                                     rows = sp$train, weights = wts_vec),
+                                     rows = sp$train, weights = wts_vec,
+                                     methods = unique(c(out$method, input$compare_models))),
                        error = function(e) NULL))
       saved_points(NULL); weight_bump(weight_bump() + 1)
 
@@ -1536,7 +1585,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
 
     output$comparison_table <- renderUI(comparison_html(live_bench()$table))
 
-    model_tables_dl <- downloadHandler(
+    model_tables_dl <- download_handler(
       filename = function() paste0("Scorecard_model_tables_", format(Sys.time(), "%Y-%m-%d_%Hh%M"), ".xlsx"),
       content = function(file) {
         f <- fitted()
@@ -1601,7 +1650,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
       if (identical(l, "fr")) "fr" else "en"
     }
 
-    output$download_report <- downloadHandler(
+    output$download_report <- download_handler(
       filename = function() paste0("Targeting_design_report_", format(Sys.time(), "%Y-%m-%d_%Hh%M"), ".html"),
       content = function(file) {
         safe <- function(expr) tryCatch(expr, error = function(e) NULL)
@@ -2252,7 +2301,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
               length(sc$items), fmt5(sc$threshold %||% 0))
     })
 
-    output$download <- downloadHandler(
+    output$download <- download_handler(
       filename = function() paste0("Targeting_Scorecard_", format(Sys.time(), "%Y-%m-%d_%Hh%Mm"), ".xlsx"),
       content = function(file) {
         req(fitted())
@@ -2325,7 +2374,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
       }
     )
 
-    output$download_json <- downloadHandler(
+    output$download_json <- download_handler(
       filename = function() paste0("scorecard_", format(Sys.time(), "%Y-%m-%d"), ".json"),
       content = function(file) {
         req(fitted())

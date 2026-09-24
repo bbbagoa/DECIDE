@@ -32,7 +32,11 @@ mod_chart_builder_ui <- function(id, presets = names(chart_presets())) {
                          selectInput(ns("value"), "Number column", choices = character(0), width = "100%")),
         conditionalPanel(sprintf("input['%s'] === 'share'", ns("type")),
                          selectInput(ns("den"), "Out of (total column)", choices = character(0), width = "100%")),
-        selectInput(ns("group"), "Split by (optional)", choices = character(0), width = "100%"),
+        selectInput(ns("group"), "Split by (optional; the columns of a crosstab)", choices = character(0), width = "100%"),
+        conditionalPanel(sprintf("input['%s'] === 'crosstab'", ns("type")),
+                         radioButtons(ns("pct"), "Percentages", inline = TRUE,
+                                      choices = c("Row" = "row", "Column" = "col", "Total" = "total", "Counts only" = "count"),
+                                      selected = "row")),
         tags$div(class = "d-flex gap-2",
                  field(selectInput(ns("filter_col"), "Only where", choices = character(0), width = "100%")),
                  field(shinyWidgets::pickerInput(ns("filter_vals"), "is one of", choices = character(0), multiple = TRUE,
@@ -46,6 +50,7 @@ mod_chart_builder_ui <- function(id, presets = names(chart_presets())) {
       bslib::card_header(bsicons::bs_icon("bar-chart"), " ", textOutput(ns("preview_title"), inline = TRUE)),
       bslib::card_body(
         uiOutput(ns("preview_empty")),
+        uiOutput(ns("stat_note")),
         conditionalPanel(sprintf("input['%s'] !== 'table'", ns("display")),
                          plotly::plotlyOutput(ns("preview"), height = "360px")),
         conditionalPanel(sprintf("input['%s'] === 'table'", ns("display")),
@@ -118,8 +123,16 @@ mod_chart_builder_server <- function(id, data, source, dataset_name = reactive("
 
     spec <- reactive(list(type = input$type, x = input$x, group = input$group, value = input$value, den = input$den,
                           date = input$date, period = input$period, filter_col = input$filter_col,
-                          filter_vals = input$filter_vals))
+                          filter_vals = input$filter_vals, pct = input$pct))
     agg <- reactive(tryCatch(chart_aggregate(data(), spec()), error = function(e) NULL))
+
+    output$stat_note <- renderUI({
+      sp <- spec()
+      if (!identical(sp$type, "crosstab")) return(NULL)
+      if (!nzchar(sp$group %||% "")) return(tags$div(class = "small text-warning mb-2", "Choose the column variable in 'Split by'."))
+      d <- agg(); req(d)
+      tags$div(class = "small text-muted mb-2", bsicons::bs_icon("calculator"), " ", crosstab_test_text(crosstab_test(d)))
+    })
 
     output$preview_title <- renderText(if (nzchar(input$title %||% "")) input$title else "Preview")
     output$preview_empty <- renderUI({
@@ -138,7 +151,7 @@ mod_chart_builder_server <- function(id, data, source, dataset_name = reactive("
         d$x <- factor(d$x, levels = rev(unique(d$x)))
         p <- plotly::plot_ly(d, x = ~value, y = ~x, color = if (grp) ~group else I("#0A6EB4"), type = "bar",
                              orientation = "h", text = ~value, textposition = "outside", cliponaxis = FALSE)
-        if (grp && !identical(sp$type, "share")) p <- plotly::layout(p, barmode = "stack")
+        if (grp && chart_stacks(sp)) p <- plotly::layout(p, barmode = "stack")
       }
       plotly::layout(p, xaxis = list(title = if (identical(sp$type, "trend")) "" else chart_value_label(sp)),
                      yaxis = list(title = if (identical(sp$type, "trend")) chart_value_label(sp) else "", automargin = TRUE),

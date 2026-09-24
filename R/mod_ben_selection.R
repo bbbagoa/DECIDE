@@ -41,6 +41,8 @@ mod_ben_selection_ui <- function(id) {
                          title = "Clear the selection criteria")),
           actionButton(ns("export_open"), "Export selection (Excel)", icon = icon("download"),
                        class = "btn-outline-primary btn-sm w-100 mt-2"),
+          downloadButton(ns("selection_report"), "Selection report (HTML)",
+                         class = "btn-outline-primary btn-sm w-100 mt-2"),
           # New criteria built from the registration data (e.g. a dependency
           # ratio), usable at once in the eligibility rules.
           tags$div(class = "mt-2",
@@ -1064,15 +1066,20 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
                        legend = list(orientation = "h", x = 0, y = 1.08, xanchor = "left", yanchor = "bottom"))
     })
 
-    output$ben_profile <- renderUI({
-      s <- selection(); df <- uploaded_df(); req(s, df)
-      sel <- s$prioritized
-      if (!any(sel) || all(sel)) return(tags$div(class = "small text-muted", "Needs both selected and non-selected households."))
+    current_profile <- function(df, sel) {
       keys <- c(hh_size = "Household size", hhh_age = "Head of household age", childU5 = "Children under 5",
                 v_score = "Vulnerability score", hhh_sex = "Head of household sex", residency = "Residency status",
                 disability = "Disability / chronic illness", v_groups = "Vulnerability group")
       cols <- Filter(Negate(is.null), lapply(stats::setNames(names(keys), names(keys)), col_of))
-      p <- selection_profile(df, unlist(cols), keys, sel)
+      if (!length(cols)) return(NULL)
+      selection_profile(df, unlist(cols), keys, sel)
+    }
+
+    output$ben_profile <- renderUI({
+      s <- selection(); df <- uploaded_df(); req(s, df)
+      sel <- s$prioritized
+      if (!any(sel) || all(sel)) return(tags$div(class = "small text-muted", "Needs both selected and non-selected households."))
+      p <- current_profile(df, sel)
       if (is.null(p)) return(tags$div(class = "small text-muted", "Map household variables (size, age, sex...) to compare the groups."))
       tagList(
         tags$div(class = "wfp-model-table-wrap", tags$table(
@@ -1272,8 +1279,118 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
     observeEvent(input$export_all, shinyWidgets::updatePickerInput(session, "export_vars", selected = session$userData$export_all))
     observeEvent(input$export_vars, export_cols(input$export_vars), ignoreNULL = FALSE, ignoreInit = TRUE)
 
+    # What the selection is and how it was made, as labelled sections. The
+    # Excel summary sheet and the HTML report both use it, so they never
+    # disagree.
+    selection_sections <- function(s, df_all, keep_cols, with_audit = FALSE) {
+      cut <- which(s$eligible & !s$prioritized)
+      prio_desc <- if (!isTRUE(suppressWarnings(as.numeric(applied$prio_n)) > 0)) "none (all eligible served)" else switch(applied$prio_mode %||% "none",
+        none = "none (all eligible served)",
+        caseload = sprintf("total caseload of %s households", applied$prio_n),
+        per_unit = sprintf("%s households per %s", applied$prio_n, applied$quota_unit))
+      m <- ben_metrics()
+      mpct <- function(x) if (is.null(m) || is.na(x)) "n/a" else sprintf("%.1f%%", 100 * x)
+      mnum <- function(x) if (is.null(m) || is.na(x)) "n/a" else sprintf("%.2f", x)
+      full <- selected_data()
+      n_ind <- if (shiny::isTruthy(user_setup$hh_size) && user_setup$hh_size %in% names(full))
+        sum(suppressWarnings(as.numeric(as.character(full[[user_setup$hh_size]]))), na.rm = TRUE) else NA
+      sc <- user_setup$scorecard
+      sc_used <- isTRUE(input$use_scorecard) && !scorecard_is_empty(sc)
+      flt <- function(x) if (length(x)) paste(x, collapse = ", ") else "all"
+
+      # Everything done to the data before this list was drawn, from the
+      # audit trail, so the list can be traced back to its source.
+      lg <- if (is.function(modification_log)) modification_log() else NULL
+      lg_sel <- if (is.null(lg)) NULL else lg[audit_phase(lg$action) == "Selection", , drop = FALSE]
+      count_act <- function(pattern) if (is.null(lg_sel)) 0L else sum(grepl(pattern, lg_sel$action))
+      calc <- if (is.null(lg_sel)) NULL else lg_sel[grepl("Variable created", lg_sel$action), , drop = FALSE]
+      map_keys <- c(unique_id = "Household id", admin1 = "Admin 1", admin2 = "Admin 2", admin3 = "Admin 3",
+                    hh_size = "Household size", v_score = "Vulnerability score", v_groups = "Vulnerability group",
+                    eligibility = "Eligibility", hhh_sex = "Head of household sex", hhh_age = "Head of household age")
+      mapping <- vapply(names(map_keys), function(k) as.character(user_setup[[k]] %||% "")[1], character(1))
+
+      sections <- list(
+        "Data" = c(
+          "Source" = user_setup$data_source %||% "not recorded",
+          "Households now" = format(nrow(df_all), big.mark = ",")),
+        "Data preparation (before selection)" = c(
+          "Records deleted" = format(length(deleted_uids(lg_sel)), big.mark = ","),
+          "Values edited" = format(count_act("^Edit record"), big.mark = ","),
+          "Location names normalised" = format(count_act("location normalization"), big.mark = ","),
+          "Outlier values corrected" = format(count_act("Outlier correction"), big.mark = ","),
+          "Reset to the original data" = if (count_act("Reset to original")) "yes" else "no",
+          "Calculated variables" = if (is.null(calc) || !nrow(calc)) "none" else
+            paste(sprintf("%s = %s", calc$column, calc$new_value), collapse = "; "),
+          "Full history" = if (isTRUE(with_audit)) "see the Audit_trail sheet" else "in the app's Audit Trail (not exported)"),
+        "Selection" = c(
+          "Country office" = user_setup$country_office %||% "not set",
+          "Exported" = format(Sys.time(), "%Y-%m-%d %H:%M"),
+          "Exported by" = Sys.getenv("USERNAME", Sys.getenv("USER", "")),
+          "Variables exported" = sprintf("%d of %d: %s", length(keep_cols), ncol(df_all), paste(keep_cols, collapse = ", ")),
+          "Targeting approach" = targeting_approaches()[[applied$approach]]$label,
+          "Criteria and score combine as" = if (identical(applied$approach, "hybrid")) applied$combine else "n/a",
+          "Prioritisation" = prio_desc,
+          "Ranked by" = if (is.na(s$rank_by)) "n/a" else s$rank_by),
+        "Totals" = c(
+          "Households in the dataset" = format(nrow(df_all), big.mark = ","),
+          "Eligible by design" = format(sum(s$eligible), big.mark = ","),
+          "Selected (served)" = format(sum(s$prioritized), big.mark = ","),
+          "Individuals in selected households" = if (is.na(n_ind)) "n/a" else format(n_ind, big.mark = ","),
+          "Excluded by design (unmet need)" = format(length(cut), big.mark = ",")),
+        "Filters and rules" = c(
+          "Admin 1" = flt(applied$admin1), "Admin 2" = flt(applied$admin2), "Admin 3" = flt(applied$admin3),
+          "Vulnerability score range" = paste(applied$score_min, "-", applied$score_max),
+          "Eligibility rules" = ruleset_describe(active_ruleset(), user_setup, RULE_FIELDS),
+          "Community selection" = if (shiny::isTruthy(applied$comm_col))
+            sprintf("%s in {%s}", applied$comm_col, paste(applied$comm_vals %||% "", collapse = ", ")) else "n/a"),
+        "Scorecard" = if (sc_used) c(
+          "Scorecard" = sprintf("%d criteria, eligible when score > %s", length(sc$items), fmt5(sc$threshold %||% 0)),
+          "Status" = if (identical(sc$source, "design")) paste("adopted", sc$adopted_at %||% "") else "loaded from a workbook",
+          "Designed on" = sc$created %||% "n/a",
+          "Criteria" = paste(vapply(sc$items, function(it) sprintf("%s (%s%s)", it$criterion,
+            if (identical(it$direction, "exclusion")) "-" else "+", fmt5(it$weight)), character(1)), collapse = "; "))
+          else c("Scorecard" = "not used"),
+        "Accuracy against mapped eligibility" = c(
+          "Coverage rate" = mpct(m$coverage_rate), "Selection ratio" = mnum(m$selection_ratio),
+          "Inclusion error" = mpct(m$inclusion_error), "Exclusion error" = mpct(m$exclusion_error),
+          "Precision" = mpct(m$precision), "Recall" = mpct(m$recall)),
+        "Variable mapping" = stats::setNames(ifelse(nzchar(mapping), mapping, "not mapped"), map_keys),
+        "Notes" = c("Notes" = if (length(s$notes)) paste(s$notes, collapse = " | ") else "none",
+                    "Excluded by design" = "Eligible households not served for lack of resources: unmet need, not counted as exclusion error (Targeting Advisory 2/2025).")
+      )
+      sections
+    }
+
+    output$selection_report <- download_handler(
+      filename = function() paste0("Beneficiary_selection_report_", format(Sys.time(), "%Y-%m-%d_%Hh%M"), ".html"),
+      content = function(file) {
+        s <- selection(); df_all <- uploaded_df()
+        req(s, df_all)
+        sections <- selection_sections(s, df_all, names(df_all))
+        # The report is about the selection, not about which columns an
+        # export carried.
+        sections$Selection <- sections$Selection[names(sections$Selection) != "Variables exported"]
+        sections[["Data preparation (before selection)"]][["Full history"]] <- "in the app's Audit Trail"
+        hs <- col_of("hh_size")
+        people <- if (is.null(hs)) NA else sum(as_number(df_all[[hs]])[s$prioritized], na.rm = TRUE)
+        sel <- s$prioritized
+        mp <- selection_map_points(df_all, user_setup, s)
+        lang <- session$rootScope()$input$lang_selector
+        write_selection_report(file, list(
+          country_office = user_setup$country_office, sections = sections,
+          totals = c(households = nrow(df_all), eligible = sum(s$eligible), served = sum(sel),
+                     excluded = sum(s$eligible & !sel), people = people),
+          by_area = selection_by_area(df_all, user_setup, s),
+          profile = if (any(sel) && !all(sel)) current_profile(df_all, sel),
+          map = mp, map_n = attr(mp, "n_total")),
+          lang = if (identical(lang, "fr")) "fr" else "en")
+        audit_add(modification_log, "Selection", "Selection report exported",
+                  sprintf("%s households served", format(sum(sel), big.mark = ",")))
+      }
+    )
+
     # Self-documenting export: rows + a metadata sheet (filters, totals, accuracy)
-    output$download_selection <- downloadHandler(
+    output$download_selection <- download_handler(
       filename = function() {
         paste0("Targeting_BeneficiarySelection_", format(Sys.time(), "%Y-%m-%d_%Hh%Mm%Ss"),
                if (identical(input$export_split, "area")) ".zip" else ".xlsx")
@@ -1294,81 +1411,9 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
           ex <- df_all[cut, intersect(keep_cols, names(df_all)), drop = FALSE]
           if (with_score) ex$selection_score <- s$score[cut]
         }
-        prio_desc <- if (!isTRUE(suppressWarnings(as.numeric(applied$prio_n)) > 0)) "none (all eligible served)" else switch(applied$prio_mode %||% "none",
-          none = "none (all eligible served)",
-          caseload = sprintf("total caseload of %s households", applied$prio_n),
-          per_unit = sprintf("%s households per %s", applied$prio_n, applied$quota_unit))
-        m <- ben_metrics()
-        mpct <- function(x) if (is.null(m) || is.na(x)) "n/a" else sprintf("%.1f%%", 100 * x)
-        mnum <- function(x) if (is.null(m) || is.na(x)) "n/a" else sprintf("%.2f", x)
         full <- selected_data()
-        n_ind <- if (shiny::isTruthy(user_setup$hh_size) && user_setup$hh_size %in% names(full))
-          sum(suppressWarnings(as.numeric(as.character(full[[user_setup$hh_size]]))), na.rm = TRUE) else NA
-        sc <- user_setup$scorecard
-        sc_used <- isTRUE(input$use_scorecard) && !scorecard_is_empty(sc)
-        flt <- function(x) if (length(x)) paste(x, collapse = ", ") else "all"
-
-        # Everything done to the data before this list was drawn, from the
-        # audit trail, so the list can be traced back to its source.
         lg <- if (is.function(modification_log)) modification_log() else NULL
-        lg_sel <- if (is.null(lg)) NULL else lg[audit_phase(lg$action) == "Selection", , drop = FALSE]
-        count_act <- function(pattern) if (is.null(lg_sel)) 0L else sum(grepl(pattern, lg_sel$action))
-        calc <- if (is.null(lg_sel)) NULL else lg_sel[grepl("Variable created", lg_sel$action), , drop = FALSE]
-        map_keys <- c(unique_id = "Household id", admin1 = "Admin 1", admin2 = "Admin 2", admin3 = "Admin 3",
-                      hh_size = "Household size", v_score = "Vulnerability score", v_groups = "Vulnerability group",
-                      eligibility = "Eligibility", hhh_sex = "Head of household sex", hhh_age = "Head of household age")
-        mapping <- vapply(names(map_keys), function(k) as.character(user_setup[[k]] %||% "")[1], character(1))
-
-        sections <- list(
-          "Data" = c(
-            "Source" = user_setup$data_source %||% "not recorded",
-            "Households now" = format(nrow(df_all), big.mark = ",")),
-          "Data preparation (before selection)" = c(
-            "Records deleted" = format(length(deleted_uids(lg_sel)), big.mark = ","),
-            "Values edited" = format(count_act("^Edit record"), big.mark = ","),
-            "Location names normalised" = format(count_act("location normalization"), big.mark = ","),
-            "Outlier values corrected" = format(count_act("Outlier correction"), big.mark = ","),
-            "Reset to the original data" = if (count_act("Reset to original")) "yes" else "no",
-            "Calculated variables" = if (is.null(calc) || !nrow(calc)) "none" else
-              paste(sprintf("%s = %s", calc$column, calc$new_value), collapse = "; "),
-            "Full history" = if (isTRUE(input$export_audit)) "see the Audit_trail sheet" else "in the app's Audit Trail (not exported)"),
-          "Selection" = c(
-            "Country office" = user_setup$country_office %||% "not set",
-            "Exported" = format(Sys.time(), "%Y-%m-%d %H:%M"),
-            "Exported by" = Sys.getenv("USERNAME", Sys.getenv("USER", "")),
-            "Variables exported" = sprintf("%d of %d: %s", length(keep_cols), ncol(df_all), paste(keep_cols, collapse = ", ")),
-            "Targeting approach" = targeting_approaches()[[applied$approach]]$label,
-            "Criteria and score combine as" = if (identical(applied$approach, "hybrid")) applied$combine else "n/a",
-            "Prioritisation" = prio_desc,
-            "Ranked by" = if (is.na(s$rank_by)) "n/a" else s$rank_by),
-          "Totals" = c(
-            "Households in the dataset" = format(nrow(df_all), big.mark = ","),
-            "Eligible by design" = format(sum(s$eligible), big.mark = ","),
-            "Selected (served)" = format(sum(s$prioritized), big.mark = ","),
-            "Individuals in selected households" = if (is.na(n_ind)) "n/a" else format(n_ind, big.mark = ","),
-            "Excluded by design (unmet need)" = format(length(cut), big.mark = ",")),
-          "Filters and rules" = c(
-            "Admin 1" = flt(applied$admin1), "Admin 2" = flt(applied$admin2), "Admin 3" = flt(applied$admin3),
-            "Vulnerability score range" = paste(applied$score_min, "-", applied$score_max),
-            "Eligibility rules" = ruleset_describe(active_ruleset(), user_setup, RULE_FIELDS),
-            "Community selection" = if (shiny::isTruthy(applied$comm_col))
-              sprintf("%s in {%s}", applied$comm_col, paste(applied$comm_vals %||% "", collapse = ", ")) else "n/a"),
-          "Scorecard" = if (sc_used) c(
-            "Scorecard" = sprintf("%d criteria, eligible when score > %s", length(sc$items), fmt5(sc$threshold %||% 0)),
-            "Status" = if (identical(sc$source, "design")) paste("adopted", sc$adopted_at %||% "") else "loaded from a workbook",
-            "Designed on" = sc$created %||% "n/a",
-            "Criteria" = paste(vapply(sc$items, function(it) sprintf("%s (%s%s)", it$criterion,
-              if (identical(it$direction, "exclusion")) "-" else "+", fmt5(it$weight)), character(1)), collapse = "; "))
-            else c("Scorecard" = "not used"),
-          "Accuracy against mapped eligibility" = c(
-            "Coverage rate" = mpct(m$coverage_rate), "Selection ratio" = mnum(m$selection_ratio),
-            "Inclusion error" = mpct(m$inclusion_error), "Exclusion error" = mpct(m$exclusion_error),
-            "Precision" = mpct(m$precision), "Recall" = mpct(m$recall)),
-          "Variable mapping" = stats::setNames(ifelse(nzchar(mapping), mapping, "not mapped"), map_keys),
-          "Notes" = c("Notes" = if (length(s$notes)) paste(s$notes, collapse = " | ") else "none",
-                      "Excluded by design" = "Eligible households not served for lack of resources: unmet need, not counted as exclusion error (Targeting Advisory 2/2025).")
-        )
-
+        sections <- selection_sections(s, df_all, keep_cols, with_audit = isTRUE(input$export_audit))
         subtitle <- paste(c(user_setup$country_office, format(Sys.Date())), collapse = " \u00b7 ")
         make_wb <- function(sel_df, ex_df, area = NULL) {
           wb <- openxlsx::createWorkbook()

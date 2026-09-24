@@ -361,7 +361,7 @@ dq_location_server <- function(input, output, session, ns, core) {
 
   ### ----------------- Download Locations Button Logic
 
-  output$download_locations <- downloadHandler(
+  output$download_locations <- download_handler(
     filename = function() {
       paste0(
         "Targeting_LocationsCheck_",

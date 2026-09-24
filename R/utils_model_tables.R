@@ -353,3 +353,21 @@ effects_html <- function(eff, importance = NULL) {
              "A criterion whose sign or size changes a lot between models deserves a second look.")
   )
 }
+
+#' One line on what a candidate criterion can tell, from its descriptives
+#'
+#' @param prevalence,missing,prev_vuln,prev_not Shares (0-1), one per criterion.
+#' @return Character vector of plain-language readings.
+#' @noRd
+criterion_reading <- function(prevalence, missing, prev_vuln, prev_not) {
+  gap <- prev_vuln - prev_not
+  out <- ifelse(abs(gap) >= 0.15,
+                ifelse(gap > 0, "Clearly more common among the vulnerable", "Clearly less common among the vulnerable"),
+         ifelse(abs(gap) >= 0.05,
+                ifelse(gap > 0, "Somewhat more common among the vulnerable", "Somewhat less common among the vulnerable"),
+                "About as common in both groups: weak on its own"))
+  out[prevalence < 0.05 | prevalence > 0.95] <- "Almost all or almost no households meet it: separates few"
+  out[missing > 0.2] <- sprintf("Often missing (%.0f%%): check the question first", 100 * missing[missing > 0.2])
+  out[is.na(gap)] <- "Cannot be read: no answers"
+  out
+}

@@ -72,7 +72,7 @@ mod_audit_server <- function(id, modification_log) {
                     rownames = FALSE)
     })
 
-    output$download_full_log <- downloadHandler(
+    output$download_full_log <- download_handler(
       filename = function() {
         paste0("Targeting_Audit_Log_", format(Sys.time(), "%Y-%m-%d_%Hh%Mm%Ss"), ".xlsx")
       },

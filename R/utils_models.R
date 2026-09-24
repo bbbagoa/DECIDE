@@ -440,8 +440,10 @@ benchmark_models <- function(df, outcome, criteria, outcome_positive = NULL,
 #' @return A data frame: criterion, model (label), effect, p_value.
 #' @noRd
 model_effects <- function(df, outcome, criteria, outcome_positive = NULL,
-                          rows = NULL, weights = NULL) {
+                          rows = NULL, weights = NULL, methods = NULL) {
   ch <- scorecard_model_choices()
+  # Only the models asked for: each one is a full fit.
+  if (!is.null(methods)) ch <- ch[ch %in% methods]
   short <- c(logit = "Logistic", stepwise = "Stepwise", woe = "Weight of evidence",
              stumps = "Boosted stumps", rf = "Random forest", xgb = "XGBoost", svm = "SVM",
              nb = "Naive Bayes", nnet = "Neural network")

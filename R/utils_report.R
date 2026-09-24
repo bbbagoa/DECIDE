@@ -144,13 +144,7 @@ design_report_md <- function(x, figures = character(0)) {
         sprintf("- AUC: %s", if (is.na(x$auc %||% NA)) "n/a" else sprintf("%.3f", x$auc)), "",
         "**Rationale recorded by the team:**", "",
         if (shiny::isTruthy(x$rationale)) paste0("> ", gsub("\n", "\n> ", x$rationale)) else "> _Not documented. Targeting Advisory 2/2025 requires it._",
-        "", "### Design error matrix", "",
-        md_table(data.frame(
-          ` ` = c("Eligible", "Not eligible", "Total"),
-          Vulnerable = c(e$correctly_included, e$excluded_in_need, e$correctly_included + e$excluded_in_need),
-          `Not vulnerable` = c(e$included_not_in_need, e$correctly_excluded, e$included_not_in_need + e$correctly_excluded),
-          Total = c(e$correctly_included + e$included_not_in_need, e$excluded_in_need + e$correctly_excluded, e$n),
-          check.names = FALSE), digits = 6), "",
+        "", "### Design error matrix", "", "@@MATRIX@@", "",
         sprintf("- **Inclusion error** %s = %s / %s: of everyone selected, the share who did not need assistance.",
                 md_pct(e$inclusion_error), e$included_not_in_need, e$correctly_included + e$included_not_in_need),
         sprintf("- **Exclusion error** %s = %s / %s: of everyone who needed assistance, the share left out.",
@@ -304,7 +298,48 @@ write_design_report <- function(file, x, plots = list(), lang = "en") {
              "Status" = if (isTRUE(x$adopted)) "Adopted" else "Draft, not adopted",
              "Source" = x$source %||% ""),
     footer = "This record documents the design so it can be reviewed, reproduced and challenged.",
-    blocks = list("@@ERRORS@@" = report_error_cards(x, lang)))
+    blocks = list("@@ERRORS@@" = report_error_cards(x, lang),
+                  "@@MATRIX@@" = report_error_matrix(x$errors, x$threshold, x$outcome, x$outcome_pos, lang)))
+}
+
+#' The design error matrix as in the app, in the report's neutral style
+#'
+#' Each cell: what it is, the count, and its share of the row and of all
+#' households; totals on the right and at the bottom. The two error cells are
+#' marked by their label in bold, not by colour.
+#' @noRd
+report_error_matrix <- function(e, threshold = NULL, outcome = NULL, outcome_pos = NULL, lang = "en") {
+  if (is.null(e) || is.null(e$n) || e$n == 0) return("")
+  tr <- function(t) htmltools::htmlEscape(i18n_lookup(t, lang))
+  esc <- function(t) htmltools::htmlEscape(t %||% "")
+  num <- function(x) format(round(x), big.mark = ",")
+  pct <- function(x, d) if (is.na(d) || d == 0) "\u2013" else sprintf("%.1f%%", 100 * x / d)
+  n_elig <- e$correctly_included + e$included_not_in_need
+  n_not <- e$excluded_in_need + e$correctly_excluded
+  n_vuln <- e$correctly_included + e$excluded_in_need
+  n_novuln <- e$included_not_in_need + e$correctly_excluded
+  cell <- function(count, row_total, label, err = FALSE) sprintf(
+    '<td class="%s"><div class="m-label">%s</div><div class="m-count">%s</div><div class="m-share">%s %s \u00b7 %s %s</div></td>',
+    if (err) "m-cell m-err" else "m-cell", tr(label), num(count),
+    pct(count, row_total), tr("of row"), pct(count, e$n), tr("of all"))
+  tot <- function(x) sprintf('<td class="m-tot"><div class="m-count">%s</div><div class="m-share">%s</div></td>', num(x), pct(x, e$n))
+  paste0(
+    '<div class="err-matrix-wrap"><table class="err-matrix"><thead>',
+    '<tr><th class="m-corner" rowspan="2">', tr("Scorecard decision"), '</th>',
+    '<th colspan="2">', tr("Outcome"), if (nzchar(outcome %||% "")) paste0(": <code>", esc(outcome), "</code>") else "", '</th>',
+    '<th class="m-tot-head" rowspan="2">', tr("Total"), '</th></tr>',
+    '<tr><th>', tr("Vulnerable"), if (nzchar(outcome_pos %||% "")) paste0('<div class="m-sub">', esc(outcome_pos), '</div>') else "",
+    '</th><th>', tr("Not vulnerable"), '</th></tr></thead><tbody>',
+    '<tr><th class="m-row">', tr("Eligible"),
+    if (!is.null(threshold)) sprintf('<div class="m-sub">%s > %s</div>', tr("score"), fmt5(threshold)) else "", '</th>',
+    cell(e$correctly_included, n_elig, "Correctly included"),
+    cell(e$included_not_in_need, n_elig, "Inclusion error", err = TRUE), tot(n_elig), '</tr>',
+    '<tr><th class="m-row">', tr("Not eligible"), '</th>',
+    cell(e$excluded_in_need, n_not, "Exclusion error", err = TRUE),
+    cell(e$correctly_excluded, n_not, "Correctly excluded"), tot(n_not), '</tr>',
+    '<tr class="m-total"><th class="m-row">', tr("Total"), '</th>', tot(n_vuln), tot(n_novuln),
+    sprintf('<td class="m-tot m-grand"><div class="m-count">%s</div></td>', num(e$n)), '</tr>',
+    '</tbody></table></div>')
 }
 
 #' Write one self-contained HTML report page
@@ -471,11 +506,11 @@ design_report_css <- function() {
   .band-meta { margin: 0; font-size: 12px; text-align: right; display: grid; grid-template-columns: auto auto; gap: 2px 10px; }
   .band-meta dt { opacity: .7; text-transform: uppercase; letter-spacing: .08em; font-size: 10.5px; align-self: center; }
   .band-meta dd { margin: 0; font-weight: 600; text-align: left; max-width: 260px; overflow-wrap: anywhere; }
-  .err-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; margin: 16px 0 8px; }
+  .err-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin: 14px 0 8px; max-width: 720px; }
   /* Restrained: the status colour appears only as a thin left rule and the
      dot on the status label; the number, gauge and marker stay neutral. */
   .err-card { --c: #6c757d; position: relative; overflow: hidden;
-    border: 1px solid var(--line); border-left: 3px solid var(--c); border-radius: 10px; padding: 16px 20px 14px; background: #fff; }
+    border: 0; border-radius: 8px; padding: 12px 16px 10px; background: var(--tint); }
   .err-card.is-ok { --c: #3f7e44; }
   .err-card.is-warn { --c: #b87700; }
   .err-card.is-bad { --c: #c5192d; }
@@ -487,9 +522,9 @@ design_report_css <- function() {
   .err-pill { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 600; color: var(--ink);
     white-space: nowrap; }
   .err-pill::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--c); }
-  .err-value { position: relative; font-size: 38px; font-weight: 700; letter-spacing: -.02em; line-height: 1; margin: 14px 0 4px;
+  .err-value { position: relative; font-size: 28px; font-weight: 700; letter-spacing: -.02em; line-height: 1; margin: 10px 0 3px;
     color: var(--ink); font-variant-numeric: tabular-nums; }
-  .err-sub { position: relative; font-size: 13px; color: var(--muted); margin-bottom: 30px; }
+  .err-sub { position: relative; font-size: 12px; color: var(--muted); margin-bottom: 24px; }
   .err-gauge { position: relative; height: 6px; margin: 0 2px; }
   .err-zones { display: flex; height: 100%; border-radius: 999px; overflow: hidden; background: #eef1f5; }
   .err-zones .z.ok { background: #eef1f5; } .err-zones .z.warn { background: #cfd6df; }
@@ -501,12 +536,37 @@ design_report_css <- function() {
   .err-scale { position: relative; height: 16px; margin: 6px 2px 0; font-size: 10.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
   .err-scale span { position: absolute; transform: translateX(-50%); }
   .err-scale span:first-child { transform: none; } .err-scale span:last-child { transform: translateX(-100%); }
-  .err-detail { position: relative; font-size: 13px; color: var(--muted); margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--line); }
+  .err-detail { position: relative; font-size: 12px; color: var(--muted); margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(15,40,70,.08); }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin: 14px 0 10px; }
+  .kpi { background: var(--tint); border-radius: 8px; padding: 12px 14px; }
+  .kpi-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  .kpi-value { font-size: 26px; font-weight: 700; color: var(--ink); line-height: 1.2; margin-top: 4px; font-variant-numeric: tabular-nums; }
+  .kpi-sub { font-size: 12px; color: var(--muted); }
+  .fig .leaflet-container { border-radius: 6px; }
+  .err-matrix-wrap { overflow-x: auto; margin: 10px 0 12px; }
+  .err-matrix { border-collapse: collapse; width: 100%; max-width: 760px; font-size: 13px; font-variant-numeric: tabular-nums; }
+  .err-matrix th, .err-matrix td { border: 1px solid var(--line); padding: 8px 12px; text-align: left; vertical-align: top; }
+  .err-matrix thead th { background: var(--tint); font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+  .err-matrix th.m-row { background: #fff; font-weight: 600; color: var(--ink); white-space: nowrap; }
+  .err-matrix .m-corner { vertical-align: bottom; }
+  .err-matrix .m-sub { font-size: 11px; font-weight: 400; color: var(--muted); text-transform: none; letter-spacing: 0; }
+  .err-matrix .m-label { font-size: 11.5px; color: var(--muted); }
+  .err-matrix .m-err .m-label { color: var(--ink); font-weight: 700; }
+  .err-matrix .m-count { font-size: 18px; font-weight: 700; color: var(--ink); line-height: 1.3; }
+  .err-matrix .m-share { font-size: 11px; color: var(--muted); }
+  .err-matrix .m-tot { background: var(--tint); }
+  .err-matrix tr.m-total th, .err-matrix tr.m-total td { border-top: 2px solid #c9d3de; }
   .err-detail strong { color: var(--ink); font-weight: 700; }
   .err-note { font-size: 13px; color: var(--muted); margin: 8px 0 18px; }
   .err-note strong { color: var(--ink); font-weight: 600; }
   @media print { .err-card { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
   .fig-row { display: grid; gap: 18px; margin: 16px 0 26px; }
+  .pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; margin: 8px 0 22px; align-items: start; }
+  .pair-cell h3 { margin-top: 6px; }
+  .pair-cell .fig-row { margin: 8px 0 10px; }
+  .pair-cell table { font-size: 12.5px; }
+  .pair-cell .note { font-size: 12px; color: var(--muted); margin: 4px 0; }
+  @media (max-width: 900px) { .pair { grid-template-columns: 1fr; } }
   .fig-row.n2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .fig { margin: 0; padding: 14px 16px 8px; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
   .fig figcaption:empty { display: none; }

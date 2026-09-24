@@ -464,7 +464,7 @@ mod_spot_checking_server <- function(id, uploaded_df, user_setup, workspace = NU
 
     # The sample as a field-ready workbook: how it was drawn, then the list
     # with the identification columns first and blank columns for the team.
-    output$download_spot <- downloadHandler(
+    output$download_spot <- download_handler(
       filename = function() paste0("Targeting_SpotCheck_", format(Sys.time(), "%Y-%m-%d_%Hh%M"), ".xlsx"),
       content = function(file) {
         smp <- sampled_data()
@@ -758,7 +758,7 @@ mod_spot_checking_server <- function(id, uploaded_df, user_setup, workspace = NU
       DT::datatable(out, rownames = FALSE, options = list(pageLength = 15, scrollX = TRUE))
     })
 
-    output$verif_report <- downloadHandler(
+    output$verif_report <- download_handler(
       filename = function() paste0("Verification_report_", format(Sys.time(), "%Y-%m-%d_%Hh%M"), ".html"),
       content = function(file) {
         methods <- c(random = "Simple random", systematic = "Systematic", pps = "PPS (size = household size or weight)")
@@ -780,7 +780,7 @@ mod_spot_checking_server <- function(id, uploaded_df, user_setup, workspace = NU
       }
     )
 
-    output$verif_download <- downloadHandler(
+    output$verif_download <- download_handler(
       filename = function() paste0("Targeting_BackCheck_", format(Sys.time(), "%Y-%m-%d_%Hh%M"), ".xlsx"),
       content = function(file) {
         r <- comparison()

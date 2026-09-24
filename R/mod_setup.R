@@ -567,7 +567,7 @@ mod_setup_server <- function(id, r_data, parent_session, trigger_open = reactive
       showNotification(paste0("Profile '", nm, "' deleted."), type = "message")
     })
 
-    output$profile_download <- downloadHandler(
+    output$profile_download <- download_handler(
       filename = function() {
         nm <- profile_save_name()
         if (!nzchar(nm)) nm <- "setup-profile"

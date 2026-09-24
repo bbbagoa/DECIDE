@@ -62,7 +62,11 @@ mod_session_manager_server <- function(
         html = waiter_content(paste0("Loading session \"", name, "\"...")),
         color = "rgba(10, 30, 50, 0.65)"
       )
-      on.exit(waiter::waiter_hide(), add = TRUE)
+      # The restored data is drawn after this function returns (the data, then
+      # the page the user returns to), which on a large dataset takes longer
+      # than reading the file: the overlay stays until the browser reports the
+      # page has settled (www/busy.js), not just until the file is read.
+      on.exit(session$sendCustomMessage("tw-when-settled", list(id = ns("restore_settled"))), add = TRUE)
 
       saved <- load_session(name, user = who)
       if (is.null(saved)) {
@@ -126,6 +130,8 @@ mod_session_manager_server <- function(
       audit_add(modification_log, "Session", "Session loaded", name)
       showNotification(paste("Session", name, "loaded."), type = "message")
     }
+
+    observeEvent(input$restore_settled, waiter::waiter_hide())
 
     # -------------------------------------------------------------------------
     # 1. Restore modal on startup

@@ -11,7 +11,13 @@
 * Report error cards have a quieter, more professional look.
 * Restoring a session brings back every dataset (registration, assessment, PDM, process monitoring, and the original import used by Reset), and the variable setup reopens on the restored mapping.
 * Every Excel export is locked for editing (set `TARGETWISE_EXPORT_PASSWORD` to require a password to unlock); the exports that were CSV are now locked Excel workbooks.
-* Beneficiary list export: the audit trail is optional (tick box), and the list can be exported as one workbook per area (Admin 1, 2 or 3) in a zip, each file named after its area.
+* Beneficiary list export: the audit trail is optional (tick box), and the list can be exported as one workbook per area (Admin 1 down to village) in a zip, each file named after its area.
+* A "Working..." indicator appears whenever the app takes more than a moment, and "Preparing your file..." until a download is ready; a restored session keeps its loader until the page has settled.
+* Beneficiary selection report (HTML): headline figures, data and preparation, the selection design, who was selected (by area, selected vs not selected), a map of selected and non-selected households, and accuracy.
+* Targeting Design: the screening table explains each candidate (share among the vulnerable and the others, a plain-language reading); quick screening shows odds ratios, adjusted p-values and a verdict; choose which models to compare per variable (the quick ones by default).
+* Design report: smaller, borderless error cards and the full design error matrix in a neutral table.
+* Targeting Monitoring: PDM or baseline data; crosstabs with row, column or total percentages and a chi-square test in the chart and table builder; report items can be dragged into order and set to half width to sit side by side.
+* PDM analysis: required columns start empty instead of defaulting to the first column; the selected entry of every dropdown is readable.
 
 # TargetWise 0.1.0
 

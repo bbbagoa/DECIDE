@@ -204,7 +204,7 @@ dq_enumerator_server <- function(input, output, session, ns, core) {
                                   title = paste("Interview:", input$enum_view)))
   })
 
-  output$enum_flag_download <- downloadHandler(
+  output$enum_flag_download <- download_handler(
     filename = function() paste0("Targeting_Flagged_enumerators_", format(Sys.time(), "%Y-%m-%d_%Hh%M"), ".xlsx"),
     content = function(file) {
       m <- enum_metrics()

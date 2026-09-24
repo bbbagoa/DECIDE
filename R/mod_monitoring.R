@@ -17,7 +17,7 @@ mod_monitoring_ui <- function(id) {
   htmltools::bindFillRole(item = TRUE, tags$div(class = "wfp-scroll-page", bslib::navset_underline(
     id = ns("tabs"),
     bslib::nav_panel(
-      value = "pdm", title = tagList(bsicons::bs_icon("bullseye"), " 1. PDM analysis"),
+      value = "pdm", title = tagList(bsicons::bs_icon("bullseye"), " 1. PDM / baseline analysis"),
       mod_pdm_ui(ns("pdm"), explore = mod_chart_builder_ui(ns("pdm_charts"), presets = "PDM"))
     ),
     bslib::nav_panel(
@@ -58,7 +58,7 @@ mod_monitoring_ui <- function(id) {
                           placeholder = "What worked, what did not, where and for whom."),
             textAreaInput(ns("recommendations"), "Recommendations", rows = 5, width = "100%",
                           placeholder = "What to change in the next round, and who does it."),
-            checkboxInput(ns("include_pdm"), "Include the implementation errors from the PDM analysis", value = TRUE),
+            checkboxInput(ns("include_pdm"), "Include the implementation errors from the PDM / baseline analysis", value = TRUE),
             downloadButton(ns("report"), "Targeting monitoring report (HTML)", class = "btn-primary w-100")
           )
         ),
@@ -126,18 +126,30 @@ mod_monitoring_server <- function(id, workspace = NULL, country_office = reactiv
                            icon = "collection"))
       }
       js <- function(what, id) sprintf("Shiny.setInputValue('%s', {what: '%s', id: '%s', n: Math.random()})", ns("item_act"), what, id)
-      tagList(lapply(seq_along(its), function(i) {
+      half <- function(it) identical(it$width, "half")
+      tagList(
+        tags$p(class = "small text-muted mb-2",
+               bsicons::bs_icon("grip-vertical"), " Drag an item by its handle to reorder. ",
+               "Two half-width items next to each other sit side by side in the report."),
+        tags$div(
+        class = "wfp-items", `data-input` = ns("item_order"),
+        lapply(seq_along(its), function(i) {
         it <- its[[i]]
         tags$div(
-          class = "wfp-item",
+          class = paste("wfp-item", if (half(it)) "is-half"), `data-id` = it$id,
           tags$div(class = "wfp-item-head",
+                   tags$span(class = "wfp-drag", title = "Drag to reorder", bsicons::bs_icon("grip-vertical")),
                    tags$span(class = "wfp-item-num", i),
                    tags$div(class = "flex-grow-1",
                             tags$strong(it$title),
                             tags$div(class = "small text-muted",
-                                     if (identical(it$source, "pdm")) "PDM" else "Process monitoring", " \u00b7 ",
+                                     if (identical(it$source, "pdm")) pdm$kind() else "Process monitoring", " \u00b7 ",
                                      it$dataset, " \u00b7 ", if (identical(it$display, "table")) "table" else "chart")),
                    tags$div(class = "btn-group btn-group-sm",
+                            tags$button(type = "button", class = "btn btn-outline-secondary",
+                                        title = if (half(it)) "Make full width" else "Make half width (side by side)",
+                                        onclick = js("width", it$id),
+                                        bsicons::bs_icon(if (half(it)) "arrows-angle-expand" else "layout-split")),
                             tags$button(type = "button", class = "btn btn-outline-secondary", title = "Move up",
                                         onclick = js("up", it$id), icon("arrow-up")),
                             tags$button(type = "button", class = "btn btn-outline-secondary", title = "Move down",
@@ -149,12 +161,20 @@ mod_monitoring_server <- function(id, workspace = NULL, country_office = reactiv
                                            ns("item_comment"), it$id),
                         it$comment)
         )
-      }))
+      })))
+    })
+    observeEvent(input$item_order, {
+      its <- items()
+      ids <- vapply(its, `[[`, character(1), "id")
+      ord <- match(unlist(input$item_order), ids)
+      ord <- c(ord[!is.na(ord)], setdiff(seq_along(its), ord))
+      items(its[ord])
     })
     observeEvent(input$item_act, {
       a <- input$item_act; its <- items()
       i <- which(vapply(its, `[[`, character(1), "id") == a$id); req(length(i) == 1)
       if (identical(a$what, "remove")) its <- its[-i]
+      else if (identical(a$what, "width")) its[[i]]$width <- if (identical(its[[i]]$width, "half")) "full" else "half"
       else if (identical(a$what, "up") && i > 1) its[c(i - 1, i)] <- its[c(i, i - 1)]
       else if (identical(a$what, "down") && i < length(its)) its[c(i, i + 1)] <- its[c(i + 1, i)]
       items(its)
@@ -167,7 +187,7 @@ mod_monitoring_server <- function(id, workspace = NULL, country_office = reactiv
     })
 
     # --- the report --------------------------------------------------------------
-    output$report <- downloadHandler(
+    output$report <- download_handler(
       filename = function() paste0("Targeting_monitoring_report_", format(Sys.time(), "%Y-%m-%d_%Hh%M"), ".html"),
       content = function(file) {
         r <- pdm$results()
@@ -175,12 +195,13 @@ mod_monitoring_server <- function(id, workspace = NULL, country_office = reactiv
         p <- if (isTRUE(input$include_pdm) && !is.null(r)) list(
           metrics = r$metrics, n = r$n, by_unit = r$by_unit, excl_design = r$excl_design, tolerance = tol,
           elig_source = r$elig_source, weighting = r$weighting, strata = r$strata, no_nonbenef = r$no_nonbenef,
+          kind = pdm$kind(),
           verdict = tryCatch(error_verdict(r$metrics$inclusion_error, r$metrics$exclusion_error, tol[1], tol[2],
                                            stage = "implementation"), error = function(e) NULL))
         lang <- session$rootScope()$input$lang_selector
         write_monitoring_report(file, list(country_office = country_office(), context = input$context,
                                            findings = input$findings, recommendations = input$recommendations,
-                                           pdm = p, items = items()),
+                                           pdm = p, items = items(), kind = pdm$kind()),
                                 lang = if (identical(lang, "fr")) "fr" else "en")
         audit_add(modification_log, "Monitoring", "Monitoring report exported",
                   sprintf("%d charts and tables%s", length(items()), if (is.null(p)) "" else ", with implementation errors"))

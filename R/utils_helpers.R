@@ -517,3 +517,21 @@ startup_splash <- function() {
 ]+", " ", paste(as.character(content), collapse = " "))
   HTML(gsub("'", "&#39;", one_line, fixed = TRUE))
 }
+
+#' downloadHandler that tells the page when the file is built
+#'
+#' A download does not make Shiny busy, so without this a large export gives
+#' no sign of life. www/busy.js shows "Preparing your file..." from the click
+#' and hides it on this message. Use it for every download.
+#' @noRd
+download_handler <- function(filename, content, contentType = NULL, outputArgs = list()) {
+  # Captured here: while the file is written there is no current session.
+  session <- shiny::getDefaultReactiveDomain()
+  shiny::downloadHandler(
+    filename = filename,
+    content = function(file) {
+      on.exit(if (!is.null(session)) session$sendCustomMessage("tw-download-done", list()), add = TRUE)
+      content(file)
+    },
+    contentType = contentType, outputArgs = outputArgs)
+}

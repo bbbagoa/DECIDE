@@ -183,7 +183,7 @@ dq_spelling_server <- function(input, output, session, ns, core) {
 
   ### ----------------- Download Button Logic
 
-  output$download_audit <- downloadHandler(
+  output$download_audit <- download_handler(
     filename = function() {
       paste0(
         "Targeting_NamesCheck_",
