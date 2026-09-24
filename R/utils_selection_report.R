@@ -171,7 +171,7 @@ selection_map <- function(d, lang = "en") {
   labs <- vapply(lv, function(t) i18n_lookup(t, lang), character(1))
   # Not selected first, so the served points are drawn on top.
   d <- d[order(-as.integer(d$status)), , drop = FALSE]
-  leaflet::leaflet(d, width = "100%", height = 760) |>   # squared by the report CSS
+  leaflet::leaflet(d, width = "100%", height = 460) |>   # 5:3 set by the report CSS
     # The Overview's basemaps: Esri light-grey canvas with its place names,
     # terrain and satellite to switch to. Keyless, and unlike the
     # OpenStreetMap servers Esri serves a page opened from a local file (no

@@ -552,8 +552,8 @@ design_report_css <- function() {
   .kpi-value { font-size: 26px; font-weight: 700; color: var(--ink); line-height: 1.2; margin-top: 4px; font-variant-numeric: tabular-nums; }
   .kpi-sub { font-size: 12px; color: var(--muted); }
   .fig .leaflet-container { border-radius: 6px; }
-  /* The map is square: as tall as it is wide, whatever the page width. */
-  .fig .leaflet.html-widget { aspect-ratio: 1 / 1; height: auto !important; max-height: 90vh; }
+  /* The map is 3 high for 5 wide, whatever the page width. */
+  .fig .leaflet.html-widget { aspect-ratio: 5 / 3; height: auto !important; max-height: 90vh; }
   .ptiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin: 12px 0 16px; }
   .ptile { display: flex; gap: 12px; align-items: center; background: var(--tint); border-radius: 8px; padding: 12px 14px; }
   .ptile-ico { flex: none; width: 44px; height: 44px; border-radius: 50%; background: var(--blue); display: flex; align-items: center; justify-content: center; }
