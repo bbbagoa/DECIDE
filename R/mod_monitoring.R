@@ -1,7 +1,7 @@
 #' Targeting Monitoring (phase 3)
 #'
 #' Three tabs: the PDM analysis (implementation errors, plus charts on any
-#' PDM variable), process monitoring (the officer's own datasets and charts:
+#' PDM variable), targeting process (the officer's own datasets and charts:
 #' complaints, community process, committees, participation...), and the
 #' report, which gathers the implementation errors, every chart or table
 #' added with its comment, and the officer's context, findings and
@@ -21,42 +21,45 @@ mod_monitoring_ui <- function(id) {
       mod_pdm_ui(ns("pdm"), explore = mod_chart_builder_ui(ns("pdm_charts"), presets = "PDM"))
     ),
     bslib::nav_panel(
-      value = "process", title = tagList(bsicons::bs_icon("people"), " 2. Process monitoring"),
-      bslib::card(
-        class = "mt-3",
-        bslib::card_header(bsicons::bs_icon("cloud-upload"), " Process-monitoring data"),
-        bslib::card_body(
-          tags$p(class = "small text-muted mb-2",
-                 "Complaints and feedback, community sessions, targeting committees, participation of women and minorities, ",
-                 "focus group discussions on the criteria... Load as many datasets as you have; each one can feed charts and tables."),
-          tags$div(
-            class = "d-flex flex-wrap align-items-end gap-3",
-            tags$div(style = "flex: 1 1 280px;",
-                     fileInput(ns("pm_file"), "Load a dataset", width = "100%",
-                               accept = c(".xlsx", ".xls", ".sav", ".dta", ".csv", ".parquet"))),
-            tags$div(style = "flex: 0 1 260px;",
-                     selectInput(ns("pm_active"), "Dataset to chart", choices = character(0), width = "100%")),
-            tags$div(class = "pb-3",
-                     actionButton(ns("pm_remove"), NULL, icon = icon("trash"), class = "btn-outline-danger btn-sm",
-                                  title = "Remove this dataset"))
-          ),
-          uiOutput(ns("pm_status"))
-        )
-      ),
-      mod_chart_builder_ui(ns("pm_charts"), presets = c("Complaints and feedback (CFM)", "Community process"))
+      value = "process", title = tagList(bsicons::bs_icon("people"), " 2. Targeting process"),
+      # Datasets and areas in a compact sidebar; the chart builder beside it.
+      bslib::layout_sidebar(
+        fillable = FALSE, class = "mt-3 wfp-mon-layout",
+        sidebar = bslib::sidebar(
+          width = 330, class = "wfp-mon-sidebar",
+          bslib::accordion(
+            id = ns("pm_setup"), multiple = TRUE, open = c("data", "areas"),
+            bslib::accordion_panel(
+              "Datasets", value = "data", icon = bsicons::bs_icon("cloud-upload"),
+              tags$p(class = "small text-muted mb-2",
+                     "Complaints and feedback, community sessions, targeting committees, participation of women and minorities, ",
+                     "focus groups on the criteria. Load as many as you have."),
+              fileInput(ns("pm_file"), NULL, width = "100%", placeholder = "Load a dataset",
+                        accept = c(".xlsx", ".xls", ".sav", ".dta", ".csv", ".parquet")),
+              tags$div(class = "d-flex gap-2 align-items-end",
+                       tags$div(class = "flex-fill", selectInput(ns("pm_active"), "Dataset to chart", choices = character(0), width = "100%")),
+                       tags$div(class = "pb-3", actionButton(ns("pm_remove"), NULL, icon = icon("trash"), class = "btn-outline-danger btn-sm",
+                                                             title = "Remove this dataset"))),
+              uiOutput(ns("pm_status"))),
+            bslib::accordion_panel(
+              "Areas covered", value = "areas", icon = bsicons::bs_icon("geo-alt"),
+              mod_area_scope_ui(ns("pm_scope"), title = NULL)))
+        ),
+        mod_chart_builder_ui(ns("pm_charts"), presets = c("Complaints and feedback (CFM)", "Community process"))
+      )
     ),
     bslib::nav_panel(
       value = "report", title = tagList(bsicons::bs_icon("file-earmark-text"), " 3. Monitoring report"),
       bslib::layout_columns(
-        class = "mt-3", col_widths = c(5, 7),
+        class = "mt-3", col_widths = c(4, 8),
         bslib::card(
           bslib::card_header(bsicons::bs_icon("pencil"), " Your analysis"),
           bslib::card_body(
-            textAreaInput(ns("context"), "Context", rows = 4, width = "100%",
+            textAreaInput(ns("context"), "Context", rows = 3, width = "100%",
                           placeholder = "Programme, area, period, targeting approach, who collected what."),
-            textAreaInput(ns("findings"), "Key findings", rows = 5, width = "100%",
+            textAreaInput(ns("findings"), "Key findings", rows = 3, width = "100%",
                           placeholder = "What worked, what did not, where and for whom."),
-            textAreaInput(ns("recommendations"), "Recommendations", rows = 5, width = "100%",
+            textAreaInput(ns("recommendations"), "Recommendations", rows = 3, width = "100%",
                           placeholder = "What to change in the next round, and who does it."),
             checkboxInput(ns("include_pdm"), "Include the implementation errors from the PDM / baseline analysis", value = TRUE),
             downloadButton(ns("report"), "Targeting monitoring report (HTML)", class = "btn-primary w-100")
@@ -85,7 +88,7 @@ mod_monitoring_server <- function(id, workspace = NULL, country_office = reactiv
       audit_add(modification_log, "Monitoring", "Added to the monitoring report", it$title)
     }
 
-    # --- process-monitoring datasets -------------------------------------------
+    # --- targeting-process datasets -------------------------------------------
     datasets <- reactiveVal(list())
     observeEvent(input$pm_file, {
       f <- input$pm_file; req(f)
@@ -98,7 +101,7 @@ mod_monitoring_server <- function(id, workspace = NULL, country_office = reactiv
       req(df)
       ds <- datasets(); ds[[f$name]] <- df; datasets(ds)
       updateSelectInput(session, "pm_active", choices = names(ds), selected = f$name)
-      audit_add(modification_log, "Monitoring", "Process-monitoring data loaded", sprintf("%s (%s rows)", f$name, nrow(df)))
+      audit_add(modification_log, "Monitoring", "Targeting-process data loaded", sprintf("%s (%s rows)", f$name, nrow(df)))
     })
     observeEvent(input$pm_remove, {
       ds <- datasets(); need_ok(length(ds) > 0 && shiny::isTruthy(input$pm_active), "No dataset to remove.")
@@ -113,9 +116,18 @@ mod_monitoring_server <- function(id, workspace = NULL, country_office = reactiv
     })
     active_pm <- reactive({ ds <- datasets(); if (shiny::isTruthy(input$pm_active)) ds[[input$pm_active]] else NULL })
 
-    mod_chart_builder_server("pdm_charts", data = pdm$df, source = "pdm", dataset_name = pdm$name, add_item = add_item)
-    mod_chart_builder_server("pm_charts", data = active_pm, source = "process",
-                             dataset_name = reactive(input$pm_active %||% ""), add_item = add_item)
+    mod_chart_builder_server("pdm_charts", data = pdm$df, source = "pdm", add_item = add_item,
+                             dataset_name = reactive({
+                               a <- pdm$areas()
+                               paste0(pdm$name(), if (!identical(a, "All areas")) paste0(" (", a, ")") else "")
+                             }))
+    # Charts cover the chosen areas; the dataset name says which.
+    pm_scope <- mod_area_scope_server("pm_scope", active_pm, workspace, "pm_scope", modification_log, "Monitoring")
+    mod_chart_builder_server("pm_charts", data = reactive(pm_scope$filter(active_pm())), source = "process",
+                             dataset_name = reactive({
+                               a <- pm_scope$text()
+                               paste0(input$pm_active %||% "", if (!identical(a, "All areas")) paste0(" (", a, ")") else "")
+                             }), add_item = add_item)
 
     observe(gate_button("pm_remove", length(datasets()) > 0, "No dataset loaded yet."))
 
@@ -124,7 +136,7 @@ mod_monitoring_server <- function(id, workspace = NULL, country_office = reactiv
       its <- items()
       if (!length(its)) {
         return(empty_state("Nothing added yet",
-                           "Build a chart or a table on the PDM or Process monitoring tab and click Add to report.",
+                           "Build a chart or a table on the PDM or Targeting process tab and click Add to report.",
                            icon = "collection"))
       }
       js <- function(what, id) sprintf("Shiny.setInputValue('%s', {what: '%s', id: '%s', n: Math.random()})", ns("item_act"), what, id)
@@ -145,7 +157,7 @@ mod_monitoring_server <- function(id, workspace = NULL, country_office = reactiv
                    tags$div(class = "flex-grow-1",
                             tags$strong(it$title),
                             tags$div(class = "small text-muted",
-                                     if (identical(it$source, "pdm")) pdm$kind() else "Process monitoring", " \u00b7 ",
+                                     if (identical(it$source, "pdm")) pdm$kind() else "Targeting process", " \u00b7 ",
                                      it$dataset, " \u00b7 ", if (identical(it$display, "table")) "table" else "chart")),
                    tags$div(class = "btn-group btn-group-sm",
                             tags$button(type = "button", class = "btn btn-outline-secondary",
@@ -197,7 +209,7 @@ mod_monitoring_server <- function(id, workspace = NULL, country_office = reactiv
         p <- if (isTRUE(input$include_pdm) && !is.null(r)) list(
           metrics = r$metrics, n = r$n, by_unit = r$by_unit, excl_design = r$excl_design, tolerance = tol,
           elig_source = r$elig_source, weighting = r$weighting, strata = r$strata, no_nonbenef = r$no_nonbenef,
-          kind = pdm$kind(),
+          kind = pdm$kind(), areas = pdm$areas(),
           verdict = tryCatch(error_verdict(r$metrics$inclusion_error, r$metrics$exclusion_error, tol[1], tol[2],
                                            stage = "implementation"), error = function(e) NULL))
         lang <- session$rootScope()$input$lang_selector

@@ -134,6 +134,11 @@ mod_welcome_ui <- function(tr = function(x) x) {
           class = "wfp-lift",
           bslib::card_header(bsicons::bs_icon("journal-bookmark"), " ", tr("Methodological basis")),
           bslib::card_body(
+            tags$div(class = "wfp-credit-label", tr("WFP guidance")),
+            tags$ul(
+              class = "small mb-2 ps-3",
+              tags$li(tags$strong("WFP (2021)"), " \u2014 ",
+                      tr("Targeting and Prioritization Operational Guidance Note"))),
             tags$div(class = "wfp-credit-label", tr("WFP Assessment and Targeting Unit (APP-FA)")),
             tags$ul(
               class = "small mb-0 ps-3",

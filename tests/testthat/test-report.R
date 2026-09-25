@@ -32,7 +32,7 @@ test_that("a partial design still produces a report with its figures", {
   expect_match(html, "billboard", fixed = TRUE)
   expect_match(html, "<div class=\"fig-row n2\">", fixed = TRUE)
   expect_false(grepl("@@FIG", html, fixed = TRUE))
-  expect_match(html, "4. Variable selection", fixed = TRUE)
+  expect_match(html, "4. Criteria Screening", fixed = TRUE)
   expect_match(html, "No variables were selected", fixed = TRUE)
   expect_match(html, "Condition: size at least 7", fixed = TRUE)
   expect_match(html, "Not documented", fixed = TRUE)
@@ -63,4 +63,33 @@ test_that("the verification report writes the back-check with its cards, chart a
   # without a comparison it still writes the sample section
   tm("write_verification_report")(f, list(sample = list(method = "Systematic", n = 3, population = 10)))
   expect_match(paste(readLines(f), collapse = "\n"), "No comparison has been run yet", fixed = TRUE)
+})
+
+test_that("the data collection summary report is written from the Overview data", {
+  df <- utils::read.csv(testthat::test_path("fixtures", "mini_targeting.csv"), stringsAsFactors = FALSE)
+  st <- list(admin1 = "Province", admin2 = "Territoire", village = "Village", hh_size = "HHSize", hhh_sex = "HHHSex",
+             enumerator_id = "enumerator", date = "SvyDate", v_score = "score", v_groups = "score_class",
+             eligibility = "eligible", lon = "lon", lat = "lat", residency = "HHStatus")
+  ga <- tm("overview_by_area")(df, st)
+  expect_equal(ga$Households[ga$.kind == "total"], nrow(df))
+  expect_equal(sum(ga$Households[ga$.kind == "group"]), nrow(df))
+  f <- withr::local_tempfile(fileext = ".html")
+  tm("write_overview_report")(f, df, st, list(n_total = nrow(df), areas = "All areas", period = "All dates", source = "test"))
+  html <- paste(readLines(f, encoding = "UTF-8"), collapse = "\n")
+  expect_match(html, "Data collection summary", fixed = TRUE)
+  expect_match(html, 'class="area-sum"', fixed = TRUE)
+  expect_match(html, "World_Topo_Map", fixed = TRUE)
+  expect_false(grepl("@@", gsub("@@iterator", "", html), fixed = TRUE))
+})
+
+test_that("without vulnerability mapped, the data summary shows socio-economic indicators", {
+  df <- data.frame(FCS_class = rep(c("Poor", "Acceptable"), 20), rCSI = rep(0:19, 2),
+                   water_source = rep(c("Well", "Tap", "River", "Tap"), 10), `_id` = 1:40, check.names = FALSE)
+  se <- tm("socioeconomic_indicators")(df)
+  expect_equal(se$numbers$Column, "rCSI")
+  expect_equal(unname(vapply(se$vars, attr, "", "label")),
+               c("Food consumption group (FCS_class)", "Water source (water_source)"))
+  expect_null(tm("socioeconomic_indicators")(data.frame(a = 1:3)))
+  sc <- tm("rp_share_charts")(se$vars)
+  expect_equal(sc$rows[1], "@@FIG:se_1,se_2@@")
 })

@@ -217,3 +217,11 @@ test_that("a tie between groups is said as such, not as a group against itself",
   rt <- data.frame(variable = "Residency", category = c("host", "IDP"), households = c(10, 10), selected = c(10, 10), rate = c(1, 1))
   expect_match(TargetWise:::selection_rate_insights(rt), "same rate")
 })
+
+test_that("the areas covered are written plainly", {
+  expect_equal(TargetWise:::areas_covered_text(list()), "All areas")
+  expect_equal(TargetWise:::areas_covered_text(list(admin1 = c("Ituri", "Nord-Kivu"), admin2 = NULL, admin3 = "Mutwanga")),
+               "Admin 1: Ituri, Nord-Kivu; Admin 3: Mutwanga")
+  expect_equal(TargetWise:::scope_text(list(list(col = "Province", values = "Ituri"))), "Province: Ituri")
+  expect_equal(TargetWise:::scope_text(list()), "All areas")
+})

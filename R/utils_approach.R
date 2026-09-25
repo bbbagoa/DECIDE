@@ -59,13 +59,13 @@ targeting_approaches <- function() {
       label = "Geographic",
       gates = c("area"),
       description = paste(
-        "Every household in the selected areas. Use when vulnerability is",
+        "Every household in the areas covered (chosen in the sidebar). Use when vulnerability is",
         "concentrated geographically and household-level criteria add little.")),
     blanket = list(
       label = "Blanket",
       gates = character(0),
       description = paste(
-        "Every registered household, with no area or household criteria. Appropriate",
+        "Every registered household in the areas covered, with no household criteria. Appropriate",
         "for acute emergencies where needs are near-universal.")),
     self = list(
       label = "Self-targeting",

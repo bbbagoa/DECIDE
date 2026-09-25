@@ -241,12 +241,42 @@ rp_corr_table <- function(cm) {
 }
 
 # Donut of shares (category, n): the profile charts of the selection report.
-rp_donut <- function(d, height = 260) {
+rp_donut <- function(d, height = 240) {
   cols <- stats::setNames(rep_len(c("#0A6EB4", "#f7b825", "#26bde2", "#3f7e44", "#c5192d", "#8a96a3"), nrow(d)), d$category)
   rp_base(height) |>
     billboarder::bb_donutchart(data.frame(category = d$category, n = d$n)) |>
     rp_colors(cols) |>
     billboarder::bb_donut(label = list(format = htmlwidgets::JS("function(v, r) { return (r * 100).toFixed(0) + '%'; }")),
-                          width = 34) |>
-    billboarder::bb_legend(position = "right")
+                          width = 46) |>
+    billboarder::bb_legend(position = "bottom")
+}
+
+# Category shares as charts: donuts for the (at most three) variables with
+# three categories or fewer, side by side on one row; horizontal bars of the
+# share of households for everything else.
+# `vars`: named list of data.frame(category, n) with attr "label".
+# Returns list(plots, captions, rows): rows are the @@FIG@@ lines to add.
+rp_share_charts <- function(vars, max_donuts = 3, lang = "en") {
+  if (!length(vars)) return(list(plots = list(), captions = character(0), rows = character(0)))
+  k <- vapply(vars, nrow, integer(1))
+  donut <- utils::head(names(vars)[k <= 3], max_donuts)
+  bars <- setdiff(names(vars), donut)
+  lab <- i18n_lookup("Share of households (%)", lang)
+  plots <- list()
+  for (nm in donut) plots[[nm]] <- rp_donut(vars[[nm]])
+  for (nm in bars) {
+    v <- vars[[nm]]
+    d <- data.frame(category = v$category, share = round(100 * v$n / sum(v$n), 1))
+    names(d)[2] <- lab
+    plots[[nm]] <- rp_hbars(d, stats::setNames("#0A6EB4", lab), lab) |> billboarder::bb_legend(show = FALSE)
+  }
+  fig <- function(keys) c(sprintf("@@FIG:%s@@", paste(keys, collapse = ",")), "")
+  # The donuts' row is filled up to three with bars, so a lone donut does not
+  # take the whole width.
+  first <- if (length(donut)) c(donut, utils::head(bars, 3 - length(donut))) else character(0)
+  bars <- setdiff(bars, first)
+  rows <- c(if (length(first)) fig(first),
+            unlist(lapply(split(bars, ceiling(seq_along(bars) / 2)), fig), use.names = FALSE))
+  list(plots = plots, rows = rows,
+       captions = stats::setNames(vapply(vars, function(v) attr(v, "label") %||% "", character(1)), names(vars)))
 }

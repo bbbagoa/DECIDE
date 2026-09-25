@@ -23,6 +23,8 @@ mod_scorecard_ui <- function(id) {
         width = 320,
         uiOutput(ns("data_status")),
         hr(),
+        mod_area_scope_ui(ns("scope")),
+        hr(),
         actionButton(ns("btn_use"), "Use this scorecard", icon = icon("check"),
                      class = "btn-success w-100"),
         tags$div(class = "small text-muted mt-1", textOutput(ns("use_status"))),
@@ -37,54 +39,43 @@ mod_scorecard_ui <- function(id) {
                        class = "btn-outline-secondary w-100 mt-2")
       ),
 
-      bslib::card(
-        class = "mb-3",
-        bslib::card_header(
-          bsicons::bs_icon("clipboard-data"), " Needs-assessment data"
-        ),
-        bslib::card_body(
-          tags$p(
-            class = "text-muted mb-2",
-            "The scorecard is designed on assessment data (EFSA, VAM, or any",
-            " survey carrying a food-security outcome). That is a different",
-            " dataset from the household registration data you select",
-            " beneficiaries from, and different again from PDM data."
-          ),
-          # Load, reuse, or extend the data: one row.
-          bslib::layout_columns(
-            col_widths = c(6, 3, 3), fill = FALSE,
-            fileInput(ns("assessment_file"), "Load assessment data",
-                      accept = c(".xlsx", ".xls", ".sav", ".dta", ".csv", ".parquet"),
-                      width = "100%"),
-            # Reloading data is the session's job; this explains the method.
+      # The data and its tools on one side, the analysis chain on the other.
+      bslib::layout_columns(
+        col_widths = c(4, 8), fill = FALSE, class = "mb-3 wfp-design-top",
+        bslib::card(
+          class = "mb-0",
+          bslib::card_header(bsicons::bs_icon("clipboard-data"), " Needs-assessment data"),
+          bslib::card_body(
+            tags$p(class = "small text-muted mb-2",
+                   "An assessment survey carrying a food-security outcome (EFSA, VAM...): ",
+                   "not the registration data selected from, nor the PDM data."),
+            fileInput(ns("assessment_file"), NULL, width = "100%",
+                      placeholder = "Load assessment data",
+                      accept = c(".xlsx", ".xls", ".sav", ".dta", ".csv", ".parquet")),
             tags$div(
-              class = "wfp-inline-action",
-              tags$label(class = "form-label", "New to the design?"),
-              actionButton(ns("open_guide"), "How the design works",
-                           icon = icon("book-open"),
-                           class = "btn-outline-secondary w-100")
-            ),
-            tags$div(
-              class = "wfp-inline-action",
+              class = "d-flex gap-2",
+              # Reloading data is the session's job; this explains the method.
+              tags$div(class = "flex-fill",
+                       actionButton(ns("open_guide"), "How it works", icon = icon("book-open"),
+                                    class = "btn-outline-secondary btn-sm w-100",
+                                    title = "The design process step by step, with its methods")),
               # Build outcomes or criteria the data does not carry yet (a
               # two-level CARI, a dependency-ratio flag).
-              tags$label(class = "form-label", "Missing a variable?"),
-              mod_var_calc_ui(ns("calc"), "Variable calculator",
-                              class = "btn-outline-secondary w-100")
-            )
+              tags$div(class = "flex-fill",
+                       mod_var_calc_ui(ns("calc"), "Variable calculator",
+                                       class = "btn-outline-secondary btn-sm w-100")))
           )
-        )
+        ),
+        # The whole design as one path, data to final model: done, current and
+        # next are visible at a glance, and the next action is one click.
+        uiOutput(ns("flow"))
       ),
-
-      # The whole design as one path, data to final model: done, current and
-      # next are visible at a glance, and the next action is one click.
-      uiOutput(ns("flow")),
 
       bslib::navset_card_pill(
         id = ns("steps"),
 
         bslib::nav_panel(
-          title = "1. Outcome",
+          title = "1. Vulnerability Framework",
           value = "outcome",
           bslib::card_body(
             tags$p(class = "text-muted",
@@ -101,7 +92,7 @@ mod_scorecard_ui <- function(id) {
         ),
 
         bslib::nav_panel(
-          title = "2. Criteria",
+          title = "2. Criteria Selection",
           value = "criteria",
           bslib::card_body(
             tags$p(class = "text-muted",
@@ -122,7 +113,7 @@ mod_scorecard_ui <- function(id) {
         ),
 
         bslib::nav_panel(
-          title = "3. Variable selection",
+          title = "3. Criteria Screening",
           value = "screening",
           bslib::card_body(
             uiOutput(ns("gate_screening")),
@@ -402,7 +393,13 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
     # The assessment extract this tab works on. Deliberately separate from the
     # registration data: designing the scorecard on the same file you then
     # select from would validate the design against itself.
-    assessment_df <- reactiveVal(NULL)
+    # The loaded data is kept whole; the design works on the areas covered.
+    # assessment_df() reads the covered part, assessment_df(value) stores new
+    # data, so every existing call site keeps working.
+    assessment_all <- reactiveVal(NULL)
+    scope <- mod_area_scope_server("scope", assessment_all, workspace, "scorecard_scope", modification_log, "Design")
+    assessment_scoped <- reactive(scope$filter(assessment_all()))
+    assessment_df <- function(value) if (missing(value)) assessment_scoped() else assessment_all(value)
     assessment_source <- reactiveVal(NA_character_)
 
     # Loading data lands the user on step 1 rather than wherever they were
@@ -453,7 +450,8 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
       gate_button("thr_caseload", has_fit, "Fit a model first.")
     })
 
-    calc_vars <- mod_var_calc_server("calc", assessment_df, function(df) assessment_df(df),
+    # Whole data here: a column built on the covered part only would lose the rest.
+    calc_vars <- mod_var_calc_server("calc", assessment_all, function(df) assessment_all(df),
                                      log = modification_log, phase = "Design")
 
     output$data_status <- renderUI({
@@ -503,7 +501,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
       snapshot = function() {
         if (is.null(assessment_df())) return(NULL)
         pts <- tryCatch(current_weights()[, c("weight", "verifiable", "validated")], error = function(e) NULL)
-        list(data = assessment_df(), source = assessment_source(), calc = calc_vars(),
+        list(data = assessment_all(), source = assessment_source(), calc = calc_vars(),
              inputs = lapply(stats::setNames(sc_inputs, sc_inputs), function(k) input[[k]]),
              screened = screened(), collinear = collinear(), analyst_dropped = analyst_dropped(),
              selection_set = selection_set(), selection_applied = selection_applied(),
@@ -1705,6 +1703,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
         x <- list(
           generated = format(Sys.time(), "%Y-%m-%d %H:%M"),
           source = assessment_source(), n_rows = if (is.null(df)) NA else nrow(df),
+          areas = scope$text(),
           n_cols = if (is.null(df)) NA else ncol(df),
           calc_vars = calc_vars(),
           outcome = input$outcome_col, outcome_pos = input$outcome_pos,
@@ -2210,12 +2209,12 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
       here <- input$steps %||% "outcome"
       st <- list(
         list(key = "data", label = "Data loaded", done = !is.null(assessment_df()), panel = NULL,
-             todo = "Load the assessment data above."),
-        list(key = "outcome", label = "Outcome", done = shiny::isTruthy(input$outcome_col),
+             todo = "Load the assessment data on the left."),
+        list(key = "outcome", label = "Vulnerability Framework", done = shiny::isTruthy(input$outcome_col),
              panel = "outcome", todo = "Choose the food-security outcome to predict."),
-        list(key = "criteria", label = "Criteria", done = length(input$criteria %||% character(0)) > 0,
+        list(key = "criteria", label = "Criteria Selection", done = length(input$criteria %||% character(0)) > 0,
              panel = "criteria", todo = "Pick the candidate criteria."),
-        list(key = "screening", label = "Variable selection", done = isTRUE(selection_applied()),
+        list(key = "screening", label = "Criteria Screening", done = isTRUE(selection_applied()),
              panel = "screening", todo = "Review the variables' statistics and correlations, then drop the ones not to keep."),
         list(key = "weights", label = "Model fitted", done = !is.null(fitted()),
              panel = "weights", todo = "Fit the model, iterate until satisfied."),
@@ -2239,9 +2238,23 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
                               if (x$done) bsicons::bs_icon("check-lg") else as.character(i)),
                     tags$span(class = "wfp-flow-label", x$label))
       })
+      # Back and forward through the step tabs, either side of the chart.
+      panels <- c(outcome = "Vulnerability Framework", criteria = "Criteria Selection", screening = "Criteria Screening",
+                  weights = "Model & weights", threshold = "Threshold & errors")
+      at <- match(here, names(panels))
+      arrow <- function(to, icon_name, side) {
+        ok <- !is.na(to) && to >= 1 && to <= length(panels)
+        tags$button(type = "button", class = paste("wfp-flow-arrow", side), disabled = if (!ok) NA,
+                    title = if (ok) paste(if (side == "prev") "Back to" else "Next:", panels[[to]]) else NULL,
+                    `aria-label` = if (side == "prev") "Previous step" else "Next step",
+                    onclick = if (ok) go(names(panels)[to]), bsicons::bs_icon(icon_name))
+      }
       tags$div(
         class = "wfp-flow mb-3",
-        tags$div(class = "wfp-flow-track", items),
+        tags$div(class = "wfp-flow-row",
+                 arrow(at - 1, "chevron-left", "prev"),
+                 tags$div(class = "wfp-flow-track", items),
+                 arrow(at + 1, "chevron-right", "next")),
         tags$div(
           class = "wfp-flow-next",
           if (is.null(nxt)) tagList(bsicons::bs_icon("check-circle-fill"),

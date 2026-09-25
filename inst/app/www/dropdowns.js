@@ -27,9 +27,12 @@
 
     function place() {
       var r = st.$control[0].getBoundingClientRect();
+      var h = $dropdown.outerHeight() || 0;
+      // No room below the input and more above it: open upwards.
+      var up = r.bottom + h > window.innerHeight && r.top > window.innerHeight - r.bottom;
       $dropdown.css({
         // getBoundingClientRect is viewport-relative; the menu is on the body.
-        top: r.bottom + window.pageYOffset + "px",
+        top: (up ? r.top - h : r.bottom) + window.pageYOffset + "px",
         left: r.left + window.pageXOffset + "px",
         width: r.width + "px"
       });
@@ -58,6 +61,14 @@
   });
 
   $(document).on("shown.bs.modal", function (e) { setTimeout(function () { sweep(e.target); }, 0); });
+
+  // updateSelectInput() with new choices makes Shiny destroy and rebuild the
+  // selectize instance: the new one had its menu back inside the card (clipped
+  // by the scrolling page) and the 1,000-option cap back on.
+  $(document).on("shiny:updateinput", function (e) {
+    var el = e.target;
+    if (el && el.tagName === "SELECT") setTimeout(function () { reparent(el); }, 0);
+  });
 
   $(document).on("shiny:connected", function () { setTimeout(sweep, 250); });
 

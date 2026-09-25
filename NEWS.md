@@ -9,7 +9,7 @@
 * Variable calculator: an R code mode for multi-line calculations, checked before it runs.
 * Targeting Monitoring pages and the sidebars scroll again, so every option and the Add to report button can be reached.
 * Report error cards have a quieter, more professional look.
-* Restoring a session brings back every dataset (registration, assessment, PDM, process monitoring, and the original import used by Reset), and the variable setup reopens on the restored mapping.
+* Restoring a session brings back every dataset (registration, assessment, PDM, targeting process, and the original import used by Reset), and the variable setup reopens on the restored mapping.
 * Every Excel export is locked for editing (set `TARGETWISE_EXPORT_PASSWORD` to require a password to unlock); the exports that were CSV are now locked Excel workbooks.
 * Beneficiary list export: the audit trail is optional (tick box), and the list can be exported as one workbook per area (Admin 1 down to village) in a zip, each file named after its area.
 * A "Working..." indicator appears whenever the app takes more than a moment, and "Preparing your file..." until a download is ready; a restored session keeps its loader until the page has settled.
@@ -25,6 +25,13 @@
 * Stepwise selection (AIC or BIC) is an option for every model, not a model of its own.
 * Targeting Design: "How the design works" guide (seven steps, methods, technical details, references) replaces the reload button.
 * Selection report: area summary grouped Admin 1 > Admin 2 with highlighted subtotals and total; compact table rows in every report; selection rates across socio-demographic groups (head's sex, residency, marital status, disability, chronic illness, age and household-size bands) with the widest gaps in words; no information repeated between the profile tiles and charts; an explained accuracy section (inclusion and exclusion errors with their matrix, as designed and after prioritisation, coverage, precision, recall); a 5:3 map on the Overview's Esri basemaps (light, terrain, satellite), which also work when the report is opened from a file.
+* Areas covered: the area pickers are the scope of an analysis, not a criterion. Households outside the chosen areas are left out of every count, list and report, and each report says which areas it covers. Beneficiary Selection uses the mapped admin levels (for every approach); Targeting Design, the PDM/baseline analysis and targeting process get the same control on any area column of their data (saved with the session, logged in the audit trail).
+* Overview: "Data summary report (HTML)": key figures, coverage, households by Admin 1 > Admin 2, collection over time and by enumerator, who was surveyed, vulnerability, and a map; covers the Overview's filters.
+* Esri Terrain is the default basemap on every map (the others stay selectable). Monitoring pages and the Design page reorganised: set-up in a compact sidebar, data card and analysis chain side by side. "Process monitoring" is now "Targeting process".
+* Design progress chart: back and next arrows. Design steps renamed: Vulnerability Framework, Criteria Selection, Criteria Screening.
+* Reports: at most three donuts, on one row; other categories as bar charts; no borders around charts; maps open zoomed on the households. The data summary shows socio-economic indicators found in the data (food consumption, coping, income, shelter, water...) when no vulnerability is mapped.
+* Welcome page: the WFP Targeting and Prioritization Operational Guidance Note (2021) is the first methodological reference.
+* Dropdowns whose variables are refreshed (chart builder and others) are no longer cut off and list every variable.
 * The "By area" chart of the Composition tab no longer fails ("unknown colour name").
 * The country-office settings file is no longer listed as a saved session.
 * Sessions also keep the Data Quality settings (filters, outlier variable, method and allowed ranges, duplicate columns, missing-data analysis) and the quick-screening result; after a restore, "Refresh MODA" fetches only the new submissions (the API key is asked for, never saved).
@@ -38,7 +45,7 @@
 * PDM analysis page reorganised into four setup steps and result tabs.
 * Light/dark switch no longer reshapes the page.
 * Implementation errors: eligibility can be re-established by applying the adopted scorecard or the eligibility rules to the PDM answers; beneficiaries and non-beneficiaries are weighted by their population sizes (overall or per area), so the exclusion error is not understated; with only beneficiaries surveyed, the exclusion error is reported as not measurable.
-* Targeting Monitoring: PDM analysis, process monitoring (complaints, community process, committees, participation of women and minorities, focus group discussions) with a chart and table builder, and a Targeting Monitoring report (HTML) with the implementation errors and the officer's comments.
+* Targeting Monitoring: PDM analysis, targeting process (complaints, community process, committees, participation of women and minorities, focus group discussions) with a chart and table builder, and a Targeting Monitoring report (HTML) with the implementation errors and the officer's comments.
 * Beneficiary selection export: choose the variables to export.
 * Saved sessions now keep all the work: the Targeting Design (assessment data, calculated variables, outcome, criteria, selection, every model run, edited points and review ticks, threshold, rationale, current step), the Beneficiary Selection settings, the spot-check sample and back-check, and the PDM analysis.
 * Machine-learning models in Targeting Design: random forest, XGBoost, naive Bayes, neural network and SVM, turned into additive cards through average marginal effects.

@@ -24,14 +24,18 @@ mod_ben_selection_ui <- function(id) {
       # The sidebar holds the filters only; the design of the selection
       # (approach, rules, score, prioritisation) has its own tab.
       sidebar = bslib::sidebar(
-        title = "Filters",
+        title = "Areas covered",
         width = 300,
         class = "wfp-ben-sidebar",
-        step("Area",
+        # Not a criterion: the part of the registration data this selection
+        # covers. Households elsewhere are left out of every count, list and
+        # report, which then say which areas they cover.
+        step("Areas covered",
+             tags$p(class = "small text-muted mb-2",
+                    "Leave empty to cover every area. Households outside the chosen areas are left out of the selection and its reports."),
              picker("ben_admin1", "Admin 1"),
              picker("ben_admin2", "Admin 2"),
-             picker("ben_admin3", "Admin 3"),
-             condition = approach_js(ns, c("hybrid", "scorecard", "categorical", "community", "geographic"))),
+             picker("ben_admin3", "Admin 3")),
         tags$div(
           class = "wfp-sb-actions",
           tags$div(
@@ -215,6 +219,16 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
       prio_mode = "none", prio_n = NA, quota_unit = "admin1"
     )
 
+    # The whole registration data stays as it is; this module works on the
+    # areas covered. Area choices and new variables use the whole data.
+    full_df <- uploaded_df
+    uploaded_df <- reactive({
+      df <- full_df()
+      if (is.null(df)) return(NULL)
+      keep <- area_mask(df, user_setup, list(admin1 = applied$admin1, admin2 = applied$admin2, admin3 = applied$admin3))
+      if (all(keep)) df else df[which(keep), , drop = FALSE]
+    })
+
     # Saved with the session: the applied selection. The rules already travel
     # in user_setup.
     workspace_register(workspace, "ben_selection",
@@ -240,7 +254,7 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
       })
     pending_comm_vals <- reactiveVal(NULL)
 
-    mod_var_calc_server("calc", uploaded_df, function(df) uploaded_df(df), modification_log)
+    mod_var_calc_server("calc", full_df, function(df) full_df(df), modification_log)
 
     # Exports need a selection to export.
     observe({
@@ -277,8 +291,8 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
     # when a column is added (variable calculator) or a record edited, so the
     # applied area and score are kept wherever they still fit the data.
     observe({
-      req(uploaded_df())
-      df <- uploaded_df()
+      req(full_df())
+      df <- full_df()
       for (lvl in c("admin1", "admin2", "admin3")) {
         col <- user_setup[[lvl]]
         if (!is.null(col) && col %in% names(df)) {
@@ -922,7 +936,8 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
       select_households(
         df, user_setup,
         approach = applied$approach,
-        area = list(admin1 = applied$admin1, admin2 = applied$admin2, admin3 = applied$admin3),
+        # The areas covered are applied to the data above, not as a criterion.
+        area = list(),
         # The sidebar's household-criteria pickers were dropped: the
         # eligibility rules express the same conditions, on any column.
         filters = list(),
@@ -1305,7 +1320,6 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
         sum(suppressWarnings(as.numeric(as.character(full[[user_setup$hh_size]]))), na.rm = TRUE) else NA
       sc <- user_setup$scorecard
       sc_used <- isTRUE(input$use_scorecard) && !scorecard_is_empty(sc)
-      flt <- function(x) if (length(x)) paste(x, collapse = ", ") else "all"
 
       # Everything done to the data before this list was drawn, from the
       # audit trail, so the list can be traced back to its source.
@@ -1321,7 +1335,9 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
       sections <- list(
         "Data" = c(
           "Source" = user_setup$data_source %||% "not recorded",
-          "Households now" = format(nrow(df_all), big.mark = ",")),
+          "Households in the data" = format(nrow(full_df()), big.mark = ","),
+          "Households in the areas covered" = format(nrow(df_all), big.mark = ",")),
+        "Areas covered" = c("Areas covered" = areas_covered_text(reactiveValuesToList(applied))),
         "Data preparation (before selection)" = c(
           "Records deleted" = format(length(deleted_uids(lg_sel)), big.mark = ","),
           "Values edited" = format(count_act("^Edit record"), big.mark = ","),
@@ -1346,8 +1362,7 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
           "Selected (served)" = format(sum(s$prioritized), big.mark = ","),
           "Individuals in selected households" = if (is.na(n_ind)) "n/a" else format(n_ind, big.mark = ","),
           "Excluded by design (unmet need)" = format(length(cut), big.mark = ",")),
-        "Filters and rules" = c(
-          "Admin 1" = flt(applied$admin1), "Admin 2" = flt(applied$admin2), "Admin 3" = flt(applied$admin3),
+        "Rules" = c(
           "Vulnerability score range" = paste(applied$score_min, "-", applied$score_max),
           "Eligibility rules" = ruleset_describe(active_ruleset(), user_setup, RULE_FIELDS),
           "Community selection" = if (shiny::isTruthy(applied$comm_col))
@@ -1387,6 +1402,7 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
         lang <- session$rootScope()$input$lang_selector
         write_selection_report(file, list(
           country_office = user_setup$country_office, sections = sections,
+          areas = areas_covered_text(reactiveValuesToList(applied)),
           totals = c(households = nrow(df_all), eligible = sum(s$eligible), served = sum(sel),
                      excluded = sum(s$eligible & !sel), people = people),
           by_area = selection_by_area(df_all, user_setup, s),

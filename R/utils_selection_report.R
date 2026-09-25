@@ -23,11 +23,11 @@ write_selection_report <- function(file, x, lang = "en") {
       "so the selection can be reviewed, explained to communities and challenged.", "",
       "## Key results", "", "@@KPI@@", "")
 
-  add("## 1. Data and preparation", "")
-  for (nm in intersect(c("Data", "Data preparation (before selection)"), names(sec))) add(paste("###", nm), "", kv(sec[[nm]]), "")
+  add("## 1. Data, areas covered and preparation", "")
+  for (nm in intersect(c("Data", "Areas covered", "Data preparation (before selection)"), names(sec))) add(paste("###", nm), "", kv(sec[[nm]]), "")
 
   add("## 2. Selection design", "")
-  for (nm in intersect(c("Selection", "Filters and rules", "Scorecard"), names(sec))) add(paste("###", nm), "", kv(sec[[nm]]), "")
+  for (nm in intersect(c("Selection", "Rules", "Scorecard"), names(sec))) add(paste("###", nm), "", kv(sec[[nm]]), "")
 
   add("## 3. Who was selected", "")
   ga <- area_summary_grouped(x$by_area)
@@ -53,13 +53,11 @@ write_selection_report <- function(file, x, lang = "en") {
   }
 
   bp <- x$beneficiary_profile
+  sc <- rp_share_charts(bp$vars, lang = lang)
   if (!is.null(bp) && (length(bp$tiles) || length(bp$vars))) {
     add("## 4. Who the beneficiaries are", "",
         "Socio-demographic and socio-economic profile of the households served.", "",
-        "@@PROFILE@@", "",
-        # Two charts per row.
-        unlist(lapply(split(names(bp$vars), ceiling(seq_along(bp$vars) / 2)),
-                      function(k) c(sprintf("@@FIG:%s@@", paste(k, collapse = ",")), ""))))
+        "@@PROFILE@@", "", sc$rows)
   }
 
   if (!is.null(x$map) && nrow(x$map)) {
@@ -114,7 +112,7 @@ write_selection_report <- function(file, x, lang = "en") {
     plots$area <- rp_hbars(d, stats::setNames(c("#0A6EB4", "#f7b825"), lab),
                            i18n_lookup("Households", lang), stacked = TRUE)
   }
-  if (!is.null(bp)) for (nm in names(bp$vars)) plots[[nm]] <- rp_donut(bp$vars[[nm]])
+  plots <- c(plots, sc$plots)
   if (!is.null(rt) && nrow(rt)) {
     d <- data.frame(group = paste(rt$variable, rt$category, sep = " \u00b7 "), rate = round(100 * rt$rate, 1))
     names(d)[2] <- i18n_lookup("Selected (%)", lang)
@@ -128,10 +126,11 @@ write_selection_report <- function(file, x, lang = "en") {
     captions = c(area = "Households served and excluded by design, by Admin 1",
                  rates = "Share of households selected, by group",
                  map = "Selected and non-selected households",
-                 if (!is.null(bp)) stats::setNames(vapply(bp$vars, function(v) attr(v, "label"), character(1)), names(bp$vars))),
+                 sc$captions),
     lang = lang, title = "Beneficiary selection report", record = "Beneficiary selection record",
     meta = c("Country office" = x$country_office %||% "",
              "Generated" = format(Sys.time(), "%Y-%m-%d %H:%M"),
+             "Areas covered" = x$areas %||% "All areas",
              "Served" = format(x$totals[["served"]] %||% NA, big.mark = ",")),
     footer = "This record documents the selection so it can be reviewed, explained and challenged.",
     blocks = list("@@KPI@@" = selection_kpis(x$totals, lang),
@@ -153,9 +152,9 @@ selection_kpis <- function(t, lang = "en") {
   tile <- function(label, value, sub) sprintf('<div class="kpi"><div class="kpi-label">%s</div><div class="kpi-value">%s</div><div class="kpi-sub">%s</div></div>',
                                               tr(label), value, sub)
   paste0('<div class="kpis">',
-         tile("Households served", num(t[["served"]]), paste(pc(t[["served"]], t[["households"]]), tr("of all households"))),
+         tile("Households served", num(t[["served"]]), paste(pc(t[["served"]], t[["households"]]), tr("of the households in the areas covered"))),
          tile("People served", num(t[["people"]]), tr("in the households served")),
-         tile("Eligible by design", num(t[["eligible"]]), paste(pc(t[["eligible"]], t[["households"]]), tr("of all households"))),
+         tile("Eligible by design", num(t[["eligible"]]), paste(pc(t[["eligible"]], t[["households"]]), tr("of the households in the areas covered"))),
          tile("Excluded by design", num(t[["excluded"]]), tr("eligible, not served for lack of resources")),
          '</div>')
 }
@@ -171,22 +170,11 @@ selection_map <- function(d, lang = "en") {
   labs <- vapply(lv, function(t) i18n_lookup(t, lang), character(1))
   # Not selected first, so the served points are drawn on top.
   d <- d[order(-as.integer(d$status)), , drop = FALSE]
-  leaflet::leaflet(d, width = "100%", height = 460) |>   # 5:3 set by the report CSS
-    # The Overview's basemaps: Esri light-grey canvas with its place names,
-    # terrain and satellite to switch to. Keyless, and unlike the
-    # OpenStreetMap servers Esri serves a page opened from a local file (no
-    # Referer header), which is how a downloaded report is read.
-    leaflet::addTiles(esri_canvas("Light_Gray_Base"), attribution = ESRI_ATTRIBUTION, group = "Light") |>
-    leaflet::addTiles(esri_canvas("Light_Gray_Reference"), group = "Light") |>
-    leaflet::addProviderTiles(leaflet::providers$Esri.WorldTopoMap, group = "Terrain") |>
-    leaflet::addProviderTiles(leaflet::providers$Esri.WorldImagery, group = "Satellite") |>
-    leaflet::hideGroup(c("Terrain", "Satellite")) |>
-    leaflet::addLayersControl(baseGroups = c("Light", "Terrain", "Satellite"), position = "topright",
-                              options = leaflet::layersControlOptions(collapsed = TRUE)) |>
-    leaflet::addScaleBar(position = "bottomleft", options = leaflet::scaleBarOptions(imperial = FALSE)) |>
+  esri_basemap(leaflet::leaflet(d, width = "100%", height = 460)) |>   # 5:3 set by the report CSS
     leaflet::addCircleMarkers(~lon, ~lat, radius = 3.5, stroke = FALSE, fillOpacity = 0.8,
                               fillColor = ~pal(status), label = ~label) |>
-    leaflet::addLegend("bottomright", colors = cols, labels = labs, opacity = 0.9)
+    leaflet::addLegend("bottomright", colors = cols, labels = labs, opacity = 0.9) |>
+    fit_to_points(d$lon, d$lat)
 }
 
 #' Points for the map: every household with coordinates, or an even sample

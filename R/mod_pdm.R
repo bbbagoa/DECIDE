@@ -24,72 +24,72 @@ mod_pdm_ui <- function(id, explore = NULL) {
   pick <- function(id, label) shinyWidgets::pickerInput(
     ns(id), label, choices = NULL, width = "100%",
     options = shinyWidgets::pickerOptions(container = "body", liveSearch = TRUE))
-  # Same numbered-step cards as the selection design: set up left to right,
-  # compute once, read the results in tabs below.
-  step <- function(title, ...) tags$section(class = "wfp-sb-step",
-                                            tags$div(class = "wfp-sb-head", tags$span(class = "wfp-sb-num"), tags$span(title)), ...)
-  tagList(
-    tags$div(
-      class = "wfp-design-grid mt-3 wfp-pdm-grid",
-      step("Monitoring data",
-           # The same accuracy analysis runs on a post-distribution survey or on
-           # a baseline taken before distribution; the choice names the data in
-           # the results, the exports and the report.
-           radioButtons(ns("data_kind"), NULL, inline = TRUE,
-                        choices = c("PDM (after distribution)" = "PDM", "Baseline (before distribution)" = "Baseline"),
-                        selected = "PDM"),
-           tags$p(class = "small text-muted mb-2",
-                  "One row per surveyed household, beneficiaries and non-beneficiaries."),
-           fileInput(ns("pdm_file"), NULL, width = "100%", accept = c(".xlsx", ".xls", ".sav", ".dta", ".csv", ".parquet")),
-           uiOutput(ns("pdm_file_status"))),
-      step("Who received assistance",
-           pick("pdm_beneficiary", "Beneficiary column"),
-           # Where resources did not cover every eligible household, the ones
-           # cut by prioritisation are excluded by design, not exclusion errors
-           # (Targeting Advisory 2/2025).
-           pick("pdm_prioritized", "Prioritised column (optional)"),
-           pick("pdm_unit", "Area column (optional: coverage and per-area sizes)")),
-      step("Who was eligible",
-           # Implementation error = were the criteria applied correctly? The
-           # ground truth is the criteria, re-applied to the PDM answers.
-           radioButtons(ns("pdm_elig_source"), NULL,
-                        choices = c("A column in the PDM data" = "column",
-                                    "Apply the adopted scorecard" = "scorecard",
-                                    "Apply the eligibility rules" = "rules"),
-                        selected = "column"),
-           conditionalPanel(sprintf("input['%s'] === 'column'", ns("pdm_elig_source")),
-                            pick("pdm_eligibility", "Eligibility column")),
-           uiOutput(ns("pdm_elig_note"))),
-      step("Weighting",
-           # The PDM surveys set numbers of beneficiaries and non-beneficiaries;
-           # the exclusion error needs each group weighted by its real size.
-           radioButtons(ns("pdm_weight_mode"), NULL,
-                        choices = c("Population sizes (recommended)" = "population",
-                                    "A weight column" = "column", "None" = "none"),
-                        selected = "population"),
-           conditionalPanel(sprintf("input['%s'] === 'column'", ns("pdm_weight_mode")),
-                            pick("pdm_weight", "Weight column")),
-           conditionalPanel(
-             sprintf("input['%s'] === 'population'", ns("pdm_weight_mode")),
-             radioButtons(ns("pop_scope"), NULL, inline = TRUE,
-                          choices = c("Overall" = "overall", "Per area" = "unit"), selected = "overall"),
-             conditionalPanel(
-               sprintf("input['%s'] === 'overall'", ns("pop_scope")),
-               tags$div(class = "d-flex gap-2",
-                        tags$div(class = "flex-fill", numericInput(ns("pop_benef"), "Beneficiary households", value = NA, min = 0, width = "100%")),
-                        tags$div(class = "flex-fill", numericInput(ns("pop_nonbenef"), "Non-beneficiary households", value = NA, min = 0, width = "100%")))),
-             conditionalPanel(sprintf("input['%s'] === 'unit'", ns("pop_scope")),
-                              tags$div(class = "small text-muted", "Type the sizes per area in the table below."))))
+  # Set-up in a compact sidebar, one collapsible step each; the results take
+  # the page beside it.
+  panel <- function(value, title, icon_name, ...) bslib::accordion_panel(
+    title = title, value = value, icon = bsicons::bs_icon(icon_name), ...)
+  bslib::layout_sidebar(
+    fillable = FALSE, class = "mt-3 wfp-mon-layout",
+    sidebar = bslib::sidebar(
+      width = 330, class = "wfp-mon-sidebar",
+      bslib::accordion(
+        id = ns("setup"), multiple = TRUE, open = c("data", "benef", "elig"),
+        panel("data", "1. Monitoring data", "cloud-upload",
+              # The same accuracy analysis runs on a post-distribution survey or
+              # on a baseline taken before distribution; the choice names the
+              # data in the results, the exports and the report.
+              radioButtons(ns("data_kind"), NULL,
+                           choices = c("PDM (after distribution)" = "PDM", "Baseline (before distribution)" = "Baseline"),
+                           selected = "PDM"),
+              fileInput(ns("pdm_file"), NULL, width = "100%", accept = c(".xlsx", ".xls", ".sav", ".dta", ".csv", ".parquet"),
+                        placeholder = "One row per surveyed household"),
+              uiOutput(ns("pdm_file_status"))),
+        panel("areas", "Areas covered", "geo-alt", mod_area_scope_ui(ns("scope"), title = NULL)),
+        panel("benef", "2. Who received assistance", "person-check",
+              pick("pdm_beneficiary", "Beneficiary column"),
+              # Where resources did not cover every eligible household, the ones
+              # cut by prioritisation are excluded by design, not exclusion
+              # errors (Targeting Advisory 2/2025).
+              pick("pdm_prioritized", "Prioritised column (optional)"),
+              pick("pdm_unit", "Area column (optional)")),
+        panel("elig", "3. Who was eligible", "clipboard-check",
+              # Implementation error = were the criteria applied correctly? The
+              # ground truth is the criteria, re-applied to the PDM answers.
+              radioButtons(ns("pdm_elig_source"), NULL,
+                           choices = c("A column in the data" = "column",
+                                       "Apply the adopted scorecard" = "scorecard",
+                                       "Apply the eligibility rules" = "rules"),
+                           selected = "column"),
+              conditionalPanel(sprintf("input['%s'] === 'column'", ns("pdm_elig_source")),
+                               pick("pdm_eligibility", "Eligibility column")),
+              uiOutput(ns("pdm_elig_note"))),
+        panel("weight", "4. Weighting", "sliders",
+              # The surveys set numbers of beneficiaries and non-beneficiaries;
+              # the exclusion error needs each group weighted by its real size.
+              radioButtons(ns("pdm_weight_mode"), NULL,
+                           choices = c("Population sizes (recommended)" = "population",
+                                       "A weight column" = "column", "None" = "none"),
+                           selected = "population"),
+              conditionalPanel(sprintf("input['%s'] === 'column'", ns("pdm_weight_mode")),
+                               pick("pdm_weight", "Weight column")),
+              conditionalPanel(
+                sprintf("input['%s'] === 'population'", ns("pdm_weight_mode")),
+                radioButtons(ns("pop_scope"), NULL, inline = TRUE,
+                             choices = c("Overall" = "overall", "Per area" = "unit"), selected = "overall"),
+                conditionalPanel(
+                  sprintf("input['%s'] === 'overall'", ns("pop_scope")),
+                  numericInput(ns("pop_benef"), "Beneficiary households", value = NA, min = 0, width = "100%"),
+                  numericInput(ns("pop_nonbenef"), "Non-beneficiary households", value = NA, min = 0, width = "100%")),
+                conditionalPanel(sprintf("input['%s'] === 'unit'", ns("pop_scope")),
+                                 tags$div(class = "small text-muted", "Type the sizes per area in the table on the right."))))
+      ),
+      tags$div(class = "wfp-sb-actions",
+               actionButton(ns("pdm_run"), "Compute implementation errors", class = "btn-primary btn-sm w-100", icon = icon("calculator")),
+               downloadButton(ns("pdm_download"), "Export (Excel)", class = "btn-outline-secondary btn-sm w-100 mt-2"),
+               tags$div(class = "small text-muted mt-2", bsicons::bs_icon("info-circle"),
+                        " Implementation errors measure whether the criteria were applied correctly on the ground, not whether they were right (that is the design error)."))
     ),
     uiOutput(ns("pop_table_ui")),
-    tags$div(
-      class = "wfp-design-foot",
-      tags$span(class = "small text-muted", bsicons::bs_icon("info-circle"),
-                " Implementation errors measure whether the criteria were applied correctly on the ground, not whether they were right (that is the design error)."),
-      tags$div(class = "d-flex gap-2",
-               downloadButton(ns("pdm_download"), "Export (Excel)", class = "btn-outline-secondary btn-sm"),
-               actionButton(ns("pdm_run"), "Compute implementation errors", class = "btn-primary btn-sm", icon = icon("calculator")))
-    ),
     uiOutput(ns("pdm_hint")),
     bslib::navset_underline(
       id = ns("pdm_tabs"),
@@ -97,8 +97,8 @@ mod_pdm_ui <- function(id, explore = NULL) {
         value = "errors", title = tagList(bsicons::bs_icon("bullseye"), " Errors and verdict"),
         uiOutput(ns("pdm_results")),
         tags$div(class = "d-flex gap-3 flex-wrap align-items-end mt-2 wfp-tol-row",
-                 tags$div(style = "flex: 0 1 220px;", numericInput(ns("tol_lower"), "Lower error tolerance (%)", value = 5, min = 0, max = 49, step = 1, width = "100%")),
-                 tags$div(style = "flex: 0 1 220px;", numericInput(ns("tol_upper"), "Upper error tolerance (%)", value = 20, min = 1, max = 49, step = 1, width = "100%"))),
+                 tags$div(style = "flex: 0 1 200px;", numericInput(ns("tol_lower"), "Lower error tolerance (%)", value = 5, min = 0, max = 49, step = 1, width = "100%")),
+                 tags$div(style = "flex: 0 1 200px;", numericInput(ns("tol_upper"), "Upper error tolerance (%)", value = 20, min = 1, max = 49, step = 1, width = "100%"))),
         uiOutput(ns("pdm_verdict"))
       ),
       bslib::nav_panel(
@@ -127,14 +127,18 @@ mod_pdm_server <- function(id, workspace = NULL, country_office = reactive(NULL)
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
-    pdm_df <- reactiveVal(NULL)
+    # Kept whole; the analysis runs on the areas covered (see mod_area_scope).
+    pdm_all <- reactiveVal(NULL)
+    scope <- mod_area_scope_server("scope", pdm_all, workspace, "pdm_scope", modification_log, "Monitoring")
+    pdm_scoped <- reactive(scope$filter(pdm_all()))
+    pdm_df <- function(value) if (missing(value)) pdm_scoped() else pdm_all(value)
     results <- reactiveVal(NULL)
 
     pdm_inputs <- c("pdm_eligibility", "pdm_beneficiary", "pdm_prioritized", "pdm_unit", "pdm_weight")
     workspace_register(workspace, "pdm",
       snapshot = function() {
         if (is.null(pdm_df())) return(NULL)
-        list(df = pdm_df(), results = results(),
+        list(df = pdm_all(), results = results(),
              inputs = lapply(stats::setNames(pdm_inputs, pdm_inputs), function(k) input[[k]]),
              options = list(data_kind = input$data_kind, elig_source = input$pdm_elig_source, weight_mode = input$pdm_weight_mode,
                             pop_scope = input$pop_scope, pop_benef = input$pop_benef,
@@ -614,7 +618,7 @@ mod_pdm_server <- function(id, workspace = NULL, country_office = reactive(NULL)
         } else {
           m <- r$metrics
           summary_df <- data.frame(
-            Field = c("Country office", "Exported at", "Eligibility from", "Weighting", "PDM records", "Records with known eligibility",
+            Field = c("Country office", "Exported at", "Areas covered", "Eligibility from", "Weighting", "Records analysed", "Records with known eligibility",
                       "Eligibility column", "Beneficiary column", "Weighted",
                       "Implementation inclusion error",
                       "Implementation exclusion error", "Coverage rate",
@@ -623,6 +627,7 @@ mod_pdm_server <- function(id, workspace = NULL, country_office = reactive(NULL)
             Value = c(
               country_office() %||% "",
               format(Sys.time(), "%Y-%m-%d %H:%M:%S"),
+              scope$text(),
               r$elig_source %||% r$elig_col, r$weighting %||% (if (isTRUE(r$weighted)) "weight column" else "none"),
               format(r$n, big.mark = ","),
               format(r$n_known, big.mark = ","),
@@ -652,7 +657,8 @@ mod_pdm_server <- function(id, workspace = NULL, country_office = reactive(NULL)
 
     # For the Targeting Monitoring report and the PDM chart builder.
     list(
-      df = pdm_df,
+      df = pdm_scoped,
+      areas = scope$text,
       name = reactive(if (is.null(input$pdm_file)) paste(input$data_kind %||% "PDM", "data") else input$pdm_file$name),
       kind = reactive(input$data_kind %||% "PDM"),
       results = results,

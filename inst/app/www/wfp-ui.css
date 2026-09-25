@@ -2441,3 +2441,31 @@ table.dataTable tr.dtrg-group td { background: var(--surface-3) !important; font
 .wfp-guide-sec-body { font-size: .87rem; line-height: 1.55; }
 .wfp-guide-refs { margin-top: .9rem; padding-top: .7rem; border-top: 1px solid var(--border); font-size: .8rem; color: var(--text-muted); }
 .wfp-guide-tip { margin-top: .6rem; padding: .55rem .8rem; border-radius: 8px; background: var(--accent-warning-bg); font-size: .84rem; }
+
+/* Monitoring set-up: a compact sidebar of collapsible steps. */
+.wfp-mon-sidebar .accordion-button { padding: .55rem .75rem; font-size: .84rem; font-weight: 600; }
+.wfp-mon-sidebar .accordion-body { padding: .6rem .75rem .4rem; }
+.wfp-mon-sidebar .accordion-item { border-color: var(--border); }
+.wfp-mon-sidebar .form-group, .wfp-mon-sidebar .shiny-input-container { margin-bottom: .55rem; }
+.wfp-mon-sidebar .form-label, .wfp-mon-sidebar .control-label { font-size: .78rem; margin-bottom: .2rem; }
+.wfp-mon-sidebar .radio label { font-size: .84rem; }
+.wfp-scope .wfp-scope-level { margin-bottom: .35rem; }
+.wfp-scope .wfp-scope-level .form-group { margin-bottom: .3rem; }
+
+/* Design page: data card and analysis chain side by side, same height. */
+.wfp-design-top > * { display: flex; flex-direction: column; }
+.wfp-design-top > * > .card, .wfp-design-top > * > .shiny-html-output > .card,
+.wfp-design-top > .card { height: 100%; margin-bottom: 0; }
+.wfp-design-top .shiny-input-container { margin-bottom: .6rem; }
+.wfp-design-top > div > .shiny-html-output { height: 100%; }
+.wfp-design-top > div > .shiny-html-output > * { height: 100%; margin-bottom: 0 !important; display: flex; flex-direction: column; justify-content: center; }
+
+/* Back / next arrows either side of the design progress chart. */
+.wfp-flow-row { display: flex; align-items: center; gap: .6rem; }
+.wfp-flow-row > .wfp-flow-track { flex: 1 1 auto; min-width: 0; }
+.wfp-flow-arrow { flex: none; width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--border-strong);
+  background: var(--surface); color: var(--wfp-blue); display: inline-flex; align-items: center; justify-content: center;
+  transition: background-color 160ms ease, color 160ms ease, transform 160ms ease; }
+.wfp-flow-arrow:hover:not(:disabled) { background: var(--wfp-blue); color: #fff; transform: scale(1.06); }
+.wfp-flow-arrow:disabled { opacity: .3; cursor: default; }
+@media (prefers-reduced-motion: reduce) { .wfp-flow-arrow { transition: none; } .wfp-flow-arrow:hover:not(:disabled) { transform: none; } }

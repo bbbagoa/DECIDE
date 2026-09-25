@@ -569,3 +569,24 @@ esri_canvas <- function(layer) sprintf(
 
 #' @noRd
 ESRI_ATTRIBUTION <- "Tiles &copy; Esri &mdash; Esri, HERE, Garmin, &copy; OpenStreetMap contributors"
+
+#' The range a map opens on: the inner 99% of the points, padded
+#'
+#' One mis-keyed GPS fix would otherwise double the extent and shrink the real
+#' cluster to a speck; every point is still drawn.
+#' @noRd
+map_fit_range <- function(x, p = 0.005) {
+  x <- x[is.finite(x)]
+  if (length(x) < 20) { r <- range(x); pad <- max(diff(r) * 0.05, 0.01); return(c(r[1] - pad, r[2] + pad)) }
+  q <- stats::quantile(x, c(p, 1 - p), names = FALSE)
+  if (q[1] == q[2]) q <- range(x)
+  pad <- max(diff(q) * 0.05, 0.01)
+  c(q[1] - pad, q[2] + pad)
+}
+
+#' Zoom a report map to its households
+#' @noRd
+fit_to_points <- function(m, lon, lat) {
+  xr <- map_fit_range(lon); yr <- map_fit_range(lat)
+  leaflet::fitBounds(m, xr[1], yr[1], xr[2], yr[2])
+}

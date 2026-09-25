@@ -1895,10 +1895,10 @@
     {"en": "Enumerator metrics", "fr": "Indicateurs des enquêteurs"},
     {"en": "Missingness by enumerator (top 20)", "fr": "Données manquantes par enquêteur (top 20)"},
     {"en": "1. PDM analysis", "fr": "1. Analyse PDM"},
-    {"en": "2. Process monitoring", "fr": "2. Suivi des processus"},
+    {"en": "2. Targeting process", "fr": "2. Processus de ciblage"},
     {"en": "3. Monitoring report", "fr": "3. Rapport de suivi"},
     {"en": "Explore the PDM data", "fr": "Explorer les données PDM"},
-    {"en": "Process-monitoring data", "fr": "Données de suivi des processus"},
+    {"en": "Targeting-process data", "fr": "Données de processus de ciblage"},
     {"en": "Load a dataset", "fr": "Charger un jeu de données"},
     {"en": "Dataset to chart", "fr": "Jeu de données à représenter"},
     {"en": "Remove this dataset", "fr": "Retirer ce jeu de données"},
@@ -1910,7 +1910,7 @@
     {"en": "Targeting monitoring report (HTML)", "fr": "Rapport de suivi du ciblage (HTML)"},
     {"en": "In the report", "fr": "Dans le rapport"},
     {"en": "Nothing added yet", "fr": "Rien d'ajouté pour l'instant"},
-    {"en": "Build a chart or a table on the PDM or Process monitoring tab and click Add to report.", "fr": "Créez un graphique ou un tableau dans l'onglet PDM ou Suivi des processus, puis cliquez sur Ajouter au rapport."},
+    {"en": "Build a chart or a table on the PDM or Targeting process tab and click Add to report.", "fr": "Créez un graphique ou un tableau dans l'onglet PDM ou Processus de ciblage, puis cliquez sur Ajouter au rapport."},
     {"en": "Move up", "fr": "Monter"},
     {"en": "Move down", "fr": "Descendre"},
     {"en": "Remove", "fr": "Retirer"},
@@ -1962,7 +1962,7 @@
     {"en": "Measured on the PDM sample", "fr": "Mesuré sur l'échantillon PDM"},
     {"en": "## 1. Context", "fr": "## 1. Contexte"},
     {"en": "## 2. Implementation accuracy (PDM)", "fr": "## 2. Précision de la mise en œuvre (PDM)"},
-    {"en": "## 3. Process monitoring", "fr": "## 3. Suivi des processus"},
+    {"en": "## 3. Targeting process", "fr": "## 3. Processus de ciblage"},
     {"en": "## 4. Insights from the PDM", "fr": "## 4. Enseignements du PDM"},
     {"en": "## 5. Key findings", "fr": "## 5. Constats clés"},
     {"en": "## 6. Recommendations", "fr": "## 6. Recommandations"},
@@ -2013,6 +2013,9 @@
     {"en": "Spot-check sample", "fr": "Échantillon de contrôle ponctuel"},
     {"en": "Spot-check back-check", "fr": "Contrôle ponctuel : vérification"},
     {"en": "For the field team", "fr": "Pour l'équipe de terrain"},
-    {"en": "Reaching the most vulnerable", "fr": "Atteindre les plus vulnérables"}
+    {"en": "Reaching the most vulnerable", "fr": "Atteindre les plus vulnérables"},
+    {"en": "WFP guidance", "fr": "Orientations du PAM"},
+    {"en": "Targeting and Prioritization Operational Guidance Note", "fr": "Note d'orientation opérationnelle sur le ciblage et la priorisation"},
+    {"en": "Share of households (%)", "fr": "Part des ménages (%)"}
   ]
 }

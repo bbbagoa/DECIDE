@@ -36,7 +36,10 @@ mod_overview_ui <- function(id) {
           class = "d-flex gap-2 mt-2",
           actionButton(ns("btn_apply_filters"), "Apply", class = "btn-primary btn-sm flex-fill", icon = icon("filter")),
           actionButton(ns("btn_clear_filters"), label = NULL, icon = icon("xmark"), class = "btn-outline-secondary btn-sm")
-        )
+        ),
+        hr(),
+        # What this page shows, as a report: covers the filters above.
+        downloadButton(ns("overview_report"), "Data summary report (HTML)", class = "btn-outline-primary btn-sm w-100")
       ),
 
       bslib::layout_column_wrap(
@@ -241,6 +244,23 @@ mod_overview_server <- function(id, uploaded_df, user_setup) {
   })
 
   # --- Master Filtered Data (uses applied filters) ---
+  output$overview_report <- download_handler(
+    filename = function() paste0("Data_collection_summary_", format(Sys.time(), "%Y-%m-%d_%Hh%M"), ".html"),
+    content = function(file) {
+      df <- filtered_data()
+      d <- applied_filters$date
+      lang <- session$rootScope()$input$lang_selector
+      write_overview_report(file, df, user_setup, list(
+        country_office = user_setup$country_office, source = user_setup$data_source,
+        n_total = nrow(uploaded_df()),
+        areas = areas_covered_text(list(admin1 = applied_filters$admin1, admin2 = applied_filters$admin2, admin3 = applied_filters$admin3)),
+        period = if (length(d) == 2 && all(!is.na(d))) sprintf("%s to %s", format(as.Date(d[1])), format(as.Date(d[2]))) else "All dates"),
+        lang = if (identical(lang, "fr")) "fr" else "en")
+    }
+  )
+  observe(gate_button("overview_report", !is.null(tryCatch(filtered_data(), error = function(e) NULL)),
+                      "Load the registration data and map its variables first."))
+
   filtered_data <- reactive({
     req(uploaded_df())
     df <- uploaded_df()
@@ -361,15 +381,15 @@ mod_overview_server <- function(id, uploaded_df, user_setup) {
     c(q[1] - pad, q[2] + pad)
   }
 
-  # Base map follows the app's light/dark switch, unless the user picked
-  # Terrain or Satellite, which then stays.
+  # Esri Terrain is the default basemap. Whatever base the user picks then
+  # stays; the light/dark switch only moves between Light and Dark.
   dark_mode <- reactive(identical(session$rootScope()$input$dark_mode, "dark"))
-  base_choice <- reactiveVal(NULL)
+  base_choice <- reactiveVal("Terrain")
   observeEvent(input$map_plot_groups, {
-    g <- intersect(input$map_plot_groups, c("Terrain", "Satellite"))
-    base_choice(if (length(g)) g[1] else NULL)
+    g <- intersect(input$map_plot_groups, c("Terrain", "Satellite", "Light", "Dark"))
+    if (length(g)) base_choice(g[1])
   })
-  base_group <- function() base_choice() %||% if (isTRUE(dark_mode())) "Dark" else "Light"
+  base_group <- function() base_choice()
 
   esri_attr <- ESRI_ATTRIBUTION
 
@@ -403,7 +423,8 @@ mod_overview_server <- function(id, uploaded_df, user_setup) {
   }
 
   observeEvent(dark_mode(), {
-    if (!is.null(base_choice())) return()
+    if (!isTRUE(base_choice() %in% c("Light", "Dark"))) return()
+    base_choice(if (isTRUE(dark_mode())) "Dark" else "Light")
     leaflet::leafletProxy("map_plot", session) |>
       leaflet::hideGroup(c("Light", "Dark")) |>
       leaflet::showGroup(if (isTRUE(dark_mode())) "Dark" else "Light")

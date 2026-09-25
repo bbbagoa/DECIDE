@@ -59,13 +59,14 @@ design_report_md <- function(x, figures = character(0)) {
 
   add("## 1. Assessment data", "",
       sprintf("- Source: %s", x$source %||% "not recorded"),
+      sprintf("- Areas covered: %s", x$areas %||% "All areas"),
       sprintf("- Households: %s; variables: %s", format(x$n_rows %||% NA, big.mark = ","), x$n_cols %||% NA), "")
 
   add("### Variables calculated", "")
   if (is.null(x$calc_vars) || !nrow(x$calc_vars)) add("_No variable was calculated in the app; all come from the source file._", "")
   else add(md_table(stats::setNames(x$calc_vars, c("Variable", "Definition", "Created"))), "")
 
-  add("## 2. Outcome", "")
+  add("## 2. Vulnerability Framework", "")
   if (!shiny::isTruthy(x$outcome)) add("_No outcome chosen._", "") else add(
     sprintf("- Outcome variable: `%s`", x$outcome),
     sprintf("- Level treated as vulnerable: **%s**", x$outcome_pos %||% "n/a"),
@@ -75,12 +76,12 @@ design_report_md <- function(x, figures = character(0)) {
     "are never used as eligibility criteria (Targeting Advisory 1/2025).", "")
 
   kept <- if (is.null(x$screening)) character(0) else x$screening$criterion[x$screening$retained]
-  add("## 3. Criteria", "",
+  add("## 3. Criteria Selection", "",
       sprintf("%d candidate criteria were examined; **%d were kept** for the model: %s.",
               length(x$candidates %||% character(0)), length(kept),
               if (length(kept)) paste0("`", kept, "`", collapse = ", ") else "none"), "")
 
-  add("## 4. Variable selection", "")
+  add("## 4. Criteria Screening", "")
   if (is.null(x$screening)) add("_No variables were selected._", "") else {
     s <- x$screening
     add(sprintf("Variables were chosen by the analyst from their descriptive statistics and correlations (no model fitted at this step); pairs correlated above **|r| = %s** were flagged.",
@@ -303,7 +304,8 @@ write_design_report <- function(file, x, plots = list(), lang = "en") {
     meta = c("Country office" = x$country_office %||% "",
              "Generated" = x$generated %||% format(Sys.time(), "%Y-%m-%d %H:%M"),
              "Status" = if (isTRUE(x$adopted)) "Adopted" else "Draft, not adopted",
-             "Source" = x$source %||% ""),
+             "Source" = x$source %||% "",
+             "Areas covered" = x$areas %||% "All areas"),
     footer = "This record documents the design so it can be reviewed, reproduced and challenged.",
     blocks = list("@@ERRORS@@" = report_error_cards(x, lang),
                   "@@MATRIX@@" = report_error_matrix(x$errors, x$threshold, x$outcome, x$outcome_pos, lang)))
@@ -594,10 +596,12 @@ design_report_css <- function() {
   .pair-cell .note { font-size: 12px; color: var(--muted); margin: 4px 0; }
   @media (max-width: 900px) { .pair { grid-template-columns: 1fr; } }
   .fig-row.n2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .fig { margin: 0; padding: 14px 16px 8px; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
+  .fig-row.n3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .fig { margin: 0; padding: 6px 4px 4px; border: 0; background: transparent; }
   .fig figcaption:empty { display: none; }
   .fig figcaption { text-align: left; color: var(--ink); font-weight: 600; font-size: 13px; margin-bottom: 6px; }
   .fig .bb text { font-family: Commissioner, 'Segoe UI', sans-serif; fill: #3c4a5c; }
+  .fig .bb .bb-chart-arc text { fill: #fff; font-weight: 600; }
   .fig .bb-legend-item text { font-size: 12px; }
   .corr-wrap { overflow-x: auto; }
   table.corr { width: auto; margin: 4px 0; font-size: 12px; }
@@ -616,7 +620,7 @@ design_report_css <- function() {
   .toc a { color: var(--ink); text-decoration: none; } .toc a:hover { color: var(--blue); }
   h2 { scroll-margin-top: 16px; }
   @media (max-width: 900px) { .wrap { width: auto; } .layout { grid-template-columns: 1fr; } .toc { position: static; }
-    .fig-row.n2, .err-cards { grid-template-columns: 1fr; } .band-inner { grid-template-columns: 1fr; } .band-logo { border: 0; padding: 0; } .band-meta { text-align: left; } }
+    .fig-row.n2, .fig-row.n3, .err-cards { grid-template-columns: 1fr; } .band-inner { grid-template-columns: 1fr; } .band-logo { border: 0; padding: 0; } .band-meta { text-align: left; } }
   .band { background: var(--blue); color: #fff; padding: 26px 0; }
   .sub { opacity: .85; font-size: 13px; }
   main { padding-top: 12px; }

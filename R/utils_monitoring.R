@@ -123,7 +123,7 @@ chart_value_label <- function(spec) {
          "Records")
 }
 
-#' Ready-made charts for the usual process-monitoring and PDM questions
+#' Ready-made charts for the usual targeting-process and PDM questions
 #'
 #' Each preset names the chart and says which columns it wants, as name
 #' patterns; `apply_preset()` picks the first matching column of the data.
@@ -230,7 +230,7 @@ write_monitoring_report <- function(file, x, lang = "en") {
   kind <- x$kind %||% p$kind %||% "PDM"
 
   add("# Targeting monitoring report", "",
-      "This report brings together how the targeting was carried out on the ground (process monitoring) and how accurately",
+      "This report brings together how the targeting was carried out on the ground (targeting process) and how accurately",
       if (identical(kind, "Baseline")) "it reached the intended households (baseline survey)." else "it reached the intended households (post-distribution monitoring).", "")
   if (!is.null(p)) add("## Key results", "", "@@IMPL@@", "")
   add("## 1. Context", "", quote_block(x$context), "")
@@ -241,6 +241,7 @@ write_monitoring_report <- function(file, x, lang = "en") {
   } else {
     m <- p$metrics
     add(sprintf("- %s records analysed: %s", kind, format(p$n %||% NA, big.mark = ",")),
+        sprintf("- Areas covered: %s", p$areas %||% "All areas"),
         sprintf("- Eligibility from %s", p$elig_source %||% "a PDM column"),
         sprintf("- Weighting: %s", p$weighting %||% "none"),
         if (isTRUE(p$no_nonbenef)) "- **Only beneficiaries were surveyed: the exclusion error and the coverage cannot be measured.**",
@@ -300,7 +301,7 @@ write_monitoring_report <- function(file, x, lang = "en") {
       add(sprintf("_Source: %s; %s._", it$dataset %||% src, tolower(names(chart_types())[chart_types() == it$spec$type][1] %||% "")), "")
     }
   }
-  section(3, "Process monitoring", "process", "No process-monitoring chart was added.")
+  section(3, "Targeting process", "process", "No targeting-process chart was added.")
   section(4, sprintf("Insights from the %s data", kind), "pdm", sprintf("No %s chart was added.", kind))
 
   add("## 5. Key findings", "", quote_block(x$findings), "",
@@ -315,7 +316,7 @@ write_monitoring_report <- function(file, x, lang = "en") {
             "count for their real share.",
             "They show whether the criteria were applied correctly on the ground, not whether the criteria were right (that is the design error).",
             "Eligible households left out because of prioritisation are excluded by design and reported separately (Targeting Advisory 2/2025)."), "",
-      paste("**Process monitoring** charts count records, total or average a number, or divide two totals (for example women among",
+      paste("**Targeting process** charts count records, total or average a number, or divide two totals (for example women among",
             "participants), by area or category, as chosen by the officer, shown as a chart or a table; each carries the officer's comment."), "")
 
   plots <- list(); caps <- character(0)

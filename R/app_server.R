@@ -516,7 +516,7 @@ app_server <- function(input, output, session) {
   # be applied by Beneficiary Selection.
   mod_scorecard_server("scorecard_1", uploaded_df, user_setup, workspace, modification_log)
   # PDM accuracy works off its own uploaded extract, so it takes no app state.
-  # Targeting Monitoring: the PDM analysis, process monitoring and the report.
+  # Targeting Monitoring: the PDM analysis, targeting process and the report.
   mod_monitoring_server("monitoring_1", workspace, country_office = reactive(user_setup$country_office),
                         modification_log = modification_log, user_setup = user_setup)
 

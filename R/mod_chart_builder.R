@@ -2,7 +2,7 @@
 #'
 #' Pick a ready-made chart or build one (what to count or measure, by what,
 #' for whom), see it, then add it to the Targeting Monitoring report with a
-#' title and a comment. Used on the PDM data and on process-monitoring data.
+#' title and a comment. Used on the PDM data and on targeting-process data.
 #'
 #' @param id module id
 #' @param presets Names of `chart_presets()` groups offered here.
