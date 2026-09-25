@@ -32,6 +32,21 @@
 * Reports: at most three donuts, on one row; other categories as bar charts; no borders around charts; maps open zoomed on the households. The data summary shows socio-economic indicators found in the data (food consumption, coping, income, shelter, water...) when no vulnerability is mapped.
 * Welcome page: the WFP Targeting and Prioritization Operational Guidance Note (2021) is the first methodological reference.
 * Dropdowns whose variables are refreshed (chart builder and others) are no longer cut off and list every variable.
+* Report texts (monitoring context, findings, recommendations, chart comments, threshold rationale) have a formatting toolbar: paragraph style, size, bold, italic, underline, strikethrough, text and highlight colours, lists, alignment, links. The formatting carries into the HTML reports (cleaned of anything that could run); Excel and the audit trail get the plain text.
+* Chart builder: choose the chart style (bars, columns, donut, pie, line, area); the report draws the same style.
+* Admin filters are chained everywhere (Overview, Data Quality, Beneficiary Selection, Areas covered): Admin 2 lists only the areas inside the chosen Admin 1, Admin 3 inside those, and valid selections are kept.
+* Targeting Monitoring: the set-up sidebar fits the window, so every step and the Compute button can be reached.
+* Assessment data (Design), PDM / baseline data and targeting-process datasets can be imported from MODA, like the registration data.
+* Session toolbar: New saves the current session and starts an empty one (or starts fresh without saving).
+* Welcome page: the methodological references are credited to the WFP VAM Needs Assessment and Targeting Unit.
+* Targeting Design: MODA, How it works and Calculator side by side; candidate criteria beside the blocked columns, with the selected ones listed; a chart of vulnerable households by area under the Vulnerability Framework, also in the design report; threshold controls on one side and the rationale on the other; the progress chart numbers its steps like the tabs, and the guidance under it follows the current tab (back to an unfinished step, or on to the next).
+* Spot Checking: the sampling controls sit on top of the Sample tab (Draw sample); the verification controls are one panel in two numbered parts (verification data, comparison) with the actions at its foot; the area filters are chained like the others.
+* Special characters (accents, cedillas, curly apostrophes, the euro sign, Arabic) read correctly from every format: CSV in UTF-8 (with or without BOM) or Windows-1252 (Excel on a French or Spanish Windows, semicolons), Excel, SPSS and Stata (value labels included), Parquet and MODA; they stay intact in the reports and Excel exports.
+* MODA downloads are faster and survive a poor connection: responses are compressed, pages come four at a time once the first one gives the total, a slow page is waited for as long as data keeps flowing, and a failed page is retried (up to four times, with a growing pause) instead of stopping the download. The "no applicable method for conditionMessage" error on a timeout is fixed.
+* The first MODA (or Kobo / ODK) API key entered is filled in for every later import in the same session (registration, assessment, PDM, targeting process, spot-check verification, Refresh MODA); only the form ID changes, and the key can still be edited. It stays in memory and is never saved.
+* MODA, Kobo and ODK imports go through the same text handling as file imports, so accents and other scripts arrive intact.
+* On a narrow window (a browser zoom above about 110% on a laptop) the app sets its base text size to 90%, as a 90% zoom would, so the pages keep their layout.
+* The app keeps an idle page connected (a keep-alive every 30 seconds) and picks a dropped connection up again where the server allows it, so a quiet session is not lost.
 * The "By area" chart of the Composition tab no longer fails ("unknown colour name").
 * The country-office settings file is no longer listed as a saved session.
 * Sessions also keep the Data Quality settings (filters, outlier variable, method and allowed ranges, duplicate columns, missing-data analysis) and the quick-screening result; after a restore, "Refresh MODA" fetches only the new submissions (the API key is asked for, never saved).

@@ -5,6 +5,12 @@
 #' @import shiny
 #' @noRd
 app_server <- function(input, output, session) {
+  # Nothing here ends a session on inactivity. A dropped connection (laptop
+  # asleep, a network that closes quiet sockets) is picked up again with the
+  # work in memory where the server allows it; www/busy.js also sends a
+  # keep-alive every 30 s so an idle page is not taken for a closed one.
+  session$allowReconnect(TRUE)
+
   # The audit trail, shared by every phase.
   modification_log <- reactiveVal(
     data.frame(

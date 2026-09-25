@@ -74,6 +74,16 @@ design_report_md <- function(x, figures = character(0)) {
             format(x$n_outcome %||% NA, big.mark = ","), md_pct(x$prevalence)),
     "", "Outcome indicators (FCS, rCSI, LCSI, CARI and similar) are the outcome the scorecard predicts and",
     "are never used as eligibility criteria (Targeting Advisory 1/2025).", "")
+  va <- x$vuln_area
+  if (!is.null(va) && nrow(va)) {
+    add("### Vulnerable households by area", "",
+        sprintf("Share of households on the vulnerable side of the outcome, by `%s`%s.", x$vuln_area_col %||% "area",
+                if (nrow(va) > 30) " (the 30 areas with the highest share are charted)" else ""), "")
+    fig("vuln_area")
+    add(md_table(data.frame(Area = va$area, Households = format(va$households, big.mark = ","),
+                            Vulnerable = format(va$vulnerable, big.mark = ","),
+                            `Share vulnerable` = sprintf("%.1f%%", 100 * va$share), check.names = FALSE)), "")
+  }
 
   kept <- if (is.null(x$screening)) character(0) else x$screening$criterion[x$screening$retained]
   add("## 3. Criteria Selection", "",
@@ -146,7 +156,7 @@ design_report_md <- function(x, figures = character(0)) {
         sprintf("- Evaluated on: %s", x$eval_note %||% "all households"),
         sprintf("- AUC: %s", if (is.na(x$auc %||% NA)) "n/a" else sprintf("%.3f", x$auc)), "",
         "**Rationale recorded by the team:**", "",
-        if (shiny::isTruthy(x$rationale)) paste0("> ", gsub("\n", "\n> ", x$rationale)) else "> _Not documented. Targeting Advisory 2/2025 requires it._",
+        if (nzchar(rich_html(x$rationale))) "@@RATIONALE@@" else "> _Not documented. Targeting Advisory 2/2025 requires it._",
         "", "### Design error matrix", "", "@@MATRIX@@", "",
         sprintf("- **Inclusion error** %s = %s / %s: of everyone selected, the share who did not need assistance.",
                 md_pct(e$inclusion_error), e$included_not_in_need, e$correctly_included + e$included_not_in_need),
@@ -281,7 +291,7 @@ design_report_methods <- function(x) {
 #' Captions of the report figures
 #' @noRd
 design_report_captions <- function() {
-  c(prevalence = "How common each criterion is", correlation = "Correlation between the selected variables",
+  c(vuln_area = "Vulnerable households by area", prevalence = "How common each criterion is", correlation = "Correlation between the selected variables",
     weights = "Points by criterion", comparison_roc = "ROC, held-out households",
     roc = "ROC curve with the chosen threshold", scores = "Score distribution by outcome",
     box = "Score by vulnerability", drivers = "What actually drives the score",
@@ -307,7 +317,8 @@ write_design_report <- function(file, x, plots = list(), lang = "en") {
              "Source" = x$source %||% "",
              "Areas covered" = x$areas %||% "All areas"),
     footer = "This record documents the design so it can be reviewed, reproduced and challenged.",
-    blocks = list("@@ERRORS@@" = report_error_cards(x, lang),
+    blocks = list("@@RATIONALE@@" = sprintf('<div class="rich">%s</div>', rich_html(x$rationale)),
+                  "@@ERRORS@@" = report_error_cards(x, lang),
                   "@@MATRIX@@" = report_error_matrix(x$errors, x$threshold, x$outcome, x$outcome_pos, lang)))
 }
 
@@ -597,6 +608,8 @@ design_report_css <- function() {
   @media (max-width: 900px) { .pair { grid-template-columns: 1fr; } }
   .fig-row.n2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .fig-row.n3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .rich { margin: 0 0 14px; padding: 8px 14px; border-left: 3px solid #0A6EB4; background: #f6f9fc; border-radius: 0 8px 8px 0; }
+  .rich p, .rich div { margin: 0 0 6px; } .rich h3, .rich h4 { margin: 6px 0; } .rich ul, .rich ol { margin: 0 0 6px; }
   .fig { margin: 0; padding: 6px 4px 4px; border: 0; background: transparent; }
   .fig figcaption:empty { display: none; }
   .fig figcaption { text-align: left; color: var(--ink); font-weight: 600; font-size: 13px; margin-bottom: 6px; }

@@ -2469,3 +2469,57 @@ table.dataTable tr.dtrg-group td { background: var(--surface-3) !important; font
 .wfp-flow-arrow:hover:not(:disabled) { background: var(--wfp-blue); color: #fff; transform: scale(1.06); }
 .wfp-flow-arrow:disabled { opacity: .3; cursor: default; }
 @media (prefers-reduced-motion: reduce) { .wfp-flow-arrow { transition: none; } .wfp-flow-arrow:hover:not(:disabled) { transform: none; } }
+
+/* Formatted text editor (report texts, comments): R/utils_richtext.R */
+.tw-rt-frame { border: 1px solid var(--border-strong); border-radius: var(--control-radius); background: var(--surface); }
+.tw-rt-frame:focus-within { border-color: var(--wfp-blue); box-shadow: 0 0 0 3px var(--accent-primary-bg); }
+.tw-rt-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; padding: 4px 6px;
+  border-bottom: 1px solid var(--border); }
+.tw-rt-btn, .tw-rt-color { display: inline-flex; align-items: center; justify-content: center; gap: 2px;
+  min-width: 26px; height: 26px; padding: 0 4px; border: 0; border-radius: 6px; background: transparent;
+  color: var(--text-muted); cursor: pointer; font-size: .85rem; margin: 0; }
+.tw-rt-btn:hover, .tw-rt-color:hover { background: var(--accent-primary-bg); color: var(--wfp-blue); }
+.tw-rt-btn:focus-visible { outline: 2px solid var(--wfp-blue); outline-offset: 1px; }
+.tw-rt-color input[type="color"] { width: 16px; height: 16px; padding: 0; border: 0; background: none; cursor: pointer; }
+.tw-rt-select { height: 26px; padding: 0 4px; border: 1px solid var(--border); border-radius: 6px;
+  background: var(--surface); color: var(--body-text); font-size: .78rem; }
+.tw-rt-sep { width: 1px; height: 18px; background: var(--border-strong); margin: 0 3px; }
+.tw-rich { padding: .45rem .65rem; font-size: .88rem; color: var(--body-text); outline: none; overflow-y: auto;
+  max-height: 22rem; overflow-wrap: anywhere; }
+.tw-rich:empty::before { content: attr(data-placeholder); color: var(--text-muted); pointer-events: none; }
+.tw-rich p, .tw-rich div { margin: 0 0 .35rem; }
+.tw-rich h3 { font-size: 1.1rem; margin: .3rem 0; } .tw-rich h4 { font-size: .98rem; margin: .3rem 0; }
+.tw-rich blockquote { border-left: 3px solid var(--wfp-blue); padding-left: .6rem; margin: .3rem 0; color: var(--text-muted); }
+.tw-rich ul, .tw-rich ol { margin: 0 0 .35rem; padding-left: 1.3rem; }
+.tw-rt-compact .tw-rt-toolbar { padding: 2px 4px; }
+.tw-rt-compact .tw-rt-select { display: none; }
+/* Monitoring pages sit under the navbar AND a tab strip: bound the sidebar by
+   the space really left, or its last pickers and the Compute / Export block
+   fall below the window. */
+.bslib-sidebar-layout > .sidebar.wfp-mon-sidebar > .sidebar-content { max-height: calc(100vh - 150px); }
+
+/* A row of controls on one line, wrapping only when the controls (each at
+   its minimum width) do not fit (spot-check sampling and back-check bars). */
+.wfp-oneline { display: flex; flex-wrap: wrap; align-items: flex-end; column-gap: .75rem; }
+.wfp-oneline .form-group, .wfp-oneline .shiny-input-container { margin-bottom: .75rem; }
+.wfp-oneline .shiny-options-group { white-space: nowrap; }
+
+/* Spot-check verification: two numbered parts in one quiet panel. */
+.wfp-vc { display: grid; grid-template-columns: minmax(280px, 5fr) minmax(360px, 7fr);
+  border: 1px solid var(--border); border-radius: var(--card-radius-sm); background: var(--surface); margin-bottom: 1rem; }
+.wfp-vc-col { padding: .85rem 1rem .6rem; min-width: 0; }
+.wfp-vc-col + .wfp-vc-col { border-left: 1px solid var(--border); }
+.wfp-vc-head { display: flex; align-items: center; gap: .5rem; margin-bottom: .7rem; font-size: .72rem; font-weight: 600;
+  letter-spacing: .06em; text-transform: uppercase; color: var(--text-muted); }
+.wfp-vc-num { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: 50%;
+  background: var(--accent-primary-bg); color: var(--wfp-blue); font-size: .72rem; letter-spacing: 0; }
+.wfp-vc .btn-group-container-sw, .wfp-vc .radio-group-buttons { margin-bottom: .6rem; }
+.wfp-vc .form-group, .wfp-vc .shiny-input-container { margin-bottom: .6rem; }
+.wfp-vc .shiny-file-input-progress { height: 3px; margin: 2px 0 0; }
+.wfp-vc-fetch { padding-bottom: .6rem; }
+.wfp-vc-actions { display: flex; justify-content: flex-end; align-items: center; gap: .5rem;
+  padding-top: .6rem; border-top: 1px solid var(--border); }
+@media (max-width: 900px) {
+  .wfp-vc { grid-template-columns: 1fr; }
+  .wfp-vc-col + .wfp-vc-col { border-left: 0; border-top: 1px solid var(--border); }
+}

@@ -200,13 +200,32 @@ monitoring_item_chart <- function(item, lang = "en") {
   wide[is.na(wide)] <- 0
   cols <- stats::setNames(rep_len(rp_cols$models, length(groups)), groups)
   vlab <- tr(chart_value_label(item$spec))
-  if (identical(item$spec$type, "trend")) {
+  st <- chart_style(item$spec)
+  one <- function(b) if (length(groups) == 1) billboarder::bb_legend(b, show = FALSE) else b
+  if (st %in% c("pie", "donut")) {
+    p <- chart_pie_data(d)
+    if (identical(st, "donut")) return(rp_donut(p, height = 300))
+    pc <- stats::setNames(rep_len(rp_cols$models, nrow(p)), p$category)
+    return(rp_base(300) |>
+             billboarder::bb_piechart(p) |>
+             rp_colors(pc) |>
+             billboarder::bb_pie(label = list(format = htmlwidgets::JS("function(v, r) { return (r * 100).toFixed(0) + '%'; }"))))
+  }
+  if (identical(st, "column")) {
+    return(rp_base(340) |>
+             billboarder::bb_barchart(wide, stacked = length(groups) > 1 && chart_stacks(item$spec)) |>
+             rp_colors(cols) |>
+             billboarder::bb_x_axis(tick = list(multiline = FALSE, culling = list(max = 15))) |>
+             billboarder::bb_y_axis(label = rp_axis_label(vlab)) |>
+             one())
+  }
+  if (st %in% c("line", "area")) {
     return(rp_base(320) |>
-             billboarder::bb_linechart(wide, type = "spline") |>
+             billboarder::bb_linechart(wide, type = if (identical(st, "area")) "area-spline" else "spline") |>
              billboarder::bb_x_axis(type = "category", tick = list(culling = list(max = 12), multiline = FALSE)) |>
              billboarder::bb_y_axis(label = rp_axis_label(vlab)) |>
              rp_colors(cols) |>
-             (\(b) if (length(groups) == 1) billboarder::bb_legend(b, show = FALSE) else b)())
+             one())
   }
   b <- rp_hbars(wide, cols, vlab, stacked = length(groups) > 1 && chart_stacks(item$spec))
   if (length(groups) == 1) b <- billboarder::bb_legend(b, show = FALSE)
@@ -222,9 +241,18 @@ monitoring_item_chart <- function(item, lang = "en") {
 #' @noRd
 write_monitoring_report <- function(file, x, lang = "en") {
   L <- character(0)
+  pairs <- list()   # raw HTML blocks, swapped in after conversion
   add <- function(...) L <<- c(L, ...)
   pct <- function(v) if (is.null(v) || is.na(v)) "n/a" else sprintf("%.1f%%", 100 * v)
-  quote_block <- function(txt) if (shiny::isTruthy(txt)) paste0("> ", gsub("\n", "\n> ", trimws(txt))) else "> _Not written._"
+  # The officer's formatted texts go in as raw HTML blocks, swapped in after
+  # the Markdown is converted.
+  quote_block <- function(txt) {
+    h <- rich_html(txt)
+    if (!nzchar(h)) return("> _Not written._")
+    ph <- sprintf("@@RICH%d@@", length(pairs) + 1)
+    pairs[[ph]] <<- sprintf('<div class="rich">%s</div>', h)
+    ph
+  }
   items <- x$items %||% list()
   p <- x$pdm
   kind <- x$kind %||% p$kind %||% "PDM"
@@ -266,7 +294,6 @@ write_monitoring_report <- function(file, x, lang = "en") {
     }
   }
 
-  pairs <- list()
   esc <- function(t) htmltools::htmlEscape(t %||% "")
   source_line <- function(it, src) sprintf("Source: %s; %s.", it$dataset %||% src,
                                             tolower(names(chart_types())[chart_types() == it$spec$type][1] %||% ""))
@@ -277,7 +304,7 @@ write_monitoring_report <- function(file, x, lang = "en") {
     if (identical(it$display, "table")) commonmark::markdown_html(paste(md_table(chart_table(it$data, it$spec)), collapse = "\n"), extensions = TRUE)
     else sprintf("<p>@@FIG:%s@@</p>", it$id),
     if (identical(it$spec$type, "crosstab")) sprintf('<p class="note"><em>%s</em></p>', esc(crosstab_test_text(crosstab_test(it$data)))) else "",
-    if (shiny::isTruthy(it$comment)) sprintf("<blockquote><p>%s</p></blockquote>", esc(it$comment)) else "",
+    if (nzchar(rich_html(it$comment))) sprintf('<div class="rich">%s</div>', rich_html(it$comment)) else "",
     sprintf('<p class="note"><em>%s</em></p>', esc(source_line(it, src))), '</div>'), character(1)), collapse = ""), '</div>')
   section <- function(num, title, src, empty) {
     its <- Filter(function(it) identical(it$source, src), items)
@@ -297,7 +324,7 @@ write_monitoring_report <- function(file, x, lang = "en") {
       add(sprintf("### %s", it$title), "",
           if (identical(it$display, "table")) md_table(chart_table(it$data, it$spec)) else sprintf("@@FIG:%s@@", it$id), "",
           if (identical(it$spec$type, "crosstab")) c(sprintf("_%s_", crosstab_test_text(crosstab_test(it$data))), "") else NULL)
-      if (shiny::isTruthy(it$comment)) add(quote_block(it$comment), "")
+      if (nzchar(rich_html(it$comment))) add(quote_block(it$comment), "")
       add(sprintf("_Source: %s; %s._", it$dataset %||% src, tolower(names(chart_types())[chart_types() == it$spec$type][1] %||% "")), "")
     }
   }
@@ -410,4 +437,36 @@ crosstab_test_text <- function(tt) {
 #' @noRd
 chart_stacks <- function(spec) {
   !identical(spec$type, "share") && !(identical(spec$type, "crosstab") && identical(spec$pct, "col"))
+}
+
+#' How a chart is drawn (the computation is `spec$type`)
+#' @noRd
+chart_styles <- function() {
+  c("Automatic" = "auto", "Bars (horizontal)" = "bar", "Columns (vertical)" = "column",
+    "Donut" = "donut", "Pie" = "pie", "Line" = "line", "Area" = "area")
+}
+
+#' The style actually drawn: automatic is a line over time, bars otherwise
+#' @noRd
+chart_style <- function(spec) {
+  s <- spec$style %||% "auto"
+  if (!s %in% chart_styles() || identical(s, "auto")) if (identical(spec$type, "trend")) "line" else "bar" else s
+}
+
+#' Parts of a whole for a pie or donut: one slice per category, the split
+#' (if any) added up
+#' @noRd
+chart_pie_data <- function(d) {
+  a <- stats::aggregate(value ~ x, d, sum, na.rm = TRUE)
+  a <- a[order(-a$value), , drop = FALSE]
+  data.frame(category = a$x, n = a$value, stringsAsFactors = FALSE)
+}
+
+#' Why a pie or donut may mislead for this spec, or NULL
+#' @noRd
+chart_pie_note <- function(spec) {
+  if (!chart_style(spec) %in% c("pie", "donut")) return(NULL)
+  if (!(spec$type %||% "count") %in% c("count", "sum")) return("A pie or donut shows parts of a whole: use it for counts or totals, not averages or percentages.")
+  if (shiny::isTruthy(spec$group)) return("A pie or donut shows one series: the split is added up. Use bars to compare the groups.")
+  NULL
 }

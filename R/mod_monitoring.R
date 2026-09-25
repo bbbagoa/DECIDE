@@ -40,6 +40,7 @@ mod_monitoring_ui <- function(id) {
                        tags$div(class = "flex-fill", selectInput(ns("pm_active"), "Dataset to chart", choices = character(0), width = "100%")),
                        tags$div(class = "pb-3", actionButton(ns("pm_remove"), NULL, icon = icon("trash"), class = "btn-outline-danger btn-sm",
                                                              title = "Remove this dataset"))),
+              tags$div(class = "mt-1 mb-2", mod_moda_import_ui(ns("pm_moda"))),
               uiOutput(ns("pm_status"))),
             bslib::accordion_panel(
               "Areas covered", value = "areas", icon = bsicons::bs_icon("geo-alt"),
@@ -55,12 +56,12 @@ mod_monitoring_ui <- function(id) {
         bslib::card(
           bslib::card_header(bsicons::bs_icon("pencil"), " Your analysis"),
           bslib::card_body(
-            textAreaInput(ns("context"), "Context", rows = 3, width = "100%",
-                          placeholder = "Programme, area, period, targeting approach, who collected what."),
-            textAreaInput(ns("findings"), "Key findings", rows = 3, width = "100%",
-                          placeholder = "What worked, what did not, where and for whom."),
-            textAreaInput(ns("recommendations"), "Recommendations", rows = 3, width = "100%",
-                          placeholder = "What to change in the next round, and who does it."),
+            rich_text_input(ns("context"), "Context", rows = 3,
+                            placeholder = "Programme, area, period, targeting approach, who collected what."),
+            rich_text_input(ns("findings"), "Key findings", rows = 3,
+                            placeholder = "What worked, what did not, where and for whom."),
+            rich_text_input(ns("recommendations"), "Recommendations", rows = 3,
+                            placeholder = "What to change in the next round, and who does it."),
             checkboxInput(ns("include_pdm"), "Include the implementation errors from the PDM / baseline analysis", value = TRUE),
             downloadButton(ns("report"), "Targeting monitoring report (HTML)", class = "btn-primary w-100")
           )
@@ -99,9 +100,18 @@ mod_monitoring_server <- function(id, workspace = NULL, country_office = reactiv
       df <- tryCatch(as.data.frame(read_import_file(f$datapath, ext)), error = function(e) {
         showNotification(paste("Could not read file:", conditionMessage(e)), type = "error"); NULL })
       req(df)
-      ds <- datasets(); ds[[f$name]] <- df; datasets(ds)
-      updateSelectInput(session, "pm_active", choices = names(ds), selected = f$name)
-      audit_add(modification_log, "Monitoring", "Targeting-process data loaded", sprintf("%s (%s rows)", f$name, nrow(df)))
+      take_pm(df, f$name)
+    })
+    take_pm <- function(df, name) {
+      ds <- datasets(); ds[[name]] <- df; datasets(ds)
+      updateSelectInput(session, "pm_active", choices = names(ds), selected = name)
+      audit_add(modification_log, "Monitoring", "Targeting-process data loaded", sprintf("%s (%s rows)", name, nrow(df)))
+    }
+    # Datasets can also come from MODA / ONA forms, one per form.
+    pm_moda <- mod_moda_import_server("pm_moda")
+    observeEvent(pm_moda$data(), {
+      df <- pm_moda$data(); req(df)
+      take_pm(as.data.frame(df), sprintf("MODA form %s", pm_moda$credentials()$form_id %||% ""))
     })
     observeEvent(input$pm_remove, {
       ds <- datasets(); need_ok(length(ds) > 0 && shiny::isTruthy(input$pm_active), "No dataset to remove.")
@@ -132,8 +142,13 @@ mod_monitoring_server <- function(id, workspace = NULL, country_office = reactiv
     observe(gate_button("pm_remove", length(datasets()) > 0, "No dataset loaded yet."))
 
     # --- the report's items: reorder, edit the comment, remove -------------------
+    # The list is redrawn when items are added, removed, moved or resized, not
+    # when a comment changes: a redraw would take the text from under the cursor.
+    items_shape <- reactiveVal(NULL)
+    observe(items_shape(lapply(items(), function(it) it[c("id", "title", "width", "source", "dataset", "display")])))
     output$items_ui <- renderUI({
-      its <- items()
+      items_shape()
+      its <- isolate(items())
       if (!length(its)) {
         return(empty_state("Nothing added yet",
                            "Build a chart or a table on the PDM or Targeting process tab and click Add to report.",
@@ -170,10 +185,8 @@ mod_monitoring_server <- function(id, workspace = NULL, country_office = reactiv
                                         onclick = js("down", it$id), icon("arrow-down")),
                             tags$button(type = "button", class = "btn btn-outline-danger", title = "Remove",
                                         onclick = js("remove", it$id), icon("xmark")))),
-          tags$textarea(class = "form-control form-control-sm mt-2", rows = 2, placeholder = "Comment",
-                        onchange = sprintf("Shiny.setInputValue('%s', {id: '%s', text: this.value, n: Math.random()})",
-                                           ns("item_comment"), it$id),
-                        it$comment)
+          tags$div(class = "mt-2", rich_text_input(value = it$comment, placeholder = "Comment", rows = 2, compact = TRUE,
+                                                   send = ns("item_comment"), item = it$id))
         )
       })))
     })
@@ -233,7 +246,7 @@ mod_monitoring_server <- function(id, workspace = NULL, country_office = reactiv
       restore = function(s) {
         datasets(s$datasets %||% list()); items(s$items %||% list())
         updateSelectInput(session, "pm_active", choices = names(s$datasets %||% list()), selected = s$active)
-        for (k in c("context", "findings", "recommendations")) updateTextAreaInput(session, k, value = s[[k]] %||% "")
+        for (k in c("context", "findings", "recommendations")) update_rich_text(session, k, s[[k]] %||% "")
         if (!is.null(s$include_pdm)) updateCheckboxInput(session, "include_pdm", value = s$include_pdm)
       })
   })

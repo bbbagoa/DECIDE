@@ -148,8 +148,8 @@ provider_fetch <- function(provider, server, project, form, token,
       if (res$status_code >= 400) {
         stop("Server returned HTTP ", res$status_code, call. = FALSE)
       }
-      jsonlite::fromJSON(rawToChar(res$content), simplifyDataFrame = TRUE,
-                         flatten = TRUE)
+      txt <- rawToChar(res$content); Encoding(txt) <- "UTF-8"
+      jsonlite::fromJSON(txt, simplifyDataFrame = TRUE, flatten = TRUE)
     }
   }
 

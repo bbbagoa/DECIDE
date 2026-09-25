@@ -98,5 +98,33 @@
       downloads = Math.max(0, downloads - 1);
       if (!downloads) { clearTimeout(dlTimer); action = null; hide(); }
     });
+    // Start a fresh session: reload without the restore prompt. The flag
+    // leaves the address once the server has read it, so a later refresh
+    // offers the saved sessions again.
+    Shiny.addCustomMessageHandler("tw-fresh", function (m) {
+      window.location.href = window.location.pathname + "?fresh=1";
+    });
+  });
+  // A page cannot change the browser zoom, but a high zoom mostly narrows the
+  // page (125% on a laptop leaves ~1,230 px), where some layouts crowd. Below
+  // 1,400 px the app sets its base text size to 90%: text, padding and
+  // spacing (all in rem) shrink as with a 90% zoom. CSS zoom would do it too,
+  // but it throws off the menus and pickers that position themselves.
+  function fitZoom() {
+    document.documentElement.style.fontSize = window.innerWidth < 1400 ? "90%" : "";
+  }
+  fitZoom();
+  $(window).on("resize", function () { clearTimeout(window._twFit); window._twFit = setTimeout(fitZoom, 150); });
+
+  // Keep-alive: a small message every 30 s while the page is open, so proxies
+  // and hosting servers do not close an idle session. No observer reads it.
+  setInterval(function () {
+    if (window.Shiny && Shiny.shinyapp && Shiny.shinyapp.isConnected())
+      Shiny.setInputValue("tw_keepalive", Date.now());
+  }, 30000);
+
+  $(document).on("shiny:connected", function () {
+    if (/[?&]fresh=1/.test(window.location.search))
+      setTimeout(function () { history.replaceState(null, "", window.location.pathname); }, 1500);
   });
 })();

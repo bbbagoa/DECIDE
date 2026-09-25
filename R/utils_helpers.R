@@ -590,3 +590,45 @@ fit_to_points <- function(m, lon, lat) {
   xr <- map_fit_range(lon); yr <- map_fit_range(lat)
   leaflet::fitBounds(m, xr[1], yr[1], xr[2], yr[2])
 }
+
+#' Chain area pickers: each level lists only the areas inside those picked above
+#'
+#' Owns the choices of every level (Admin 1 lists everything); a level keeps
+#' whatever of its selection is still listed. Choices are sent only when they
+#' change, so an open menu is not redrawn under the pointer.
+#' @param ids Picker input ids, top level first.
+#' @param cols Reactive or function: the data column of each level ("" or NULL
+#'   when a level is not mapped).
+#' @param data Reactive data.frame.
+#' @param hint Optional function(k): values to select at level k while its
+#'   picker is empty (a restored scope waiting for its choices).
+#' @noRd
+cascade_pickers <- function(session, input, ids, cols, data, hint = NULL) {
+  sent <- list()
+  observeEvent(data(), sent <<- list(), priority = 10)
+  observe({
+    df <- data(); req(df)
+    cl <- cols()
+    keep <- NULL
+    for (k in seq_along(ids)) {
+      col <- cl[k]
+      if (is.na(col) || !nzchar(col) || !col %in% names(df)) {
+        if (length(sent[[ids[k]]])) {
+          shinyWidgets::updatePickerInput(session, ids[k], choices = character(0), selected = character(0))
+          sent[[ids[k]]] <<- character(0)
+        }
+        next
+      }
+      v <- as.character(df[[col]])
+      ch <- sort(unique(stats::na.omit(if (is.null(keep)) v else v[keep])))
+      cur <- input[[ids[k]]]
+      if (!length(cur) && !is.null(hint)) cur <- isolate(hint(k))
+      sel <- intersect(cur %||% character(0), ch)
+      if (!identical(ch, sent[[ids[k]]]) || !setequal(sel, input[[ids[k]]] %||% character(0))) {
+        shinyWidgets::updatePickerInput(session, ids[k], choices = ch, selected = sel)
+        sent[[ids[k]]] <<- ch
+      }
+      if (length(sel)) keep <- (if (is.null(keep)) TRUE else keep) & v %in% sel
+    }
+  })
+}

@@ -56,15 +56,15 @@ mod_area_scope_server <- function(id, data, workspace = NULL, key = NULL, log = 
                           selected = if (isTRUE(want %in% keep)) want else "")
       }
     })
-    for (k in 1:2) local({
-      kk <- k
-      observeEvent(input[[paste0("col", kk)]], {
-        df <- data(); cl <- input[[paste0("col", kk)]]
-        ch <- if (!is.null(df) && isTruthy(cl) && cl %in% names(df)) sort(unique(as.character(stats::na.omit(df[[cl]])))) else character(0)
-        sel <- intersect(pending()[[kk]]$values %||% character(0), ch)
-        shinyWidgets::updatePickerInput(session, paste0("val", kk), choices = ch, selected = sel)
-        if (kk == 2 && length(pending())) { applied(pending()); pending(NULL) }
-      }, ignoreNULL = FALSE)
+    # The second level lists only the areas inside those picked at the first;
+    # a restored scope is selected once its choices are there.
+    cascade_pickers(session, input, c("val1", "val2"),
+                    cols = reactive(c(input$col1 %||% "", input$col2 %||% "")), data = data,
+                    hint = function(k) pending()[[k]]$values)
+    observeEvent(list(input$val1, input$val2), {
+      p <- pending()
+      if (length(p) && all(vapply(seq_along(p), function(k) setequal(input[[paste0("val", k)]] %||% character(0), p[[k]]$values), logical(1))))
+        pending(NULL)
     })
 
     observeEvent(input$apply, {
@@ -75,6 +75,7 @@ mod_area_scope_server <- function(id, data, workspace = NULL, key = NULL, log = 
     })
     observeEvent(input$clear, {
       for (k in 1:2) shinyWidgets::updatePickerInput(session, paste0("val", k), selected = character(0))
+      pending(NULL)
       applied(list())
       audit_add(log, phase, "Areas covered set", "all areas")
     })

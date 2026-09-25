@@ -98,3 +98,19 @@ test_that("two half-width items sit side by side in the monitoring report", {
   expect_match(html, "Chi-square")
   expect_match(html, "Implementation accuracy (Baseline)", fixed = TRUE)
 })
+
+test_that("the officer's formatted texts and comments reach the monitoring report", {
+  df <- data.frame(area = c("A", "A", "B"))
+  sp <- list(type = "count", x = "area", group = "", style = "donut")
+  it <- list(id = "a", source = "process", dataset = "d.csv", title = "Item", comment = "<p><i>seen</i> in <b>A</b></p>",
+             spec = sp, data = TargetWise:::chart_aggregate(df, sp), display = "chart", width = "half")
+  f <- withr::local_tempfile(fileext = ".html")
+  TargetWise:::write_monitoring_report(f, list(items = list(it), context = "Plain\ntext",
+                                               findings = '<p><span style="color: #c5192d">Low</span> coverage</p><script>x()</script>'))
+  html <- paste(readLines(f, encoding = "UTF-8"), collapse = "\n")
+  expect_match(html, '<div class="rich"><p>Plain<br>text</p></div>', fixed = TRUE)
+  expect_match(html, '<div class="rich"><p><span style="color: #c5192d">Low</span> coverage</p></div>', fixed = TRUE)
+  expect_match(html, '<div class="rich"><p><i>seen</i> in <b>A</b></p></div>', fixed = TRUE)
+  expect_false(grepl("<script>x()", html, fixed = TRUE) || grepl("@@RICH", html))
+  expect_match(html, "_Not written._|<em>Not written.</em>")   # recommendations left empty
+})

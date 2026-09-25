@@ -9,7 +9,7 @@ mod_spot_checking_ui <- function(id) {
     bslib::layout_sidebar(
       fillable = FALSE,
       sidebar = bslib::sidebar(
-        title = "Spot Check Filters",
+        title = "Areas and search",
         width = 300,
         shinyWidgets::pickerInput(
           inputId = ns("sc_admin1"), label = "Admin 1:",
@@ -28,34 +28,9 @@ mod_spot_checking_ui <- function(id) {
         ),
         textInput(ns("sc_search"), "Search in records:", placeholder = "e.g. household ID"),
         hr(),
-        tags$h6("Sampling"),
-        radioButtons(ns("sc_mode"), "Interview mode",
-                     choices = c("Face to face" = "face", "Remote (phone)" = "remote"), selected = "face", inline = TRUE),
-        conditionalPanel(
-          condition = sprintf("input['%s'] === 'remote'", ns("sc_mode")),
-          selectInput(ns("sc_phone_col"), "Phone number column", choices = character(0), width = "100%"),
-          tags$div(class = "small text-muted mb-2", "Only households with a valid phone number are sampled.")
-        ),
-        numericInput(ns("sc_sample_size"), "Sample size:", value = 30, min = 1, max = 100000, step = 1),
-        selectInput(ns("sc_per_unit"), "Sample size applies to",
-                    choices = c("The whole scope" = "all", "Each Admin 1" = "admin1", "Each Admin 2" = "admin2",
-                                "Each Admin 3" = "admin3", "Each village" = "village"),
-                    selected = "all", width = "100%"),
-        shinyWidgets::pickerInput(
-          inputId = ns("sc_sample_method"),
-          label = "Method:",
-          choices = c(
-            "Simple Random" = "random",
-            "Systematic" = "systematic",
-            "PPS (size = hh size or weight)" = "pps"
-          ),
-          selected = "random"
-        ),
-        numericInput(ns("sc_seed"), "Random seed:", value = 12345, min = 1, step = 1),
-        hr(),
         tags$div(
           class = "d-flex gap-2 mt-2",
-          actionButton(ns("sc_apply"), "Apply", class = "btn-primary btn-sm flex-fill", icon = icon("filter")),
+          actionButton(ns("sc_apply"), "Apply", class = "btn-outline-primary btn-sm flex-fill", icon = icon("filter")),
           actionButton(ns("sc_clear"), label = NULL, icon = icon("xmark"), class = "btn-outline-secondary btn-sm")
         ),
         hr(),
@@ -94,6 +69,36 @@ mod_spot_checking_ui <- function(id) {
         id = ns("sc_tabs"),
         bslib::nav_panel(
           value = "sample", title = tagList(bsicons::bs_icon("list-check"), " 1. Sample for checking"),
+          # How the sample is drawn, above the list it produces.
+          tags$div(
+            class = "wfp-oneline bg-body-tertiary rounded-3 px-3 pt-2 mt-3",
+            tags$div(style = "flex: 0 1 230px;",
+                     radioButtons(ns("sc_mode"), "Interview mode",
+                                  choices = c("Face to face" = "face", "Remote (phone)" = "remote"), selected = "face", inline = TRUE)),
+            conditionalPanel(
+              condition = sprintf("input['%s'] === 'remote'", ns("sc_mode")),
+              tags$div(style = "flex: 0 1 200px;",
+                       selectInput(ns("sc_phone_col"), tagList("Phone column", info_tip("Only households with a valid phone number are sampled.")),
+                                   choices = character(0), width = "100%"))),
+            tags$div(style = "flex: 0 1 120px;",
+                     numericInput(ns("sc_sample_size"), "Sample size", value = 30, min = 1, max = 100000, step = 1, width = "100%")),
+            tags$div(style = "flex: 0 1 180px;",
+                     selectInput(ns("sc_per_unit"), "Applies to",
+                                 choices = c("The whole scope" = "all", "Each Admin 1" = "admin1", "Each Admin 2" = "admin2",
+                                             "Each Admin 3" = "admin3", "Each village" = "village"),
+                                 selected = "all", width = "100%")),
+            tags$div(style = "flex: 0 1 230px;",
+                     shinyWidgets::pickerInput(
+                       inputId = ns("sc_sample_method"), label = "Method",
+                       choices = c("Simple Random" = "random", "Systematic" = "systematic",
+                                   "PPS (size = hh size or weight)" = "pps"),
+                       selected = "random", width = "100%",
+                       options = shinyWidgets::pickerOptions(container = "body"))),
+            tags$div(style = "flex: 0 1 110px;",
+                     numericInput(ns("sc_seed"), "Seed", value = 12345, min = 1, step = 1, width = "100%")),
+            tags$div(class = "pb-3",
+                     actionButton(ns("sc_draw"), "Draw sample", class = "btn-primary", icon = icon("shuffle")))
+          ),
           bslib::card(
             class = "mt-3", full_screen = TRUE,
             bslib::card_header(
@@ -121,74 +126,66 @@ mod_spot_checking_ui <- function(id) {
             class = "text-muted small",
             "Export the sample above, re-collect those households, then load the results here to measure how far the two rounds agree."
           ),
+          # Two numbered parts: where the re-collected data comes from, then
+          # how the two rounds are compared; the actions close the second.
           tags$div(
-            class = "d-flex flex-wrap align-items-end gap-3",
+            class = "wfp-vc",
             tags$div(
-              style = "flex: 0 1 220px;",
-              shinyWidgets::pickerInput(
-                ns("verif_source"), "Verification data from:",
-                choices = c("File upload" = "file", "MODA form" = "moda"),
-                selected = "file", width = "100%"
-              )
-            ),
-            conditionalPanel(
-              condition = sprintf("input['%s'] == 'file'", ns("verif_source")),
-              tags$div(
-                style = "flex: 1 1 320px;",
+              class = "wfp-vc-col",
+              tags$div(class = "wfp-vc-head", tags$span(class = "wfp-vc-num", "1"), "Verification data"),
+              shinyWidgets::radioGroupButtons(
+                ns("verif_source"), NULL,
+                choices = c("File" = "file", "MODA form" = "moda"),
+                selected = "file", size = "sm", status = "outline-primary"
+              ),
+              conditionalPanel(
+                condition = sprintf("input['%s'] == 'file'", ns("verif_source")),
                 fileInput(
-                  ns("verif_file"), "Verification dataset",
+                  ns("verif_file"), NULL,
                   accept = c(".xlsx", ".xls", ".sav", ".dta", ".csv", ".parquet"),
-                  width = "100%"
+                  width = "100%", placeholder = "Re-collected households (Excel, CSV, SPSS, Stata, Parquet)"
                 )
-              )
+              ),
+              conditionalPanel(
+                condition = sprintf("input['%s'] == 'moda'", ns("verif_source")),
+                tags$div(
+                  class = "d-flex align-items-end gap-2",
+                  tags$div(style = "flex: 1 1 110px;",
+                           textInput(ns("verif_form_id"), "Form ID", placeholder = "e.g. 123456", width = "100%")),
+                  tags$div(style = "flex: 1 1 160px;",
+                           passwordInput(ns("verif_token"), "API key", width = "100%")),
+                  tags$div(class = "wfp-vc-fetch",
+                           actionButton(ns("verif_fetch"), "Fetch", class = "btn-outline-primary",
+                                        icon = icon("cloud-arrow-down"))))
+              ),
+              uiOutput(ns("verif_status"))
             ),
-            conditionalPanel(
-              condition = sprintf("input['%s'] == 'moda'", ns("verif_source")),
+            tags$div(
+              class = "wfp-vc-col",
+              tags$div(class = "wfp-vc-head", tags$span(class = "wfp-vc-num", "2"), "Comparison"),
+              bslib::layout_columns(
+                col_widths = c(4, 5, 3), fill = FALSE, gap = ".75rem",
+                shinyWidgets::pickerInput(
+                  ns("verif_key"), "Match records on", choices = NULL, width = "100%",
+                  options = shinyWidgets::pickerOptions(liveSearch = TRUE, container = "body")
+                ),
+                shinyWidgets::pickerInput(
+                  ns("verif_cols"), "Fields to compare", choices = NULL, multiple = TRUE, width = "100%",
+                  options = shinyWidgets::pickerOptions(actionsBox = TRUE, liveSearch = TRUE, container = "body",
+                                                        selectedTextFormat = "count > 2", countSelectedText = "{0} fields")
+                ),
+                numericInput(ns("verif_tolerance"),
+                             tagList("Tolerance", info_tip("Numeric answers closer than this count as agreeing.")),
+                             value = 0, min = 0, step = 0.1, width = "100%")
+              ),
               tags$div(
-                class = "d-flex flex-wrap align-items-end gap-2",
-                style = "flex: 1 1 420px;",
-                tags$div(
-                  style = "flex: 1 1 150px;",
-                  textInput(ns("verif_form_id"), "Verification Form ID:", placeholder = "e.g. 123456", width = "100%")
-                ),
-                tags$div(
-                  style = "flex: 1 1 200px;",
-                  passwordInput(ns("verif_token"), "API Gateway Key:", width = "100%")
-                ),
-                tags$div(
-                  class = "pb-3",
-                  actionButton(ns("verif_fetch"), "Fetch", class = "btn-outline-primary",
-                               icon = icon("cloud-arrow-down"))
-                )
+                class = "wfp-vc-actions",
+                downloadButton(ns("verif_download"), "Excel", class = "btn-outline-secondary btn-sm",
+                               icon = icon("file-excel"), title = "Comparison (Excel)"),
+                downloadButton(ns("verif_report"), "Report", class = "btn-outline-secondary btn-sm",
+                               icon = icon("file-lines"), title = "Verification report (HTML)"),
+                actionButton(ns("verif_run"), "Run comparison", class = "btn-primary", icon = icon("code-compare"))
               )
-            )
-          ),
-          uiOutput(ns("verif_status")),
-          tags$div(
-            class = "d-flex flex-wrap align-items-end gap-3 mt-2",
-            tags$div(
-              style = "flex: 0 1 240px;",
-              shinyWidgets::pickerInput(
-                ns("verif_key"), "Match records on:", choices = NULL, width = "100%",
-                options = shinyWidgets::pickerOptions(liveSearch = TRUE)
-              )
-            ),
-            tags$div(
-              style = "flex: 1 1 340px; max-width: 560px;",
-              shinyWidgets::pickerInput(
-                ns("verif_cols"), "Fields to compare:", choices = NULL, multiple = TRUE, width = "100%",
-                options = shinyWidgets::pickerOptions(actionsBox = TRUE, liveSearch = TRUE)
-              )
-            ),
-            tags$div(
-              style = "flex: 0 1 150px;",
-              numericInput(ns("verif_tolerance"), "Numeric tolerance:", value = 0, min = 0, step = 0.1, width = "100%")
-            ),
-            tags$div(
-              class = "d-flex align-items-end gap-2 ms-auto pb-3",
-              actionButton(ns("verif_run"), "Run comparison", class = "btn-primary", icon = icon("code-compare")),
-              downloadButton(ns("verif_report"), "Verification report (HTML)", class = "btn-outline-primary"),
-              downloadButton(ns("verif_download"), "Excel", class = "btn-outline-secondary")
             )
           ),
           uiOutput(ns("verif_hint")),
@@ -263,29 +260,22 @@ mod_spot_checking_server <- function(id, uploaded_df, user_setup, workspace = NU
                         selected = isolate(input$sc_phone_col) %||% if (length(guess)) guess[1] else NULL)
     })
 
-    # Update filter choices when data or mappings change
+    # Each admin level lists only the areas inside those picked above.
+    cascade_pickers(session, input, c("sc_admin1", "sc_admin2", "sc_admin3"),
+                    cols = reactive(vapply(c("admin1", "admin2", "admin3"), function(l) as.character(user_setup[[l]] %||% "")[1], character(1))),
+                    data = uploaded_df)
+    # New data: keep the applied areas that still exist, as the pickers do.
     observe({
-      req(uploaded_df())
-      df <- uploaded_df()
+      df <- uploaded_df(); req(df)
       for (lvl in c("admin1", "admin2", "admin3")) {
         col <- user_setup[[lvl]]
-        if (!is.null(col) && col %in% names(df)) {
-          shinyWidgets::updatePickerInput(
-            session = session,
-            inputId = paste0("sc_", lvl),
-            choices = sort(unique(as.character(df[[col]]))),
-            selected = character(0)
-          )
-        }
+        a <- isolate(applied[[lvl]])
+        if (length(a)) applied[[lvl]] <- if (shiny::isTruthy(col) && col %in% names(df))
+          intersect(a, unique(as.character(df[[col]]))) else NULL
       }
-      applied$admin1 <- NULL
-      applied$admin2 <- NULL
-      applied$admin3 <- NULL
-      applied$search <- ""
-      updateTextInput(session, "sc_search", value = "")
     })
 
-    observeEvent(input$sc_apply, {
+    observeEvent(list(input$sc_apply, input$sc_draw), ignoreInit = TRUE, {
       waiter::waiter_show(
         html = waiter_content("Drawing the spot-check sample\u2026"),
         color = "rgba(10, 30, 50, 0.65)"
@@ -544,15 +534,24 @@ mod_spot_checking_server <- function(id, uploaded_df, user_setup, workspace = NU
       comparison(NULL)
     })
 
+    # The key entered for an earlier MODA import is filled in.
+    observeEvent(input$verif_source, {
+      k <- api_key_get(session, "moda")
+      if (identical(input$verif_source, "moda") && !is.null(k) && !shiny::isTruthy(input$verif_token))
+        updateTextInput(session, "verif_token", value = k)
+    })
+
     # --- Source B: a second MODA form ---
     observeEvent(input$verif_fetch, {
-      if (!shiny::isTruthy(input$verif_form_id) || !shiny::isTruthy(input$verif_token)) {
+      token <- if (shiny::isTruthy(input$verif_token)) input$verif_token else api_key_get(session, "moda")
+      if (!shiny::isTruthy(input$verif_form_id) || !shiny::isTruthy(token)) {
         showNotification("Enter both the verification Form ID and the API key.", type = "warning")
         return()
       }
+      api_key_set(session, token, "moda")
       moda_async_fetch(
         form_id = input$verif_form_id,
-        token = input$verif_token,
+        token = token,
         existing_df = NULL,
         page_size = MODA_PAGE_SIZE,
         session = session,
@@ -592,12 +591,12 @@ mod_spot_checking_server <- function(id, uploaded_df, user_setup, workspace = NU
       if (is.null(v)) return(NULL)
       s <- tryCatch(sampled_data(), error = function(e) NULL)
       shared <- if (is.null(s)) character(0) else intersect(names(s), names(v))
-      tags$p(
-        class = if (length(shared) > 0) "text-success small mb-0" else "text-danger small mb-0",
-        paste0(
-          format(nrow(v), big.mark = ","), " verification records loaded \u2014 ",
-          length(shared), " column(s) in common with the sample."
-        )
+      ok <- length(shared) > 0
+      tags$div(
+        class = paste("small mb-1", if (ok) "text-success" else "text-danger"),
+        bsicons::bs_icon(if (ok) "check-circle-fill" else "exclamation-triangle-fill"), " ",
+        sprintf("%s records loaded; %d column%s in common with the sample.", format(nrow(v), big.mark = ","),
+                length(shared), if (length(shared) == 1) "" else "s")
       )
     })
 

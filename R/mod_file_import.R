@@ -37,16 +37,50 @@ mod_file_import_ui <- function(id, display = FALSE) {
 #' @return A plain data.frame (haven-labelled columns converted to factors).
 #' @noRd
 read_import_file <- function(path, ext) {
-  switch(ext,
+  df <- switch(ext,
     xlsx = as.data.frame(readxl::read_excel(path), stringsAsFactors = FALSE),
     xls  = as.data.frame(readxl::read_excel(path), stringsAsFactors = FALSE),
     sav  = haven::as_factor(haven::read_sav(path)),
     dta  = haven::as_factor(haven::read_dta(path)),
-    csv  = data.table::fread(path, data.table = FALSE, encoding = "UTF-8",
+    # Read as bytes: a CSV saved by Excel on a French or Spanish Windows is
+    # Windows-1252, not UTF-8; utf8_frame() below sorts out each value.
+    csv  = data.table::fread(path, data.table = FALSE, encoding = "unknown",
                              na.strings = c("", "NA", "NULL"), showProgress = FALSE),
     parquet = as.data.frame(nanoparquet::read_parquet(path), stringsAsFactors = FALSE),
     stop("Unsupported file type: ", ext)
   )
+  utf8_frame(as.data.frame(df, stringsAsFactors = FALSE))
+}
+
+#' Text as UTF-8, whatever the file was saved in
+#'
+#' Values that are not valid UTF-8 are taken as Windows-1252 (the Excel and
+#' old SPSS/Stata default in French, Spanish and Portuguese offices; a
+#' superset of Latin-1) and converted; valid ones are marked UTF-8. Works value
+#' by value, so a file mixing both still reads right.
+#' @noRd
+utf8_text <- function(x) {
+  if (!is.character(x)) return(x)
+  bad <- !is.na(x) & !validUTF8(x)
+  if (any(bad)) x[bad] <- iconv(x[bad], from = "CP1252", to = "UTF-8", sub = "?")
+  Encoding(x) <- "UTF-8"
+  x
+}
+
+#' `utf8_text()` over a data frame: text columns, factor levels, column names
+#' (and the byte-order mark some tools leave on the first name)
+#' @noRd
+utf8_frame <- function(df) {
+  if (is.null(df)) return(df)
+  for (k in seq_along(df)) {
+    v <- df[[k]]
+    if (is.character(v)) df[[k]] <- utf8_text(v)
+    else if (is.factor(v)) levels(df[[k]]) <- utf8_text(levels(v))
+  }
+  nm <- utf8_text(names(df))
+  if (length(nm) && startsWith(nm[1], "\ufeff")) nm[1] <- substring(nm[1], 2)
+  names(df) <- nm
+  df
 }
 
 #' file_import Server Functions

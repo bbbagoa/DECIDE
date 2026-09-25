@@ -7,14 +7,15 @@
 #' @noRd
 #'
 #' @importFrom shiny NS tagList
-mod_moda_import_ui <- function(id) {
+mod_moda_import_ui <- function(id, label = "Import from a server", class = "btn-outline-secondary w-100") {
   ns <- NS(id)
   tagList(
     actionButton(
       ns("btn_open_moda"),
-      "Import from a server",
-      class = "btn-outline-secondary w-100",
-      icon = icon("cloud-download")
+      label,
+      class = class,
+      icon = icon("cloud-download"),
+      title = "Import from a MODA / ONA form"
     )
   )
 }
@@ -284,6 +285,7 @@ moda_async_fetch <- function(form_id, token, existing_df = NULL, page_size = MOD
     df <- dplyr::bind_rows(state$all_pages)
     state$all_pages <- NULL   # release the per-page copies before merging
     names(df) <- make_unique_names(strip_prefix(names(df)))
+    df <- utf8_frame(df)   # same text handling as file imports
 
     w$update(html = waiter_content("Downloading form definition..."))
     odk_path <- download_moda_xlsform(form_id, token)
@@ -311,128 +313,22 @@ moda_async_fetch <- function(form_id, token, existing_df = NULL, page_size = MOD
     }
   }
 
-  fetch_chunk <- function() {
-    if (state$done || (!is.null(session) && session$isClosed())) return()
-
-    url <- paste0(base_url, "/", form_id, ".json?page=", state$page, "&page_size=", page_size, query)
-
-    page_msg <- if (is.na(state$total_pages)) {
-      paste("chunk", state$page)
-    } else {
-      paste0("chunk ", state$page, "/", state$total_pages)
-    }
-    records_msg <- if (state$total_rows > 0) {
-      paste0(prettyNum(state$total_rows, big.mark = ",", scientific = FALSE), " records so far")
-    } else {
-      "Starting download..."
-    }
-    pct <- if (is.na(state$total_pages)) NULL else round(100 * (state$page - 1) / state$total_pages, 0)
-    w$update(html = waiter_content(
-      message = "Downloading MODA data...",
-      percent = pct,
-      subtitle = paste0(page_msg, " | ", records_msg)
-    ))
-    if (!is.null(session)) session$flushOutput()
-
-    pool <- curl::new_pool()
-    h <- curl::new_handle()
-    curl::handle_setopt(h, url = url, connecttimeout = 15L, timeout = 60L, followlocation = TRUE)
-    curl::handle_setheaders(
-      h,
-      Authorization = paste("Token ", token),
-      `User-Agent` = "TargetWise/0.1",
-      Accept = "application/json"
-    )
-    state$response_done <- FALSE
-
-    on_done <- function(res) {
-      if (state$done || state$response_done) return()
-      state$response_done <- TRUE
-
-      if (res$status_code != 200) {
-        handle_error(paste("MODA returned HTTP", res$status_code))
-        return()
-      }
-
-      if (is.na(state$total_pages)) {
-        hdrs <- curl::parse_headers_list(res$headers)
-        state$total_pages <- parse_total_pages(hdrs[["link"]])
-      }
-
-      txt <- rawToChar(res$content)
-      df_page <- jsonlite::fromJSON(txt, flatten = TRUE)
-
-      if (!is.data.frame(df_page) || nrow(df_page) == 0) {
-        finalize()
-        return()
-      }
-
-      state$all_pages[[state$page]] <- df_page
-      state$total_rows <- state$total_rows + nrow(df_page)
-
-      page_msg_done <- if (is.na(state$total_pages)) {
-        paste("chunk", state$page)
-      } else {
-        paste0("chunk ", state$page, "/", state$total_pages)
-      }
-      pct_done <- if (is.na(state$total_pages)) NULL else round(100 * state$page / state$total_pages, 0)
+  moda_fetch_pages(
+    page_url = function(pg) paste0(base_url, "/", form_id, ".json?page=", pg, "&page_size=", page_size, query),
+    token = token, page_size = page_size,
+    progress = function(done, total, rows) {
       w$update(html = waiter_content(
         message = "Downloading MODA data...",
-        percent = pct_done,
-        subtitle = paste0(
-          page_msg_done, " | ",
-          prettyNum(state$total_rows, big.mark = ",", scientific = FALSE), " records downloaded"
-        )
-      ))
+        percent = if (is.na(total)) NULL else round(100 * done / total),
+        subtitle = paste0(if (is.na(total)) paste(done, "pages") else paste0(done, "/", total, " pages"), " | ",
+                          prettyNum(rows, big.mark = ",", scientific = FALSE), " records downloaded")))
       if (!is.null(session)) session$flushOutput()
-
-      if (nrow(df_page) < page_size) {
-        finalize()
-        return()
-      }
-
-      state$page <- state$page + 1
-      if (state$page > 10000) {
-        finalize()
-        return()
-      }
-
-      later::later(fetch_chunk, delay = 0)
-    }
-
-    on_fail <- function(err) {
-      if (state$done || state$response_done) return()
-      state$response_done <- TRUE
-      handle_error(conditionMessage(err))
-    }
-
-    curl::multi_add(h, done = on_done, fail = on_fail, pool = pool)
-
-    poll <- function() {
-      if (state$done || state$response_done) return()
-      res <- curl::multi_run(timeout = 0.2, pool = pool)
-      if (res$pending == 0 && !state$response_done) {
-        state$empty_ticks <- if (is.null(state$empty_ticks)) 1 else state$empty_ticks + 1
-        if (state$empty_ticks > 5) {
-          state$response_done <- TRUE
-          handle_error(
-            paste0(
-              "Connection closed before a response was received. ",
-              "(success=", res$success, ", error=", res$error, ")"
-            )
-          )
-          return()
-        }
-      } else {
-        state$empty_ticks <- 0
-      }
-      later::later(poll, delay = 0.1)
-    }
-
-    poll()
-  }
-
-  fetch_chunk()
+    },
+    finished = function(pages) { state$all_pages <- pages; finalize() },
+    failed = function(msg, cancelled = FALSE) handle_error(msg),
+    cancelled = function() !is.null(session) && session$isClosed()
+  )
+  invisible(NULL)
 }
 
 mod_moda_import_server <- function(id) {
@@ -454,11 +350,7 @@ mod_moda_import_server <- function(id) {
     # Reference to the currently active MODA waiter, so Cancel can hide/resume it
     current_waiter <- reactiveVal(NULL)
 
-    # Active curl pool for the in-flight chunk; the timer below drives it.
-    active_pool <- reactiveVal(NULL)
 
-    # Shared state env for the current download, so the timer observer can see it.
-    download_state <- reactiveVal(NULL)
 
     # Helper to render status messages without needing the local do_sync closure
     show_moda_status <- function(type, msg) {
@@ -480,63 +372,6 @@ mod_moda_import_server <- function(id) {
       w <- current_waiter()
       if (!is.null(w)) w$hide()
     }
-
-    # Drives the non-blocking curl pool at ~10 ticks per second, but only
-    # while a download is actually in flight. This used to be a bare
-    # reactiveTimer(100), which kept every session -- including ones that never
-    # touch MODA -- flushing the whole reactive graph ten times a second for as
-    # long as the browser tab stayed open.
-    #
-    # The body is isolated because it writes the same reactives it reads; the
-    # invalidateLater above is what keeps it ticking.
-    observe({
-      if (!isTRUE(download_running())) return()
-      invalidateLater(100, session)
-
-      isolate({
-      state <- download_state()
-      pool <- active_pool()
-      if (is.null(state) || is.null(pool) || state$done) return()
-
-      if (cancel_requested()) {
-        state$done <- TRUE
-        curl::multi_cancel(pool)
-        active_pool(NULL)
-        download_state(NULL)
-        hide_moda_waiter()
-        download_running(FALSE)
-        show_moda_status("info", "Download cancelled by user.")
-        return()
-      }
-
-      if (state$response_done) {
-        active_pool(NULL)
-        download_state(NULL)
-        return()
-      }
-
-      res <- curl::multi_run(timeout = 0.2, pool = pool)
-      if (res$pending == 0 && !state$response_done) {
-        state$empty_ticks <- if (is.null(state$empty_ticks)) 1 else state$empty_ticks + 1
-        if (state$empty_ticks > 5) {
-          state$response_done <- TRUE
-          active_pool(NULL)
-          download_state(NULL)
-          hide_moda_waiter()
-          download_running(FALSE)
-          show_moda_status(
-            "danger",
-            paste0(
-              "Connection closed before a response was received. ",
-              "(success=", res$success, ", error=", res$error, ")"
-            )
-          )
-        }
-      } else {
-        state$empty_ticks <- 0
-      }
-      })
-    })
 
     observeEvent(input$cancel_download, {
       if (!is.null(current_waiter())) current_waiter()$hide()
@@ -598,7 +433,12 @@ mod_moda_import_server <- function(id) {
         },
         textInput(ns("form_id"), paste0(p$form_label, ":"),
                   placeholder = p$form_placeholder, width = "100%"),
-        passwordInput(ns("token"), paste0(p$token_label, ":"), width = "100%")
+        # The key typed for the first import is offered for every later one.
+        passwordInput(ns("token"), paste0(p$token_label, ":"), width = "100%",
+                      value = api_key_get(session, input$provider %||% "moda") %||% ""),
+        if (!is.null(api_key_get(session, input$provider %||% "moda")))
+          tags$div(class = "small text-muted mt-n2 mb-2", bsicons::bs_icon("key"),
+                   " The key entered earlier in this session is filled in; change it if needed. It is never saved.")
       )
     })
 
@@ -626,6 +466,7 @@ mod_moda_import_server <- function(id) {
       req(!download_running())
 
       p <- get_provider(prov)
+      api_key_set(session, input$token, prov)
       download_running(TRUE)
       on.exit(download_running(FALSE), add = TRUE)
 
@@ -658,6 +499,7 @@ mod_moda_import_server <- function(id) {
         }
       )
       req(df)
+      df <- utf8_frame(df)
 
       if (nrow(df) == 0) {
         show_moda_status("warning", "The form has no submissions yet.")
@@ -690,6 +532,8 @@ mod_moda_import_server <- function(id) {
 
       base_url <- "https://api.moda.wfp.org/api/v1/data"
       page_size <- MODA_PAGE_SIZE
+      form_id <- input$form_id; token <- input$token
+      api_key_set(session, token, "moda")
 
       state <- new.env()
       state$page <- 1
@@ -697,13 +541,10 @@ mod_moda_import_server <- function(id) {
       state$total_rows <- 0
       state$total_pages <- NA_integer_
       state$done <- FALSE
-      download_state(state)
 
       show_status <- function(type, msg) {
         hide_moda_waiter()
         download_running(FALSE)
-        active_pool(NULL)
-        download_state(NULL)
         show_moda_status(type, msg)
       }
 
@@ -713,8 +554,6 @@ mod_moda_import_server <- function(id) {
 
         on.exit({
           download_running(FALSE)
-          active_pool(NULL)
-          download_state(NULL)
           w$hide()
         }, add = TRUE)
 
@@ -732,10 +571,11 @@ mod_moda_import_server <- function(id) {
         df <- dplyr::bind_rows(state$all_pages)
         state$all_pages <- NULL   # release the per-page copies
         names(df) <- make_unique_names(strip_prefix(names(df)))
+        df <- utf8_frame(df)   # same text handling as file imports
 
         # Download the XLSForm definition from MODA and apply choice labels
         w$update(html = waiter_content("Downloading form definition...", ns = ns))
-        odk_path <- download_moda_xlsform(input$form_id, input$token)
+        odk_path <- download_moda_xlsform(form_id, token)
 
         w$update(html = waiter_content("Applying choice labels...", ns = ns))
         label_map <- build_odk_label_map(odk_path)
@@ -743,7 +583,7 @@ mod_moda_import_server <- function(id) {
 
         w$update(html = waiter_content("Finalizing...", ns = ns))
         moda_data(df)
-        moda_credentials(list(form_id = input$form_id, token = input$token))
+        moda_credentials(list(form_id = form_id, token = token))
 
         label_msg <- if (!is.null(label_map)) " (choice labels applied)" else ""
         output$sync_status <- renderUI({
@@ -755,116 +595,24 @@ mod_moda_import_server <- function(id) {
         })
       }
 
-      fetch_chunk <- function() {
-        if (state$done || session$isClosed()) return()
-        if (cancel_requested()) {
-          show_status("info", "Download cancelled by user.")
-          return()
-        }
-
-        url <- paste0(base_url, "/", input$form_id, ".json?page=", state$page, "&page_size=", page_size)
-
-        page_msg <- if (is.na(state$total_pages)) {
-          paste("chunk", state$page)
-        } else {
-          paste0("chunk ", state$page, "/", state$total_pages)
-        }
-        records_msg <- if (state$total_rows > 0) {
-          paste0(prettyNum(state$total_rows, big.mark = ",", scientific = FALSE), " records so far")
-        } else {
-          "Starting download..."
-        }
-        pct <- if (is.na(state$total_pages)) NULL else round(100 * (state$page - 1) / state$total_pages, 0)
-
-        w$update(html = waiter_content(
-          message = "Downloading MODA data...",
-          percent = pct,
-          subtitle = paste0(page_msg, " | ", records_msg),
-          ns = ns
-        ))
-        session$flushOutput()
-
-        # Use curl's non-blocking multi interface so the R session stays responsive
-        # and the Cancel button works even while a request is in flight.
-        pool <- curl::new_pool()
-        h <- curl::new_handle()
-        curl::handle_setopt(h, url = url, connecttimeout = 15L, timeout = 60L, followlocation = TRUE)
-        curl::handle_setheaders(
-          h,
-          Authorization = paste("Token ", input$token),
-          `User-Agent` = "TargetWise/0.1",
-          Accept = "application/json"
-        )
-        state$response_done <- FALSE
-
-        on_done <- function(res) {
-          if (state$done || state$response_done) return()
-          state$response_done <- TRUE
-
-          if (res$status_code != 200) {
-            show_status("danger", paste("MODA returned HTTP", res$status_code))
-            return()
-          }
-
-          if (is.na(state$total_pages)) {
-            hdrs <- curl::parse_headers_list(res$headers)
-            state$total_pages <- parse_total_pages(hdrs[["link"]])
-          }
-
-          txt <- rawToChar(res$content)
-          df_page <- jsonlite::fromJSON(txt, flatten = TRUE)
-
-          if (!is.data.frame(df_page) || nrow(df_page) == 0) {
-            finalize()
-            return()
-          }
-
-          state$all_pages[[state$page]] <- df_page
-          state$total_rows <- state$total_rows + nrow(df_page)
-
-          page_msg_done <- if (is.na(state$total_pages)) {
-            paste("chunk", state$page)
-          } else {
-            paste0("chunk ", state$page, "/", state$total_pages)
-          }
-          pct_done <- if (is.na(state$total_pages)) NULL else round(100 * state$page / state$total_pages, 0)
+      moda_fetch_pages(
+        page_url = function(pg) paste0(base_url, "/", form_id, ".json?page=", pg, "&page_size=", page_size),
+        token = token, page_size = page_size,
+        progress = function(done, total, rows) {
+          state$total_rows <- rows
           w$update(html = waiter_content(
             message = "Downloading MODA data...",
-            percent = pct_done,
-            subtitle = paste0(
-              page_msg_done, " | ",
-              prettyNum(state$total_rows, big.mark = ",", scientific = FALSE), " records downloaded"
-            ),
-            ns = ns
-          ))
+            percent = if (is.na(total)) NULL else round(100 * done / total),
+            subtitle = paste0(if (is.na(total)) paste(done, "pages") else paste0(done, "/", total, " pages"), " | ",
+                              prettyNum(rows, big.mark = ",", scientific = FALSE), " records downloaded"),
+            ns = ns))
           session$flushOutput()
-
-          if (nrow(df_page) < page_size) {
-            finalize()
-            return()
-          }
-
-          state$page <- state$page + 1
-          if (state$page > 10000) {
-            finalize()
-            return()
-          }
-
-          fetch_chunk()
-        }
-
-        on_fail <- function(err) {
-          if (state$done || state$response_done) return()
-          state$response_done <- TRUE
-          active_pool(NULL)
-          show_status("danger", conditionMessage(err))
-        }
-
-        curl::multi_add(h, done = on_done, fail = on_fail, pool = pool)
-        active_pool(pool)
-      }
-
-      fetch_chunk()
+        },
+        # The engine calls back from later(), outside any reactive context.
+        finished = function(pages) isolate({ state$all_pages <- pages; finalize() }),
+        failed = function(msg, cancelled = FALSE) isolate(show_status(if (cancelled) "info" else "danger", msg)),
+        cancelled = function() session$isClosed() || isTRUE(isolate(cancel_requested()))
+      )
     })
 
     # Return the reactive data and credentials so the main server can use them

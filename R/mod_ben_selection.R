@@ -296,10 +296,8 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
       for (lvl in c("admin1", "admin2", "admin3")) {
         col <- user_setup[[lvl]]
         if (!is.null(col) && col %in% names(df)) {
-          ch <- sort(unique(as.character(df[[col]])))
-          keep <- intersect(isolate(applied[[lvl]]) %||% character(0), ch)
-          shinyWidgets::updatePickerInput(session = session, inputId = paste0("ben_", lvl),
-                                          choices = ch, selected = keep)
+          # The pickers' choices come from cascade_pickers() below.
+          keep <- intersect(isolate(applied[[lvl]]) %||% character(0), unique(as.character(df[[col]])))
           applied[[lvl]] <- if (length(keep)) keep else NULL
         }
       }
@@ -321,6 +319,11 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
         }
       }
     })
+
+    # Each admin level lists only the areas inside those picked above.
+    cascade_pickers(session, input, c("ben_admin1", "ben_admin2", "ben_admin3"),
+                    cols = reactive(vapply(c("admin1", "admin2", "admin3"), function(l) as.character(user_setup[[l]] %||% "")[1], character(1))),
+                    data = full_df)
 
     observeEvent(input$ben_apply, {
       waiter::waiter_show(

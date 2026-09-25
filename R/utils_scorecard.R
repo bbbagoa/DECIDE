@@ -1249,3 +1249,24 @@ read_scorecard_workbook <- function(path) {
   }
   sc
 }
+
+#' Vulnerable households by area
+#'
+#' @param area Area of each household (any type; missing -> "(missing)").
+#' @param y 1 = vulnerable, 0 = not, NA = no outcome (left out).
+#' @return data.frame(area, households, vulnerable, share), most vulnerable
+#'   first, or NULL when nothing has an outcome.
+#' @noRd
+vulnerability_by_area <- function(area, y) {
+  ok <- !is.na(y)
+  if (!any(ok)) return(NULL)
+  a <- as.character(area[ok]); a[is.na(a) | !nzchar(trimws(a))] <- "(missing)"
+  v <- y[ok] == 1
+  n <- tapply(v, a, length); k <- tapply(v, a, sum)
+  out <- data.frame(area = names(n), households = as.integer(n), vulnerable = as.integer(k[names(n)]),
+                    stringsAsFactors = FALSE)
+  out$share <- out$vulnerable / out$households
+  out <- out[order(-out$share, -out$households), , drop = FALSE]
+  rownames(out) <- NULL
+  out
+}

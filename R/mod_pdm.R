@@ -43,6 +43,7 @@ mod_pdm_ui <- function(id, explore = NULL) {
                            selected = "PDM"),
               fileInput(ns("pdm_file"), NULL, width = "100%", accept = c(".xlsx", ".xls", ".sav", ".dta", ".csv", ".parquet"),
                         placeholder = "One row per surveyed household"),
+              tags$div(class = "mt-1 mb-2", mod_moda_import_ui(ns("moda"))),
               uiOutput(ns("pdm_file_status"))),
         panel("areas", "Areas covered", "geo-alt", mod_area_scope_ui(ns("scope"), title = NULL)),
         panel("benef", "2. Who received assistance", "person-check",
@@ -138,7 +139,7 @@ mod_pdm_server <- function(id, workspace = NULL, country_office = reactive(NULL)
     workspace_register(workspace, "pdm",
       snapshot = function() {
         if (is.null(pdm_df())) return(NULL)
-        list(df = pdm_all(), results = results(),
+        list(df = pdm_all(), results = results(), source = pdm_source(),
              inputs = lapply(stats::setNames(pdm_inputs, pdm_inputs), function(k) input[[k]]),
              options = list(data_kind = input$data_kind, elig_source = input$pdm_elig_source, weight_mode = input$pdm_weight_mode,
                             pop_scope = input$pop_scope, pop_benef = input$pop_benef,
@@ -147,6 +148,7 @@ mod_pdm_server <- function(id, workspace = NULL, country_office = reactive(NULL)
       },
       restore = function(s) {
         pdm_df(s$df)
+        pdm_source(s$source)
         results(s$results)
         cols <- names(s$df)
         for (k in pdm_inputs) {
@@ -249,10 +251,21 @@ mod_pdm_server <- function(id, workspace = NULL, country_office = reactive(NULL)
       df <- tryCatch(read_import_file(input$pdm_file$datapath, ext),
                      error = function(e) { showNotification(paste("Could not read file:", conditionMessage(e)), type = "error", duration = 10); NULL })
       req(df)
+      take_pdm(df, input$pdm_file$name)
+    })
+    pdm_source <- reactiveVal(NULL)
+    # The same data can come from a MODA / ONA form.
+    moda <- mod_moda_import_server("moda")
+    observeEvent(moda$data(), {
+      df <- moda$data(); req(df)
+      take_pdm(df, sprintf("MODA form %s", moda$credentials()$form_id %||% ""))
+    })
+    take_pdm <- function(df, name) {
       pdm_df(df)
+      pdm_source(name)
       results(NULL)
       audit_add(modification_log, "Monitoring", paste(input$data_kind %||% "PDM", "data loaded"),
-                sprintf("%s (%s records)", input$pdm_file$name, nrow(df)))
+                sprintf("%s (%s records)", name, nrow(df)))
 
       cols <- names(df)
       guess <- function(keys) {
@@ -271,7 +284,7 @@ mod_pdm_server <- function(id, workspace = NULL, country_office = reactive(NULL)
                                       selected = guess(c("admin1", "province", "region")) %||% "(none)")
       shinyWidgets::updatePickerInput(session, "pdm_weight", choices = c("(none)", cols),
                                       selected = guess(c("weight", "poids", "pond")) %||% "(none)")
-    })
+    }
 
     output$pdm_file_status <- renderUI({
       df <- pdm_df()
@@ -659,7 +672,7 @@ mod_pdm_server <- function(id, workspace = NULL, country_office = reactive(NULL)
     list(
       df = pdm_scoped,
       areas = scope$text,
-      name = reactive(if (is.null(input$pdm_file)) paste(input$data_kind %||% "PDM", "data") else input$pdm_file$name),
+      name = reactive(pdm_source() %||% paste(input$data_kind %||% "PDM", "data")),
       kind = reactive(input$data_kind %||% "PDM"),
       results = results,
       tolerance = reactive(c((input$tol_lower %||% 5) / 100, (input$tol_upper %||% 20) / 100))

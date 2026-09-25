@@ -2016,6 +2016,12 @@
     {"en": "Reaching the most vulnerable", "fr": "Atteindre les plus vulnérables"},
     {"en": "WFP guidance", "fr": "Orientations du PAM"},
     {"en": "Targeting and Prioritization Operational Guidance Note", "fr": "Note d'orientation opérationnelle sur le ciblage et la priorisation"},
-    {"en": "Share of households (%)", "fr": "Part des ménages (%)"}
+    {"en": "Share of households (%)", "fr": "Part des ménages (%)"},
+    {"en": "WFP VAM Needs Assessment and Targeting Unit", "fr": "Unité Évaluation des besoins et Ciblage du VAM (PAM)"},
+    {"en": "Paragraph style", "fr": "Style de paragraphe"},
+    {"en": "Text size", "fr": "Taille du texte"},
+    {"en": "Chart style", "fr": "Style du graphique"},
+    {"en": "A pie or donut shows parts of a whole: use it for counts or totals, not averages or percentages.", "fr": "Un camembert ou un anneau montre les parts d'un tout : utilisez-le pour des effectifs ou des totaux, pas des moyennes ou des pourcentages."},
+    {"en": "A pie or donut shows one series: the split is added up. Use bars to compare the groups.", "fr": "Un camembert ou un anneau montre une seule série : la répartition est additionnée. Utilisez des barres pour comparer les groupes."}
   ]
 }

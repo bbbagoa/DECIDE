@@ -22,6 +22,8 @@ mod_chart_builder_ui <- function(id, presets = names(chart_presets())) {
         shinyWidgets::radioGroupButtons(ns("display"), "Display as", choices = c("Chart" = "chart", "Table" = "table"),
                                         selected = "chart", size = "sm", status = "outline-primary", justified = TRUE),
         selectInput(ns("type"), "Show", choices = chart_types(), width = "100%"),
+        conditionalPanel(sprintf("input['%s'] !== 'table'", ns("display")),
+                         selectInput(ns("style"), "Chart style", choices = chart_styles(), width = "100%")),
         conditionalPanel(sprintf("input['%s'] !== 'trend'", ns("type")),
                          selectInput(ns("x"), "By", choices = character(0), width = "100%")),
         conditionalPanel(sprintf("input['%s'] === 'trend'", ns("type")),
@@ -58,8 +60,8 @@ mod_chart_builder_ui <- function(id, presets = names(chart_presets())) {
         tags$div(
           class = "wfp-cb-add",
           textInput(ns("title"), "Title in the report", width = "100%"),
-          textAreaInput(ns("comment"), "Your comment (what it shows, why it matters)", rows = 3, width = "100%",
-                        placeholder = "e.g. Women made up 38% of participants in Beni, below the 50% target; sessions were held on market days."),
+          rich_text_input(ns("comment"), "Your comment (what it shows, why it matters)", rows = 3,
+                          placeholder = "e.g. Women made up 38% of participants in Beni, below the 50% target; sessions were held on market days."),
           actionButton(ns("add"), "Add to report", icon = icon("plus"), class = "btn-primary")
         )
       )
@@ -123,11 +125,13 @@ mod_chart_builder_server <- function(id, data, source, dataset_name = reactive("
 
     spec <- reactive(list(type = input$type, x = input$x, group = input$group, value = input$value, den = input$den,
                           date = input$date, period = input$period, filter_col = input$filter_col,
-                          filter_vals = input$filter_vals, pct = input$pct))
+                          filter_vals = input$filter_vals, pct = input$pct, style = input$style %||% "auto"))
     agg <- reactive(tryCatch(chart_aggregate(data(), spec()), error = function(e) NULL))
 
     output$stat_note <- renderUI({
       sp <- spec()
+      pn <- if (!identical(input$display, "table")) chart_pie_note(sp)
+      if (!is.null(pn)) return(tags$div(class = "small text-warning mb-2", bsicons::bs_icon("info-circle"), " ", pn))
       if (!identical(sp$type, "crosstab")) return(NULL)
       if (!nzchar(sp$group %||% "")) return(tags$div(class = "small text-warning mb-2", "Choose the column variable in 'Split by'."))
       d <- agg(); req(d)
@@ -144,17 +148,35 @@ mod_chart_builder_server <- function(id, data, source, dataset_name = reactive("
       d <- agg(); req(d, nrow(d) > 0)
       sp <- spec()
       grp <- length(unique(d$group)) > 1
-      if (identical(sp$type, "trend")) {
+      st <- chart_style(sp)
+      if (st %in% c("pie", "donut")) {
+        pd <- chart_pie_data(d)
+        return(plotly::plot_ly(pd, labels = ~category, values = ~n, type = "pie", sort = FALSE,
+                               hole = if (identical(st, "donut")) 0.55 else 0, textinfo = "percent",
+                               marker = list(colors = rep_len(rp_cols$models, nrow(pd)))) |>
+                 plotly::layout(legend = list(orientation = "h", x = 0, y = -0.05)))
+      }
+      if (identical(st, "column")) {
+        d$x <- factor(d$x, levels = unique(d$x))
+        p <- plotly::plot_ly(d, x = ~x, y = ~value, color = if (grp) ~group else I("#0A6EB4"), type = "bar",
+                             text = ~value, textposition = "outside", cliponaxis = FALSE)
+        if (grp && chart_stacks(sp)) p <- plotly::layout(p, barmode = "stack")
+        return(plotly::layout(p, xaxis = list(title = "", automargin = TRUE), yaxis = list(title = chart_value_label(sp)),
+                              legend = list(orientation = "h", x = 0, y = 1.08, xanchor = "left", yanchor = "bottom")))
+      }
+      if (st %in% c("line", "area")) {
+        if (!identical(sp$type, "trend")) d$x <- factor(d$x, levels = unique(d$x))
         p <- plotly::plot_ly(d, x = ~x, y = ~value, color = if (grp) ~group else I("#0A6EB4"),
-                             type = "scatter", mode = "lines+markers")
+                             type = "scatter", mode = "lines+markers", fill = if (identical(st, "area")) "tozeroy" else "none")
       } else {
         d$x <- factor(d$x, levels = rev(unique(d$x)))
         p <- plotly::plot_ly(d, x = ~value, y = ~x, color = if (grp) ~group else I("#0A6EB4"), type = "bar",
                              orientation = "h", text = ~value, textposition = "outside", cliponaxis = FALSE)
         if (grp && chart_stacks(sp)) p <- plotly::layout(p, barmode = "stack")
       }
-      plotly::layout(p, xaxis = list(title = if (identical(sp$type, "trend")) "" else chart_value_label(sp)),
-                     yaxis = list(title = if (identical(sp$type, "trend")) chart_value_label(sp) else "", automargin = TRUE),
+      line <- st %in% c("line", "area")
+      plotly::layout(p, xaxis = list(title = if (line) "" else chart_value_label(sp)),
+                     yaxis = list(title = if (line) chart_value_label(sp) else "", automargin = TRUE),
                      legend = list(orientation = "h", x = 0, y = 1.08, xanchor = "left", yanchor = "bottom"))
     })
 
@@ -176,7 +198,7 @@ mod_chart_builder_server <- function(id, data, source, dataset_name = reactive("
                     source = source, dataset = dataset_name(), title = title,
                     comment = input$comment %||% "", spec = spec(), data = d,
                     display = input$display %||% "chart"))
-      updateTextAreaInput(session, "comment", value = "")
+      update_rich_text(session, "comment", "")
       showNotification(sprintf("'%s' added to the monitoring report.", title), type = "message")
     })
   })

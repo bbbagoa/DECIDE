@@ -141,18 +141,7 @@ mod_overview_server <- function(id, uploaded_df, user_setup) {
   observe({
     req(uploaded_df())
 
-    # Admin choices
-    for (lvl in c("admin1", "admin2", "admin3")) {
-      col <- user_setup[[lvl]]
-      if (shiny::isTruthy(col)) {
-        shinyWidgets::updatePickerInput(
-          session,
-          paste0("filter_", lvl),
-          choices = sort(unique(as.character(uploaded_df()[[col]]))),
-          selected = character(0)
-        )
-      }
-    }
+    # Admin choices: cascade_pickers() below.
 
     # Date range
     if (shiny::isTruthy(user_setup$date)) {
@@ -168,41 +157,20 @@ mod_overview_server <- function(id, uploaded_df, user_setup) {
       applied_filters$date <- c(d_min, d_max)
     }
 
-    # Reset applied admin filters on new data
-    applied_filters$admin1 <- NULL
-    applied_filters$admin2 <- NULL
-    applied_filters$admin3 <- NULL
+    # The data also changes on every correction: keep the applied areas that
+    # still exist, as the pickers do.
+    for (lvl in c("admin1", "admin2", "admin3")) {
+      col <- user_setup[[lvl]]
+      a <- isolate(applied_filters[[lvl]])
+      if (length(a)) applied_filters[[lvl]] <- if (shiny::isTruthy(col) && col %in% names(uploaded_df()))
+        intersect(a, unique(as.character(uploaded_df()[[col]]))) else NULL
+    }
   })
 
-  # --- Cascade Admin 2 choices based on selected Admin 1 ---
-  observeEvent(input$filter_admin1, {
-    req(uploaded_df(), shiny::isTruthy(user_setup$admin2))
-    df <- uploaded_df()
-    if (!shiny::isTruthy(input$filter_admin1)) {
-      choices <- unique(df[[user_setup$admin2]])
-    } else {
-      choices <- df |>
-        dplyr::filter(.data[[user_setup$admin1]] %in% input$filter_admin1) |>
-        dplyr::pull(.data[[user_setup$admin2]]) |>
-        unique()
-    }
-    shinyWidgets::updatePickerInput(session, "filter_admin2", choices = sort(as.character(choices)))
-  }, ignoreNULL = FALSE)
-
-  # --- Cascade Admin 3 choices based on selected Admin 2 ---
-  observeEvent(input$filter_admin2, {
-    req(uploaded_df(), shiny::isTruthy(user_setup$admin3))
-    df <- uploaded_df()
-    if (!shiny::isTruthy(input$filter_admin2)) {
-      choices <- unique(df[[user_setup$admin3]])
-    } else {
-      choices <- df |>
-        dplyr::filter(.data[[user_setup$admin2]] %in% input$filter_admin2) |>
-        dplyr::pull(.data[[user_setup$admin3]]) |>
-        unique()
-    }
-    shinyWidgets::updatePickerInput(session, "filter_admin3", choices = sort(as.character(choices)))
-  }, ignoreNULL = FALSE)
+  # Each admin level lists only the areas inside those picked above.
+  cascade_pickers(session, input, c("filter_admin1", "filter_admin2", "filter_admin3"),
+                  cols = reactive(vapply(c("admin1", "admin2", "admin3"), function(l) as.character(user_setup[[l]] %||% "")[1], character(1))),
+                  data = uploaded_df)
 
   # --- Apply Filters ---
   observeEvent(input$btn_apply_filters, {

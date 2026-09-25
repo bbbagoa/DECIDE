@@ -137,6 +137,8 @@ mod_session_manager_server <- function(
     # 1. Restore modal on startup
     # -------------------------------------------------------------------------
     output$restore_modal_container <- renderUI({
+      # Arrived from "Save and start fresh": no restore prompt.
+      if (grepl("(^|[?&])fresh=1", isolate(session$clientData$url_search) %||% "")) return(NULL)
       sessions <- list_saved_sessions(who)
       if (nrow(sessions) == 0) return(NULL)
 
@@ -238,6 +240,12 @@ mod_session_manager_server <- function(
           class = "btn-success btn-sm"
         ),
         actionButton(
+          ns("btn_new_session"), title = "Save this session and start a fresh one",
+          "New",
+          icon = icon("file-circle-plus"),
+          class = "btn-outline-secondary btn-sm"
+        ),
+        actionButton(
           ns("btn_load_session"), title = "Load a saved session",
           "Load",
           icon = icon("folder-open"),
@@ -255,6 +263,9 @@ mod_session_manager_server <- function(
     observeEvent(input$btn_sync_moda, {
       cred <- moda_credentials()
       if (isTruthy(cred$token)) { sync_trigger(Sys.time()); return() }
+      # A restored session has no key: use the one entered earlier in this session.
+      known <- api_key_get(session, "moda")
+      if (!is.null(known)) { cred$token <- known; moda_credentials(cred); sync_trigger(Sys.time()); return() }
       showModal(modalDialog(
         title = tagList(icon("sync"), " Refresh MODA data"), size = "s", easyClose = TRUE,
         tags$p(class = "small", sprintf("Form %s. The data already in this session is kept; only the submissions received since are fetched.",
@@ -267,6 +278,7 @@ mod_session_manager_server <- function(
     observeEvent(input$sync_token_go, {
       tok <- trimws(input$sync_token %||% "")
       if (!nzchar(tok)) { showNotification("Enter the API key.", type = "warning"); return() }
+      api_key_set(session, tok, "moda")
       cred <- moda_credentials(); cred$token <- tok
       moda_credentials(cred)
       removeModal()
@@ -286,18 +298,18 @@ mod_session_manager_server <- function(
       ))
     })
 
-    observeEvent(input$btn_confirm_save, {
-      removeModal()
-      name <- input$save_session_name
+    # Save everything under `name`; FALSE (with a notice) when there is
+    # nothing to save or no name.
+    save_as <- function(name) {
       if (!shiny::isTruthy(name) || trimws(name) == "") {
         showNotification("Name the session first.", type = "error")
-        return()
+        return(FALSE)
       }
       name <- trimws(name)
       work <- workspace_snapshot(workspace)
       if (is.null(uploaded_df()) && !length(work)) {
         showNotification("Nothing to save: no dataset is loaded and no work has been done.", type = "error")
-        return()
+        return(FALSE)
       }
       waiter::waiter_show(
         html = waiter_content("Encrypting and saving session..."),
@@ -320,7 +332,42 @@ mod_session_manager_server <- function(
       current_session_name(name)
       audit_add(modification_log, "Session", "Session saved", name)
       showNotification(paste("Session saved as", name), type = "message")
+      TRUE
+    }
+
+    observeEvent(input$btn_confirm_save, {
+      removeModal()
+      save_as(input$save_session_name)
     })
+
+    # Save this session, then start an empty one. The page reloads, which
+    # resets every module; the saved session stays under Load.
+    observeEvent(input$btn_new_session, {
+      has_work <- !is.null(uploaded_df()) || length(workspace_snapshot(workspace)) > 0
+      showModal(modalDialog(
+        title = tagList(icon("file-circle-plus"), " Start a fresh session"),
+        size = "s", easyClose = TRUE,
+        if (has_work) tagList(
+          tags$p(class = "small", "The current work is saved under this name, then the app starts empty. Load it again at any time from Load."),
+          textInput(ns("new_session_name"), "Save the current session as", value = if (identical(current_session_name(), "default"))
+            format(Sys.time(), "session_%Y-%m-%d_%Hh%M") else current_session_name(), width = "100%"))
+        else tags$p(class = "small", "Nothing is loaded yet, so there is nothing to save."),
+        footer = tagList(
+          modalButton("Cancel"),
+          actionButton(ns("btn_new_nosave"), if (has_work) "Discard and start fresh" else "Start fresh",
+                       class = if (has_work) "btn-outline-danger" else "btn-primary"),
+          if (has_work) actionButton(ns("btn_new_save"), "Save and start fresh", class = "btn-primary", icon = icon("floppy-disk")))
+      ))
+    })
+    start_fresh <- function() {
+      removeModal()
+      waiter::waiter_show(html = waiter_content("Starting a fresh session..."), color = "rgba(10, 30, 50, 0.65)")
+      session$sendCustomMessage("tw-fresh", list())
+    }
+    observeEvent(input$btn_new_save, {
+      if (isTRUE(save_as(input$new_session_name))) start_fresh()
+    })
+    observeEvent(input$btn_new_nosave, start_fresh())
 
     observeEvent(input$btn_load_session, {
       sessions <- list_saved_sessions(who)

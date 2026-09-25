@@ -53,7 +53,10 @@ mod_scorecard_ui <- function(id) {
                       placeholder = "Load assessment data",
                       accept = c(".xlsx", ".xls", ".sav", ".dta", ".csv", ".parquet")),
             tags$div(
-              class = "d-flex gap-2",
+              class = "d-flex gap-2 wfp-data-tools",
+              # The same data from a MODA / ONA form.
+              tags$div(class = "flex-fill",
+                       mod_moda_import_ui(ns("moda"), "MODA", class = "btn-outline-secondary btn-sm w-100")),
               # Reloading data is the session's job; this explains the method.
               tags$div(class = "flex-fill",
                        actionButton(ns("open_guide"), "How it works", icon = icon("book-open"),
@@ -62,7 +65,7 @@ mod_scorecard_ui <- function(id) {
               # Build outcomes or criteria the data does not carry yet (a
               # two-level CARI, a dependency-ratio flag).
               tags$div(class = "flex-fill",
-                       mod_var_calc_ui(ns("calc"), "Variable calculator",
+                       mod_var_calc_ui(ns("calc"), "Calculator",
                                        class = "btn-outline-secondary btn-sm w-100")))
           )
         ),
@@ -87,6 +90,16 @@ mod_scorecard_ui <- function(id) {
               selectInput(ns("outcome_pos"), "Level meaning 'vulnerable'", choices = NULL, width = "100%")
             ),
             uiOutput(ns("outcome_summary")),
+            # Where the vulnerable households are: the share by first-level area.
+            bslib::card(
+              class = "mb-3",
+              bslib::card_header(
+                class = "d-flex align-items-center justify-content-between gap-2",
+                tags$span(bsicons::bs_icon("geo-alt"), " Vulnerable households by area"),
+                tags$div(style = "min-width: 200px;",
+                         selectInput(ns("vuln_area"), NULL, choices = c("(none)" = ""), width = "100%", selectize = FALSE))),
+              bslib::card_body(uiOutput(ns("vuln_area_ui")))
+            ),
             uiOutput(ns("nav_outcome"))
           )
         ),
@@ -99,15 +112,21 @@ mod_scorecard_ui <- function(id) {
                    "Candidate eligibility criteria. Only binary columns qualify;",
                    " anything that looks like a food-security outcome is blocked."),
             # Select all / Deselect all and search are built into the picker.
-            shinyWidgets::pickerInput(
-              ns("criteria"), "Candidate criteria", choices = character(0),
-              multiple = TRUE, width = "100%",
-              options = shinyWidgets::pickerOptions(container = "body",
-                actionsBox = TRUE, liveSearch = TRUE, size = 14,
-                selectedTextFormat = "count > 3"
-              )
+            bslib::layout_columns(
+              col_widths = c(6, 6), fill = FALSE,
+              tags$div(
+                shinyWidgets::pickerInput(
+                  ns("criteria"), "Candidate criteria", choices = character(0),
+                  multiple = TRUE, width = "100%",
+                  options = shinyWidgets::pickerOptions(container = "body",
+                    actionsBox = TRUE, liveSearch = TRUE, size = 14,
+                    selectedTextFormat = "count > 3"
+                  )
+                ),
+                uiOutput(ns("criteria_chips"))
+              ),
+              uiOutput(ns("blocked_note"))
             ),
-            uiOutput(ns("blocked_note")),
             uiOutput(ns("nav_criteria"))
           )
         ),
@@ -249,52 +268,52 @@ mod_scorecard_ui <- function(id) {
             # one row. Advisory 3/2025: the cut-point can be set statistically
             # (Youden's J) or programmatically (to fit a caseload); both only
             # move the slider, which stays the decision.
-            tags$div(
-              class = "border-0 bg-body-tertiary rounded-3 px-3 pt-2 mb-2",
-              bslib::layout_columns(
-                col_widths = c(3, 1, 1, 1, 2, 2, 2), fill = FALSE,
-                uiOutput(ns("threshold_ui")),
-                numericInput(ns("tol_lower"),
-                             tagList("Lower %", info_tip("Lower bound of the tolerance band (Advisory 2/2025). Errors below it are acceptable without action.")),
-                             value = 5,
-                             min = 0, max = 49, step = 1, width = "100%"),
-                numericInput(ns("tol_upper"),
-                             tagList("Upper %", info_tip("Upper bound of the tolerance band. Errors above it call for a redesign; it can never reach 50% (no better than random).")),
-                             value = 20,
-                             min = 1, max = 49, step = 1, width = "100%"),
-                numericInput(ns("caseload_pct"),
-                             tagList("Caseload", info_tip("Share of households the programme can serve. Used by 'Fit to caseload' to set the highest threshold that stays within it.")),
-                             value = NA, min = 1, max = 100, step = 1, width = "100%"),
-                tags$div(class = "wfp-inline-action",
-                         tags$label(class = "form-label", "\u00a0"),
-                         bslib::tooltip(
-                           actionButton(ns("thr_balanced"), "Minimise errors",
-                                        icon = icon("arrows-to-dot"), class = "btn-outline-primary w-100"),
-                           "Sets the threshold where the larger of the inclusion and exclusion errors is smallest, so neither is traded away for the other.")),
-                tags$div(class = "wfp-inline-action",
-                         tags$label(class = "form-label", "\u00a0"),
-                         bslib::tooltip(
-                           actionButton(ns("thr_youden"), "Balance (Youden)",
-                                        icon = icon("scale-balanced"), class = "btn-outline-primary w-100"),
-                           tip_body("Youden's J", list(list(name = "", text = "Picks the threshold maximising sensitivity + specificity - 1: the point of the ROC curve furthest from the diagonal (Targeting Advisory 3/2025).",
-                                                          ref = "Youden (1950), Index for rating diagnostic tests, Cancer 3(1)."))))),
-                tags$div(class = "wfp-inline-action",
-                         tags$label(class = "form-label", "\u00a0"),
-                         bslib::tooltip(
-                           actionButton(ns("thr_caseload"), "Fit to caseload",
-                                        icon = icon("people-group"), class = "btn-outline-primary w-100"),
-                           "Sets the threshold so no more than the caseload share of households is eligible."))
+            # Set-up on the left, the team's rationale on the right.
+            bslib::layout_columns(
+              col_widths = c(7, 5), fill = FALSE, class = "mb-2 wfp-thr-setup",
+              tags$div(
+                class = "border-0 bg-body-tertiary rounded-3 px-3 pt-2 h-100",
+                bslib::layout_columns(
+                  col_widths = c(6, 2, 2, 2), fill = FALSE,
+                  uiOutput(ns("threshold_ui")),
+                  numericInput(ns("tol_lower"),
+                               tagList("Lower %", info_tip("Lower bound of the tolerance band (Advisory 2/2025). Errors below it are acceptable without action.")),
+                               value = 5,
+                               min = 0, max = 49, step = 1, width = "100%"),
+                  numericInput(ns("tol_upper"),
+                               tagList("Upper %", info_tip("Upper bound of the tolerance band. Errors above it call for a redesign; it can never reach 50% (no better than random).")),
+                               value = 20,
+                               min = 1, max = 49, step = 1, width = "100%"),
+                  numericInput(ns("caseload_pct"),
+                               tagList("Caseload", info_tip("Share of households the programme can serve. Used by 'Fit to caseload' to set the highest threshold that stays within it.")),
+                               value = NA, min = 1, max = 100, step = 1, width = "100%")
+                ),
+                tags$div(
+                  class = "d-flex flex-wrap gap-2 mb-2",
+                  bslib::tooltip(
+                    actionButton(ns("thr_balanced"), "Minimise errors",
+                                 icon = icon("arrows-to-dot"), class = "btn-outline-primary btn-sm"),
+                    "Sets the threshold where the larger of the inclusion and exclusion errors is smallest, so neither is traded away for the other."),
+                  bslib::tooltip(
+                    actionButton(ns("thr_youden"), "Balance (Youden)",
+                                 icon = icon("scale-balanced"), class = "btn-outline-primary btn-sm"),
+                    tip_body("Youden's J", list(list(name = "", text = "Picks the threshold maximising sensitivity + specificity - 1: the point of the ROC curve furthest from the diagonal (Targeting Advisory 3/2025).",
+                                                   ref = "Youden (1950), Index for rating diagnostic tests, Cancer 3(1).")))),
+                  bslib::tooltip(
+                    actionButton(ns("thr_caseload"), "Fit to caseload",
+                                 icon = icon("people-group"), class = "btn-outline-primary btn-sm"),
+                    "Sets the threshold so no more than the caseload share of households is eligible.")),
+                tags$div(class = "small text-muted pb-2", textOutput(ns("thr_note")))
               ),
-              tags$div(class = "small text-muted pb-2", textOutput(ns("thr_note")))
+              # Advisory 2/2025: COs must document the rationale behind their
+              # threshold bandwidth. It travels in the exported workbook.
+              rich_text_input(ns("tol_rationale"),
+                              "Rationale for the tolerance band and the threshold (goes into the export)",
+                              placeholder = paste("e.g. Lower 15% / upper 25% agreed with the programme",
+                                                  "team given field access constraints; threshold set to",
+                                                  "fit a caseload of 40% of households."),
+                              rows = 4)
             ),
-            # Advisory 2/2025: COs must document the rationale behind their
-            # threshold bandwidth. It travels in the exported workbook.
-            textAreaInput(ns("tol_rationale"),
-                          "Rationale for the tolerance band and the threshold (goes into the export)",
-                          placeholder = paste("e.g. Lower 15% / upper 25% agreed with the programme",
-                                              "team given field access constraints; threshold set to",
-                                              "fit a caseload of 40% of households."),
-                          rows = 2, width = "100%"),
             tags$div(class = "small text-muted mb-2", textOutput(ns("eval_note"))),
             bslib::layout_columns(
               col_widths = c(3, 3, 3, 3), fill = FALSE, class = "wfp-kpi-flat",
@@ -423,15 +442,24 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
                        NULL
                      })
       req(df)
+      take_assessment(df, input$assessment_file$name)
+    })
+    take_assessment <- function(df, name) {
       assessment_df(as.data.frame(df))
-      assessment_source(input$assessment_file$name)
+      assessment_source(name)
       audit_add(modification_log, "Design", "Assessment data loaded",
-                sprintf("%s (%s rows, %s columns)", input$assessment_file$name, nrow(df), ncol(df)))
+                sprintf("%s (%s rows, %s columns)", name, nrow(df), ncol(df)))
       reset_build()
       go_step("outcome")
       showNotification(sprintf("Assessment data loaded: %s rows, %s columns.",
                                format(nrow(df), big.mark = ","), ncol(df)),
                        type = "message")
+    }
+    # The same data can come from a MODA / ONA form.
+    moda <- mod_moda_import_server("moda")
+    observeEvent(moda$data(), {
+      df <- moda$data(); req(df)
+      take_assessment(df, sprintf("MODA form %s", moda$credentials()$form_id %||% ""))
     })
 
     observeEvent(input$open_guide, showModal(design_guide_modal()))
@@ -495,7 +523,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
     sc_inputs <- c("outcome_col", "outcome_pos", "criteria", "model_method", "model_scheme",
                    "holdout_pct", "split_seed", "model_weights", "run_benchmarks", "fit_criteria", "compare_models",
                    "stepwise_on", "stepwise_ic",
-                   "corr_cutoff", "tol_lower", "tol_upper", "tol_rationale", "caseload_pct")
+                   "corr_cutoff", "tol_lower", "tol_upper", "tol_rationale", "caseload_pct", "vuln_area")
 
     workspace_register(workspace, "scorecard",
       snapshot = function() {
@@ -546,7 +574,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
           updateSelectInput(session, "model_method", selected = "logit")
           updateCheckboxInput(session, "stepwise_on", value = TRUE)
         }
-        if (!is.null(i$tol_rationale)) updateTextAreaInput(session, "tol_rationale", value = i$tol_rationale)
+        if (!is.null(i$tol_rationale)) update_rich_text(session, "tol_rationale", i$tol_rationale)
         if (!is.null(s$threshold)) {
           thr_pending(s$threshold)
           updateSliderInput(session, "threshold", value = s$threshold)
@@ -631,31 +659,31 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
       step_nav(NULL, NULL, ok,
                sprintf("Outcome set: %s = %s.", input$outcome_col %||% "", input$outcome_pos %||% ""),
                "Load assessment data above, then choose the outcome and the level that means vulnerable.",
-               "nav_next_outcome", "Continue to criteria")
+               "nav_next_outcome", "Continue to Criteria Selection")
     })
 
     output$nav_criteria <- renderUI({
       n <- length(input$criteria %||% character(0))
-      step_nav("nav_back_criteria", "Back to outcome", n > 0,
+      step_nav("nav_back_criteria", "Back to Vulnerability Framework", n > 0,
                sprintf("%d candidate criteria selected.", n),
                "Select the household characteristics that could make a household eligible.",
-               "nav_next_criteria", "Continue to variable selection")
+               "nav_next_criteria", "Continue to Criteria Screening")
     })
 
     output$nav_screening <- renderUI({
       res <- screened()
-      step_nav("nav_back_screening", "Back to criteria", isTRUE(selection_applied()),
+      step_nav("nav_back_screening", "Back to Criteria Selection", isTRUE(selection_applied()),
                sprintf("%d variables kept for the model.", sum(res$retained %||% FALSE)),
                "Tick variables, click Select, review them, then use 'Drop ticked and continue'.",
-               "nav_next_screening", "Continue to model & weights")
+               "nav_next_screening", "Continue to Model & weights")
     })
 
     output$nav_weights <- renderUI({
       f <- fitted()
-      step_nav("nav_back_weights", "Back to variable selection", !is.null(f),
+      step_nav("nav_back_weights", "Back to Criteria Screening", !is.null(f),
                if (is.null(f)) "" else sprintf("Model fitted on %d criteria. Iterate above if needed.", nrow(f$weights)),
                "Fit the model first.",
-               "nav_next_weights", "Continue to threshold & errors")
+               "nav_next_weights", "Continue to Threshold & errors")
     })
 
     output$nav_threshold <- renderUI({
@@ -663,14 +691,14 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
       if (adopted_current()) {
         return(tags$div(
           class = "wfp-stepnav",
-          actionButton(ns("nav_back_threshold"), "Back to model & weights", icon = icon("arrow-left"), class = "btn-outline-secondary"),
+          actionButton(ns("nav_back_threshold"), "Back to Model & weights", icon = icon("arrow-left"), class = "btn-outline-secondary"),
           tags$div(class = "wfp-stepnav-status small",
                    bsicons::bs_icon("check-circle-fill", class = "text-success"),
                    sprintf(" Adopted %s. Any change to the design withdraws the adoption.", user_setup$scorecard$adopted_at %||% "")),
           tags$span(class = "wfp-adopted-pill", bsicons::bs_icon("patch-check-fill"), " Adopted")))
       }
       other <- !scorecard_is_empty(user_setup$scorecard)
-      step_nav("nav_back_threshold", "Back to model & weights", !length(todo),
+      step_nav("nav_back_threshold", "Back to Model & weights", !length(todo),
                if (other) "Another scorecard is in use. Adopting replaces it with this design."
                else "Check the errors and the verdict, record the rationale, then adopt.",
                paste0("Still to do: ", paste(todo, collapse = ", "), "."),
@@ -689,19 +717,19 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
     output$gate_screening <- renderUI({
       if (length(input$criteria %||% character(0)) > 0) return(NULL)
       gate("Screening compares each candidate criterion against the outcome, so pick the candidates first.",
-           "back_to_criteria", "Back to criteria")
+           "back_to_criteria", "Back to Criteria Selection")
     })
 
     output$gate_weights <- renderUI({
       if (!is.null(screened())) return(NULL)
       gate("Weights come from a model fitted on the selected variables, so select them first.",
-           "back_to_screening", "Back to variable selection")
+           "back_to_screening", "Back to Criteria Screening")
     })
 
     output$gate_threshold <- renderUI({
       if (!is.null(fitted())) return(NULL)
       gate("The threshold is chosen against the errors a scored design produces, so fit the weights first.",
-           "back_to_weights", "Back to weights")
+           "back_to_weights", "Back to Model & weights")
     })
 
     observeEvent(input$back_to_criteria, go_step("criteria"))
@@ -807,6 +835,61 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
       choices <- eligible_criteria()
       shinyWidgets::updatePickerInput(session, "criteria", choices = choices,
                                       selected = rs_in("criteria") %||% isolate(input$criteria))
+    })
+
+    # The chosen candidates, readable at a glance beside the blocked ones.
+    output$criteria_chips <- renderUI({
+      cr <- input$criteria
+      if (!length(cr)) return(tags$div(class = "small text-muted", "No candidate selected yet."))
+      tags$div(class = "wfp-norm-bar mt-1",
+               tags$strong(sprintf("%d selected", length(cr))),
+               lapply(cr, function(x) tags$span(class = "wfp-norm-chip", x)))
+    })
+
+    # --- Vulnerable households by area (step 1) ------------------------------
+    observeEvent(assessment_df(), {
+      df <- assessment_df(); req(df)
+      cols <- names(df)[vapply(df, function(v) { k <- length(unique(v)); k >= 2 && k <= 200 }, logical(1))]
+      cols <- setdiff(cols, isolate(input$outcome_col))
+      cur <- rs_in("vuln_area") %||% isolate(input$vuln_area)
+      sc_col <- tryCatch(isolate(scope$applied())[[1]]$col, error = function(e) NULL)
+      guess <- find_guess(cols, c("admin1", "adm1", "province", "region", "state", "governorate", "departement"))
+      sel <- if (isTRUE(cur %in% cols)) cur else if (isTRUE(sc_col %in% cols)) sc_col else guess
+      updateSelectInput(session, "vuln_area", choices = c("(none)" = "", cols), selected = sel %||% "")
+    })
+    vuln_area_tab <- reactive({
+      df <- assessment_df(); a <- input$vuln_area
+      req(df, shiny::isTruthy(a), a %in% names(df))
+      y <- tryCatch(outcome_binary(), error = function(e) NULL); req(y)
+      vulnerability_by_area(df[[a]], y)
+    })
+    output$vuln_area_ui <- renderUI({
+      if (!shiny::isTruthy(input$vuln_area))
+        return(tags$div(class = "small text-muted", "Choose the area column (for example the province) to see where the vulnerable households are."))
+      d <- tryCatch(vuln_area_tab(), error = function(e) NULL)
+      if (is.null(d)) return(tags$div(class = "small text-muted", "Choose the outcome first."))
+      n <- min(nrow(d), 30)
+      tagList(
+        plotly::plotlyOutput(ns("vuln_area_plot"), height = sprintf("%dpx", max(220, 60 + 26 * n))),
+        if (nrow(d) > 30) tags$div(class = "small text-muted", sprintf("The 30 areas with the highest share of %d.", nrow(d)))
+      )
+    })
+    output$vuln_area_plot <- render_wfp_plotly({
+      d <- utils::head(vuln_area_tab(), 30)
+      y <- outcome_binary()
+      overall <- 100 * mean(y == 1, na.rm = TRUE)
+      d$area <- factor(d$area, levels = rev(d$area))
+      plotly::plot_ly(d, x = ~ 100 * share, y = ~area, type = "bar", orientation = "h",
+                      marker = list(color = "#c5192d"),
+                      text = ~ sprintf("%.0f%%", 100 * share), textposition = "outside", cliponaxis = FALSE,
+                      hovertext = ~ sprintf("%s: %s of %s households vulnerable", area, format(vulnerable, big.mark = ","),
+                                            format(households, big.mark = ",")), hoverinfo = "text") |>
+        plotly::layout(xaxis = list(title = "Vulnerable households (%)", range = c(0, 105)),
+                       yaxis = list(title = "", automargin = TRUE),
+                       shapes = list(list(type = "line", x0 = overall, x1 = overall, y0 = -0.5, y1 = nrow(d) - 0.5,
+                                          line = list(color = "#5b6b7e", dash = "dash", width = 1.5))),
+                       annotations = list(list(x = overall, y = nrow(d) - 0.5, yanchor = "bottom", showarrow = FALSE,
+                                               text = sprintf("All: %.0f%%", overall), font = list(size = 11))))
     })
 
     output$blocked_note <- renderUI({
@@ -1709,6 +1792,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
           outcome = input$outcome_col, outcome_pos = input$outcome_pos,
           n_outcome = sum(!is.na(y)), n_vuln = sum(y == 1, na.rm = TRUE),
           prevalence = if (is.null(y)) NA else mean(y == 1, na.rm = TRUE),
+          vuln_area = safe(vuln_area_tab()), vuln_area_col = input$vuln_area,
           candidates = input$criteria,
           blocked = if (is.null(bl)) NULL else unlist(bl[setdiff(names(bl), input$outcome_col)]),
           screening = screened(), collinear = collinear(),
@@ -1760,6 +1844,13 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
           # the boxplot compares groups on the evaluation households
           plots$box <- design_report_extra_plots(score = s$score[r], vulnerable = y[r] == 1,
                                                  threshold = input$threshold, lang = report_lang())$box
+        }
+        va <- x$vuln_area
+        if (!is.null(va) && nrow(va)) {
+          top <- utils::head(va, 30)
+          lab <- i18n_lookup("Vulnerable households (%)", report_lang())
+          d <- data.frame(area = top$area, share = round(100 * top$share, 1)); names(d)[2] <- lab
+          plots$vuln_area <- rp_hbars(d, stats::setNames(rp_cols$vuln, lab), lab) |> billboarder::bb_legend(show = FALSE)
         }
         write_design_report(file, x, plots, lang = report_lang())
       }
@@ -2207,40 +2298,47 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
 
     output$flow <- renderUI({
       here <- input$steps %||% "outcome"
+      # The step tabs, in order; the dots carry the same numbers.
+      panels <- c(outcome = "Vulnerability Framework", criteria = "Criteria Selection", screening = "Criteria Screening",
+                  weights = "Model & weights", threshold = "Threshold & errors")
+      has_data <- !is.null(assessment_df())
       st <- list(
-        list(key = "data", label = "Data loaded", done = !is.null(assessment_df()), panel = NULL,
-             todo = "Load the assessment data on the left."),
-        list(key = "outcome", label = "Vulnerability Framework", done = shiny::isTruthy(input$outcome_col),
-             panel = "outcome", todo = "Choose the food-security outcome to predict."),
-        list(key = "criteria", label = "Criteria Selection", done = length(input$criteria %||% character(0)) > 0,
+        list(key = "data", label = "Data", icon = "database", done = has_data, panel = NULL,
+             todo = "Load the assessment data (file or MODA) on the left."),
+        list(key = "outcome", label = panels[["outcome"]], done = has_data && shiny::isTruthy(input$outcome_col) && shiny::isTruthy(input$outcome_pos),
+             panel = "outcome", todo = "Choose the outcome and the level that means vulnerable."),
+        list(key = "criteria", label = panels[["criteria"]], done = length(input$criteria %||% character(0)) > 0,
              panel = "criteria", todo = "Pick the candidate criteria."),
-        list(key = "screening", label = "Criteria Screening", done = isTRUE(selection_applied()),
-             panel = "screening", todo = "Review the variables' statistics and correlations, then drop the ones not to keep."),
-        list(key = "weights", label = "Model fitted", done = !is.null(fitted()),
-             panel = "weights", todo = "Fit the model, iterate until satisfied."),
-        list(key = "threshold", label = "Threshold & errors",
+        list(key = "screening", label = panels[["screening"]], done = isTRUE(selection_applied()),
+             panel = "screening", todo = "Tick the variables, click Select, review them, then drop the ones not to keep."),
+        list(key = "weights", label = panels[["weights"]], done = !is.null(fitted()),
+             panel = "weights", todo = "Fit the model; iterate until satisfied."),
+        list(key = "threshold", label = panels[["threshold"]],
              done = !is.null(fitted()) && !is.null(input$threshold %||% thr_pending()),
              panel = "threshold", todo = "Set the threshold and check the design errors."),
-        list(key = "adopt", label = "Adopted", done = adopted_current(),
-             panel = "threshold", todo = "Record the rationale, then adopt the scorecard (after every other step).")
+        list(key = "adopt", label = "Adopted", icon = "patch-check", done = adopted_current(),
+             panel = "threshold", todo = "Record the rationale, then adopt the scorecard.")
       )
-      nxt <- Find(function(x) !x$done, st)
+      keys <- vapply(st, `[[`, character(1), "key")
+      todo_i <- which(!vapply(st, `[[`, logical(1), "done"))[1]
+      here_i <- match(here, keys)
       go <- function(panel) if (is.null(panel)) NULL else
         sprintf("Shiny.setInputValue('%s', '%s', {priority:'event'})", ns("flow_go"), panel)
       items <- lapply(seq_along(st), function(i) {
         x <- st[[i]]
         cls <- paste("wfp-flow-step",
                      if (x$done) "is-done" else "",
-                     if (!is.null(x$panel) && identical(x$panel, here)) "is-current" else "",
-                     if (identical(x$key, nxt$key)) "is-next" else "")
-        tags$button(type = "button", class = cls, onclick = go(x$panel),
+                     if (identical(x$key, here)) "is-current" else "",
+                     if (isTRUE(i == todo_i)) "is-next" else "")
+        num <- match(x$key, names(panels))
+        tags$button(type = "button", class = cls, onclick = go(x$panel), disabled = if (is.null(x$panel)) NA,
+                    title = if (!is.null(x$panel)) paste("Open", panels[[x$panel]]),
                     tags$span(class = "wfp-flow-dot",
-                              if (x$done) bsicons::bs_icon("check-lg") else as.character(i)),
+                              if (x$done) bsicons::bs_icon("check-lg")
+                              else if (!is.na(num)) as.character(num) else bsicons::bs_icon(x$icon)),
                     tags$span(class = "wfp-flow-label", x$label))
       })
       # Back and forward through the step tabs, either side of the chart.
-      panels <- c(outcome = "Vulnerability Framework", criteria = "Criteria Selection", screening = "Criteria Screening",
-                  weights = "Model & weights", threshold = "Threshold & errors")
       at <- match(here, names(panels))
       arrow <- function(to, icon_name, side) {
         ok <- !is.na(to) && to >= 1 && to <= length(panels)
@@ -2249,23 +2347,28 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
                     `aria-label` = if (side == "prev") "Previous step" else "Next step",
                     onclick = if (ok) go(names(panels)[to]), bsicons::bs_icon(icon_name))
       }
+      btn <- function(panel, text, icon_name) tags$button(
+        type = "button", class = "btn btn-primary btn-sm ms-2", onclick = go(panel),
+        if (identical(icon_name, "arrow-left")) bsicons::bs_icon(icon_name), paste(text, panels[[panel]]),
+        if (!identical(icon_name, "arrow-left")) bsicons::bs_icon(icon_name))
+      # What to do now, seen from the tab the user is on.
+      guide <- if (is.na(todo_i)) {
+        tagList(bsicons::bs_icon("check-circle-fill"), " Design complete: the scorecard is adopted and ready for Beneficiary Selection.")
+      } else {
+        t <- st[[todo_i]]
+        if (is.null(t$panel)) tagList(tags$strong("First: "), t$todo)
+        else if (identical(t$panel, here)) tagList(tags$strong("On this step: "), t$todo)
+        else if (todo_i < here_i) tagList(tags$strong(paste0(t$label, " is not finished: ")), t$todo,
+                                          btn(t$panel, "Back to", "arrow-left"))
+        else tagList(tags$strong("This step is done. Next: "), t$todo, btn(t$panel, "Continue to", "arrow-right"))
+      }
       tags$div(
         class = "wfp-flow mb-3",
         tags$div(class = "wfp-flow-row",
                  arrow(at - 1, "chevron-left", "prev"),
                  tags$div(class = "wfp-flow-track", items),
                  arrow(at + 1, "chevron-right", "next")),
-        tags$div(
-          class = "wfp-flow-next",
-          if (is.null(nxt)) tagList(bsicons::bs_icon("check-circle-fill"),
-                                    " Design complete: the scorecard is adopted and ready for Beneficiary Selection.")
-          else tagList(
-            tags$span(tags$strong("Next: "), nxt$todo),
-            if (!is.null(nxt$panel) && !identical(nxt$panel, here))
-              tags$button(type = "button", class = "btn btn-primary btn-sm ms-2", onclick = go(nxt$panel),
-                          paste("Go to", nxt$label), bsicons::bs_icon("arrow-right"))
-          )
-        )
+        tags$div(class = "wfp-flow-next", guide)
       )
     })
 
@@ -2276,7 +2379,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
       c(if (is.null(assessment_df())) "load the assessment data",
         if (!shiny::isTruthy(input$outcome_col)) "choose the outcome",
         if (!length(input$criteria)) "pick the candidate criteria",
-        if (!isTRUE(selection_applied())) "confirm the variable selection",
+        if (!isTRUE(selection_applied())) "confirm the criteria screening",
         if (is.null(fitted())) "fit the model",
         if (is.null(input$threshold %||% thr_pending())) "set the threshold")
     }
@@ -2298,7 +2401,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
                 sprintf("%d criteria, eligible above %s%s", length(sc$items), fmt5(sc$threshold),
                         if (is.null(e)) "" else sprintf("; inclusion error %.1f%%, exclusion error %.1f%%",
                                                         100 * e$inclusion_error, 100 * e$exclusion_error)),
-                reason = input$tol_rationale %||% "")
+                reason = rich_text(input$tol_rationale))
       showNotification(
         sprintf("Scorecard adopted: %d criteria, eligible above %s. Beneficiary Selection can now apply it.",
                 length(sc$items), fmt5(sc$threshold)),
@@ -2376,8 +2479,8 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
           "Correctly excluded" = format(e$correctly_excluded, big.mark = ","),
           "Tolerance band" = sprintf("%.0f%% - %.0f%%", 100 * lower, 100 * upper),
           # Advisory 2/2025: the rationale for the band has to be documented.
-          "Threshold rationale" = if (nzchar(trimws(input$tol_rationale %||% "")))
-            trimws(input$tol_rationale) else "NOT DOCUMENTED (Targeting Advisory 2/2025 requires it)",
+          "Threshold rationale" = if (nzchar(rich_text(input$tol_rationale)))
+            rich_text(input$tol_rationale) else "NOT DOCUMENTED (Targeting Advisory 2/2025 requires it)",
           "Model" = names(scorecard_model_choices())[scorecard_model_choices() == (fitted()$method %||% "logit")],
           "Weighting scheme" = names(scorecard_scheme_choices())[scorecard_scheme_choices() == (fitted()$scheme %||% "odds_ratio")],
           "Survey weights" = if (shiny::isTruthy(input$model_weights)) input$model_weights else "none",
