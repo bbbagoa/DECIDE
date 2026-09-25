@@ -456,7 +456,7 @@ mod_spot_checking_server <- function(id, uploaded_df, user_setup, workspace = NU
     # The sample as a field-ready workbook: how it was drawn, then the list
     # with the identification columns first and blank columns for the team.
     output$download_spot <- download_handler(
-      filename = function() paste0("Targeting_SpotCheck_", format(Sys.time(), "%Y-%m-%d_%Hh%M"), ".xlsx"),
+      filename = function() export_file_name("Targeting_SpotCheck", "xlsx", "%Y-%m-%d_%Hh%M"),
       content = function(file) {
         smp <- sampled_data()
         pool <- sample_pool()
@@ -759,7 +759,7 @@ mod_spot_checking_server <- function(id, uploaded_df, user_setup, workspace = NU
     })
 
     output$verif_report <- download_handler(
-      filename = function() paste0("Verification_report_", format(Sys.time(), "%Y-%m-%d_%Hh%M"), ".html"),
+      filename = function() export_file_name("Verification_report", "html", "%Y-%m-%d_%Hh%M"),
       content = function(file) {
         methods <- c(random = "Simple random", systematic = "Systematic", pps = "PPS (size = household size or weight)")
         flt <- c(if (length(applied$admin1)) paste("Admin 1:", paste(applied$admin1, collapse = ", ")),
@@ -781,7 +781,7 @@ mod_spot_checking_server <- function(id, uploaded_df, user_setup, workspace = NU
     )
 
     output$verif_download <- download_handler(
-      filename = function() paste0("Targeting_BackCheck_", format(Sys.time(), "%Y-%m-%d_%Hh%M"), ".xlsx"),
+      filename = function() export_file_name("Targeting_BackCheck", "xlsx", "%Y-%m-%d_%Hh%M"),
       content = function(file) {
         r <- comparison()
         wb <- openxlsx::createWorkbook()

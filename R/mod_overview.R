@@ -213,7 +213,7 @@ mod_overview_server <- function(id, uploaded_df, user_setup) {
 
   # --- Master Filtered Data (uses applied filters) ---
   output$overview_report <- download_handler(
-    filename = function() paste0("Data_collection_summary_", format(Sys.time(), "%Y-%m-%d_%Hh%M"), ".html"),
+    filename = function() export_file_name("Data_collection_summary", "html", "%Y-%m-%d_%Hh%M"),
     content = function(file) {
       df <- filtered_data()
       d <- applied_filters$date

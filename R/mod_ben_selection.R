@@ -132,12 +132,25 @@ mod_ben_selection_ui <- function(id) {
                               selected = "none"),
                  conditionalPanel(
                    condition = sprintf("input['%s'] !== 'none'", ns("ben_prio_mode")),
-                   numericInput(ns("ben_prio_n"), "Households to serve", value = NA, min = 1, step = 1, width = "100%"),
+                   # Caseloads are usually given in beneficiaries (people).
+                   radioButtons(ns("ben_prio_count"), "Caseload counted in", inline = TRUE,
+                                choices = c("People (beneficiaries)" = "people", "Households" = "households"),
+                                selected = "people"),
+                   conditionalPanel(
+                     condition = sprintf("input['%s'] === 'caseload'", ns("ben_prio_mode")),
+                     numericInput(ns("ben_prio_n"), "Caseload to serve", value = NA, min = 1, step = 1, width = "100%"),
+                     textAreaInput(ns("ben_prio_rationale"), "Rationale (required)", rows = 2, width = "100%",
+                                   placeholder = "e.g. Caseload set by the funding available for the first round.")),
+                   # Areas rarely share one caseload: each gets its own, in
+                   # households or as a share of the total, with a rationale.
                    conditionalPanel(
                      condition = sprintf("input['%s'] === 'per_unit'", ns("ben_prio_mode")),
                      selectInput(ns("ben_quota_unit"), "Per",
                                  choices = c("Admin 1" = "admin1", "Admin 2" = "admin2", "Admin 3" = "admin3"),
-                                 selected = "admin1", width = "100%")),
+                                 selected = "admin1", width = "100%"),
+                     actionButton(ns("quota_open"), "Set the caseload per area...", icon = icon("table-list"),
+                                  class = "btn-outline-primary btn-sm w-100 mb-2"),
+                     uiOutput(ns("quota_summary"))),
                    tags$div(class = "text-muted small",
                             "Most vulnerable first (highest score). Eligible households cut here are ",
                             tags$em("excluded by design"), ": reported separately, not counted as exclusion errors.")),
@@ -216,8 +229,257 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
       admin1 = NULL, admin2 = NULL, admin3 = NULL,
       score_min = 0, score_max = 100,
       approach = "hybrid", combine = "both", comm_col = NULL, comm_vals = NULL,
-      prio_mode = "none", prio_n = NA, quota_unit = "admin1"
+      prio_mode = "none", prio_n = NA, prio_count = "people", quota_unit = "admin1", quota_plan = NULL
     )
+
+    # --- Caseload per area ------------------------------------------------------
+    # list(unit, kind ("households" | "share"), total, values (named, as typed),
+    # caseload (named households), rationale, set_at). Takes effect on Apply.
+    quota_plan <- reactiveVal(NULL)
+    has_size <- reactive(shiny::isTruthy(user_setup$hh_size) && isTRUE(user_setup$hh_size %in% names(full_df() %||% data.frame())))
+    # The user's choice, kept while household size is not mapped (people
+    # cannot be counted then) and given back once it is.
+    count_pref <- reactiveVal("people")
+    observeEvent(input$ben_prio_count, if (isolate(has_size())) count_pref(input$ben_prio_count))
+    observe({
+      if (!has_size()) updateRadioButtons(session, "ben_prio_count", selected = "households",
+                                         choices = c("Households (map household size to count people)" = "households"))
+      else updateRadioButtons(session, "ben_prio_count", choices = c("People (beneficiaries)" = "people", "Households" = "households"),
+                              selected = isolate(count_pref()))
+    })
+    count_unit <- reactive(if (has_size() && !identical(input$ben_prio_count, "households")) "people" else "households")
+    unit_word <- function(u = count_unit()) if (identical(u, "people")) "people" else "households"
+    quota_areas <- reactive({
+      df <- full_df(); lvl <- input$ben_quota_unit %||% "admin1"
+      col <- user_setup[[lvl]]
+      if (is.null(df) || !shiny::isTruthy(col) || !col %in% names(df)) return(NULL)
+      u <- as.character(df[[col]])
+      tab <- sort(table(u[!is.na(u) & nzchar(u)]), decreasing = TRUE)
+      hs <- user_setup$hh_size
+      size <- if (shiny::isTruthy(hs) && hs %in% names(df)) as_number(df[[hs]]) else rep(NA_real_, nrow(df))
+      people <- tapply(size, factor(u, levels = names(tab)), sum, na.rm = TRUE)
+      el <- tryCatch({
+        s <- selection(); d <- uploaded_df()
+        if (length(s$eligible) != nrow(d)) NULL else {
+          ud <- factor(as.character(d[[col]]), levels = names(tab))
+          sd <- if (shiny::isTruthy(hs) && hs %in% names(d)) as_number(d[[hs]]) else rep(NA_real_, nrow(d))
+          list(hh = tapply(s$eligible, ud, sum), people = tapply(ifelse(s$eligible, sd, 0), ud, sum, na.rm = TRUE))
+        }
+      }, error = function(e) NULL)
+      has_size <- shiny::isTruthy(hs) && hs %in% names(df)
+      ipc <- ipc_by_area(df, u)
+      out <- data.frame(area = names(tab), households = as.integer(tab),
+                 people = if (has_size) as.numeric(people[names(tab)]) else NA_real_,
+                 eligible = if (is.null(el)) NA_integer_ else as.integer(el$hh[names(tab)]),
+                 eligible_people = if (is.null(el) || !has_size) NA_real_ else as.numeric(el$people[names(tab)]),
+                 stringsAsFactors = FALSE)
+      out$ipc_phase <- if (is.null(ipc$phase)) NA_real_ else as.numeric(ipc$phase[names(tab)])
+      out$ipc_pop <- if (is.null(ipc$pop)) NA_real_ else as.numeric(ipc$pop[names(tab)])
+      attr(out, "ipc_phase_col") <- ipc$phase_col; attr(out, "ipc_pop_col") <- ipc$pop_col
+      out
+    })
+    quota_label <- function(lvl) c(admin1 = "Admin 1", admin2 = "Admin 2", admin3 = "Admin 3")[[lvl %||% "admin1"]]
+    # Ways to split a total caseload; the IPC ones only when the data has IPC figures.
+    alloc_choices <- function(a) {
+      c("In proportion to eligible households" = "eligible",
+        "In proportion to households" = "households",
+        if (!all(is.na(a$eligible_people))) c("In proportion to eligible people" = "eligible_people", "In proportion to people" = "people"),
+        if (!all(is.na(a$ipc_phase))) c("Eligible households in IPC phase 3+ areas only" = "ipc3",
+                                        "Eligible households weighted by IPC phase (3 x1, 4 x2, 5 x3)" = "ipc_weight"),
+        c("In proportion to the reference figure (column in the table)" = "fig"))
+    }
+    fig_types <- function() c("IPC phase 3 population" = "ipc3", "IPC phase 4 population" = "ipc4",
+                              "IPC phase 5 population" = "ipc5", "IPC phase 3+ population" = "ipc3plus",
+                              "HNRP people in need" = "hnrp_pin", "HNRP people targeted" = "hnrp_target")
+    fig_label <- function(t) names(fig_types())[match(t %||% "ipc3plus", fig_types())] %||% "Reference figure"
+    output$fig_label <- renderText(fig_label(input$fig_type))
+    alloc_words <- c(eligible = "eligible households", households = "households", eligible_people = "eligible people",
+                     people = "people", ipc3 = "eligible households of the areas in IPC phase 3 or above",
+                     ipc_weight = "eligible households weighted by IPC phase (phase 3 x1, 4 x2, 5 x3)",
+                     fig = "the reference figure")
+    observeEvent(input$quota_allocate, {
+      a <- quota_areas(); req(a)
+      total <- input$quota_total
+      need_ok(isTRUE(total > 0), "Give the total caseload to allocate first.")
+      m <- input$quota_alloc %||% "eligible"
+      w <- switch(m,
+        eligible = a$eligible, households = a$households, eligible_people = a$eligible_people, people = a$people,
+        ipc3 = ifelse(!is.na(a$ipc_phase) & a$ipc_phase >= 3, a$eligible, 0),
+        ipc_weight = ifelse(!is.na(a$ipc_phase) & a$ipc_phase >= 3, a$eligible * (a$ipc_phase - 2), 0),
+        fig = typed_figs("fig"))
+      need_ok(sum(w, na.rm = TRUE) > 0, if (identical(m, "fig")) "Type the reference figure of the areas in the table first."
+              else "Nothing to allocate on: no area has a figure for this method.")
+      vals <- if (identical(input$quota_kind, "share")) allocate_total(w, 1000) / 10 else allocate_total(w, total)
+      for (i in seq_len(nrow(a))) updateNumericInput(session, paste0("quota_", i), value = vals[i])
+      # The rationale stays the officer's to write: the method is only suggested.
+      what <- if (identical(m, "fig")) paste("the", fig_label(input$fig_type)) else alloc_words[[m]]
+      updateTextAreaInput(session, "quota_rationale",
+                          placeholder = sprintf("e.g. Total caseload of %s %s allocated in proportion to %s per %s, because...",
+                                                format(total, big.mark = ","), unit_word(), what, quota_label(input$ben_quota_unit)))
+    })
+    observeEvent(input$quota_open, {
+      a <- quota_areas()
+      need_ok(!is.null(a) && nrow(a) > 0, sprintf("Map %s in the variable setup first.", quota_label(input$ben_quota_unit)))
+      plan <- quota_plan()
+      same <- !is.null(plan) && identical(plan$unit, input$ben_quota_unit)
+      kind <- if (same) plan$kind else "households"
+      val <- function(i) if (same) plan$values[[a$area[i]]] %||% NA else NA
+      # IPC and HNRP figures: typed per area (from the data when it has IPC
+      # figures), kept with the plan, usable to allocate the caseload.
+      fig0 <- function(i) {
+        v <- plan$fig[[a$area[i]]]
+        if (!is.null(v)) return(v)
+        x <- a$ipc_pop[i]; if (is.na(x)) NA else x
+      }
+      fig_type0 <- plan$fig_type %||% "ipc3plus"
+      n0 <- function(v) if (is.na(v)) "\u2013" else format(round(v), big.mark = ",")
+      rows <- lapply(seq_len(nrow(a)), function(i) tags$tr(
+        tags$td(a$area[i]),
+        tags$td(class = "num", n0(a$households[i])),
+        tags$td(class = "num", n0(a$people[i])),
+        tags$td(class = "num", n0(a$eligible[i])),
+        tags$td(class = "num", n0(a$eligible_people[i])),
+        tags$td(class = "num wfp-quota-fig", style = "width: 130px;",
+                numericInput(ns(paste0("fig_", i)), NULL, value = fig0(i), min = 0, step = 1, width = "100%")),
+        tags$td(class = "num", style = "width: 125px;",
+                numericInput(ns(paste0("quota_", i)), NULL, value = val(i), min = 0, step = 1, width = "100%")),
+        tags$td(class = "wfp-quota-flag", uiOutput(ns(paste0("quota_flag_", i)), inline = TRUE))))
+      tot <- function(v) if (all(is.na(v))) "\u2013" else format(round(sum(v, na.rm = TRUE)), big.mark = ",")
+      rows <- c(rows, list(tags$tr(class = "wfp-quota-total",
+        tags$td("Total"), tags$td(class = "num", tot(a$households)), tags$td(class = "num", tot(a$people)),
+        tags$td(class = "num", tot(a$eligible)), tags$td(class = "num", tot(a$eligible_people)),
+        tags$td(class = "num", textOutput(ns("fig_total"), inline = TRUE)),
+        tags$td(class = "num", textOutput(ns("quota_total_entered"), inline = TRUE)), tags$td())))
+      # One live flag per area: the caseload above what is eligible there
+      # (eligible people or eligible households, in the caseload's unit).
+      elig_in_unit <- if (identical(count_unit(), "people")) a$eligible_people else a$eligible
+      for (i in seq_len(nrow(a))) local({
+        ii <- i
+        output[[paste0("quota_flag_", ii)]] <- renderUI({
+          k <- quota_caseload()[ii]; el <- elig_in_unit[ii]
+          if (is.na(k) || is.na(el) || k <= el) return(NULL)
+          tags$span(class = "text-danger small", title = sprintf("%s %s asked, %s eligible", format(k, big.mark = ","), unit_word(), format(round(el), big.mark = ",")),
+                    bsicons::bs_icon("exclamation-triangle-fill"), sprintf(" %s > %s eligible", format(k, big.mark = ","), format(round(el), big.mark = ",")))
+        })
+      })
+      showModal(modalDialog(
+        title = tagList(bsicons::bs_icon("table"), sprintf(" Caseload per %s", quota_label(input$ben_quota_unit))),
+        size = "xl", easyClose = FALSE,
+        tags$p(class = "small text-muted",
+               sprintf("Each area is served up to its own caseload in %s, most vulnerable households first. Give the caseload of each area,", unit_word()),
+               " or each area's share of a total caseload. Eligible households beyond an area's caseload are excluded by design (Advisory 2/2025)."),
+        tags$div(class = "d-flex flex-wrap gap-3 align-items-end",
+                 radioButtons(ns("quota_kind"), NULL, inline = TRUE, selected = kind,
+                              choices = stats::setNames(c("households", "share"),
+                                                        c(sprintf("Caseload per area (%s)", unit_word()), "Share (%) of a total caseload"))),
+                 numericInput(ns("quota_total"), sprintf("Total caseload (%s)", unit_word()), value = if (same) plan$total else NA,
+                              min = 1, step = 1, width = "200px")),
+        # Fill the table from the total caseload in one click.
+        tags$div(class = "d-flex flex-wrap gap-2 align-items-end wfp-quota-alloc",
+                 tags$div(style = "min-width: 230px;",
+                          selectInput(ns("fig_type"), "Reference figure in the table", width = "100%", selectize = FALSE,
+                                      choices = fig_types(), selected = fig_type0)),
+                 tags$div(style = "min-width: 320px;",
+                          selectInput(ns("quota_alloc"), "Allocate the total caseload", width = "100%", selectize = FALSE,
+                                      choices = alloc_choices(a))),
+                 tags$div(class = "pb-3",
+                          actionButton(ns("quota_allocate"), "Allocate", icon = icon("scale-balanced"), class = "btn-outline-primary"))),
+        tags$div(class = "wfp-quota-table",
+                 tags$table(class = "table table-sm align-middle mb-2",
+                            tags$thead(tags$tr(tags$th("Area"), tags$th(class = "num", "Households"), tags$th(class = "num", "People"),
+                                               tags$th(class = "num", "Eligible households"), tags$th(class = "num", "Eligible people"),
+                                               tags$th(class = "num", textOutput(ns("fig_label"), inline = TRUE),
+                                                       info_tip("The reference figure of each area (IPC population of the chosen phase, or the HNRP figure), typed or read from the data. The allocation can follow it.")),
+                                               tags$th(class = "num", textOutput(ns("quota_col_label"), inline = TRUE)), tags$th(""))),
+                            tags$tbody(rows))),
+        uiOutput(ns("quota_check")),
+        textAreaInput(ns("quota_rationale"), "Rationale for these caseloads (required)", rows = 3, width = "100%",
+                      value = if (same) plan$rationale else "",
+                      placeholder = "e.g. Caseloads follow the IPC phase 3+ population in each province and the partner capacity agreed with the cluster."),
+        footer = tagList(modalButton("Cancel"),
+                         actionButton(ns("quota_save"), "Save the caseloads", icon = icon("check"), class = "btn-primary"))
+      ))
+    })
+    output$quota_col_label <- renderText(if (identical(input$quota_kind, "share")) "Share (%)" else sprintf("Caseload (%s)", unit_word()))
+    quota_typed <- reactive({
+      a <- quota_areas(); req(a)
+      v <- vapply(seq_len(nrow(a)), function(i) suppressWarnings(as.numeric(input[[paste0("quota_", i)]] %||% NA)), numeric(1))
+      stats::setNames(v, a$area)
+    })
+    typed_figs <- function(key) {
+      a <- quota_areas(); req(a)
+      stats::setNames(vapply(seq_len(nrow(a)), function(i) suppressWarnings(as.numeric(input[[paste0(key, "_", i)]] %||% NA)), numeric(1)), a$area)
+    }
+    output$fig_total <- renderText({ v <- typed_figs("fig"); if (all(is.na(v))) "" else format(round(sum(v, na.rm = TRUE)), big.mark = ",") })
+    quota_caseload <- reactive({
+      v <- quota_typed()
+      if (identical(input$quota_kind, "share")) round((input$quota_total %||% NA) * v / 100) else round(v)
+    })
+    output$quota_total_entered <- renderText({
+      v <- quota_typed()
+      if (identical(input$quota_kind, "share")) sprintf("%.1f%%", sum(v, na.rm = TRUE)) else format(sum(v, na.rm = TRUE), big.mark = ",")
+    })
+    over_eligible <- function() {
+      a <- quota_areas(); k <- quota_caseload()
+      el <- if (identical(count_unit(), "people")) a$eligible_people else a$eligible
+      o <- !is.na(k) & !is.na(el) & k > el
+      a$area[o]
+    }
+    output$quota_check <- renderUI({
+      over <- tryCatch(over_eligible(), error = function(e) character(0))
+      over_note <- if (length(over)) tags$div(class = "small text-danger mb-1", bsicons::bs_icon("exclamation-triangle-fill"),
+        sprintf(" %d area%s above %s eligible %s (%s): %s will serve all its eligible households, fewer than asked.",
+                length(over), if (length(over) == 1) "" else "s", if (length(over) == 1) "its" else "their", unit_word(),
+                paste(over, collapse = ", "), if (length(over) == 1) "it" else "each"))
+      v <- quota_typed(); v[is.na(v)] <- 0
+      if (identical(input$quota_kind, "share")) {
+        tot <- sum(v); ok <- abs(tot - 100) < 0.05
+        tagList(over_note, tags$div(class = paste("small mb-2", if (ok) "text-success" else "text-danger"),
+                 bsicons::bs_icon(if (ok) "check-circle-fill" else "exclamation-triangle-fill"),
+                 sprintf(" Shares add up to %.1f%%%s", tot, if (ok) "." else ": they must add up to 100% to save."),
+                 if (ok && isTRUE(input$quota_total > 0)) sprintf(" %s %s in all.", format(sum(round(input$quota_total * v / 100)), big.mark = ","), unit_word())))
+      } else {
+        tagList(over_note, tags$div(class = "small mb-2 text-muted", sprintf("%s %s in all.", format(sum(v), big.mark = ","), unit_word())))
+      }
+    })
+    observeEvent(input$quota_save, {
+      a <- quota_areas(); v <- quota_typed()
+      kind <- input$quota_kind %||% "households"
+      need_ok(any(!is.na(v) & v > 0), "Give a caseload for at least one area.")
+      need_ok(all(is.na(v) | v >= 0), "Caseloads cannot be negative.")
+      v[is.na(v)] <- 0
+      if (identical(kind, "share")) {
+        need_ok(abs(sum(v) - 100) < 0.05, sprintf("The shares add up to %.1f%%: they must add up to 100%%.", sum(v)))
+        need_ok(isTRUE(input$quota_total > 0), "Give the total caseload the shares apply to.")
+      }
+      need_ok(nzchar(trimws(input$quota_rationale %||% "")), "Write the rationale for these caseloads.")
+      caseload <- if (identical(kind, "share")) round(input$quota_total * v / 100) else round(v)
+      fv <- typed_figs("fig")
+      quota_plan(list(unit = input$ben_quota_unit, kind = kind, count = count_unit(),
+                      fig = if (all(is.na(fv))) NULL else as.list(fv), fig_type = input$fig_type %||% "ipc3plus", total = if (identical(kind, "share")) input$quota_total else sum(caseload),
+                      values = as.list(v), caseload = as.list(stats::setNames(caseload, a$area)),
+                      rationale = trimws(input$quota_rationale), set_at = format(Sys.time(), "%Y-%m-%d %H:%M")))
+      audit_add(modification_log, "Selection", "Caseload per area set",
+                sprintf("%s per %s: %s %s in %d areas (%s)", if (identical(kind, "share")) "Shares" else "Caseloads",
+                        quota_label(input$ben_quota_unit), format(sum(caseload), big.mark = ","), unit_word(), sum(caseload > 0),
+                        paste(sprintf("%s %s", names(caseload), caseload)[caseload > 0], collapse = ", ")),
+                reason = trimws(input$quota_rationale))
+      removeModal()
+      over <- tryCatch(over_eligible(), error = function(e) character(0))
+      showNotification(paste0("Caseloads saved. Apply the selection to use them.",
+                              if (length(over)) sprintf(" %s: caseload above the eligible households; all of them will be served.",
+                                                        paste(over, collapse = ", ")) else ""),
+                       type = if (length(over)) "warning" else "message", duration = if (length(over)) 10 else 5)
+    })
+    output$quota_summary <- renderUI({
+      plan <- quota_plan()
+      if (is.null(plan) || !identical(plan$unit, input$ben_quota_unit) || !identical(plan$count %||% "households", count_unit()))
+        return(tags$div(class = "small text-warning", bsicons::bs_icon("exclamation-circle"), " No caseload set for this level yet."))
+      k <- unlist(plan$caseload)
+      tags$div(class = "small text-muted", bsicons::bs_icon("check-circle-fill", class = "text-success"),
+               sprintf(" %s %s in %d areas (%s).", format(sum(k), big.mark = ","), plan$count %||% "households", sum(k > 0),
+                       if (identical(plan$kind, "share")) "by share of the total" else "per area"))
+    })
 
     # The whole registration data stays as it is; this module works on the
     # areas covered. Area choices and new variables use the whole data.
@@ -248,6 +510,8 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
           updateRadioButtons(session, "ben_prio_mode", selected = s$prio_mode)
           updateNumericInput(session, "ben_prio_n", value = s$prio_n)
           updateSelectInput(session, "ben_quota_unit", selected = s$quota_unit)
+          if (!is.null(s$prio_count)) updateRadioButtons(session, "ben_prio_count", selected = s$prio_count)
+          if (!is.null(s$quota_plan)) quota_plan(s$quota_plan)
           # the community values picker refills when its column arrives
           pending_comm_vals(s$comm_vals)
         })
@@ -344,6 +608,20 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
       applied$prio_mode <- input$ben_prio_mode %||% "none"
       applied$prio_n <- input$ben_prio_n
       applied$quota_unit <- input$ben_quota_unit
+      applied$prio_count <- count_unit()
+      if (identical(applied$prio_mode, "caseload")) {
+        if (!nzchar(trimws(input$ben_prio_rationale %||% ""))) {
+          applied$prio_mode <- "none"
+          showNotification("Write the rationale for the caseload first (Prioritisation). The selection was applied without prioritisation.",
+                           type = "warning", duration = 10)
+        } else applied$prio_rationale <- trimws(input$ben_prio_rationale)
+      }
+      plan <- quota_plan()
+      applied$quota_plan <- if (identical(applied$prio_mode, "per_unit") && !is.null(plan) && identical(plan$unit, applied$quota_unit) &&
+                                identical(plan$count %||% "households", applied$prio_count)) plan
+      if (identical(applied$prio_mode, "per_unit") && is.null(applied$quota_plan))
+        showNotification("No caseload is set for this area level: every eligible household is served. Set the caseload per area first.",
+                         type = "warning", duration = 10)
       audit_add(modification_log, "Selection", "Selection criteria applied",
                 sprintf("%s; prioritisation: %s", targeting_approaches()[[applied$approach]]$label, applied$prio_mode))
       showNotification("Selection criteria applied.", type = "message")
@@ -371,6 +649,7 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
       applied$prio_mode <- "none"
       applied$prio_n <- NA
       applied$quota_unit <- "admin1"
+      applied$quota_plan <- NULL
       shinyWidgets::updatePickerInput(session, "ben_comm_vals", selected = character(0))
       updateRadioButtons(session, "ben_prio_mode", selected = "none")
       updateNumericInput(session, "ben_prio_n", value = NA)
@@ -949,10 +1228,47 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
         score_range = c(applied$score_min, applied$score_max),
         combine = applied$combine,
         community = list(column = applied$comm_col, values = applied$comm_vals),
-        prioritization = list(mode = applied$prio_mode, n = applied$prio_n,
-                              unit = applied$quota_unit)
+        prioritization = list(mode = applied$prio_mode, n = applied$prio_n, count = applied$prio_count %||% "households",
+                              unit = applied$quota_unit, quotas = applied$quota_plan$caseload)
       )
     })
+
+    # The applied caseload plan per area, with what the selection did.
+    caseload_table <- function(s, df_all) {
+      qp <- applied$quota_plan
+      if (!identical(applied$prio_mode, "per_unit") || is.null(qp)) return(NULL)
+      col <- user_setup[[qp$unit]]
+      if (!shiny::isTruthy(col) || !col %in% names(df_all)) return(NULL)
+      k <- unlist(qp$caseload)
+      u <- factor(as.character(df_all[[col]]), levels = names(k))
+      hs <- user_setup$hh_size
+      size <- if (shiny::isTruthy(hs) && hs %in% names(df_all)) as_number(df_all[[hs]]) else NULL
+      n <- function(x) as.numeric(tapply(x, u, sum, na.rm = TRUE)[names(k)])
+      out <- data.frame(Area = names(k), Households = n(rep(1, nrow(df_all))),
+                        People = if (is.null(size)) NA else n(size),
+                        `Eligible households` = n(s$eligible), `Eligible people` = if (is.null(size)) NA else n(ifelse(s$eligible, size, 0)),
+                        check.names = FALSE)
+      if (!is.null(qp$fig)) out[[fig_label(qp$fig_type)]] <- as.numeric(unlist(qp$fig)[names(k)])
+      if (identical(qp$kind, "share")) out$`Share (%)` <- as.numeric(unlist(qp$values)[names(k)])
+      people <- identical(qp$count, "people")
+      out[[if (people) "Caseload (people)" else "Caseload (households)"]] <- as.numeric(k)
+      out$`Served households` <- n(s$prioritized)
+      if (!is.null(size)) out$`Served people` <- n(ifelse(s$prioritized, size, 0))
+      out$`Excluded by design` <- n(s$eligible & !s$prioritized)
+      el <- if (people && !is.null(size)) out$`Eligible people` else out$`Eligible households`
+      out$Note <- ifelse(as.numeric(k) > el, sprintf("Caseload above the eligible %s", if (people) "people" else "households"), "")
+      if (is.null(size)) out$People <- out$`Eligible people` <- NULL
+      tot <- out[1, ]; tot$Area <- "Total"
+      for (cl in setdiff(names(out), c("Area", "Note"))) tot[[cl]] <- sum(out[[cl]], na.rm = TRUE)
+      tot$Note <- ""
+      out <- rbind(out, tot)
+      attr(out, "rationale") <- qp$rationale
+      attr(out, "level") <- quota_label(qp$unit)
+      attr(out, "kind") <- qp$kind
+      attr(out, "count") <- qp$count %||% "households"
+      attr(out, "total") <- qp$total
+      out
+    }
 
     selected_data <- reactive({
       df <- uploaded_df(); req(df)
@@ -1311,9 +1627,16 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
     # disagree.
     selection_sections <- function(s, df_all, keep_cols, with_audit = FALSE) {
       cut <- which(s$eligible & !s$prioritized)
-      prio_desc <- if (!isTRUE(suppressWarnings(as.numeric(applied$prio_n)) > 0)) "none (all eligible served)" else switch(applied$prio_mode %||% "none",
+      qp <- applied$quota_plan
+      prio_desc <- if (identical(applied$prio_mode, "per_unit") && !is.null(qp)) {
+        k <- unlist(qp$caseload)
+        sprintf("caseload per %s, %s: %s %s in all (%s). Rationale: %s",
+                quota_label(qp$unit), if (identical(qp$kind, "share")) sprintf("as shares of %s", format(qp$total, big.mark = ",")) else "set per area",
+                format(sum(k), big.mark = ","), qp$count %||% "households", paste(sprintf("%s %s", names(k), format(k, big.mark = ",")), collapse = "; "), qp$rationale)
+      } else if (!isTRUE(suppressWarnings(as.numeric(applied$prio_n)) > 0)) "none (all eligible served)" else switch(applied$prio_mode %||% "none",
         none = "none (all eligible served)",
-        caseload = sprintf("total caseload of %s households", applied$prio_n),
+        caseload = sprintf("total caseload of %s %s. Rationale: %s", applied$prio_n, applied$prio_count %||% "households",
+                           applied$prio_rationale %||% "not recorded"),
         per_unit = sprintf("%s households per %s", applied$prio_n, applied$quota_unit))
       m <- ben_metrics()
       mpct <- function(x) if (is.null(m) || is.na(x)) "n/a" else sprintf("%.1f%%", 100 * x)
@@ -1389,7 +1712,7 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
     }
 
     output$selection_report <- download_handler(
-      filename = function() paste0("Beneficiary_selection_report_", format(Sys.time(), "%Y-%m-%d_%Hh%M"), ".html"),
+      filename = function() export_file_name("Beneficiary_selection_report", "html", "%Y-%m-%d_%Hh%M"),
       content = function(file) {
         s <- selection(); df_all <- uploaded_df()
         req(s, df_all)
@@ -1413,6 +1736,7 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
           beneficiary_profile = beneficiary_profile(df_all[which(sel), , drop = FALSE], user_setup),
           rates = selection_rates(df_all, user_setup, sel),
           accuracy = selection_accuracy(df_all, user_setup, s),
+          caseload = caseload_table(s, df_all),
           map = mp, map_n = attr(mp, "n_total")),
           lang = if (identical(lang, "fr")) "fr" else "en")
         audit_add(modification_log, "Selection", "Selection report exported",
@@ -1423,8 +1747,7 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
     # Self-documenting export: rows + a metadata sheet (filters, totals, accuracy)
     output$download_selection <- download_handler(
       filename = function() {
-        paste0("Targeting_BeneficiarySelection_", format(Sys.time(), "%Y-%m-%d_%Hh%Mm%Ss"),
-               if (identical(input$export_split, "area")) ".zip" else ".xlsx")
+        export_file_name("Targeting_BeneficiarySelection", if (identical(input$export_split, "area")) "zip" else "xlsx")
       },
       content = function(file) {
         sel <- selected_data()
@@ -1455,6 +1778,8 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
           if (is.null(area)) {
             by_area <- selection_by_area(df_all, user_setup, s)
             if (!is.null(by_area)) xl_data_sheet(wb, "By_area", by_area)
+            ct <- caseload_table(s, df_all)
+            if (!is.null(ct)) xl_data_sheet(wb, "Caseload_per_area", ct)
           }
           if (!is.null(ex_df) && nrow(ex_df)) xl_data_sheet(wb, "Excluded_by_design", sanitize_for_excel(ex_df))
           if (isTRUE(input$export_audit) && !is.null(lg) && nrow(lg)) {

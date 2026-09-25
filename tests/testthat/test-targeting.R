@@ -100,3 +100,14 @@ test_that("weighted_cor_matrix builds a symmetric matrix with unit diagonal", {
   expect_equal(mat["a", "c"], -1)
   expect_equal(mat["a", "b"], mat["b", "a"])  # symmetric
 })
+
+test_that("any two-answer column can say who received assistance", {
+  g <- TargetWise:::guess_positive_answer
+  expect_equal(g(c("No", "Yes")), "Yes")
+  expect_equal(g(c("0", "1")), "1")
+  expect_equal(g(c("Beneficiary", "Non-beneficiary")), "Beneficiary")
+  expect_equal(g(c("Non beneficiaire", "Beneficiaire")), "Beneficiaire")
+  expect_equal(g(c("Assisted", "Not assisted")), "Assisted")
+  expect_equal(g(c("Group A", "Group B")), "Group A")          # no clue: the first, the officer can change it
+  expect_equal(TargetWise:::two_levels(c(" A", "B", NA, "", "A")), c("A", "B"))
+})

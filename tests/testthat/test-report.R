@@ -32,7 +32,7 @@ test_that("a partial design still produces a report with its figures", {
   expect_match(html, "billboard", fixed = TRUE)
   expect_match(html, "<div class=\"fig-row n2\">", fixed = TRUE)
   expect_false(grepl("@@FIG", html, fixed = TRUE))
-  expect_match(html, "4. Criteria Screening", fixed = TRUE)
+  expect_match(html, "3. Criteria Screening", fixed = TRUE)
   expect_match(html, "No variables were selected", fixed = TRUE)
   expect_match(html, "Condition: size at least 7", fixed = TRUE)
   expect_match(html, "Not documented", fixed = TRUE)
@@ -92,4 +92,26 @@ test_that("without vulnerability mapped, the data summary shows socio-economic i
   expect_null(tm("socioeconomic_indicators")(data.frame(a = 1:3)))
   sc <- tm("rp_share_charts")(se$vars)
   expect_equal(sc$rows[1], "@@FIG:se_1,se_2@@")
+})
+
+test_that("downloads carry the country office in their name and header", {
+  expect_match(TargetWise:::export_file_name("Targeting_design_report", "html", country = "C\u00f4te d'Ivoire"),
+               "^Targeting_design_report_Cote_d_Ivoire_[0-9]{4}-[0-9]{2}-[0-9]{2}_[0-9]{2}h[0-9]{2}[.]html$")
+  expect_match(TargetWise:::export_file_name("Targeting_Scorecard", "xlsx", country = ""), "^Targeting_Scorecard_[0-9]{4}-")
+  s <- shiny::MockShinySession$new()
+  s$userData$country_office <- "Mali"
+  f <- withr::local_tempfile(fileext = ".html")
+  shiny::withReactiveDomain(s, {
+    expect_equal(TargetWise:::country_office_now(), "Mali")
+    expect_match(TargetWise:::export_file_name("X", "html"), "^X_Mali_")
+    TargetWise:::report_write_page(f, "# T", title = "T", record = "R", meta = c("Country office" = ""))
+  })
+  expect_match(paste(readLines(f, encoding = "UTF-8"), collapse = "\n"), "Mali", fixed = TRUE)
+})
+
+test_that("the vulnerability framework chart is 100% stacked with the overall line", {
+  b <- TargetWise:::rp_stacked_share(c("A", "B"), c(0.6, 0.3), 45)
+  expect_s3_class(b, "billboarder")
+  expect_true(isTRUE(b$x$bb_opts$data$groups[[1]] |> length() == 2) || length(b$x$bb_opts$data$groups) > 0)
+  expect_equal(b$x$bb_opts$grid$y$lines[[1]]$value, 45)
 })

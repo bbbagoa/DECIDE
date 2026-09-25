@@ -22,6 +22,8 @@ test_that("restoring a Targeting Design keeps the fitted model through the input
   shiny::testServer(TargetWise:::mod_scorecard_server, args = args(ws1), {
     assessment_df(df)
     session$setInputs(outcome_col = "FSI_CARI2_2class", outcome_pos = "Food insecure", criteria = crit)
+    # Criteria go to the model once reviewed (observable, not an outcome, community-validated).
+    do.call(session$setInputs, stats::setNames(as.list(rep(TRUE, length(crit))), paste0("rvcval_", gsub("[^A-Za-z0-9]", "_", crit))))
     session$setInputs(model_method = "logit", model_scheme = "odds_ratio", holdout_pct = 0,
                       split_seed = 1, run_benchmarks = FALSE, fit_criteria = crit, run_fit = 1)
     session$setInputs(w_1 = 9, ver_2 = TRUE, threshold = 1.5)
@@ -73,4 +75,23 @@ test_that("the autosave fingerprint changes with the work, not with nothing", {
   expect_false(identical(sig(a), sig(b)))
   c <- a; c$scorecard$data$y <- 1   # a calculated column
   expect_false(identical(sig(a), sig(c)))
+})
+
+test_that("only the criteria that passed their three reviews go on to the model", {
+  df <- read.csv(system.file("extdata", "assessment_demo.csv", package = "TargetWise"))
+  crit <- c("Targ_HHNoLight", "Targ_HHDepRatio2plus", "Targ_HHRemittance")
+  shiny::testServer(TargetWise:::mod_scorecard_server,
+                    args = list(uploaded_df = shiny::reactiveVal(NULL), user_setup = shiny::reactiveValues(),
+                                workspace = TargetWise:::workspace_new()), {
+    assessment_df(df)
+    session$setInputs(outcome_col = "FSI_CARI2_2class", outcome_pos = "Food insecure", criteria = crit)
+    expect_equal(ready_criteria(), character(0))              # community validation not ticked yet
+    session$setInputs(rvcval_Targ_HHNoLight = TRUE, rvcval_Targ_HHDepRatio2plus = TRUE, rvcval_Targ_HHRemittance = TRUE,
+                      rvobs_Targ_HHRemittance = FALSE)            # not observable after all
+    expect_equal(ready_criteria(), c("Targ_HHNoLight", "Targ_HHDepRatio2plus"))
+    session$setInputs(model_method = "logit", model_scheme = "odds_ratio", holdout_pct = 0, split_seed = 1,
+                      run_benchmarks = FALSE, run_fit = 1)
+    expect_setequal(fitted()$weights$criterion, c("Targ_HHNoLight", "Targ_HHDepRatio2plus"))
+    expect_true(all(current_weights()$validated))
+  })
 })

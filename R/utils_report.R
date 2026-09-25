@@ -85,16 +85,10 @@ design_report_md <- function(x, figures = character(0)) {
                             `Share vulnerable` = sprintf("%.1f%%", 100 * va$share), check.names = FALSE)), "")
   }
 
-  kept <- if (is.null(x$screening)) character(0) else x$screening$criterion[x$screening$retained]
-  add("## 3. Criteria Selection", "",
-      sprintf("%d candidate criteria were examined; **%d were kept** for the model: %s.",
-              length(x$candidates %||% character(0)), length(kept),
-              if (length(kept)) paste0("`", kept, "`", collapse = ", ") else "none"), "")
-
-  add("## 4. Criteria Screening", "")
+  add("## 3. Criteria Screening", "")
   if (is.null(x$screening)) add("_No variables were selected._", "") else {
     s <- x$screening
-    add(sprintf("Variables were chosen by the analyst from their descriptive statistics and correlations (no model fitted at this step); pairs correlated above **|r| = %s** were flagged.",
+    add(sprintf("Every yes/no variable of the data was compared with the vulnerability framework before any criterion was chosen; the analyst kept variables from their descriptive statistics and correlations (no model fitted at this step); pairs correlated above **|r| = %s** were flagged.",
                 x$screen_settings$corr %||% 0.8), "",
         "Descriptive statistics of the variables kept:", "",
         md_table(data.frame(
@@ -108,13 +102,21 @@ design_report_md <- function(x, figures = character(0)) {
       if (length(x$collinear)) sprintf(", %d of them because they duplicated a stronger variable", length(x$collinear)) else ""), "")
   }
 
+
+  kept <- if (is.null(x$screening)) character(0) else x$screening$criterion[x$screening$retained]
+  chosen <- x$candidates %||% character(0)
+  add("## 4. Criteria Selection", "",
+      sprintf("%d variables were kept at the screening; **%d criteria went to the model**: %s.",
+              length(kept), length(chosen),
+              if (length(chosen)) paste0("`", chosen, "`", collapse = ", ") else "none"), "")
+
   add("## 5. Model", "")
   if (is.null(x$model)) add("_No model was fitted._", "") else {
     m <- x$model
     add(sprintf("- Model: **%s**", m$method),
         sprintf("- Weighting scheme: **%s**", m$scheme),
         sprintf("- Stepwise selection of the criteria: %s",
-                switch(m$stepwise %||% "none", aic = "**backward, AIC**", bic = "**backward, BIC**", "none")),
+                if ((m$stepwise %||% "none") %in% c("aic", "bic")) sprintf("**%s, %s**", m$stepwise_dir %||% "backward", toupper(m$stepwise)) else "none"),
         sprintf("- Training households: %s; held out for evaluation: %s (seed %s)",
                 format(m$n_train, big.mark = ","), format(m$n_test, big.mark = ","), m$seed),
         sprintf("- Survey weights: %s", if (shiny::isTruthy(m$weights)) paste0("`", m$weights, "`") else "none"),
@@ -229,10 +231,13 @@ design_report_methods <- function(x) {
     if (shiny::isTruthy(m$weights)) item("Survey weights",
        sprintf("Each household counted in the model by its sampling weight `%s`, normalised to a mean of 1 so the sample size, and therefore the standard errors, keep their scale.", m$weights))
 
-    if ((m$stepwise %||% "none") %in% c("aic", "bic")) item(sprintf("Stepwise selection (%s)", toupper(m$stepwise)),
+    if ((m$stepwise %||% "none") %in% c("aic", "bic")) item(sprintf("Stepwise selection (%s, %s)", m$stepwise_dir %||% "backward", toupper(m$stepwise)),
        paste("Reference: Venables & Ripley (2002), *Modern Applied Statistics with S*, ch. 6. Before the model is fitted, the criteria go through",
-             "**backward stepwise selection** on a logistic fit: one at a time, the criterion whose removal lowers the information criterion most is dropped,",
-             "until no removal lowers it. AIC = 2k - 2 log L; BIC = k log(n) - 2 log L, a heavier penalty per criterion, so BIC keeps fewer.",
+             switch(m$stepwise_dir %||% "backward",
+               forward = "**forward stepwise selection** on a logistic fit: starting from no criterion, the one whose addition lowers the information criterion most is added, one at a time, until no addition lowers it.",
+               both = "**stepwise selection in both directions** on a logistic fit: starting from no criterion, criteria are added one at a time, and one added earlier is removed again whenever that lowers the information criterion, until no step lowers it.",
+               "**backward stepwise selection** on a logistic fit: one at a time, the criterion whose removal lowers the information criterion most is dropped, until no removal lowers it."),
+             "AIC = 2k - 2 log L; BIC = k log(n) - 2 log L, a heavier penalty per criterion, so BIC keeps fewer.",
              "The chosen model is then fitted on the criteria that remain, so every model can be made shorter the same way."))
     item(sprintf("Model: %s", m$method %||% ""), switch(m$method_code %||% "logit",
       logit = paste("Reference: Hosmer, Lemeshow & Sturdivant (2013), *Applied Logistic Regression*, 3rd ed. A **logistic regression** of the outcome on all kept criteria: log(p / (1 - p)) = b0 + b1 x1 + ... + bk xk, where p is the probability of being vulnerable and each x is 0/1. Each coefficient b is the change in log-odds when the criterion is met, **net of the other criteria**; exp(b) is its odds ratio. Standard errors and p-values come from the Wald test; the 95% interval is b +/- 1.96 SE."),
@@ -378,6 +383,13 @@ report_error_matrix <- function(e, threshold = NULL, outcome = NULL, outcome_pos
 #' @noRd
 report_write_page <- function(file, md, plots = list(), captions = character(0), lang = "en",
                               title, record, meta = character(0), footer = "", blocks = list()) {
+  # Every report names its country office, filled in here when a caller did
+  # not pass it.
+  co <- country_office_now()
+  if (nzchar(co)) {
+    if (!"Country office" %in% names(meta)) meta <- c("Country office" = co, meta)
+    else if (!nzchar(meta[["Country office"]] %||% "")) meta[["Country office"]] <- co
+  }
   figs <- list(); deps <- list()
   for (nm in names(plots)) {
     r <- tryCatch(htmltools::renderTags(plots[[nm]]), error = function(e) NULL)

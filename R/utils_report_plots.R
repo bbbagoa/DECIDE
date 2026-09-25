@@ -280,3 +280,22 @@ rp_share_charts <- function(vars, max_donuts = 3, lang = "en") {
   list(plots = plots, rows = rows,
        captions = stats::setNames(vapply(vars, function(v) attr(v, "label") %||% "", character(1)), names(vars)))
 }
+
+# 100% stacked columns: vulnerable / not vulnerable per group, with a dotted
+# line at the overall share vulnerable (Vulnerability Framework by area).
+rp_stacked_share <- function(group, share, overall_pct, lang = "en") {
+  tr <- function(x) i18n_lookup(x, lang)
+  lab <- tr(c("Vulnerable", "Not vulnerable"))
+  d <- data.frame(group = group, a = round(100 * share, 1), b = round(100 * (1 - share), 1))
+  names(d)[2:3] <- lab
+  rp_base(340) |>
+    billboarder::bb_barchart(d, stacked = TRUE) |>
+    rp_colors(stats::setNames(c(rp_cols$vuln, rp_cols$not), lab)) |>
+    billboarder::bb_bar(width = list(ratio = 0.6)) |>
+    billboarder::bb_x_axis(tick = list(multiline = FALSE, rotate = if (length(group) > 8) -35 else 0)) |>
+    billboarder::bb_y_axis(max = 100, min = 0, padding = list(top = 0, bottom = 0),
+                           label = rp_axis_label(tr("Households (%)"))) |>
+    billboarder::bb_y_grid(lines = list(list(value = round(overall_pct, 1), class = "rp-avg",
+                                             text = sprintf("%s: %.0f%%", tr("All areas"), overall_pct)))) |>
+    billboarder::bb_add_style(".rp-avg line" = "stroke: #1f2a37; stroke-dasharray: 4 4; stroke-width: 2px;")
+}

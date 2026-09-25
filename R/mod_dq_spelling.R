@@ -185,11 +185,7 @@ dq_spelling_server <- function(input, output, session, ns, core) {
 
   output$download_audit <- download_handler(
     filename = function() {
-      paste0(
-        "Targeting_NamesCheck_",
-        format(Sys.time(), "%Y-%m-%d_%Hh%Mm%Ss"),
-        ".xlsx"
-      )
+      export_file_name("Targeting_NamesCheck", "xlsx", "%Y-%m-%d_%Hh%Mm%Ss")
     },
     content = function(file) {
       export_data <- sanitize_for_excel(bad_data_reactive())
@@ -237,28 +233,34 @@ dq_spelling_server <- function(input, output, session, ns, core) {
   # 2. The Logic to Open the Modal based on Selection
   # -------------------------------------------------------------
 
-  observeEvent(input$btn_open_edit, {
-    selected_idx <- input$dq_names_redflags_rows_selected
-    need_ok(length(selected_idx) > 0, "Select a record in the table first.")
+  # The id of the record selected in the red-flag table, or NULL. The column is
+  # taken first: `tbl[i, id]` gives a vector (data.frame) or a 1x1 tibble,
+  # and `record[[id]]` on the vector failed, so Edit hung with nothing shown.
+  selected_uid <- function() {
+    i <- input$dq_names_redflags_rows_selected
+    bd <- bad_data_reactive()
+    id <- user_setup$unique_id
+    if (!length(i) || is.null(bd) || !shiny::isTruthy(id) || !id %in% names(bd) || i[1] > nrow(bd)) return(NULL)
+    v <- as.character(bd[[id]][i[1]])
+    if (is.na(v)) NULL else v
+  }
 
-    if (is.null(selected_idx)) {
-      showNotification(
-        "Please select a record in the table first.",
-        type = "warning"
-      )
-      return()
+  observeEvent(input$btn_open_edit, {
+    uid <- selected_uid()
+    need_ok(!is.null(uid), "Select a record in the table first.")
+
+    df <- dq_filtered_data()
+    full_record <- df[which(as.character(df[[user_setup$unique_id]]) == uid)[1], , drop = FALSE]
+    # A field that is not mapped shows a dash instead of failing.
+    fld <- function(k) {
+      col <- user_setup[[k]]
+      if (!shiny::isTruthy(col) || !col %in% names(full_record)) return("\u2013")
+      v <- as.character(full_record[[col]][1])
+      if (is.na(v) || !nzchar(v)) "\u2013" else v
     }
 
-    # Fetch the specific record from your reactive audit data
-    record <- bad_data_reactive()[selected_idx, user_setup$unique_id]
-
-    full_record <- dq_filtered_data() |>
-      dplyr::filter(
-        .data[[user_setup$unique_id]] == record[[user_setup$unique_id]]
-      )
-
     showModal(modalDialog(
-      title = paste("Household Review: ", record[[user_setup$unique_id]]),
+      title = paste("Household Review: ", uid),
       size = "xl",
       easyClose = FALSE,
 
@@ -272,21 +274,21 @@ dq_spelling_server <- function(input, output, session, ns, core) {
             bslib::card_header("Location Context"),
             tags$div(
               style = "font-size: 12px;",
-              tags$p(tags$b("Admin 1: "), full_record[[user_setup$admin1]]),
-              tags$p(tags$b("Admin 2: "), full_record[[user_setup$admin2]]),
-              tags$p(tags$b("Admin 3: "), full_record[[user_setup$admin3]]),
-              tags$p(tags$b("Admin 4: "), full_record[[user_setup$admin4]]),
-              tags$p(tags$b("Community: "), full_record[[user_setup$village]]),
+              tags$p(tags$b("Admin 1: "), fld("admin1")),
+              tags$p(tags$b("Admin 2: "), fld("admin2")),
+              tags$p(tags$b("Admin 3: "), fld("admin3")),
+              tags$p(tags$b("Admin 4: "), fld("admin4")),
+              tags$p(tags$b("Community: "), fld("village")),
               tags$p(
                 tags$b("HH Head Sex: "),
-                full_record[[user_setup$hhh_sex]]
+                fld("hhh_sex")
               ),
               tags$p(
                 tags$b("HH Head Age: "),
-                full_record[[user_setup$hhh_age]]
+                fld("hhh_age")
               ),
-              tags$p(tags$b("HH Size: "), full_record[[user_setup$hh_size]]),
-              tags$p(tags$b("Residency: "), full_record[[user_setup$residency]])
+              tags$p(tags$b("HH Size: "), fld("hh_size")),
+              tags$p(tags$b("Residency: "), fld("residency"))
             ),
             hr(),
             # Vulnerability Status Boxes
@@ -295,15 +297,15 @@ dq_spelling_server <- function(input, output, session, ns, core) {
               style = "font-size: 12px;",
               tags$p(
                 tags$b("Vulnerability Score: "),
-                full_record[[user_setup$v_score]]
+                fld("v_score")
               ),
               tags$p(
                 tags$b("Vulnerability Group : "),
-                full_record[[user_setup$v_groups]]
+                fld("v_groups")
               ),
               tags$p(
                 tags$b("Eligibility : "),
-                full_record[[user_setup$eligibility]]
+                fld("eligibility")
               )
             )
           )
@@ -321,13 +323,13 @@ dq_spelling_server <- function(input, output, session, ns, core) {
                 # the module, input[["edit_<col>"]] below reads NULL, and the
                 # save handler writes "" over the value it was meant to correct.
                 ns(paste0("edit_", col)),
-                paste("Correct", col, ":", full_record[[col]]),
+                paste("Correct", col, ":", as.character(full_record[[col]][1])),
                 # full_record, NOT record: `record` is a one-COLUMN slice (just
                 # the unique id), so record[[col]] is NULL and every box opened
                 # empty. With namespaced inputs now actually wired up, saving
                 # would then blank every field the user didn't retype.
-                value = full_record[[col]],
-                placeholder = full_record[[col]]
+                value = as.character(full_record[[col]][1]),
+                placeholder = as.character(full_record[[col]][1])
               )
             }),
             textAreaInput(
@@ -403,13 +405,13 @@ dq_spelling_server <- function(input, output, session, ns, core) {
     }
 
     df <- isolate(uploaded_df())
-    selected_idx <- isolate(input$dq_names_redflags_rows_selected)
-    record <- isolate(bad_data_reactive()[selected_idx, user_setup$unique_id])
+    uid <- isolate(selected_uid())
+    need_ok(!is.null(uid), "Select a record in the table first.")
 
     # 1. Log the deletion
     new_log <- data.frame(
       timestamp = format(Sys.time(), "%Y-%m-%d %H:%M:%S"),
-      uid = as.character(record[[user_setup$unique_id]]),
+      uid = uid,
       column = "ALL_RECORD",
       old_value = "ACTIVE",
       new_value = "DELETED",
@@ -421,10 +423,8 @@ dq_spelling_server <- function(input, output, session, ns, core) {
     modification_log(rbind(modification_log(), new_log))
 
     # 2. Filter out the deleted row from the 1GB file
-    df_new <- df |>
-      dplyr::filter(
-        .data[[user_setup$unique_id]] != record[[user_setup$unique_id]]
-      )
+    keep <- as.character(df[[user_setup$unique_id]]) != uid
+    df_new <- df[which(keep | is.na(keep)), , drop = FALSE]
 
     uploaded_df(df_new)
 
@@ -561,25 +561,12 @@ dq_spelling_server <- function(input, output, session, ns, core) {
     # `tbl[i, j]` returns a 1x1 tibble rather than a scalar. That made the
     # `df[[id_col]] == target_id` match below find nothing, so the save
     # aborted at the `length(match_idx) == 0` guard without any message.
-    selected_idx <- input$dq_names_redflags_rows_selected
-    target_id <- as.character(bad_data_reactive()[[id_col]][selected_idx])
-
-    # 1. Safety Gate: Ensure a row is actually selected
-    req(selected_idx, target_id)
-
-    if (length(target_id) == 0 || is.na(target_id)) {
-      showNotification(
-        "Error: Selection lost. Please re-select the row.",
-        type = "error"
-      )
-      return()
-    }
+    target_id <- selected_uid()
+    need_ok(!is.null(target_id), "The selection was lost: select the row again.")
 
     # 3. Locate the row once
-    match_idx <- which(df[[id_col]] == target_id)
-    if (length(match_idx) == 0) {
-      return()
-    } # Record gone or ID changed
+    match_idx <- which(as.character(df[[id_col]]) == target_id)
+    need_ok(length(match_idx) > 0, "This record is no longer in the data (deleted or its id changed).")
 
     edit_reason <- input$reason_edit_record %||% ""
     edit_reason <- if (shiny::isTruthy(edit_reason)) trimws(as.character(edit_reason)) else ""
@@ -588,7 +575,7 @@ dq_spelling_server <- function(input, output, session, ns, core) {
     for (col in input$dq_name_cols) {
       # Get values and ensure they are at least length 1 strings
       new_val <- as.character(input[[paste0("edit_", col)]] %||% "")
-      old_val <- as.character(df[match_idx, col] %||% "")
+      old_val <- as.character(df[[col]][match_idx[1]] %||% "")
 
       # 4. Only act if the user actually changed the text
       if (!identical(as.character(new_val), as.character(old_val))) {
@@ -606,7 +593,7 @@ dq_spelling_server <- function(input, output, session, ns, core) {
         )
 
         # UPDATE THE MASTER DATA in memory
-        df[df[[id_col]] == target_id, col] <- new_val
+        df[[col]][match_idx] <- new_val
         # Update the reactive log
         modification_log(rbind(modification_log(), new_log_entry))
       }

@@ -131,7 +131,11 @@ build_odk_label_map <- function(odk_path) {
   name_col <- "name"
   list_name_col <- "list_name"
   choice_name_col <- "name"
-  choice_label_col <- grep("^label", names(choices), value = TRUE)[1]
+  # The label column in the app's language when the form has one
+  # (label::French, label::English (en)...), else the first.
+  labs <- grep("^label", names(choices), value = TRUE)
+  want <- if (identical(import_yes_no()[1], "Oui")) "fran|french|[(]fr[)]" else "english|[(]en[)]"
+  choice_label_col <- c(grep(want, labs, value = TRUE, ignore.case = TRUE), labs)[1]
 
   if (is.na(choice_label_col)) {
     return(NULL)
@@ -171,7 +175,8 @@ build_odk_label_map <- function(odk_path) {
     label_map[[var]] <- lookup
   }
 
-  # Which questions are select_multiple: they are split into 0/1 columns.
+  attr(label_map, "label_column") <- choice_label_col
+  # Which questions are select_multiple: they are split into Yes/No columns.
   attr(label_map, "multiple") <- unique(survey$var_name[grepl("^select_multiple", as.character(survey[[type_col]]))])
   label_map
 }
@@ -183,7 +188,7 @@ download_moda_xlsform <- function(form_id, token) {
 
   res <- httr::GET(
     url,
-    httr::add_headers(Authorization = paste("Token ", token)),
+    httr::add_headers(Authorization = paste("Token", token)),
     httr::write_disk(tmp, overwrite = TRUE),
     httr::timeout(600)
   )
@@ -353,9 +358,19 @@ moda_async_fetch <- function(form_id, token, existing_df = NULL, page_size = MOD
   invisible(NULL)
 }
 
-mod_moda_import_server <- function(id) {
+mod_moda_import_server <- function(id, summary = TRUE) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
+    # What was imported, for the "Data imported" dialog: the form's name and
+    # what was done with its definition.
+    import_label <- reactiveVal(NULL)
+    import_notes <- reactiveVal(NULL)
+    # Close the MODA dialog and confirm the import with the summary, unless
+    # the caller shows its own (the registration import does).
+    confirm_import <- function(df) {
+      removeModal()
+      if (isTRUE(summary)) showModal(import_summary_modal(df, label = import_label(), notes = import_notes()))
+    }
 
     # This reactive will hold the downloaded data
     moda_data <- reactiveVal(NULL)
@@ -526,12 +541,10 @@ mod_moda_import_server <- function(id) {
         show_moda_status("warning", "The form has no submissions yet.")
         return()
       }
-      removeModal()
+      import_label(paste0(p$label, ": form ", input$form_id))
+      import_notes(list(list(ok = FALSE, text = paste("Choice labels are not applied for", p$label, "(values arrive as stored)."))))
       moda_data(df)
-      showNotification(
-        paste0(format(nrow(df), big.mark = ","), " records imported from ", p$label, "."),
-        type = "message"
-      )
+      confirm_import(df)
     })
 
     # MODA: Sync Now first checks the form (title, submissions, last one
@@ -636,6 +649,7 @@ mod_moda_import_server <- function(id) {
         state$all_pages <- NULL   # release the per-page copies
         names(df) <- make_unique_names(strip_prefix(names(df)))
         df <- utf8_frame(df)   # same text handling as file imports
+        before <- names(df)
 
         # Download the XLSForm definition from MODA and apply choice labels
         waiter_progress(session, message = paste("Downloading the form definition of", label))
@@ -647,17 +661,12 @@ mod_moda_import_server <- function(id) {
         df <- split_multiselect(split_geopoints(df))   # GPS -> coordinates; multi-selects the form did not name -> Yes/No columns
 
         waiter_progress(session, message = "Finalizing...")
+        import_label(paste("MODA:", label))
+        import_notes(form_import_notes(before, df, label_map, downloaded = !is.null(odk_path)))
         moda_data(df)
         moda_credentials(list(form_id = form_id, token = token))
 
-        label_msg <- if (!is.null(label_map)) " (choice labels applied)" else ""
-        output$sync_status <- renderUI({
-          tags$div(
-            class = "alert alert-success mt-3",
-            icon("check-circle"),
-            " ", label, ": ", prettyNum(nrow(df), big.mark = ",", scientific = FALSE), " records downloaded.", label_msg
-          )
-        })
+        confirm_import(df)
       }
 
       moda_fetch_pages(
@@ -680,7 +689,7 @@ mod_moda_import_server <- function(id) {
     })
 
     # Return the reactive data and credentials so the main server can use them
-    return(list(data = moda_data, credentials = moda_credentials))
+    return(list(data = moda_data, credentials = moda_credentials, label = import_label, notes = import_notes))
   })
 }
 

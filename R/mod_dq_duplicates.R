@@ -358,7 +358,7 @@ dq_duplicates_server <- function(input, output, session, ns, core) {
   })
 
   output$download_duplicates <- download_handler(
-    filename = function() paste0("Targeting_Duplicates_", format(Sys.time(), "%Y-%m-%d_%Hh%Mm%Ss"), ".xlsx"),
+    filename = function() export_file_name("Targeting_Duplicates", "xlsx", "%Y-%m-%d_%Hh%Mm%Ss"),
     content = function(file) {
       a <- analysis_or_null()
       if (is.null(a) || nrow(a$dup_df) == 0) {

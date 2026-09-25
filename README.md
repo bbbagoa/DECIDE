@@ -47,29 +47,40 @@ The app follows the targeting cycle in three phases, each working on its own dat
 - On Windows, no compiler is needed: every dependency is available as a binary from CRAN.
 - A modern browser (Chrome, Edge, Firefox).
 
-The app runs entirely on your computer and **works offline** once installed; only the MODA/Kobo/ODK import and the map's background tiles need a connection. The repository is public: no GitHub account or token is needed. Choose the route that fits:
+The app runs entirely on your computer and **works offline** once installed; only the MODA/Kobo/ODK import and the map's background tiles need a connection. The repository is **private**: installing from GitHub needs an access token (a read-only key given by the maintainer). Choose the route that fits:
 
-| Route | Internet needed | GitHub account needed |
+| Route | Internet needed | Needs |
 |---|---|---|
-| **A. From GitHub** (recommended) | Yes, to install | No |
-| **B. Offline installer** (Windows) | No | No |
+| **A. From GitHub** (recommended) | Yes, to install | An access token |
+| **B. Offline installer** (Windows) | No | The installer file |
 
-### A. From GitHub (internet, no account)
+### A. From GitHub (internet, access token)
 
-In R or RStudio:
+**1. Save the token once on the computer.** The maintainer gives you a token (it starts with `github_pat_`). In R or RStudio:
 
 ```r
-install.packages("remotes")
-remotes::install_github("bbbagoa/TargetWise", dependencies = TRUE)
+install.packages(c("pak", "gitcreds"))
+gitcreds::gitcreds_set()
 ```
+
+When asked for a password or token, paste the token and press Enter. It is kept in Windows' credential manager (or the macOS keychain), not in a file, and every later install and update uses it. (Alternative: put the line `GITHUB_PAT=github_pat_...` in your `.Renviron` file, opened with `usethis::edit_r_environ()`, then restart R.)
+
+**2. Install:**
+
+```r
+pak::pak("bbbagoa/TargetWise")
+```
+
+`pak` finds the token saved in step 1 (or in `GITHUB_PAT`) by itself.
 
 Every dependency is installed from CRAN at the same time. On Windows no compiler is needed. The first installation takes a few minutes.
 
-- **A given version** (for example the one your office validated): `remotes::install_github("bbbagoa/TargetWise@v0.1.0")`, using a tag from the [Releases](https://github.com/bbbagoa/TargetWise/releases) page.
+- **A given version** (for example the one your office validated): `pak::pak("bbbagoa/TargetWise@v0.1.0")`, using a tag from the [Releases](https://github.com/bbbagoa/TargetWise/releases) page.
 - **The optional machine-learning models** (random forest, XGBoost, naive Bayes, neural network, SVM): `install.packages(c("ranger", "xgboost", "e1071", "nnet"))`.
 
 **Common errors**
-- `HTTP error 403. API rate limit exceeded`: GitHub limits anonymous downloads per network (60 an hour, shared by everyone behind the same office connection). Wait an hour, or sign in once with a free account token: `usethis::create_github_token()`, then `gitcreds::gitcreds_set()`.
+- `HTTP error 404. Not Found` (or `Bad credentials`): the token is missing, mistyped, expired, or does not give access to this repository. Run `gitcreds::gitcreds_set()` again with the current token (choose *Replace these credentials*); ask the maintainer for a new one if it expired.
+- `HTTP error 403. API rate limit exceeded`: only without a token; set it as in step 1.
 - `Could not find tools necessary to compile a package`: a dependency has no ready-made binary for your R version. Install the latest R release, or use the offline installer.
 - Behind a proxy: set `Sys.setenv(https_proxy = "http://proxy:port")` before installing.
 
@@ -94,7 +105,19 @@ source("install.R")
 - **By email.** On the repository page, click **Watch → Custom → Releases** (needs a free GitHub account).
 - **Offline users** receive the new offline installer from the maintainer.
 
-**How to update.** Close the app, restart R, and run the `install_github(...)` line again (route A), or `source("install.R")` from the new offline bundle (route B).
+**How to update.** Close the app, restart R, and run `pak::pak("bbbagoa/TargetWise")` again (route A; the token saved in step 1 is reused), or `source("install.R")` from the new offline bundle (route B).
+
+### For the maintainer: the access token
+
+The repository is private, so installing needs a token that can read it. Create one **fine-grained, read-only** token for the users:
+
+1. On GitHub: your photo › **Settings › Developer settings › Personal access tokens › Fine-grained tokens › Generate new token**.
+2. **Token name**: e.g. `TargetWise install (read-only)`. **Expiration**: a date that suits you (e.g. one year; you will have to give out a new one then). **Resource owner**: your account.
+3. **Repository access**: *Only select repositories* › `bbbagoa/TargetWise`.
+4. **Permissions › Repository permissions › Contents: Read-only** (GitHub adds *Metadata: Read-only* by itself). Nothing else.
+5. **Generate token**, copy it (it is shown once) and share it with the users through a private channel (not in an email to a list, not in the repository).
+
+This token can only download the code, never change it. If it leaks, delete it on the same page and create a new one. People who contribute to the code are better added as collaborators (*Settings › Collaborators*) with their own accounts.
 
 What changed in each version is listed in [NEWS.md](NEWS.md). Your saved sessions, setup profiles and country office setting are kept across updates.
 

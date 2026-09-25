@@ -72,3 +72,40 @@ test_that("GPS-like text is only split when every answer is a valid point", {
   # whole numbers are not a place ("1 3" is a multi-select answer)
   expect_false("code_latitude" %in% names(out))
 })
+
+test_that("the import summary says what was done with the form", {
+  tw <- function(f) utils::getFromNamespace(f, "TargetWise")
+  pages <- tw("harmonize_pages")(ona_pages())
+  df <- dplyr::bind_rows(pages)
+  names(df) <- tw("make_unique_names")(tw("strip_prefix")(names(df)))
+  before <- names(df)
+  lm <- tw("build_odk_label_map")(xlsform())
+  df <- tw("split_geopoints")(tw("apply_odk_labels")(df, lm))
+  notes <- vapply(tw("form_import_notes")(before, df, lm, downloaded = TRUE), `[[`, "", "text")
+  expect_equal(notes[1], "Choice labels applied to 2 questions (label).")
+  expect_equal(notes[2], "1 select-multiple question split into 4 Yes/No columns.")
+  expect_equal(notes[3], "GPS split into latitude and longitude: gps.")
+  no_form <- tw("form_import_notes")(before, df, NULL, downloaded = FALSE)
+  expect_false(no_form[[1]]$ok); expect_match(no_form[[1]]$text, "could not be downloaded")
+  html <- as.character(tw("import_summary_modal")(df, label = "MODA: Enquete PDM (form 123)",
+                                                  notes = tw("form_import_notes")(before, df, lm, TRUE)))
+  expect_match(html, "Data imported", fixed = TRUE)
+  expect_match(html, "MODA: Enquete PDM (form 123)", fixed = TRUE)
+  expect_match(html, "From the form", fixed = TRUE)
+  expect_match(html, "Continue with this data", fixed = TRUE)
+})
+
+test_that("the label column follows the app language when the form has several", {
+  tw <- function(f) utils::getFromNamespace(f, "TargetWise")
+  f <- withr::local_tempfile(fileext = ".xlsx")
+  wb <- openxlsx::createWorkbook()
+  openxlsx::addWorksheet(wb, "survey"); openxlsx::addWorksheet(wb, "choices")
+  openxlsx::writeData(wb, "survey", data.frame(type = "select_one sex", name = "sex"))
+  openxlsx::writeData(wb, "choices", data.frame(list_name = "sex", name = c("f", "m"),
+                                                 "label::French (fr)" = c("Femme", "Homme"),
+                                                 "label::English (en)" = c("Female", "Male"), check.names = FALSE))
+  openxlsx::saveWorkbook(wb, f)
+  lm <- tw("build_odk_label_map")(f)            # outside a session: English
+  expect_equal(unname(lm$sex[c("f", "m")]), c("Female", "Male"))
+  expect_equal(attr(lm, "label_column"), "label::English (en)")
+})

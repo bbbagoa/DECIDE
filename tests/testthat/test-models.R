@@ -210,3 +210,35 @@ test_that("stepwise works with every model, and BIC keeps no more than AIC", {
   old <- tm("fit_scorecard_advanced")(df, "FSI", crit, "Food insecure", method = "stepwise")
   expect_equal(old$method, "logit"); expect_equal(old$stepwise, "aic")
 })
+
+test_that("criteria asked to different subgroups still fit: a missing answer counts as no", {
+  set.seed(3)
+  n <- 300
+  y <- rbinom(n, 1, 0.5)
+  df <- data.frame(out = ifelse(y == 1, "Vulnerable", "Not"),
+                   a = ifelse(runif(n) < 0.3 + 0.4 * y, "Yes", "No"),
+                   b = ifelse(runif(n) < 0.5, "Yes", "No"), c = ifelse(runif(n) < 0.5, "Yes", "No"))
+  df$b[1:150] <- NA                 # asked to half the households
+  df$c[151:300] <- NA               # asked to the other half: no household answered both
+  f <- TargetWise:::fit_scorecard_advanced(df, "out", c("a", "b", "c"), outcome_positive = "Vulnerable")
+  expect_equal(f$n, n)
+  expect_equal(unname(f$filled[c("b", "c")]), c(150L, 150L))
+  g <- TargetWise:::fit_scorecard_model(df, "out", c("a", "b", "c"), outcome_positive = "Vulnerable")
+  expect_equal(g$n, n)
+  expect_error(TargetWise:::fit_scorecard_advanced(df, "out", "a", outcome_positive = "Vulnerable", weights = rep(NA, n)),
+               "survey weight column is empty")
+})
+
+test_that("stepwise selection runs backward, forward or both", {
+  set.seed(11); n <- 500; y <- rbinom(n, 1, 0.5)
+  df <- data.frame(out = ifelse(y == 1, "V", "N"),
+                   s1 = ifelse(runif(n) < 0.2 + 0.5 * y, "Yes", "No"), s2 = ifelse(runif(n) < 0.3 + 0.4 * y, "Yes", "No"),
+                   n1 = ifelse(runif(n) < 0.5, "Yes", "No"), n2 = ifelse(runif(n) < 0.5, "Yes", "No"))
+  for (d in c("backward", "forward", "both")) {
+    f <- TargetWise:::fit_scorecard_advanced(df, "out", c("s1", "s2", "n1", "n2"), outcome_positive = "V",
+                                             stepwise = "bic", stepwise_dir = d)
+    expect_true(all(c("s1", "s2") %in% f$weights$criterion), info = d)
+    expect_equal(f$stepwise_dir, d)
+  }
+  expect_match(TargetWise:::stepwise_note("aic", "forward"), "starting from no criterion")
+})

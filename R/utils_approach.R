@@ -232,7 +232,10 @@ select_households <- function(df, settings, approach = "hybrid",
   prioritized <- eligible
   mode <- prioritization$mode %||% "none"
   cap <- suppressWarnings(as.numeric(prioritization$n))
-  if (!identical(mode, "none") && isTRUE(cap > 0)) {
+  # Per area, each area can have its own caseload (named: area -> households).
+  quotas <- prioritization$quotas
+  has_quotas <- identical(mode, "per_unit") && length(quotas) > 0
+  if (!identical(mode, "none") && (isTRUE(cap > 0) || has_quotas)) {
     rank_score <- score
     if (all(is.na(rank_score)) && shiny::isTruthy(settings$v_score) &&
         settings$v_score %in% names(df)) {
@@ -246,11 +249,22 @@ select_households <- function(df, settings, approach = "hybrid",
       # Most vulnerable first; unscored last; ties keep the original order so
       # the result is reproducible.
       ord_key <- ifelse(is.na(rank_score), -Inf, rank_score)
+      # A caseload counted in people (beneficiaries): households are taken in
+      # order while the people served stay within it. In households: the
+      # first k households.
+      hs <- settings$hh_size
+      size <- if (identical(prioritization$count, "people") && shiny::isTruthy(hs) && hs %in% names(df)) {
+        z <- suppressWarnings(as.numeric(as.character(df[[hs]]))); z[is.na(z) | z < 0] <- 1; z
+      }
+      take <- function(idx, k) {
+        if (is.null(size)) return(utils::head(idx, round(k)))
+        idx[cumsum(size[idx]) <= k]
+      }
       if (identical(mode, "caseload")) {
         idx <- which(eligible)
         idx <- idx[order(-ord_key[idx], idx)]
         prioritized <- rep(FALSE, n)
-        prioritized[utils::head(idx, cap)] <- TRUE
+        prioritized[take(idx, cap)] <- TRUE
       } else if (identical(mode, "per_unit")) {
         ucol <- settings[[prioritization$unit %||% "admin1"]]
         if (shiny::isTruthy(ucol) && ucol %in% names(df)) {
@@ -259,7 +273,9 @@ select_households <- function(df, settings, approach = "hybrid",
           for (u in unique(unit[eligible])) {
             idx <- which(eligible & unit == u)
             idx <- idx[order(-ord_key[idx], idx)]
-            prioritized[utils::head(idx, cap)] <- TRUE
+            # An area left out of the caseload plan serves no one.
+            k <- if (has_quotas) suppressWarnings(as.numeric(quotas[[u]] %||% 0)) else cap
+            if (isTRUE(k > 0)) prioritized[take(idx, k)] <- TRUE
           }
         } else {
           notes <- c(notes, "The area level chosen for the per-area cap is not mapped. Not applied.")
@@ -270,4 +286,56 @@ select_households <- function(df, settings, approach = "hybrid",
 
   list(eligible = eligible, prioritized = prioritized, score = score,
        rank_by = rank_by, list_produced = TRUE, notes = notes)
+}
+
+#' Split a whole total in proportion to weights, summing exactly to the total
+#'
+#' Largest-remainder rounding: each area gets the whole part of its share,
+#' and the units left go to the largest remainders.
+#' @noRd
+allocate_total <- function(weights, total) {
+  w <- as.numeric(weights); w[is.na(w) | w < 0] <- 0
+  if (!length(w) || sum(w) == 0 || !isTRUE(total > 0)) return(rep(0, length(w)))
+  raw <- total * w / sum(w)
+  out <- floor(raw)
+  left <- round(total - sum(out))
+  if (left > 0) {
+    ord <- order(raw - out, w, decreasing = TRUE)
+    out[ord[seq_len(left)]] <- out[ord[seq_len(left)]] + 1
+  }
+  out
+}
+
+#' IPC figures per area, when the data carries them
+#'
+#' A column naming IPC phases (1-5, or text such as "Phase 3") gives each
+#' area its most frequent phase; a numeric column naming the IPC phase 3+
+#' population gives each area its figure (the largest value, as it is
+#' repeated on every household of the area).
+#' @return list(phase = named numeric or NULL, pop = named numeric or NULL,
+#'   phase_col, pop_col).
+#' @noRd
+ipc_by_area <- function(df, area) {
+  cols <- names(df)[grepl("ipc", names(df), ignore.case = TRUE)]
+  pop_col <- cols[grepl("pop|3plus|3_plus|p3|phase3|people|pin", cols, ignore.case = TRUE)][1]
+  phase_col <- setdiff(cols, pop_col)[grepl("phase|ipc$|class|level", setdiff(cols, pop_col), ignore.case = TRUE)][1]
+  if (is.na(phase_col)) phase_col <- setdiff(cols, pop_col)[1]
+  u <- as.character(area)
+  out <- list(phase = NULL, pop = NULL, phase_col = NA_character_, pop_col = NA_character_)
+  if (!is.na(phase_col)) {
+    ph <- suppressWarnings(as.numeric(sub("^\\D*([1-5]).*$", "\\1", as.character(df[[phase_col]]))))
+    ph[!ph %in% 1:5] <- NA
+    if (any(!is.na(ph))) {
+      m <- tapply(ph, u, function(v) { v <- v[!is.na(v)]; if (!length(v)) NA_real_ else as.numeric(names(which.max(table(v)))) })
+      out$phase <- m; out$phase_col <- phase_col
+    }
+  }
+  if (!is.na(pop_col)) {
+    pv <- suppressWarnings(as.numeric(as.character(df[[pop_col]])))
+    if (any(!is.na(pv))) {
+      out$pop <- tapply(pv, u, function(v) if (all(is.na(v))) NA_real_ else max(v, na.rm = TRUE))
+      out$pop_col <- pop_col
+    }
+  }
+  out
 }

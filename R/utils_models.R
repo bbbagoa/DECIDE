@@ -247,7 +247,7 @@ scorecard_weights <- function(coef, scheme = "odds_ratio") {
 #' @noRd
 fit_scorecard_advanced <- function(df, outcome, criteria, outcome_positive = NULL,
                                    method = "logit", scheme = "odds_ratio",
-                                   rows = NULL, weights = NULL, stepwise = "none") {
+                                   rows = NULL, weights = NULL, stepwise = "none", stepwise_dir = "backward") {
   # "stepwise" was once a model; it is now logistic with AIC selection.
   if (identical(method, "stepwise")) { method <- "logit"; if (identical(stepwise, "none")) stepwise <- "aic" }
   y <- as_binary_outcome(df[[outcome]], outcome_positive)
@@ -256,11 +256,19 @@ fit_scorecard_advanced <- function(df, outcome, criteria, outcome_positive = NUL
 
   X <- as.data.frame(lapply(criteria, function(cl) as_binary_criterion(df[[cl]])))
   names(X) <- criteria
+  # A missing answer counts as "no", as it does in the score (it scores
+  # nothing). Keeping only households that answered every criterion left no
+  # row at all when criteria were asked to different subgroups.
+  filled <- vapply(criteria, function(cl) sum(is.na(X[[cl]]) & !is.na(y)), integer(1))
+  for (cl in criteria) X[[cl]][is.na(X[[cl]])] <- 0L
   X$.y <- y
   X$.w <- if (is.null(weights)) 1 else suppressWarnings(as.numeric(weights))
   if (!is.null(rows)) X <- X[rows, , drop = FALSE]
+  if (!any(!is.na(X$.y))) stop("No household has an answer for the outcome.", call. = FALSE)
+  if (!is.null(weights) && !any(!is.na(X$.w[!is.na(X$.y)]) & X$.w[!is.na(X$.y)] > 0, na.rm = TRUE))
+    stop("The survey weight column is empty (or zero) for the households with an outcome: choose another weight column or none.", call. = FALSE)
   X <- X[stats::complete.cases(X) & X$.w > 0, , drop = FALSE]
-  if (nrow(X) == 0) stop("No complete rows for the chosen outcome and criteria.", call. = FALSE)
+  if (nrow(X) == 0) stop("No household has both an outcome and a survey weight.", call. = FALSE)
   if (length(unique(X$.y)) < 2) stop("The training sample has only one outcome level.", call. = FALSE)
 
   keep <- vapply(criteria, function(cl) length(unique(X[[cl]])) > 1, logical(1))
@@ -279,10 +287,15 @@ fit_scorecard_advanced <- function(df, outcome, criteria, outcome_positive = NUL
   step_model <- NULL
   if (stepwise %in% c("aic", "bic")) {
     k <- if (identical(stepwise, "bic")) log(nrow(X)) else 2
-    full0 <- suppressWarnings(stats::glm(stats::reformulate(criteria, response = ".y"), data = X,
+    full_f <- stats::reformulate(criteria, response = ".y")
+    dir <- if (stepwise_dir %in% c("forward", "both")) stepwise_dir else "backward"
+    # Backward starts from every criterion and removes; forward starts from
+    # none and adds; both starts from none and may also remove one added before.
+    start <- suppressWarnings(stats::glm(if (identical(dir, "backward")) full_f else .y ~ 1, data = X,
                                          family = stats::binomial(), weights = .w))
-    step_model <- withCallingHandlers(stats::step(full0, direction = "backward", trace = 0, k = k),
-                                      warning = function(w) invokeRestart("muffleWarning"))
+    step_model <- withCallingHandlers(
+      stats::step(start, scope = list(lower = ~ 1, upper = full_f), direction = dir, trace = 0, k = k),
+      warning = function(w) invokeRestart("muffleWarning"))
     sel <- intersect(criteria, attr(stats::terms(step_model), "term.labels"))
     if (length(sel) == 0) stop("Stepwise selection removed every criterion: none adds information over the others.", call. = FALSE)
     step_dropped <- setdiff(criteria, sel)
@@ -304,8 +317,8 @@ fit_scorecard_advanced <- function(df, outcome, criteria, outcome_positive = NUL
     out$weight <- scorecard_weights(out$coefficient, scheme)
     out <- out[order(-abs(out$coefficient)), , drop = FALSE]
     rownames(out) <- NULL
-    return(list(weights = round5(out), dropped = c(step_dropped, setdiff(criteria, kept)), model = NULL,
-                n = nrow(X), converged = TRUE, method = method, scheme = scheme, stepwise = stepwise))
+    return(list(weights = round5(out), dropped = c(step_dropped, setdiff(criteria, kept)), model = NULL, filled = filled[filled > 0],
+                n = nrow(X), converged = TRUE, method = method, scheme = scheme, stepwise = stepwise, stepwise_dir = stepwise_dir))
   }
 
   converged <- TRUE
@@ -348,9 +361,9 @@ fit_scorecard_advanced <- function(df, outcome, criteria, outcome_positive = NUL
   out <- out[order(-abs(out$coefficient)), , drop = FALSE]
   rownames(out) <- NULL
 
-  list(weights = round5(out), dropped = dropped, model = model, n = nrow(X),
+  list(weights = round5(out), dropped = dropped, model = model, n = nrow(X), filled = filled[filled > 0],
        converged = converged && isTRUE(model$converged),
-       method = method, scheme = scheme, stepwise = stepwise)
+       method = method, scheme = scheme, stepwise = stepwise, stepwise_dir = stepwise_dir)
 }
 
 #' Benchmark the scorecard against models that cannot be written as one
@@ -476,9 +489,13 @@ model_effects <- function(df, outcome, criteria, outcome_positive = NULL,
 
 #' What the stepwise option does, shown under the model settings
 #' @noRd
-stepwise_note <- function(ic) {
+stepwise_note <- function(ic, dir = "backward") {
+  how <- switch(dir %||% "backward",
+    forward = "starting from no criterion, the one that improves the fit most is added, one at a time, while it lowers the %s",
+    both = "starting from no criterion, criteria are added one at a time, and one added earlier is removed again when that lowers the %s",
+    "starting from every criterion, the one that adds least is removed, one at a time, while that lowers the %s")
   switch(ic %||% "none",
-    aic = "Stepwise (AIC): criteria that add nothing once the others are known are dropped first, on a logistic fit, then the chosen model is fitted on the rest.",
-    bic = "Stepwise (BIC): as AIC but with a heavier penalty per criterion (log of the sample size), so it keeps fewer criteria: a shorter card.",
+    aic = paste0("Stepwise (", dir %||% "backward", ", AIC): ", sprintf(how, "AIC"), ", on a logistic fit; then the chosen model is fitted on the criteria kept."),
+    bic = paste0("Stepwise (", dir %||% "backward", ", BIC): ", sprintf(how, "BIC"), ". BIC penalises each criterion more (log of the sample size), so it keeps fewer: a shorter card."),
     "")
 }

@@ -562,7 +562,7 @@ dq_outliers_server <- function(input, output, session, ns, core) {
   })
 
   output$ol_download <- download_handler(
-    filename = function() paste0("Targeting_Outliers_", input$outlier_var, "_", format(Sys.time(), "%Y-%m-%d_%Hh%M"), ".xlsx"),
+    filename = function() export_file_name(paste0("Targeting_Outliers_", input$outlier_var), "xlsx"),
     content = function(file) {
       d <- flagged_df()
       write_xlsx_readonly(if (is.null(d)) data.frame(Message = "No flagged values") else d[, setdiff(names(d), ".idx")], file, "Outliers")

@@ -57,6 +57,35 @@ OUTCOME_PATTERNS <- c(
   OUTCOME_PHRASES
 )
 
+#' Variables a registration team cannot observe or verify
+#'
+#' Not criteria, whatever their association with vulnerability: expenditure,
+#' prices, coping strategies and their reasons, the minimum expenditure basket
+#' and transfer values, food consumption, phone numbers, indebtedness. Matched
+#' on column names, case-insensitively; each group gives the reason shown.
+#' @noRd
+UNOBSERVABLE_PATTERNS <- list(
+  "expenditure" = "expend|hh_?exp|(?<![a-z])exp_|d[\u00e9e]pense|spend|(?<![a-z])cost|(?<![a-z])co[\u00fbu]t",
+  "prices" = "price|(?<![a-z])prix",
+  # coping strategies, and the reasons given for them (a displacement reason
+  # is observable; a reason for using a coping strategy is not)
+  "coping strategies" = paste0("coping|strat[\u00e9e]g|(?<![a-z])(lcs|lhcs|rcsi|csi)",
+                               "|(lcs|coping|strat|csi)[a-z0-9_]*(reason|raison|motif)|(reason|raison|motif)[a-z0-9_]*(lcs|coping|strat)"),
+  "the minimum expenditure basket or transfer values" = "(?<![a-z])s?meb(?![a-z])|(?<![a-z])ubt(?![a-z])|transfer_?value",
+  "food consumption" = "^(fcs|hdds|fcg|fies|hwise)|food_?cons|consommation",
+  "phone numbers" = "phone|t[\u00e9e]l[\u00e9e]phone|(?<![a-z])tel(_?(num|no|number)|(?![a-z]))|(?<![a-z])mobile_?(no|num|number)|portable|msisdn|num[\u00e9e]ro_?tel",
+  "indebtedness" = "debt|dette|endett"
+)
+
+#' Why a column cannot be observed at registration, or NA
+#' @noRd
+unobservable_reason <- function(cols) {
+  vapply(cols, function(cl) {
+    for (g in names(UNOBSERVABLE_PATTERNS)) if (grepl(UNOBSERVABLE_PATTERNS[[g]], cl, ignore.case = TRUE, perl = TRUE)) return(g)
+    NA_character_
+  }, character(1), USE.NAMES = FALSE)
+}
+
 #' Outcome indicators ranked by how likely they are to BE the outcome
 #'
 #' CARI is the standard WFP vulnerability classification and is what a country
@@ -125,6 +154,12 @@ criterion_blockers <- function(df, cols, outcome) {
         "and corporate guidance (Targeting Advisory 1/2025) rules them out as",
         "eligibility criteria."
       )
+      next
+    }
+    why <- unobservable_reason(cl)
+    if (!is.na(why)) {
+      out[[cl]] <- sprintf(paste("Not observable at registration (%s): a registration team cannot see or verify it,",
+                                 "so it is not a criterion, whatever its link with vulnerability."), why)
       next
     }
     x <- df[[cl]]
@@ -331,6 +366,8 @@ screen_criteria <- function(df, outcome, criteria, alpha = 0.05, adjust = "BH",
   out$direction <- ifelse(is.na(out$or), NA_character_,
                           ifelse(out$or > 1, "inclusion", "exclusion"))
   out <- round5(out[order(out$p_adj, na.last = TRUE), , drop = FALSE])
+  # Odds ratios to 4 decimals at most, wherever they are shown or exported.
+  for (k in c("or", "or_low", "or_high")) out[[k]] <- round(out[[k]], 4)
   rownames(out) <- NULL
   out
 }
@@ -402,9 +439,14 @@ fit_scorecard_model <- function(df, outcome, criteria, outcome_positive = NULL) 
 
   X <- as.data.frame(lapply(criteria, function(cl) as_binary_criterion(df[[cl]])))
   names(X) <- criteria
+  # A missing answer counts as "no", as it does in the score (it scores
+  # nothing). Keeping only households that answered every criterion left no
+  # row at all when criteria were asked to different subgroups.
+  filled <- vapply(criteria, function(cl) sum(is.na(X[[cl]]) & !is.na(y)), integer(1))
+  for (cl in criteria) X[[cl]][is.na(X[[cl]])] <- 0L
   X$.y <- y
   X <- X[stats::complete.cases(X), , drop = FALSE]
-  if (nrow(X) == 0) stop("No complete rows for the chosen outcome and criteria.", call. = FALSE)
+  if (nrow(X) == 0) stop("No household has an answer for the outcome.", call. = FALSE)
 
   keep <- vapply(criteria, function(cl) length(unique(X[[cl]])) > 1, logical(1))
   criteria <- criteria[keep]
@@ -439,7 +481,7 @@ fit_scorecard_model <- function(df, outcome, criteria, outcome_positive = NULL) 
   weights <- weights[order(-abs(weights$coefficient)), , drop = FALSE]
   rownames(weights) <- NULL
 
-  list(weights = weights, model = model, n = nrow(X),
+  list(weights = weights, model = model, n = nrow(X), filled = filled[filled > 0],
        converged = converged && isTRUE(model$converged))
 }
 

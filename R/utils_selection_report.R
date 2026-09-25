@@ -28,6 +28,18 @@ write_selection_report <- function(file, x, lang = "en") {
 
   add("## 2. Selection design", "")
   for (nm in intersect(c("Selection", "Rules", "Scorecard"), names(sec))) add(paste("###", nm), "", kv(sec[[nm]]), "")
+  ct <- x$caseload
+  if (!is.null(ct) && nrow(ct)) {
+    fmt <- ct
+    for (cl in setdiff(names(fmt), c("Area", "Note", "Share (%)"))) fmt[[cl]] <- format(round(fmt[[cl]]), big.mark = ",")
+    if ("Share (%)" %in% names(fmt)) fmt$`Share (%)` <- sprintf("%.1f%%", ct$`Share (%)`)
+    add(sprintf("### Caseload per %s", attr(ct, "level") %||% "area"), "",
+        sprintf("Each area is served up to its own caseload in %s, most vulnerable households first%s. Eligible households beyond it are excluded by design (Targeting Advisory 2/2025), not exclusion errors.",
+                attr(ct, "count") %||% "households",
+                if (identical(attr(ct, "kind"), "share")) sprintf(", set as shares of a total caseload of %s %s", format(attr(ct, "total"), big.mark = ","), attr(ct, "count") %||% "households") else ""), "",
+        md_table(fmt), "",
+        sprintf("**Rationale:** %s", attr(ct, "rationale") %||% "not recorded"), "")
+  }
 
   add("## 3. Who was selected", "")
   ga <- area_summary_grouped(x$by_area)

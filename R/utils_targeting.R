@@ -432,3 +432,26 @@ pdm_scorecard_eligibility <- function(df, scorecard) {
   if (length(missing)) return(list(eligible = NULL, missing = missing))
   list(eligible = apply_scorecard(df, scorecard)$eligible, missing = character(0))
 }
+
+#' The distinct answers of a column (text, trimmed, blanks left out)
+#' @noRd
+two_levels <- function(x) {
+  v <- trimws(as.character(x))
+  sort(unique(v[!is.na(v) & nzchar(v)]))
+}
+
+#' Which of two answers means "yes" (received, eligible...)
+#'
+#' A yes-like answer (`eligibility_flag()`), else one naming assistance or
+#' being a beneficiary without a negation, else the first.
+#' @noRd
+guess_positive_answer <- function(lv) {
+  f <- eligibility_flag(lv)
+  if (any(f %in% TRUE)) return(lv[which(f %in% TRUE)[1]])
+  low <- tolower(lv)
+  neg <- grepl("^(non|not|no|pas|sans)[ _-]|^non|n'a pas|not ", low)
+  pos <- grepl("benef|b\u00e9n\u00e9f|assist|receiv|re\u00e7u|recu|served|aid", low) & !neg
+  if (any(pos)) return(lv[which(pos)[1]])
+  if (any(neg)) return(lv[which(!neg)[1]])
+  lv[1]
+}

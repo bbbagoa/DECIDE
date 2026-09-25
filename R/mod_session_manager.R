@@ -128,6 +128,7 @@ mod_session_manager_server <- function(
       }
 
       audit_add(modification_log, "Session", "Session loaded", name)
+      mark_saved()
       showNotification(paste("Session", name, "loaded."), type = "message")
     }
 
@@ -285,7 +286,7 @@ mod_session_manager_server <- function(
       sync_trigger(Sys.time())
     })
 
-    observeEvent(input$btn_save_session, {
+    show_save_dialog <- function() {
       showModal(modalDialog(
         title = "Save Session",
         size = "s",
@@ -294,9 +295,12 @@ mod_session_manager_server <- function(
           modalButton("Cancel"),
           actionButton(ns("btn_confirm_save"), "Save", class = "btn-primary", icon = icon("floppy-disk"))
         ),
-        textInput(ns("save_session_name"), "Session name:", value = current_session_name(), width = "100%")
+        textInput(ns("save_session_name"), "Session name:",
+                  value = if (identical(current_session_name(), "default")) format(Sys.time(), "session_%Y-%m-%d_%Hh%M") else current_session_name(),
+                  width = "100%")
       ))
-    })
+    }
+    observeEvent(input$btn_save_session, show_save_dialog())
 
     # Save everything under `name`; FALSE (with a notice) when there is
     # nothing to save or no name.
@@ -332,6 +336,7 @@ mod_session_manager_server <- function(
       current_session_name(name)
       audit_add(modification_log, "Session", "Session saved", name)
       showNotification(paste("Session saved as", name), type = "message")
+      mark_saved()
       TRUE
     }
 
@@ -502,6 +507,62 @@ mod_session_manager_server <- function(
       if (identical(sig, isolate(last_sig()))) return()
       autosave(isolate(list(df = uploaded_df(), setup = reactiveValuesToList(user_setup),
                             log = modification_log(), theme = theme())), work)
+    })
+
+    # -------------------------------------------------------------------------
+    # 3b. Save reminder
+    # -------------------------------------------------------------------------
+    # After 20 minutes of work that is not saved under a name, a reminder with
+    # Save now / Later. Not shown while autosave keeps a named session up to
+    # date. A notification, not a dialog: a dialog would replace whatever
+    # dialog the user is working in. TARGETWISE_SAVE_REMINDER_MIN changes the
+    # delay (0 turns it off).
+    reminder_minutes <- function() {
+      m <- suppressWarnings(as.numeric(tw_env("SAVE_REMINDER_MIN", "20")))
+      if (is.na(m)) 20 else m
+    }
+    saved_sig <- reactiveVal(NULL)
+    dirty_since <- reactiveVal(NULL)
+    reminded_at <- reactiveVal(NULL)
+    state_sig <- function() {
+      df <- isolate(uploaded_df()); lg <- isolate(modification_log())
+      rlang::hash(list(workspace_signature(workspace_snapshot(workspace)),
+                       if (!is.null(df)) c(dim(df), names(df)), if (!is.null(lg)) nrow(lg)))
+    }
+    mark_saved <- function() {
+      saved_sig(state_sig()); dirty_since(NULL); reminded_at(NULL)
+      removeNotification("save_reminder", session = session)
+    }
+    observe({
+      mins <- reminder_minutes()
+      if (!isTRUE(mins > 0)) return()
+      invalidateLater(1000 * max(5, min(60, mins * 30)))
+      has_work <- !is.null(isolate(uploaded_df())) || length(workspace_snapshot(workspace)) > 0
+      covered <- !identical(isolate(current_session_name()), "default") && !isolate(autosave_skip_notified())
+      if (!has_work || covered || identical(state_sig(), isolate(saved_sig()))) { dirty_since(NULL); return() }
+      if (is.null(isolate(dirty_since()))) dirty_since(Sys.time())
+      last <- isolate(reminded_at())
+      due <- difftime(Sys.time(), isolate(dirty_since()), units = "mins") >= mins &&
+        (is.null(last) || difftime(Sys.time(), last, units = "mins") >= mins)
+      if (!due) return()
+      reminded_at(Sys.time())
+      showNotification(
+        id = "save_reminder", duration = NULL, type = "warning", closeButton = TRUE, session = session,
+        ui = tagList(
+          tags$strong(bsicons::bs_icon("floppy"), " Unsaved work"),
+          tags$div(class = "small", sprintf("You have been working for %s minutes without saving this session.",
+                                            format(round(as.numeric(difftime(Sys.time(), isolate(dirty_since()), units = "mins")))))),
+          tags$div(class = "d-flex gap-2 mt-2",
+                   actionButton(ns("remind_save"), "Save now", icon = icon("floppy-disk"), class = "btn-primary btn-sm"),
+                   actionButton(ns("remind_later"), "Later", class = "btn-outline-secondary btn-sm"))))
+    })
+    observeEvent(input$remind_save, {
+      removeNotification("save_reminder", session = session)
+      show_save_dialog()
+    })
+    observeEvent(input$remind_later, {
+      removeNotification("save_reminder", session = session)
+      reminded_at(Sys.time())
     })
 
     # -------------------------------------------------------------------------

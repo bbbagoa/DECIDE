@@ -646,3 +646,25 @@ cascade_pickers <- function(session, input, ids, cols, data, hint = NULL) {
 waiter_progress <- function(session, message = NULL, percent = NULL, subtitle = NULL) {
   session$sendCustomMessage("tw-wait-progress", list(message = message, percent = percent, subtitle = subtitle))
 }
+
+#' The country office set in the app (session), or "" outside a session
+#' @noRd
+country_office_now <- function() {
+  d <- shiny::getDefaultReactiveDomain()
+  if (is.null(d)) return("")
+  v <- tryCatch(d$rootScope()$userData$country_office, error = function(e) NULL)
+  v <- as.character(v %||% "")[1]
+  if (is.na(v)) "" else trimws(v)
+}
+
+#' A download's file name: stem, country office, date and time
+#'
+#' "Targeting_design_report_Mali_2026-09-25_14h30.html". The country is
+#' written in plain letters (accents dropped, spaces as underscores) so the
+#' name works on every system; without a country office it is left out.
+#' @noRd
+export_file_name <- function(stem, ext, time_format = "%Y-%m-%d_%Hh%M", country = country_office_now()) {
+  co <- iconv(country %||% "", "UTF-8", "ASCII//TRANSLIT", sub = "")
+  co <- gsub("^_+|_+$", "", gsub("[^A-Za-z0-9]+", "_", co %||% ""))
+  paste0(stem, if (nzchar(co)) paste0("_", co), "_", format(Sys.time(), time_format), ".", ext)
+}

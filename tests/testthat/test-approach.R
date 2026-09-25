@@ -92,3 +92,55 @@ test_that("approach_js builds a membership test on the namespaced picker", {
   js <- TargetWise:::approach_js(shiny::NS("m"), c("hybrid", "scorecard"))
   expect_equal(js, "['hybrid','scorecard'].indexOf(input['m-ben_approach']) >= 0")
 })
+
+test_that("each area can have its own caseload, most vulnerable first", {
+  df <- data.frame(area = rep(c("A", "B", "C"), each = 10), score = rep(10:1, 3))
+  st <- list(admin1 = "area", v_score = "score")
+  r <- TargetWise:::select_households(df, st, approach = "blanket",
+         prioritization = list(mode = "per_unit", unit = "admin1", quotas = list(A = 3, B = 7, C = 0)))
+  served <- tapply(r$prioritized, df$area, sum)
+  expect_equal(as.integer(served), c(3L, 7L, 0L))
+  expect_equal(df$score[r$prioritized & df$area == "A"], 10:8)          # the most vulnerable
+  # an area missing from the plan serves no one; without a plan the single cap applies
+  r2 <- TargetWise:::select_households(df, st, approach = "blanket",
+          prioritization = list(mode = "per_unit", unit = "admin1", quotas = list(A = 2)))
+  expect_equal(as.integer(tapply(r2$prioritized, df$area, sum)), c(2L, 0L, 0L))
+  r3 <- TargetWise:::select_households(df, st, approach = "blanket",
+          prioritization = list(mode = "per_unit", unit = "admin1", n = 4))
+  expect_equal(as.integer(tapply(r3$prioritized, df$area, sum)), c(4L, 4L, 4L))
+})
+
+test_that("a total caseload is split in proportion, summing exactly", {
+  a <- TargetWise:::allocate_total
+  expect_equal(a(c(21, 19, 18), 30), c(11, 10, 9))
+  expect_equal(sum(a(c(1, 1, 1), 100)), 100)
+  expect_equal(a(c(1, 1, 1), 1000) / 10, c(33.4, 33.3, 33.3))
+  expect_equal(a(c(5, 0, NA), 10), c(10, 0, 0))
+  expect_equal(a(c(0, 0), 10), c(0, 0))
+})
+
+test_that("IPC figures are read per area when the data has them", {
+  df <- data.frame(prov = c("A", "A", "B", "B", "C"), ipc_phase = c("Phase 3", "Phase 3", "2", "2", "4"),
+                   ipc3plus_pop = c(1200, 1200, 300, 300, 5000))
+  r <- TargetWise:::ipc_by_area(df, df$prov)
+  expect_equal(as.numeric(r$phase[c("A", "B", "C")]), c(3, 2, 4))
+  expect_equal(as.numeric(r$pop[c("A", "B", "C")]), c(1200, 300, 5000))
+  expect_equal(r$phase_col, "ipc_phase"); expect_equal(r$pop_col, "ipc3plus_pop")
+  none <- TargetWise:::ipc_by_area(data.frame(prov = "A", x = 1), "A")
+  expect_null(none$phase); expect_null(none$pop)
+})
+
+test_that("a caseload counted in people serves households until the people are reached", {
+  df <- data.frame(area = rep(c("A", "B"), each = 5), score = rep(5:1, 2), size = c(4, 3, 6, 2, 5, 1, 1, 1, 1, 1))
+  st <- list(admin1 = "area", v_score = "score", hh_size = "size")
+  r <- TargetWise:::select_households(df, st, approach = "blanket",
+         prioritization = list(mode = "per_unit", unit = "admin1", count = "people", quotas = list(A = 10, B = 3)))
+  expect_equal(df$size[r$prioritized & df$area == "A"], c(4, 3))       # 4 + 3 = 7; the next (6) would pass 10
+  expect_equal(sum(r$prioritized & df$area == "B"), 3)
+  t <- TargetWise:::select_households(df, st, approach = "blanket",
+         prioritization = list(mode = "caseload", n = 8, count = "people"))
+  expect_lte(sum(df$size[t$prioritized]), 8)
+  h <- TargetWise:::select_households(df, st, approach = "blanket",
+         prioritization = list(mode = "caseload", n = 3, count = "households"))
+  expect_equal(sum(h$prioritized), 3)
+})

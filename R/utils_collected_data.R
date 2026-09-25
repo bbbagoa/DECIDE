@@ -197,3 +197,30 @@ insert_columns <- function(df, after, new, drop = FALSE) {
   new <- new[, setdiff(names(new), c(names(left), names(right))), drop = FALSE]
   cbind(as.data.frame(left), new, as.data.frame(right))
 }
+
+#' What was done with a form definition, for the import summary
+#'
+#' @param before Column names before labels and splits.
+#' @param df The data after them.
+#' @param label_map From `build_odk_label_map()`, or NULL when the form
+#'   definition could not be downloaded.
+#' @return list of list(ok, text).
+#' @noRd
+form_import_notes <- function(before, df, label_map, downloaded = !is.null(label_map)) {
+  added <- setdiff(names(df), before)
+  gps <- sub("_latitude$", "", grep("_latitude$", added, value = TRUE))
+  multi <- attr(label_map, "multiple") %||% character(0)
+  multi <- multi[multi %in% before]
+  labelled <- setdiff(intersect(names(label_map), before), multi)
+  choice_cols <- if (length(multi)) added[Reduce(`|`, lapply(multi, function(m) startsWith(added, paste0(m, "_"))))] else character(0)
+  lang <- attr(label_map, "label_column") %||% "label"
+  c(
+    if (!downloaded) list(list(ok = FALSE, text = "The form definition could not be downloaded: answers are shown as their codes, not their labels."))
+    else if (is.null(label_map)) list(list(ok = TRUE, text = "Form definition read: it has no choice questions to label."))
+    else list(list(ok = TRUE, text = sprintf("Choice labels applied to %d question%s (%s).", length(labelled) + length(multi),
+                                             if (length(labelled) + length(multi) == 1) "" else "s", lang))),
+    if (length(multi)) list(list(ok = TRUE, text = sprintf("%d select-multiple question%s split into %d Yes/No columns.",
+                                                           length(multi), if (length(multi) == 1) "" else "s", length(choice_cols)))),
+    if (length(gps)) list(list(ok = TRUE, text = sprintf("GPS split into latitude and longitude: %s.", paste(gps, collapse = ", "))))
+  )
+}

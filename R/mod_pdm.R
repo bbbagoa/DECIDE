@@ -48,6 +48,8 @@ mod_pdm_ui <- function(id, explore = NULL) {
         panel("areas", "Areas covered", "geo-alt", mod_area_scope_ui(ns("scope"), title = NULL)),
         panel("benef", "2. Who received assistance", "person-check",
               pick("pdm_beneficiary", "Beneficiary column"),
+              # Any column with two answers: say which one means assisted.
+              uiOutput(ns("benef_level_ui")),
               # Where resources did not cover every eligible household, the ones
               # cut by prioritisation are excluded by design, not exclusion
               # errors (Targeting Advisory 2/2025).
@@ -144,6 +146,7 @@ mod_pdm_server <- function(id, workspace = NULL, country_office = reactive(NULL)
              options = list(data_kind = input$data_kind, elig_source = input$pdm_elig_source, weight_mode = input$pdm_weight_mode,
                             pop_scope = input$pop_scope, pop_benef = input$pop_benef,
                             pop_nonbenef = input$pop_nonbenef, pop_units = pop_units(),
+                            benef_level = input$pdm_benef_level,
                             tol = c(input$tol_lower, input$tol_upper)))
       },
       restore = function(s) {
@@ -163,18 +166,49 @@ mod_pdm_server <- function(id, workspace = NULL, country_office = reactive(NULL)
         updateNumericInput(session, "pop_benef", value = o$pop_benef %||% NA)
         updateNumericInput(session, "pop_nonbenef", value = o$pop_nonbenef %||% NA)
         if (!is.null(o$pop_units)) pop_units(o$pop_units)
+        if (!is.null(o$benef_level)) after_flush(session, function() updateRadioButtons(session, "pdm_benef_level", selected = o$benef_level))
         if (length(o$tol) == 2) {
           updateNumericInput(session, "tol_lower", value = o$tol[1])
           updateNumericInput(session, "tol_upper", value = o$tol[2])
         }
       })
 
+    # Who received assistance: any column with exactly two answers; the
+    # officer says which answer means assisted (guessed for yes/no, 1/0,
+    # "Beneficiary / Non-beneficiary", "Assisted / Not assisted"...).
+    benef_levels <- reactive({
+      df <- pdm_df(); b <- input$pdm_beneficiary
+      if (is.null(df) || !shiny::isTruthy(b) || !b %in% names(df)) return(NULL)
+      two_levels(df[[b]])
+    })
+    output$benef_level_ui <- renderUI({
+      lv <- benef_levels()
+      if (is.null(lv)) return(NULL)
+      if (length(lv) != 2)
+        return(tags$div(class = "small text-danger mb-2", bsicons::bs_icon("exclamation-triangle"), " ",
+                        sprintf("This column has %d different answers; choose one with exactly two (received / not received).", length(lv))))
+      sel <- isolate(input$pdm_benef_level)
+      radioButtons(ns("pdm_benef_level"), "Answer meaning 'received assistance'", choices = lv, inline = TRUE,
+                   selected = if (isTRUE(sel %in% lv)) sel else guess_positive_answer(lv))
+    })
+    # TRUE = received, FALSE = not, NA = not answered; NULL when the column
+    # does not have two answers.
+    benef_flag <- function(df) {
+      lv <- benef_levels()
+      if (length(lv) != 2) return(NULL)
+      pos <- input$pdm_benef_level %||% guess_positive_answer(lv)
+      x <- trimws(as.character(df[[input$pdm_beneficiary]]))
+      out <- x == pos
+      out[is.na(x) | !nzchar(x)] <- NA
+      out
+    }
+
     # Population sizes per area, typed into an editable table.
     pop_units <- reactiveVal(NULL)
     pop_template <- reactive({
       df <- pdm_df(); u <- input$pdm_unit
       req(df, shiny::isTruthy(u), u %in% names(df), shiny::isTruthy(input$pdm_beneficiary), input$pdm_beneficiary %in% names(df))
-      b <- eligibility_flag(df[[input$pdm_beneficiary]])
+      b <- benef_flag(df); req(b)
       st <- pdm_stratum_weights(b, df[[u]], data.frame(unit = character(0), beneficiaries = numeric(0), non_beneficiaries = numeric(0)))$strata
       old <- pop_units()
       if (!is.null(old)) {
@@ -258,7 +292,7 @@ mod_pdm_server <- function(id, workspace = NULL, country_office = reactive(NULL)
     moda <- mod_moda_import_server("moda")
     observeEvent(moda$data(), {
       df <- moda$data(); req(df)
-      take_pdm(df, sprintf("MODA form %s", moda$credentials()$form_id %||% ""))
+      take_pdm(df, moda$label() %||% sprintf("MODA form %s", moda$credentials()$form_id %||% ""))
     })
     take_pdm <- function(df, name) {
       pdm_df(df)
@@ -289,9 +323,11 @@ mod_pdm_server <- function(id, workspace = NULL, country_office = reactive(NULL)
     output$pdm_file_status <- renderUI({
       df <- pdm_df()
       if (is.null(df)) return(NULL)
-      tags$p(class = "text-success small mb-0",
-             paste0(format(nrow(df), big.mark = ","), " records, ",
-                    format(ncol(df), big.mark = ","), " variables loaded."))
+      tags$div(class = "text-success small mb-0",
+               bsicons::bs_icon("check-circle-fill"), " ",
+               tags$strong(pdm_source() %||% "Data loaded"), tags$br(),
+               paste0(format(nrow(df), big.mark = ","), " records, ",
+                      format(ncol(df), big.mark = ","), " variables. Continue with the steps below."))
     })
 
     observe({
@@ -320,7 +356,11 @@ mod_pdm_server <- function(id, workspace = NULL, country_office = reactive(NULL)
       w$show()
       on.exit(w$hide(), add = TRUE)
 
-      benef <- eligibility_flag(df[[input$pdm_beneficiary]])
+      benef <- benef_flag(df)
+      if (is.null(benef)) {
+        showNotification("The beneficiary column must have exactly two answers (received / not received).", type = "warning")
+        return()
+      }
       src <- input$pdm_elig_source %||% "column"
       elig <- switch(src,
         scorecard = {
@@ -620,7 +660,7 @@ mod_pdm_server <- function(id, workspace = NULL, country_office = reactive(NULL)
 
     # --- Export -----------------------------------------------------------
     output$pdm_download <- download_handler(
-      filename = function() paste0("Targeting_PDM_Accuracy_", format(Sys.time(), "%Y-%m-%d_%Hh%Mm%Ss"), ".xlsx"),
+      filename = function() export_file_name("Targeting_PDM_Accuracy", "xlsx", "%Y-%m-%d_%Hh%Mm%Ss"),
       content = function(file) {
         r <- results()
         wb <- openxlsx::createWorkbook()

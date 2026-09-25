@@ -105,18 +105,101 @@ mod_scorecard_ui <- function(id) {
         ),
 
         bslib::nav_panel(
-          title = "2. Criteria Selection",
+          title = "2. Criteria Screening",
+          value = "screening",
+          bslib::card_body(
+            uiOutput(ns("gate_screening")),
+            # Descriptive only: no model is fitted here. Every yes/no variable
+            # of the data is compared with the vulnerability framework before
+            # any criterion is chosen.
+            tags$p(class = "text-muted",
+                   "Every yes/no variable of the data against the vulnerability framework, before any criterion is chosen.",
+                   " Tick the promising ones and click Select: their correlations and descriptive statistics follow; drop the ones",
+                   " that repeat each other and continue to Criteria Selection. No model is fitted at this step."),
+            # Three tabs instead of one long page: suggested yes/no versions,
+            # the screening itself, then correlations and statistics of the
+            # selected variables (where the drops are decided).
+            bslib::navset_underline(
+              id = ns("screen_tabs"),
+              bslib::nav_panel(
+                value = "suggest", title = tagList(bsicons::bs_icon("magic"), " 1. Binarise: suggested cut-offs"),
+                tags$div(class = "pt-3", uiOutput(ns("varscreen_ui")))),
+              bslib::nav_panel(
+                value = "quick", title = tagList(bsicons::bs_icon("funnel"), " 2. Quick screening"),
+                tags$div(
+                  class = "pt-3",
+                  tags$p(class = "text-muted small",
+                         "Each variable is tested on its own against the vulnerability framework. The result helps decide what to tick; nothing changes until you apply it."),
+                  tags$details(
+                    class = "wfp-qs-how small mb-3",
+                    tags$summary(tags$strong("How the screening works")),
+                    tags$ol(
+                      class = "mt-2 mb-0",
+                      tags$li("For each candidate, a logistic regression of the outcome (vulnerable or not) on that one criterion is fitted, and a ",
+                              tags$strong("likelihood-ratio test"), " checks whether knowing the criterion improves the prediction."),
+                      tags$li("If that model cannot be estimated (for example, no vulnerable household meets the criterion), ",
+                              tags$strong("Fisher's exact test"), " on the 2\u00d72 table is used instead."),
+                      tags$li("Because many candidates are tested at once, the p-values are ", tags$strong("adjusted"),
+                              " with the method chosen below, so chance findings are not counted as associations."),
+                      tags$li("A candidate is ", tags$strong("associated"), " when its adjusted p-value is below the significance level. ",
+                              "The arrow gives its direction: more common (\u2191) or less common (\u2193) among vulnerable households."),
+                      tags$li("Each test looks at one criterion alone, not net of the others. Overlaps between criteria are checked with the correlation matrix after Select, and the model in step 4 estimates the net effects.")
+                    )
+                  ),
+                  bslib::layout_columns(
+                    col_widths = c(4, 5, 3), fill = FALSE,
+                    numericInput(ns("qs_alpha"),
+                                 tagList("Significance level", info_tip("A candidate counts as associated when its adjusted p-value is below this level. 0.05 is the usual choice.")),
+                                 value = 0.05, min = 0.001, max = 0.5, step = 0.005),
+                    selectInput(ns("qs_adjust"),
+                                tagList("Multiplicity adjustment", info_tip(tip_body("Testing many candidates at once finds some by chance", list(
+                                  list(name = "Benjamini-Hochberg.", text = "Controls the share of false findings among those declared associated. Recommended.",
+                                       ref = "Benjamini & Hochberg (1995), JRSS B 57(1)."),
+                                  list(name = "Bonferroni / Holm.", text = "Control the chance of even one false finding: stricter, fewer associations.",
+                                       ref = "Holm (1979), Scandinavian Journal of Statistics 6(2)."),
+                                  list(name = "None.", text = "No correction; expect false findings when there are many candidates."))))),
+                                choices = c("Benjamini-Hochberg" = "BH", "Bonferroni" = "bonferroni",
+                                            "Holm" = "holm", "None" = "none"), selected = "BH"),
+                    tags$div(class = "wfp-inline-action",
+                             tags$label(class = "form-label", "\u00a0"),
+                             actionButton(ns("qs_run"), "Screen", icon = icon("play"), class = "btn-primary w-100"))
+                  ),
+                  uiOutput(ns("qs_out")),
+                  tags$div(class = "d-flex justify-content-end mt-2",
+                           actionButton(ns("qs_apply"), "Tick only the associated ones", icon = icon("check-double"),
+                                        class = "btn-outline-primary")))),
+              bslib::nav_panel(
+                value = "screen", title = tagList(bsicons::bs_icon("list-check"), " 3. Screen the variables"),
+                tags$div(class = "pt-3", uiOutput(ns("screen_note")), uiOutput(ns("screen_table")))),
+              bslib::nav_panel(
+                value = "corr", title = tagList(bsicons::bs_icon("grid-3x3"), " 4. Correlations and statistics"),
+                tags$div(class = "pt-3",
+                         bslib::layout_columns(
+                           col_widths = c(3, 9), fill = FALSE,
+                           numericInput(ns("corr_cutoff"),
+                                        tagList("Flag pairs above |r|",
+                                                info_tip("Two criteria correlated above this value say nearly the same thing. The weaker of the pair is pre-ticked for dropping, so one effect is not counted twice in the score.")),
+                                        value = 0.8, min = 0.3, max = 1, step = 0.05)),
+                         # Select -> review correlation and descriptive statistics -> drop.
+                         uiOutput(ns("selection_ui"))))
+            ),
+            uiOutput(ns("nav_screening"))
+          )
+        ),
+
+        bslib::nav_panel(
+          title = "3. Criteria Selection",
           value = "criteria",
           bslib::card_body(
             tags$p(class = "text-muted",
-                   "Candidate eligibility criteria. Only binary columns qualify;",
-                   " anything that looks like a food-security outcome is blocked."),
+                   "The criteria that go to the model: those kept at the screening, which you can complete or trim.",
+                   " Only yes/no columns qualify; anything that looks like a food-security outcome is blocked."),
             # Select all / Deselect all and search are built into the picker.
             bslib::layout_columns(
               col_widths = c(6, 6), fill = FALSE,
               tags$div(
                 shinyWidgets::pickerInput(
-                  ns("criteria"), "Candidate criteria", choices = character(0),
+                  ns("criteria"), "Criteria for the model", choices = character(0),
                   multiple = TRUE, width = "100%",
                   options = shinyWidgets::pickerOptions(container = "body",
                     actionsBox = TRUE, liveSearch = TRUE, size = 14,
@@ -127,32 +210,10 @@ mod_scorecard_ui <- function(id) {
               ),
               uiOutput(ns("blocked_note"))
             ),
+            # Targeting Advisory 1/2025: each criterion is reviewed here; only
+            # those passing all three reviews go on to the model.
+            uiOutput(ns("criteria_review")),
             uiOutput(ns("nav_criteria"))
-          )
-        ),
-
-        bslib::nav_panel(
-          title = "3. Criteria Screening",
-          value = "screening",
-          bslib::card_body(
-            uiOutput(ns("gate_screening")),
-            # Descriptive only: no model is fitted here. Statistics and
-            # correlations guide which candidates go forward to step 4.
-            tags$p(class = "text-muted",
-                   "Tick the candidates to examine and click Select: their descriptive statistics and",
-                   " correlations follow. No model is fitted at this step."),
-            bslib::layout_columns(
-              col_widths = c(3, 9), fill = FALSE,
-              numericInput(ns("corr_cutoff"),
-                           tagList("Flag pairs above |r|",
-                                   info_tip("Two criteria correlated above this value say nearly the same thing. The weaker of the pair is pre-ticked for dropping, so one effect is not counted twice in the score.")),
-                           value = 0.8, min = 0.3, max = 1, step = 0.05)
-            ),
-            uiOutput(ns("screen_note")),
-            uiOutput(ns("screen_table")),
-            # Select -> review correlation and descriptive statistics -> drop.
-            uiOutput(ns("selection_ui")),
-            uiOutput(ns("nav_screening"))
           )
         ),
 
@@ -232,11 +293,15 @@ mod_scorecard_ui <- function(id) {
                   class = "d-flex flex-wrap align-items-center gap-3",
                   checkboxInput(ns("stepwise_on"),
                                 tagList("Stepwise selection of the criteria",
-                                        info_tip("Backward elimination before fitting, for any model: a criterion is dropped when the fit it loses is smaller than the complexity it costs. AIC is the usual choice; BIC penalises each criterion more (log of the sample size) and keeps fewer.")),
+                                        info_tip("Selection of the criteria before fitting, for any model. Backward removes criteria from the full set, forward adds them from none, both adds and may remove again. AIC is the usual choice; BIC penalises each criterion more (log of the sample size) and keeps fewer.")),
                                 value = FALSE),
                   conditionalPanel(sprintf("input['%s']", ns("stepwise_on")),
-                                   radioButtons(ns("stepwise_ic"), NULL, inline = TRUE,
-                                                choices = c("AIC" = "aic", "BIC" = "bic"), selected = "aic"))),
+                                   tags$div(class = "d-flex flex-wrap gap-3",
+                                            radioButtons(ns("stepwise_dir"), NULL, inline = TRUE,
+                                                         choices = c("Backward" = "backward", "Forward" = "forward", "Both" = "both"),
+                                                         selected = "backward"),
+                                            radioButtons(ns("stepwise_ic"), NULL, inline = TRUE,
+                                                         choices = c("AIC" = "aic", "BIC" = "bic"), selected = "aic")))),
                 tags$div(class = "small text-muted",
                          textOutput(ns("model_note"), inline = TRUE), " ",
                          textOutput(ns("scheme_note"), inline = TRUE))
@@ -459,14 +524,14 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
     moda <- mod_moda_import_server("moda")
     observeEvent(moda$data(), {
       df <- moda$data(); req(df)
-      take_assessment(df, sprintf("MODA form %s", moda$credentials()$form_id %||% ""))
+      take_assessment(df, moda$label() %||% sprintf("MODA form %s", moda$credentials()$form_id %||% ""))
     })
 
     observeEvent(input$open_guide, showModal(design_guide_modal()))
 
     # Buttons that need an earlier step are frozen until it is done.
     observe({
-      gate_button("run_fit", !is.null(assessment_df()) && !is.null(screened()),
+      gate_button("run_fit", !is.null(assessment_df()) && length(ready_criteria()) > 0,
            "Load the assessment data, choose the outcome and the candidate criteria first.")
       todo <- tryCatch(missing_steps(), error = function(e) "finish the earlier steps")
       why <- paste0("Before adopting, ", paste(todo, collapse = ", "), ".")
@@ -522,7 +587,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
     rs_in <- function(k) isolate(restoring())$inputs[[k]]
     sc_inputs <- c("outcome_col", "outcome_pos", "criteria", "model_method", "model_scheme",
                    "holdout_pct", "split_seed", "model_weights", "run_benchmarks", "fit_criteria", "compare_models",
-                   "stepwise_on", "stepwise_ic",
+                   "stepwise_on", "stepwise_ic", "stepwise_dir",
                    "corr_cutoff", "tol_lower", "tol_upper", "tol_rationale", "caseload_pct", "vuln_area")
 
     workspace_register(workspace, "scorecard",
@@ -535,12 +600,13 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
              selection_set = selection_set(), selection_applied = selection_applied(),
              fitted = fitted(), split = split_state(), bench = bench(), effects = effects(),
              runs = runs(), current_run = current_run(), points = pts,
-             threshold = input$threshold, step = input$steps, quick_screen = qs_result())
+             threshold = input$threshold, step = input$steps, quick_screen = qs_result(), review = review())
       },
       restore = function(s) {
         restoring(s)
         assessment_df(s$data); assessment_source(s$source)
         qs_result(s$quick_screen)
+        review(s$review %||% list())
         if (!is.null(s$calc)) calc_vars(s$calc)
         screened(s$screened); collinear(s$collinear); analyst_dropped(s$analyst_dropped %||% character(0))
         selection_set(s$selection_set); selection_applied(isTRUE(s$selection_applied))
@@ -569,6 +635,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
         if (!is.null(i$compare_models)) shinyWidgets::updatePickerInput(session, "compare_models", selected = i$compare_models)
         if (!is.null(i$stepwise_on)) updateCheckboxInput(session, "stepwise_on", value = i$stepwise_on)
         if (!is.null(i$stepwise_ic)) updateRadioButtons(session, "stepwise_ic", selected = i$stepwise_ic)
+        if (!is.null(i$stepwise_dir)) updateRadioButtons(session, "stepwise_dir", selected = i$stepwise_dir)
         # A session from before stepwise became an option.
         if (identical(i$model_method, "stepwise")) {
           updateSelectInput(session, "model_method", selected = "logit")
@@ -659,28 +726,28 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
       step_nav(NULL, NULL, ok,
                sprintf("Outcome set: %s = %s.", input$outcome_col %||% "", input$outcome_pos %||% ""),
                "Load assessment data above, then choose the outcome and the level that means vulnerable.",
-               "nav_next_outcome", "Continue to Criteria Selection")
+               "nav_next_outcome", "Continue to Criteria Screening")
     })
 
     output$nav_criteria <- renderUI({
-      n <- length(input$criteria %||% character(0))
-      step_nav("nav_back_criteria", "Back to Vulnerability Framework", n > 0,
-               sprintf("%d candidate criteria selected.", n),
-               "Select the household characteristics that could make a household eligible.",
-               "nav_next_criteria", "Continue to Criteria Screening")
+      n <- length(input$criteria %||% character(0)); k <- length(ready_criteria())
+      step_nav("nav_back_criteria", "Back to Criteria Screening", k > 0,
+               sprintf("%d of %d criteria reviewed and going to the model.", k, n),
+               if (n) "Tick the three reviews of the criteria that go to the model." else "Select the household characteristics that could make a household eligible.",
+               "nav_next_criteria", "Continue to Model & weights")
     })
 
     output$nav_screening <- renderUI({
       res <- screened()
-      step_nav("nav_back_screening", "Back to Criteria Selection", isTRUE(selection_applied()),
+      step_nav("nav_back_screening", "Back to Vulnerability Framework", isTRUE(selection_applied()),
                sprintf("%d variables kept for the model.", sum(res$retained %||% FALSE)),
                "Tick variables, click Select, review them, then use 'Drop ticked and continue'.",
-               "nav_next_screening", "Continue to Model & weights")
+               "nav_next_screening", "Continue to Criteria Selection")
     })
 
     output$nav_weights <- renderUI({
       f <- fitted()
-      step_nav("nav_back_weights", "Back to Criteria Screening", !is.null(f),
+      step_nav("nav_back_weights", "Back to Criteria Selection", !is.null(f),
                if (is.null(f)) "" else sprintf("Model fitted on %d criteria. Iterate above if needed.", nrow(f$weights)),
                "Fit the model first.",
                "nav_next_weights", "Continue to Threshold & errors")
@@ -705,25 +772,25 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
                "nav_adopt", "Adopt this scorecard", next_icon = "check")
     })
 
-    observeEvent(input$nav_next_outcome, go_step("criteria"))
-    observeEvent(input$nav_back_criteria, go_step("outcome"))
-    observeEvent(input$nav_next_criteria, go_step("screening"))
-    observeEvent(input$nav_back_screening, go_step("criteria"))
-    observeEvent(input$nav_next_screening, go_step("weights"))
-    observeEvent(input$nav_back_weights, go_step("screening"))
+    observeEvent(input$nav_next_outcome, go_step("screening"))
+    observeEvent(input$nav_back_screening, go_step("outcome"))
+    observeEvent(input$nav_next_screening, go_step("criteria"))
+    observeEvent(input$nav_back_criteria, go_step("screening"))
+    observeEvent(input$nav_next_criteria, go_step("weights"))
+    observeEvent(input$nav_back_weights, go_step("criteria"))
     observeEvent(input$nav_next_weights, go_step("threshold"))
     observeEvent(input$nav_back_threshold, go_step("weights"))
 
     output$gate_screening <- renderUI({
-      if (length(input$criteria %||% character(0)) > 0) return(NULL)
-      gate("Screening compares each candidate criterion against the outcome, so pick the candidates first.",
-           "back_to_criteria", "Back to Criteria Selection")
+      if (!is.null(assessment_df()) && shiny::isTruthy(input$outcome_col)) return(NULL)
+      gate("Screening compares each variable with the vulnerability framework, so set it first.",
+           "back_to_outcome", "Back to Vulnerability Framework")
     })
 
     output$gate_weights <- renderUI({
-      if (!is.null(screened())) return(NULL)
-      gate("Weights come from a model fitted on the selected variables, so select them first.",
-           "back_to_screening", "Back to Criteria Screening")
+      if (length(ready_criteria()) > 0) return(NULL)
+      gate("Weights come from a model fitted on the chosen criteria that passed their review (observable, not an outcome, validated by the community), so review them first.",
+           "back_to_criteria", "Back to Criteria Selection")
     })
 
     output$gate_threshold <- renderUI({
@@ -733,6 +800,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
     })
 
     observeEvent(input$back_to_criteria, go_step("criteria"))
+    observeEvent(input$back_to_outcome, go_step("outcome"))
     observeEvent(input$back_to_screening, go_step("screening"))
     observeEvent(input$back_to_weights, go_step("weights"))
 
@@ -831,19 +899,116 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
       setdiff(binary_cols(), names(blockers()))
     })
 
+    # Candidates added from the variable screening, selected once they exist.
+    criteria_add <- reactiveVal(character(0))
     observe({
       choices <- eligible_criteria()
-      shinyWidgets::updatePickerInput(session, "criteria", choices = choices,
-                                      selected = rs_in("criteria") %||% isolate(input$criteria))
+      add <- isolate(criteria_add())
+      sel <- unique(c(rs_in("criteria") %||% isolate(input$criteria), add))
+      shinyWidgets::updatePickerInput(session, "criteria", choices = choices, selected = intersect(sel, choices))
+      if (length(add)) isolate(criteria_add(character(0)))
+    })
+
+    # --- Step 2: variable screening -------------------------------------------
+    # Variables with several answers and numbers: suggested yes/no versions,
+    # worked out as soon as the outcome is set. A variable already turned
+    # into one (the suggestion was created) is not suggested again.
+    var_screen <- reactive({
+      df <- assessment_df()
+      y <- tryCatch(outcome_binary(), error = function(e) NULL)
+      if (is.null(df) || is.null(y)) return(NULL)
+      bl <- blockers()
+      out_like <- names(bl)[grepl("outcome|not observable", bl, ignore.case = TRUE)]
+      d <- screen_variables(df, y, exclude = unique(c(input$outcome_col, out_like)))
+      if (is.null(d)) return(NULL)
+      d <- d[d$kind != "yes/no", , drop = FALSE]
+      done <- vapply(d$variable, function(v) any(startsWith(names(df), paste0(v, "_ge")) | names(df) == paste0(v, "_grp")), logical(1))
+      d <- d[!done, , drop = FALSE]
+      if (nrow(d)) d else NULL
+    })
+    varscreen_shown <- reactive({ d <- var_screen(); req(d); d })
+    output$varscreen_ui <- renderUI({
+      d <- var_screen()
+      if (is.null(d)) return(empty_state("No suggestion",
+        "Every variable is already yes/no, or none has a clear link with vulnerability. Go on to Screen the variables.", icon = "check2-circle"))
+      bslib::card(
+        class = "mb-3",
+        bslib::card_header(bsicons::bs_icon("magic"), sprintf(" Suggested yes/no versions of %d other variable%s", nrow(d), if (nrow(d) == 1) "" else "s")),
+        bslib::card_body(
+          tags$div(class = "small text-muted mb-2",
+                   "Variables with several answers or numbers cannot be criteria as they are. Each gets a suggested yes/no version: the answers where",
+                   " vulnerability is above average, or the cut-off that separates vulnerable households best. Tick the ones you want and create them:",
+                   " they join '3. Screen the variables' (built with the variable calculator, which lists them)."),
+          DT::DTOutput(ns("varscreen_table"), fill = FALSE),
+          tags$div(class = "d-flex justify-content-end mt-2",
+                   actionButton(ns("varscreen_add"), "Create the selected yes/no variables", icon = icon("plus"), class = "btn-outline-primary"))
+        )
+      )
+    })
+    output$varscreen_table <- DT::renderDT({
+      d <- varscreen_shown()
+      pct <- function(v) sprintf("%.0f%%", 100 * v)
+      tab <- data.frame(Variable = d$variable, Type = d$kind, `Yes/no criterion` = d$suggestion,
+                        `Households yes` = pct(d$yes_share), `Vulnerable if yes` = pct(d$vuln_yes),
+                        `Vulnerable if no` = pct(d$vuln_no), `Gap (pts)` = sprintf("%+.0f", 100 * d$gap),
+                        `Odds ratio` = sprintf("%.2f", d$odds_ratio),
+                        `p-value` = ifelse(is.na(d$p_value), "", ifelse(d$p_value < 0.0001, "< 0.0001", sprintf("%.4f", d$p_value))),
+                        Strength = d$strength, Answers = d$detail, check.names = FALSE)
+      DT::datatable(tab, rownames = FALSE, selection = "multiple",
+                    options = list(pageLength = 25, dom = "ftip", scrollX = TRUE, scrollY = "1000px",
+                                   columnDefs = list(list(className = "dt-right", targets = 3:8)))) |>
+        DT::formatStyle("Strength", color = DT::styleEqual(c("Strong", "Moderate", "Weak", "Not significant"),
+                                                           c("#3f7e44", "#0A6EB4", "#8a6100", "#8a96a3")),
+                        fontWeight = "600")
+    })
+    observeEvent(input$varscreen_add, {
+      d <- varscreen_shown()
+      sel <- input$varscreen_table_rows_selected
+      need_ok(length(sel) > 0, "Tick one or more rows first.")
+      df <- assessment_all()
+      picked <- d[sel, , drop = FALSE]
+      added <- character(0); made <- list()
+      for (i in seq_len(nrow(picked))) {
+        r <- picked[i, ]
+        rule <- r$rule[[1]]
+        if (is.null(rule)) { added <- c(added, r$variable); next }
+        nm <- screen_new_name(r$variable, rule, names(df))
+        cond <- list(list(column = r$variable, op = rule$op, value = rule$value))
+        df[[nm]] <- calc_condition(df, cond, "all", coding = "yesno")
+        made[[nm]] <- calc_describe_condition(cond)
+        added <- c(added, nm)
+      }
+      if (length(made)) {
+        assessment_df(df)
+        now <- format(Sys.time(), "%Y-%m-%d %H:%M")
+        calc_vars(rbind(calc_vars()[!calc_vars()$name %in% names(made), , drop = FALSE],
+                        data.frame(name = names(made), definition = unlist(made), created = now, stringsAsFactors = FALSE)))
+        for (nm in names(made)) audit_add(modification_log, "Design", "Variable created", sprintf("%s = %s (from the variable screening)", nm, made[[nm]]))
+      }
+      need_ok(length(made) > 0, "Nothing to create for the selected rows.")
+      bslib::nav_select("screen_tabs", "screen", session = session)
+      showNotification(sprintf("%d yes/no variable%s created (%s): they are in '3. Screen the variables'.",
+                               length(made), if (length(made) == 1) "" else "s", paste(names(made), collapse = ", ")),
+                       type = "message", duration = 8)
     })
 
     # The chosen candidates, readable at a glance beside the blocked ones.
     output$criteria_chips <- renderUI({
       cr <- input$criteria
       if (!length(cr)) return(tags$div(class = "small text-muted", "No candidate selected yet."))
-      tags$div(class = "wfp-norm-bar mt-1",
-               tags$strong(sprintf("%d selected", length(cr))),
-               lapply(cr, function(x) tags$span(class = "wfp-norm-chip", x)))
+      df <- assessment_df()
+      miss <- if (is.null(df)) numeric(0) else vapply(intersect(cr, names(df)), function(cl) {
+        x <- df[[cl]]; mean(is.na(x) | (is.character(x) & !nzchar(trimws(x))))
+      }, numeric(1))
+      high <- miss[miss > 0.2]
+      tagList(
+        tags$div(class = "wfp-norm-bar mt-1",
+                 tags$strong(sprintf("%d selected", length(cr))),
+                 lapply(cr, function(x) tags$span(class = "wfp-norm-chip", x))),
+        if (length(high)) tags$div(
+          class = "small text-warning mt-2", bsicons::bs_icon("exclamation-triangle-fill"),
+          sprintf(" Many missing answers: %s. In the model and the score a missing answer counts as 'no'; check the question was asked to everyone.",
+                  paste(sprintf("%s (%.0f%%)", names(high), 100 * high), collapse = ", "))))
     })
 
     # --- Vulnerable households by area (step 1) ------------------------------
@@ -870,44 +1035,60 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
       if (is.null(d)) return(tags$div(class = "small text-muted", "Choose the outcome first."))
       n <- min(nrow(d), 30)
       tagList(
-        plotly::plotlyOutput(ns("vuln_area_plot"), height = sprintf("%dpx", max(220, 60 + 26 * n))),
+        plotly::plotlyOutput(ns("vuln_area_plot"), height = "380px"),
         if (nrow(d) > 30) tags$div(class = "small text-muted", sprintf("The 30 areas with the highest share of %d.", nrow(d)))
       )
     })
+    # 100% stacked columns: vulnerable and not vulnerable in each area, the
+    # dotted line at the share vulnerable overall.
     output$vuln_area_plot <- render_wfp_plotly({
       d <- utils::head(vuln_area_tab(), 30)
       y <- outcome_binary()
       overall <- 100 * mean(y == 1, na.rm = TRUE)
-      d$area <- factor(d$area, levels = rev(d$area))
-      plotly::plot_ly(d, x = ~ 100 * share, y = ~area, type = "bar", orientation = "h",
-                      marker = list(color = "#c5192d"),
-                      text = ~ sprintf("%.0f%%", 100 * share), textposition = "outside", cliponaxis = FALSE,
-                      hovertext = ~ sprintf("%s: %s of %s households vulnerable", area, format(vulnerable, big.mark = ","),
-                                            format(households, big.mark = ",")), hoverinfo = "text") |>
-        plotly::layout(xaxis = list(title = "Vulnerable households (%)", range = c(0, 105)),
-                       yaxis = list(title = "", automargin = TRUE),
-                       shapes = list(list(type = "line", x0 = overall, x1 = overall, y0 = -0.5, y1 = nrow(d) - 0.5,
-                                          line = list(color = "#5b6b7e", dash = "dash", width = 1.5))),
-                       annotations = list(list(x = overall, y = nrow(d) - 0.5, yanchor = "bottom", showarrow = FALSE,
-                                               text = sprintf("All: %.0f%%", overall), font = list(size = 11))))
+      d$area <- factor(d$area, levels = d$area)
+      hover <- function(k, lab) sprintf("%s<br>%s: %.0f%% (%s of %s households)", d$area, lab, 100 * k / d$households,
+                                        format(k, big.mark = ","), format(d$households, big.mark = ","))
+      plotly::plot_ly(d, x = ~area) |>
+        plotly::add_bars(y = ~ 100 * share, name = "Vulnerable", marker = list(color = "#c5192d"),
+                         text = ~ sprintf("%.0f%%", 100 * share), textposition = "inside", insidetextanchor = "middle",
+                         textfont = list(color = "#ffffff"), hovertext = hover(d$vulnerable, "Vulnerable"), hoverinfo = "text") |>
+        plotly::add_bars(y = ~ 100 * (1 - share), name = "Not vulnerable", marker = list(color = "#3f7e44"),
+                         hovertext = hover(d$households - d$vulnerable, "Not vulnerable"), hoverinfo = "text") |>
+        plotly::layout(barmode = "stack", bargap = 0.35,
+                       xaxis = list(title = "", tickangle = if (nrow(d) > 8) -35 else 0, automargin = TRUE),
+                       yaxis = list(title = "Households (%)", range = c(0, 100), ticksuffix = "%"),
+                       legend = list(orientation = "h", x = 0, y = 1.1, xanchor = "left", yanchor = "bottom"),
+                       shapes = list(list(type = "line", xref = "paper", x0 = 0, x1 = 1, y0 = overall, y1 = overall,
+                                          line = list(color = "#1f2a37", dash = "dot", width = 2))),
+                       annotations = list(list(xref = "paper", x = 1, y = overall, xanchor = "right", yanchor = "bottom",
+                                               showarrow = FALSE, text = sprintf("All areas: %.0f%% vulnerable", overall),
+                                               font = list(size = 11), bgcolor = "rgba(255,255,255,0.8)")))
     })
 
     output$blocked_note <- renderUI({
       b <- blockers()
       outcome_blocked <- b[vapply(b, function(x) grepl("Advisory 1/2025", x, fixed = TRUE), logical(1))]
-      if (length(outcome_blocked) == 0) return(NULL)
+      unobs <- b[vapply(b, function(x) grepl("Not observable", x, fixed = TRUE), logical(1))]
+      if (!length(outcome_blocked) && !length(unobs)) return(NULL)
+      cols_line <- function(v) tags$div(class = "small", paste(utils::head(names(v), 25), collapse = ", "), if (length(v) > 25) ", ...")
       tags$div(
         class = "alert alert-info mt-2",
-        tags$strong(bsicons::bs_icon("shield-exclamation"),
-                    sprintf(" %d column(s) blocked as outcome indicators", length(outcome_blocked))),
-        tags$p(class = "small mb-1 mt-2",
-               "Outcome indicators reflect a household's current food consumption, which",
-               " moves with the season and with assistance itself. Targeting on them is",
-               " reactive rather than preventive, and they cannot then be used to validate",
-               " the targeting."),
-        tags$div(class = "small",
-                 paste(utils::head(names(outcome_blocked), 20), collapse = ", "),
-                 if (length(outcome_blocked) > 20) ", ...")
+        if (length(outcome_blocked)) tagList(
+          tags$strong(bsicons::bs_icon("shield-exclamation"),
+                      sprintf(" %d column(s) blocked as outcome indicators", length(outcome_blocked))),
+          tags$p(class = "small mb-1 mt-2",
+                 "Outcome indicators reflect a household's current food consumption, which",
+                 " moves with the season and with assistance itself. Targeting on them is",
+                 " reactive rather than preventive, and they cannot then be used to validate",
+                 " the targeting."),
+          cols_line(outcome_blocked)),
+        if (length(unobs)) tagList(
+          tags$strong(class = if (length(outcome_blocked)) "d-block mt-3", bsicons::bs_icon("eye-slash"),
+                      sprintf(" %d column(s) not observable at registration", length(unobs))),
+          tags$p(class = "small mb-1 mt-2",
+                 "Expenditure, prices, coping strategies and their reasons, MEB and transfer values, food consumption,",
+                 " phone numbers and indebtedness cannot be seen or verified by a registration team, so they are not criteria."),
+          cols_line(unobs))
       )
     })
 
@@ -917,17 +1098,23 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
 
     # The candidate table is descriptive and rebuilt whenever the candidates,
     # the outcome or the data change. Every candidate starts ticked.
-    observeEvent(list(input$criteria, input$outcome_col, input$outcome_pos, assessment_df()), {
+    # Every yes/no variable of the data (outcome indicators and the outcome
+    # left out), rebuilt when the outcome or the data change -- including when
+    # a suggested yes/no version is created. Those with a gap of 5 points or
+    # more start ticked.
+    observeEvent(list(input$outcome_col, input$outcome_pos, assessment_df()), {
       if (!is.null(isolate(restoring()))) return()
       df <- assessment_df()
-      crit <- input$criteria
+      crit <- tryCatch(setdiff(eligible_criteria(), input$outcome_col), error = function(e) character(0))
       y <- tryCatch(outcome_binary(), error = function(e) NULL)
       collinear(character(0)); analyst_dropped(character(0))
       selection_set(NULL); selection_applied(FALSE)
       if (is.null(df) || !length(crit) || is.null(y)) { screened(NULL); return() }
       prof <- criteria_profile(df, crit, y)
       prof$direction <- ifelse(prof$gap >= 0, "inclusion", "exclusion")
-      prof$retained <- TRUE
+      prof$retained <- abs(prof$gap) >= 0.05
+      prof <- prof[order(-abs(prof$gap)), , drop = FALSE]
+      rownames(prof) <- NULL
       screened(prof)
       fitted(NULL)
     }, ignoreNULL = FALSE)
@@ -944,6 +1131,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
         return()
       }
       selection_set(res$criterion[use])
+      bslib::nav_select("screen_tabs", "corr", session = session)
     })
 
     # Profile + correlation of the chosen set, with the drops the collinearity
@@ -968,7 +1156,8 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
     })
 
     output$selection_ui <- renderUI({
-      if (is.null(selection_set())) return(NULL)
+      if (is.null(selection_set())) return(empty_state("Nothing selected yet",
+        "Tick variables in '3. Screen the variables' and click Select: their correlations and statistics show here.", icon = "grid-3x3"))
       si <- selection_info()
       drop <- lapply(seq_len(nrow(si$prof)), function(i)
         checkboxInput(ns(paste0("dv_", i)), NULL, value = !is.na(si$prof$suggest[i])))
@@ -988,9 +1177,9 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
                    else sprintf("No pair is correlated above |r| = %.2f.", si$cutoff),
                    " Tick or untick Drop as you see fit."),
           bslib::tooltip(
-            actionButton(ns("apply_selection"), "Drop ticked and continue to the model",
+            actionButton(ns("apply_selection"), "Drop ticked and continue to Criteria Selection",
                          icon = icon("arrow-right"), class = "btn-primary"),
-            "Removes the variables ticked in the Drop column and opens step 4 with the rest.")
+            "Removes the variables ticked in the Drop column and opens Criteria Selection with the rest.")
         )
       )
     })
@@ -1010,76 +1199,42 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
       analyst_dropped(setdiff(drop, auto))
       screened(res)
       selection_applied(TRUE)
-      go_step("weights")
-      showNotification(sprintf("%d variables kept for the model, %d dropped.", length(keep), length(drop)),
+      shinyWidgets::updatePickerInput(session, "criteria", selected = keep)
+      go_step("criteria")
+      showNotification(sprintf("%d variables kept for Criteria Selection, %d dropped.", length(keep), length(drop)),
                        type = "message")
     })
 
     # Quick screening: a univariate test per candidate, summarised as two
     # lists rather than a table of statistics. It only informs the ticks.
     qs_result <- reactiveVal(NULL)
-    observeEvent(input$quick_screen, {
-      qs_result(NULL)
-      showModal(modalDialog(
-        title = tagList(bsicons::bs_icon("funnel"), " Quick screening"),
-        size = "l", easyClose = TRUE,
-        tags$p(class = "text-muted small",
-               "Each candidate is tested on its own against the outcome. The result only helps you decide what to tick; nothing changes until you apply it."),
-        tags$details(
-          class = "wfp-qs-how small mb-3", open = NA,
-          tags$summary(tags$strong("How the screening works")),
-          tags$ol(
-            class = "mt-2 mb-0",
-            tags$li("For each candidate, a logistic regression of the outcome (vulnerable or not) on that one criterion is fitted, and a ",
-                    tags$strong("likelihood-ratio test"), " checks whether knowing the criterion improves the prediction."),
-            tags$li("If that model cannot be estimated (for example, no vulnerable household meets the criterion), ",
-                    tags$strong("Fisher's exact test"), " on the 2\u00d72 table is used instead."),
-            tags$li("Because many candidates are tested at once, the p-values are ", tags$strong("adjusted"),
-                    " with the method chosen below, so chance findings are not counted as associations."),
-            tags$li("A candidate is ", tags$strong("associated"), " when its adjusted p-value is below the significance level. ",
-                    "The arrow gives its direction: more common (\u2191) or less common (\u2193) among vulnerable households."),
-            tags$li("Each test looks at one criterion alone, not net of the others. Overlaps between criteria are checked with the correlation matrix after Select, and the model in step 4 estimates the net effects.")
-          )
-        ),
-        bslib::layout_columns(
-          col_widths = c(4, 5, 3), fill = FALSE,
-          numericInput(ns("qs_alpha"),
-                       tagList("Significance level", info_tip("A candidate counts as associated when its adjusted p-value is below this level. 0.05 is the usual choice.")),
-                       value = 0.05, min = 0.001, max = 0.5, step = 0.005),
-          selectInput(ns("qs_adjust"),
-                      tagList("Multiplicity adjustment", info_tip(tip_body("Testing many candidates at once finds some by chance", list(
-                        list(name = "Benjamini-Hochberg.", text = "Controls the share of false findings among those declared associated. Recommended.",
-                             ref = "Benjamini & Hochberg (1995), JRSS B 57(1)."),
-                        list(name = "Bonferroni / Holm.", text = "Control the chance of even one false finding: stricter, fewer associations.",
-                             ref = "Holm (1979), Scandinavian Journal of Statistics 6(2)."),
-                        list(name = "None.", text = "No correction; expect false findings when there are many candidates."))))),
-                      choices = c("Benjamini-Hochberg" = "BH", "Bonferroni" = "bonferroni",
-                                  "Holm" = "holm", "None" = "none"), selected = "BH"),
-          tags$div(class = "wfp-inline-action",
-                   tags$label(class = "form-label", "\u00a0"),
-                   actionButton(ns("qs_run"), "Screen", icon = icon("play"), class = "btn-primary w-100"))
-        ),
-        uiOutput(ns("qs_out")),
-        footer = tagList(
-          modalButton("Close"),
-          actionButton(ns("qs_apply"), "Tick only the associated ones", icon = icon("check-double"),
-                       class = "btn-outline-primary")
-        )
-      ))
-    })
-
-    observeEvent(input$qs_run, {
-      df <- assessment_df(); res <- screened(); need_ok(!is.null(df) && !is.null(res), "Load the assessment data and choose the outcome and criteria first.")
+    # Quick screening runs by itself on the screening's variables (and again
+    # with the options changed through Screen).
+    qs_for <- reactiveVal(NULL)
+    run_qs <- function(quiet = FALSE) {
+      df <- assessment_df(); res <- screened()
+      if (is.null(df) || is.null(res) || !nrow(res)) return(invisible())
       r <- tryCatch(screen_criteria(df, input$outcome_col, res$criterion,
                                     alpha = input$qs_alpha %||% 0.05, adjust = input$qs_adjust %||% "BH",
                                     outcome_positive = input$outcome_pos),
-                    error = function(e) { showNotification(paste("Screening failed:", conditionMessage(e)), type = "error"); NULL })
-      qs_result(r)
+                    error = function(e) { if (!quiet) showNotification(paste("Screening failed:", conditionMessage(e)), type = "error"); NULL })
+      qs_result(r); qs_for(res$criterion)
+    }
+    observeEvent(screened(), {
+      if (!is.null(isolate(restoring()))) return()
+      res <- screened()
+      if (is.null(res)) { qs_result(NULL); qs_for(NULL); return() }
+      if (!identical(sort(res$criterion), sort(isolate(qs_for()) %||% character(0)))) run_qs(quiet = TRUE)
+    }, ignoreNULL = FALSE)
+
+    observeEvent(input$qs_run, {
+      need_ok(!is.null(assessment_df()) && !is.null(screened()), "Set the vulnerability framework first.")
+      run_qs()
     })
 
     output$qs_out <- renderUI({
       r <- qs_result()
-      if (is.null(r)) return(NULL)
+      if (is.null(r)) return(empty_state("Not screened yet", "Set the vulnerability framework: the quick screening runs by itself.", icon = "funnel"))
       res <- screened()
       m <- match(r$criterion, res$criterion)
       pv <- res$prev_vuln[m]; pn <- res$prev_not[m]
@@ -1091,7 +1246,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
                         ifelse(r$direction == "inclusion", "Associated: points to vulnerability",
                                "Associated: points away from vulnerability"),
                         "No clear association on its own"))
-      fmt_p <- function(p) ifelse(is.na(p), "\u2013", ifelse(p < 0.001, "< 0.001", sprintf("%.3f", p)))
+      fmt_p <- function(p) ifelse(is.na(p), "\u2013", ifelse(p < 0.0001, "< 0.0001", sprintf("%.4f", p)))
       fmt_or <- function(o, lo, hi) ifelse(is.na(o), "\u2013", sprintf("%.2f (%.2f\u2013%.2f)", o, lo, hi))
       ord <- order(!r$significant, r$p_adj, na.last = TRUE)
       tagList(
@@ -1126,10 +1281,11 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
     observeEvent(input$qs_apply, {
       r <- qs_result(); res <- screened()
       if (is.null(r)) { showNotification("Click Screen first.", type = "warning"); return() }
-      sig <- r$criterion[r$significant]
-      for (i in seq_len(nrow(res))) updateCheckboxInput(session, paste0("sv_", i), value = res$criterion[i] %in% sig)
-      removeModal()
-      showNotification(sprintf("%d associated candidates ticked. Click Select to review them.", length(sig)), type = "message")
+      sig <- r$criterion[which(r$significant)]
+      res$retained <- res$criterion %in% sig
+      screened(res)
+      bslib::nav_select("screen_tabs", "screen", session = session)
+      showNotification(sprintf("%d associated variables ticked. Click Select to review their correlations.", length(sig)), type = "message")
     })
 
     output$screen_note <- renderUI({
@@ -1195,14 +1351,10 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
             tags$li(tags$strong("Among vulnerable / among others"), ": the same share within each outcome group. ",
                     "The wider the gap, the more the criterion points to vulnerability (more common among the vulnerable: an inclusion criterion; less common: an exclusion criterion)."),
             tags$li(tags$strong("Missing"), ": households with no answer. Above about 20%, check the question: missing answers score nothing."),
-            tags$li("These are descriptive and one criterion at a time. Quick screening tests them statistically; ",
+            tags$li("These are descriptive and one criterion at a time. The Quick screening tab tests them statistically; ",
                     "Select ticked variables then shows how they overlap, and the model in step 4 gives each its net weight."))),
         tags$div(
           class = "d-flex justify-content-end gap-2 mt-3",
-          bslib::tooltip(
-            actionButton(ns("quick_screen"), "Quick screening", icon = icon("filter"),
-                         class = "btn-outline-primary"),
-            "Tests each candidate against the outcome and shows, in one glance, which are associated with it. Optional: nothing is dropped unless you tick accordingly."),
           bslib::tooltip(
             actionButton(ns("select_vars"), "Select ticked variables",
                          icon = icon("check-double"), class = "btn-primary"),
@@ -1221,7 +1373,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
       need_ok(!is.null(df) && !is.null(res), "Load the assessment data, choose the outcome and the criteria, and select the variables first.")
       # The picker lets the model be iterated on a different set than the
       # screening retained; it starts from the retained set.
-      keep <- input$fit_criteria %||% res$criterion[res$retained]
+      keep <- intersect(input$fit_criteria %||% ready_criteria(), ready_criteria())
       if (length(keep) == 0) {
         showNotification("No criteria to model: tick at least one in the criteria list.", type = "error")
         return()
@@ -1242,6 +1394,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
                                outcome_positive = input$outcome_pos,
                                method = input$model_method %||% "logit",
                                stepwise = if (isTRUE(input$stepwise_on)) input$stepwise_ic %||% "aic" else "none",
+                               stepwise_dir = input$stepwise_dir %||% "backward",
                                scheme = input$model_scheme %||% "odds_ratio",
                                rows = sp$train, weights = wts_vec),
         error = function(e) {
@@ -1287,6 +1440,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
         fit = out, split = sp, bench = bench(), criteria = keep, effects = effects(),
         settings = list(method = input$model_method, scheme = input$model_scheme,
                         stepwise = if (isTRUE(input$stepwise_on)) input$stepwise_ic %||% "aic" else "none",
+                        stepwise_dir = input$stepwise_dir %||% "backward",
                         holdout = input$holdout_pct, seed = input$split_seed),
         auc = roc_curve(sc_score[auc_rows], yb[auc_rows])$auc,
         held_out = length(sp$test) > 0
@@ -1335,17 +1489,82 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
     })
     current_run <- reactiveVal(NA_integer_)
 
+    # --- Review of each chosen criterion (Criteria Selection) ------------------
+    # Observable at registration, not an outcome indicator, validated by the
+    # community. Only the criteria with all three go on to the model.
+    review <- reactiveVal(list())
+    rv_kinds <- c(obs = "Observable at registration", nout = "Not an outcome indicator", cval = "Validated by the community")
+    rv_id <- function(kind, cr) paste0("rv", kind, "_", gsub("[^A-Za-z0-9]", "_", cr))
+    rv_default <- function(kind) kind != "cval"   # the automatic checks already cover the first two
+    rv_value <- function(rv, cr, kind) { r <- rv[[cr]]; if (is.null(r)) rv_default(kind) else isTRUE(r[[kind]]) }
+    observe({
+      cr <- input$criteria %||% character(0)
+      cur <- isolate(review())
+      for (c in cr) {
+        cur[[c]] <- lapply(stats::setNames(names(rv_kinds), names(rv_kinds)), function(k) {
+          x <- input[[rv_id(k, c)]]
+          if (is.null(x)) rv_value(cur, c, k) else isTRUE(x)
+        })
+      }
+      if (!identical(cur, isolate(review()))) review(cur)
+    })
+    ready_criteria <- reactive({
+      cr <- input$criteria %||% character(0); rv <- review()
+      cr[vapply(cr, function(c) all(vapply(names(rv_kinds), function(k) rv_value(rv, c, k), logical(1))), logical(1))]
+    })
+    output$criteria_review <- renderUI({
+      cr <- input$criteria %||% character(0)
+      if (!length(cr)) return(NULL)
+      rv <- isolate(review())
+      head_cell <- function(k) tags$th(class = "text-center", rv_kinds[[k]], tags$br(),
+                                       actionLink(ns(paste0("rv_all_", k)), "tick all", class = "small fw-normal"))
+      tagList(
+        tags$div(class = "small fw-bold text-uppercase mt-3 mb-2", bsicons::bs_icon("clipboard-check"), " Review of each criterion"),
+        tags$div(class = "wfp-model-table-wrap", tags$table(
+          class = "wfp-model-table wfp-review-table",
+          tags$thead(tags$tr(tags$th("Criterion"), head_cell("obs"), head_cell("nout"), head_cell("cval"))),
+          tags$tbody(lapply(cr, function(c) tags$tr(
+            tags$td(tags$strong(c)),
+            lapply(names(rv_kinds), function(k) tags$td(class = "text-center",
+              checkboxInput(ns(rv_id(k, c)), NULL, value = rv_value(rv, c, k))))))))),
+        uiOutput(ns("criteria_ready_note"))
+      )
+    })
+    for (k0 in c("obs", "nout", "cval")) local({
+      k <- k0
+      observeEvent(input[[paste0("rv_all_", k)]], {
+        for (c in input$criteria %||% character(0)) updateCheckboxInput(session, rv_id(k, c), value = TRUE)
+      })
+    })
+    output$criteria_ready_note <- renderUI({
+      cr <- input$criteria %||% character(0); ok <- ready_criteria()
+      held <- setdiff(cr, ok)
+      tags$div(
+        class = "small mt-2",
+        tags$div(class = if (length(ok)) "text-success" else "text-warning",
+                 bsicons::bs_icon(if (length(ok)) "check-circle-fill" else "exclamation-circle"),
+                 sprintf(" %d of %d criteria go to the model%s", length(ok), length(cr), if (length(ok)) paste0(": ", paste(ok, collapse = ", "), ".") else ".")),
+        if (length(held)) tags$div(class = "text-muted", bsicons::bs_icon("pause-circle"),
+                                   sprintf(" Held back until their three reviews are ticked: %s.", paste(held, collapse = ", "))))
+    })
+
+    # The model iterates on the criteria that passed the review.
+    observeEvent(ready_criteria(), {
+      cr <- ready_criteria()
+      # A model fitted on other criteria no longer describes this design
+      # (not while a saved session is coming back).
+      if (is.null(isolate(restoring()))) fitted(NULL)
+      shinyWidgets::updatePickerInput(session, "fit_criteria", choices = cr,
+                                      selected = intersect(rs_in("fit_criteria") %||% cr, cr))
+    }, ignoreNULL = FALSE)
     observeEvent(screened(), {
-      res <- screened()
-      shinyWidgets::updatePickerInput(session, "fit_criteria", choices = res$criterion,
-                                      selected = rs_in("fit_criteria") %||% res$criterion[res$retained])
       if (!is.null(isolate(restoring()))) return()
       runs(list()); current_run(NA_integer_)
     })
 
 
     output$model_note <- renderText(paste(scorecard_model_note(input$model_method %||% "logit"),
-                                          if (isTRUE(input$stepwise_on)) stepwise_note(input$stepwise_ic) else ""))
+                                          if (isTRUE(input$stepwise_on)) stepwise_note(input$stepwise_ic, input$stepwise_dir) else ""))
 
     output$runs_ui <- renderUI({
       rl <- runs()
@@ -1390,6 +1609,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
       st <- r$settings$stepwise %||% if (identical(r$settings$method, "stepwise")) "aic" else "none"
       updateCheckboxInput(session, "stepwise_on", value = st %in% c("aic", "bic"))
       if (st %in% c("aic", "bic")) updateRadioButtons(session, "stepwise_ic", selected = st)
+      if (!is.null(r$settings$stepwise_dir)) updateRadioButtons(session, "stepwise_dir", selected = r$settings$stepwise_dir)
       freezeReactiveValue(input, "model_scheme")
       updateSelectInput(session, "model_scheme", selected = r$settings$scheme)
       updateNumericInput(session, "holdout_pct", value = r$settings$holdout)
@@ -1438,6 +1658,11 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
                   else "",
                   nrow(f$weights))
         ),
+        # Missing criterion answers count as "no", in the model as in the score.
+        if (length(f$filled)) tags$div(
+          class = "small text-muted",
+          bsicons::bs_icon("info-circle"), " Missing answers counted as 'no' (as in the score): ",
+          paste(sprintf("%s (%s)", names(f$filled), format(f$filled, big.mark = ",")), collapse = ", "), "."),
         if (length(f$dropped)) {
           tags$div(class = "small text-muted",
                    bsicons::bs_icon("scissors"),
@@ -1476,11 +1701,6 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
         numericInput(ns(paste0("w_", i)), label = NULL,
                      value = if (is.null(sp)) wts$weight[i] else sp$weight[i],
                      min = 0, step = 0.01, width = "6rem")))
-      tick <- function(id, i, col) if (!is.null(sp)) isTRUE(sp[[col]][i]) else isolate(input[[id]]) %||% FALSE
-      review <- lapply(idx, function(i) tags$div(
-        class = "wfp-review-checks",
-        checkboxInput(ns(paste0("ver_", i)), "Verifiable", value = tick(paste0("ver_", i), i, "verifiable")),
-        checkboxInput(ns(paste0("val_", i)), "Community-validated", value = tick(paste0("val_", i), i, "validated"))))
       tagList(
         tags$div(class = "d-flex justify-content-between align-items-center mb-2 gap-2",
                  tags$span(class = "small fw-bold text-uppercase", bsicons::bs_icon("table"), " Model estimates"),
@@ -1489,13 +1709,12 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
                                        icon = icon("rotate-left"), class = "btn-outline-secondary btn-sm"),
                           downloadButton(ns("dl_model_tables2"), "Export (Excel)",
                                          class = "btn-outline-primary btn-sm"))),
-        coefficients_html(wts, f$model, points = points, review = review),
+        coefficients_html(wts, f$model, points = points),
         tags$div(
           class = "small text-muted mt-2",
           bsicons::bs_icon("info-circle"),
-          " Targeting Advisory 1/2025: criteria must be observable and verifiable, and",
-          " validated through community consultation before implementation. Tick them as",
-          " that is done; the export records which have not been."
+          " Every criterion here passed its review at Criteria Selection (observable, not an outcome, validated by the",
+          " community; Targeting Advisory 1/2025)."
         )
       )
     })
@@ -1518,12 +1737,9 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
         v <- input[[paste0("w_", i)]]
         if (!is.null(v) && !is.na(v)) as.numeric(v) else if (!is.null(sp)) sp$weight[i] else wts$weight[i]
       }, numeric(1))
-      flag <- function(id, col) vapply(seq_len(nrow(wts)), function(i) {
-        v <- input[[paste0(id, i)]]
-        if (is.null(v)) isTRUE(sp[[col]][i]) else isTRUE(v)
-      }, logical(1))
-      wts$verifiable <- flag("ver_", "verifiable")
-      wts$validated <- flag("val_", "validated")
+      rv <- review()
+      wts$verifiable <- vapply(wts$criterion, function(c) rv_value(rv, c, "obs"), logical(1))
+      wts$validated <- vapply(wts$criterion, function(c) rv_value(rv, c, "cval"), logical(1))
       wts
     })
 
@@ -1692,7 +1908,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
     output$comparison_table <- renderUI(comparison_html(live_bench()$table))
 
     model_tables_dl <- download_handler(
-      filename = function() paste0("Scorecard_model_tables_", format(Sys.time(), "%Y-%m-%d_%Hh%M"), ".xlsx"),
+      filename = function() export_file_name("Scorecard_model_tables", "xlsx", "%Y-%m-%d_%Hh%M"),
       content = function(file) {
         f <- fitted()
         b <- tryCatch(live_bench(), error = function(e) NULL)
@@ -1757,7 +1973,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
     }
 
     output$download_report <- download_handler(
-      filename = function() paste0("Targeting_design_report_", format(Sys.time(), "%Y-%m-%d_%Hh%M"), ".html"),
+      filename = function() export_file_name("Targeting_design_report", "html", "%Y-%m-%d_%Hh%M"),
       content = function(file) {
         safe <- function(expr) tryCatch(expr, error = function(e) NULL)
         df <- assessment_df()
@@ -1802,7 +2018,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
           model = if (is.null(f)) NULL else list(
             method = names(scorecard_model_choices())[scorecard_model_choices() == f$method][1],
             scheme = names(scorecard_scheme_choices())[scorecard_scheme_choices() == f$scheme][1],
-            method_code = f$method, scheme_code = f$scheme, stepwise = f$stepwise %||% "none",
+            method_code = f$method, scheme_code = f$scheme, stepwise = f$stepwise %||% "none", stepwise_dir = f$stepwise_dir %||% "backward",
             n_train = f$n, n_test = length(sp$test), seed = input$split_seed,
             weights = input$model_weights, dropped = f$dropped, converged = f$converged,
             fit_stats = fit_stats),
@@ -1848,9 +2064,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
         va <- x$vuln_area
         if (!is.null(va) && nrow(va)) {
           top <- utils::head(va, 30)
-          lab <- i18n_lookup("Vulnerable households (%)", report_lang())
-          d <- data.frame(area = top$area, share = round(100 * top$share, 1)); names(d)[2] <- lab
-          plots$vuln_area <- rp_hbars(d, stats::setNames(rp_cols$vuln, lab), lab) |> billboarder::bb_legend(show = FALSE)
+          plots$vuln_area <- rp_stacked_share(top$area, top$share, 100 * x$prevalence, lang = report_lang())
         }
         write_design_report(file, x, plots, lang = report_lang())
       }
@@ -2299,7 +2513,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
     output$flow <- renderUI({
       here <- input$steps %||% "outcome"
       # The step tabs, in order; the dots carry the same numbers.
-      panels <- c(outcome = "Vulnerability Framework", criteria = "Criteria Selection", screening = "Criteria Screening",
+      panels <- c(outcome = "Vulnerability Framework", screening = "Criteria Screening", criteria = "Criteria Selection",
                   weights = "Model & weights", threshold = "Threshold & errors")
       has_data <- !is.null(assessment_df())
       st <- list(
@@ -2307,10 +2521,10 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
              todo = "Load the assessment data (file or MODA) on the left."),
         list(key = "outcome", label = panels[["outcome"]], done = has_data && shiny::isTruthy(input$outcome_col) && shiny::isTruthy(input$outcome_pos),
              panel = "outcome", todo = "Choose the outcome and the level that means vulnerable."),
-        list(key = "criteria", label = panels[["criteria"]], done = length(input$criteria %||% character(0)) > 0,
-             panel = "criteria", todo = "Pick the candidate criteria."),
         list(key = "screening", label = panels[["screening"]], done = isTRUE(selection_applied()),
-             panel = "screening", todo = "Tick the variables, click Select, review them, then drop the ones not to keep."),
+             panel = "screening", todo = "Tick the promising variables, click Select, review them, then drop the ones not to keep."),
+        list(key = "criteria", label = panels[["criteria"]], done = length(ready_criteria()) > 0,
+             panel = "criteria", todo = "Confirm the criteria and tick their three reviews: only reviewed criteria go to the model."),
         list(key = "weights", label = panels[["weights"]], done = !is.null(fitted()),
              panel = "weights", todo = "Fit the model; iterate until satisfied."),
         list(key = "threshold", label = panels[["threshold"]],
@@ -2378,8 +2592,8 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
     missing_steps <- function() {
       c(if (is.null(assessment_df())) "load the assessment data",
         if (!shiny::isTruthy(input$outcome_col)) "choose the outcome",
-        if (!length(input$criteria)) "pick the candidate criteria",
         if (!isTRUE(selection_applied())) "confirm the criteria screening",
+        if (!length(ready_criteria())) "choose the criteria and complete their review",
         if (is.null(fitted())) "fit the model",
         if (is.null(input$threshold %||% thr_pending())) "set the threshold")
     }
@@ -2443,7 +2657,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
     })
 
     output$download <- download_handler(
-      filename = function() paste0("Targeting_Scorecard_", format(Sys.time(), "%Y-%m-%d_%Hh%Mm"), ".xlsx"),
+      filename = function() export_file_name("Targeting_Scorecard", "xlsx", "%Y-%m-%d_%Hh%Mm"),
       content = function(file) {
         req(fitted())
         sc <- draft_scorecard()
@@ -2516,7 +2730,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
     )
 
     output$download_json <- download_handler(
-      filename = function() paste0("scorecard_", format(Sys.time(), "%Y-%m-%d"), ".json"),
+      filename = function() export_file_name("scorecard", "json", "%Y-%m-%d"),
       content = function(file) {
         req(fitted())
         writeLines(as.character(jsonlite::toJSON(draft_scorecard(), auto_unbox = TRUE,

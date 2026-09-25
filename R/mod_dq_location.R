@@ -363,11 +363,7 @@ dq_location_server <- function(input, output, session, ns, core) {
 
   output$download_locations <- download_handler(
     filename = function() {
-      paste0(
-        "Targeting_LocationsCheck_",
-        format(Sys.time(), "%Y-%m-%d_%Hh%Mm%Ss"),
-        ".xlsx"
-      )
+      export_file_name("Targeting_LocationsCheck", "xlsx", "%Y-%m-%d_%Hh%Mm%Ss")
     },
     content = function(file) {
       export_data <- sanitize_for_excel(norm_data_summary())

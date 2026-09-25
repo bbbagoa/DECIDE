@@ -205,7 +205,7 @@ dq_enumerator_server <- function(input, output, session, ns, core) {
   })
 
   output$enum_flag_download <- download_handler(
-    filename = function() paste0("Targeting_Flagged_enumerators_", format(Sys.time(), "%Y-%m-%d_%Hh%M"), ".xlsx"),
+    filename = function() export_file_name("Targeting_Flagged_enumerators", "xlsx", "%Y-%m-%d_%Hh%M"),
     content = function(file) {
       m <- enum_metrics()
       f <- if (is.null(m)) NULL else m[m$flag == "Review", , drop = FALSE]

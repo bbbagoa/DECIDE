@@ -2,7 +2,9 @@
 #'
 #' The package is not on CRAN, so users are not told about new versions by R.
 #' At start-up the app reads the latest version from DESCRIPTION on the
-#' public GitHub repository (no account or token needed). An organisation
+#' GitHub repository. The repository is private: the check uses the access
+#' token the package was installed with (GITHUB_PAT, or the git credential
+#' store set by gitcreds::gitcreds_set()); without one it stays silent. An organisation
 #' that hosts its own copy of the releases (a CRAN-like folder built by
 #' dev/release.R) sets TARGETWISE_RELEASES_URL, and that copy is
 #' checked first.
@@ -45,8 +47,8 @@ release_version <- function(url = release_repo_url(), timeout = 3) {
 
 .update_cache <- new.env(parent = emptyenv())
 
-#' A GitHub token from the environment or the git credential store. Optional:
-#' the repository is public; a token only lifts GitHub's anonymous rate limit.
+#' A GitHub token from the environment or the git credential store. Needed
+#' since the repository is private (also lifts the anonymous rate limit).
 #' @noRd
 github_token <- function() {
   tok <- Sys.getenv("GITHUB_PAT", Sys.getenv("GITHUB_TOKEN", ""))
@@ -107,7 +109,7 @@ update_notice <- function(status) {
     tags$strong(sprintf("Update available: version %s", status$latest)),
     tags$div(class = "small", sprintf("You have %s. Close the app, then run in R:", status$installed)),
     tags$code(class = "small d-block mt-1",
-              if (identical(status$source, "github")) sprintf('remotes::install_github("%s")', update_repo())
+              if (identical(status$source, "github")) sprintf('pak::pak("%s")', update_repo())
               else sprintf('install.packages("TargetWise", repos = c("%s", "https://cloud.r-project.org"))',
                            release_repo_url())),
     tags$div(class = "small mt-1", "Offline? Install the new offline bundle instead. What changed is listed in NEWS.md.")

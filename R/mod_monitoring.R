@@ -111,7 +111,7 @@ mod_monitoring_server <- function(id, workspace = NULL, country_office = reactiv
     pm_moda <- mod_moda_import_server("pm_moda")
     observeEvent(pm_moda$data(), {
       df <- pm_moda$data(); req(df)
-      take_pm(as.data.frame(df), sprintf("MODA form %s", pm_moda$credentials()$form_id %||% ""))
+      take_pm(as.data.frame(df), pm_moda$label() %||% sprintf("MODA form %s", pm_moda$credentials()$form_id %||% ""))
     })
     observeEvent(input$pm_remove, {
       ds <- datasets(); need_ok(length(ds) > 0 && shiny::isTruthy(input$pm_active), "No dataset to remove.")
@@ -215,7 +215,7 @@ mod_monitoring_server <- function(id, workspace = NULL, country_office = reactiv
 
     # --- the report --------------------------------------------------------------
     output$report <- download_handler(
-      filename = function() paste0("Targeting_monitoring_report_", format(Sys.time(), "%Y-%m-%d_%Hh%M"), ".html"),
+      filename = function() export_file_name("Targeting_monitoring_report", "html", "%Y-%m-%d_%Hh%M"),
       content = function(file) {
         r <- pdm$results()
         tol <- pdm$tolerance()

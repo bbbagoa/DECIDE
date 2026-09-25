@@ -220,6 +220,9 @@ xl_summary_sheet <- function(wb, sheet, title, subtitle, sections) {
                                  border = "bottom", borderColour = "#DFE6EE")
   openxlsx::writeData(wb, sheet, export_text(title), startRow = 1, startCol = 1)
   openxlsx::addStyle(wb, sheet, s_title, rows = 1, cols = 1)
+  # The country office on every summary sheet.
+  co <- country_office_now()
+  if (nzchar(co) && !grepl(co, subtitle %||% "", fixed = TRUE)) subtitle <- paste0(subtitle, " | Country office: ", co)
   openxlsx::writeData(wb, sheet, export_text(subtitle), startRow = 2, startCol = 1)
   openxlsx::addStyle(wb, sheet, s_sub, rows = 2, cols = 1)
   r <- 4

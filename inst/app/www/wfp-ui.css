@@ -2560,3 +2560,22 @@ table.dataTable tr.dtrg-group td { background: var(--surface-3) !important; font
   .tw-imp-stats, .tw-imp-cols { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .tw-imp-stat:nth-child(3) { border-left: 0; }
 }
+
+.tw-imp-note-line { font-size: .86rem; padding: .2rem 0; }
+.tw-imp-note-line.is-ok .bi { color: var(--accent-success); }
+.tw-imp-note-line.is-warn .bi { color: var(--accent-warning); }
+
+/* Caseload per area dialog */
+.wfp-quota-table { max-height: 50vh; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--card-radius-sm); margin: .5rem 0; }
+.wfp-quota-table table { margin: 0; }
+.wfp-quota-table th { position: sticky; top: 0; background: var(--surface); font-size: .72rem; text-transform: uppercase; letter-spacing: .05em; color: var(--text-muted); }
+.wfp-quota-table td.num, .wfp-quota-table th.num { text-align: right; }
+.wfp-quota-table .form-group { margin: 0; }
+.wfp-quota-table .wfp-quota-total td { font-weight: 600; border-top: 2px solid var(--border-strong); }
+.wfp-quota-table .wfp-quota-flag { white-space: nowrap; width: 1%; }
+.wfp-quota-table td.wfp-quota-fig { background: var(--accent-info-bg); }
+
+/* Criteria Screening: the tables show 25 rows before scrolling. */
+[id$="-screen_table"] .wfp-model-table-wrap, [id$="-qs_out"] .wfp-model-table-wrap,
+[id$="-selection_ui"] .wfp-model-table-wrap, [id$="-criteria_review"] .wfp-model-table-wrap { max-height: 1150px; }
+[id$="-screen_table"] .wfp-model-table-wrap, [id$="-criteria_review"] .wfp-model-table-wrap { max-height: 1450px; }
