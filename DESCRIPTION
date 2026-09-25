@@ -16,6 +16,7 @@ License: GPL (>= 3) + file LICENSE
 Depends: 
     R (>= 4.6.0)
 Imports: 
+    compiler,
     billboarder,
     bsicons,
     commonmark,

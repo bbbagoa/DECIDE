@@ -132,7 +132,7 @@ design_report_md <- function(x, figures = character(0)) {
       Criterion = w$criterion, Beta = round(w$coefficient, 3),
       SE = if (is.null(w$std_error)) NA else round(w$std_error, 3),
       `Odds ratio` = round(w$odds_ratio, 2),
-      `95% CI` = if (is.null(w$or_low)) "" else ifelse(is.na(w$or_low), "", sprintf("%.2f-%.2f", w$or_low, w$or_high)),
+      `95% CI` = if (is.null(w$or_low)) "" else ifelse(is.na(w$or_low), "", paste0(fmt_ratio(w$or_low), "-", fmt_ratio(w$or_high))),
       p = md_p(w$p_value), Direction = w$direction, Points = round(w$weight, 2),
       Verifiable = yn(w$verifiable, nrow(w)),
       `Community validated` = yn(w$validated, nrow(w)), check.names = FALSE)), "",

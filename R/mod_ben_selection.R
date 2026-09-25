@@ -568,7 +568,7 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
 
       score_col <- user_setup$v_score
       if (!is.null(score_col) && score_col %in% names(df)) {
-        vals <- suppressWarnings(as.numeric(as.character(df[[score_col]])))
+        vals <- as_number(df[[score_col]])
         vals <- vals[!is.na(vals)]
         if (length(vals) > 0) {
           lo <- floor(min(vals)); hi <- ceiling(max(vals))
@@ -1302,7 +1302,7 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
 
     output$ben_indiv <- renderText({
       req(selected_data(), user_setup$hh_size)
-      sizes <- suppressWarnings(as.numeric(as.character(selected_data()[[user_setup$hh_size]])))
+      sizes <- as_number(selected_data()[[user_setup$hh_size]])
       format(sum(sizes, na.rm = TRUE), big.mark = ",")
     })
 
@@ -1643,7 +1643,7 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
       mnum <- function(x) if (is.null(m) || is.na(x)) "n/a" else sprintf("%.2f", x)
       full <- selected_data()
       n_ind <- if (shiny::isTruthy(user_setup$hh_size) && user_setup$hh_size %in% names(full))
-        sum(suppressWarnings(as.numeric(as.character(full[[user_setup$hh_size]]))), na.rm = TRUE) else NA
+        sum(as_number(full[[user_setup$hh_size]]), na.rm = TRUE) else NA
       sc <- user_setup$scorecard
       sc_used <- isTRUE(input$use_scorecard) && !scorecard_is_empty(sc)
 

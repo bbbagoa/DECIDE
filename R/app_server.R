@@ -314,7 +314,7 @@ app_server <- function(input, output, session) {
                 paste(sprintf("%s (%s values not numeric, set blank)", fc, bl[fc] %||% 0), collapse = "; "))
       o <- original_df()
       if (!is.null(o)) {
-        for (cl in intersect(fc, names(o))) o[[cl]] <- suppressWarnings(as.numeric(as.character(o[[cl]])))
+        for (cl in intersect(fc, names(o))) o[[cl]] <- as_number(o[[cl]])
         original_df(o)
       }
     }

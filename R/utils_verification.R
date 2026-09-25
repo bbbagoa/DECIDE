@@ -27,8 +27,8 @@ normalise_for_compare <- function(x, ignore_case = TRUE) {
 #' @return Logical vector: `TRUE` where the pair agrees.
 #' @noRd
 values_agree <- function(a, b, numeric_tolerance = 0, ignore_case = TRUE) {
-  na <- suppressWarnings(as.numeric(as.character(a)))
-  nb <- suppressWarnings(as.numeric(as.character(b)))
+  na <- as_number(a)
+  nb <- as_number(b)
 
   # Treat the column as numeric only when BOTH sides parse cleanly wherever
   # they are present; otherwise a numeric-looking text column (IDs with leading

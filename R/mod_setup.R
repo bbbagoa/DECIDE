@@ -673,7 +673,7 @@ mod_setup_server <- function(id, r_data, parent_session, trigger_open = reactive
         for (col in force_cols) {
           if (isTruthy(col) && col %in% names(df_local)) {
             before <- df_local[[col]]
-            df_local[[col]] <- suppressWarnings(as.numeric(as.character(before)))
+            df_local[[col]] <- as_number(before)
             blanked[[col]] <- sum(!is.na(before) & nzchar(trimws(as.character(before))) & is.na(df_local[[col]]))
           }
         }

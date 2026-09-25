@@ -80,7 +80,7 @@ screen_variables <- function(df, y, exclude = character(0), max_levels = 15L, mi
       add("yes/no", b, "Ready: already yes/no", NULL)
       next
     }
-    num <- if (is.numeric(x)) x else suppressWarnings(as.numeric(as.character(x)))
+    num <- if (is.numeric(x)) x else as_number(x)
     answered <- !is.na(x) & nzchar(trimws(as.character(x)))
     if (mean(!is.na(num[answered])) >= 0.95 && length(unique(num[!is.na(num)])) >= 3) {
       # A number (ordered, however few its values): the cut-off with the

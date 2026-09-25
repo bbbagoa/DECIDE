@@ -1,5 +1,7 @@
 # TargetWise 1.0.0
 
+* Criteria screening: creating suggested yes/no variables now leads to the Quick screening tab; "Review the variables" is renamed "Review the variables"; odds ratios and their 95% CI show at most 4 decimals (huge ratios read "> 9999").
+* Faster on large data (measured on 102,000 households): start 32 s to 21 s, import 20 s to 7 s, setup validation to Overview 17 s to 10 s.
 * The app opens in your default browser, not the RStudio/Positron viewer.
 * Column lists show every variable: wide forms (over 1,000 columns), sparsely answered number columns and factor name columns were missing from some lists.
 * Outliers: any numeric variable can be checked; an allowed range per variable flags impossible values whatever the distribution; new corrections (cap at the limits, set to missing); the Most extreme values tab gives insights (direction, concentration on an enumerator or area, 99-style codes) and acts on selected rows (correct, set a value, mark as verified); an All numeric variables tab checks every column at once.
@@ -59,7 +61,7 @@
 * Data Quality: Edit on a flagged name no longer hangs; Edit, Save and Delete find the selected record reliably, and unmapped fields show a dash.
 * Every download names the country office in its file name (e.g. Targeting_design_report_Mali_2026-09-25_14h30.html), and every report and Excel summary sheet shows it.
 * Installation: the repository is private; README explains the read-only access token (creating it, saving it once with gitcreds, installing with pak). The update check uses that token.
-* Criteria Screening is in four tabs, in working order: 1. Binarise: suggested cut-offs, 2. Quick screening (runs by itself; Bonferroni, Holm, Benjamini-Hochberg; "Tick only the associated ones"), 3. Screen the variables, 4. Correlations and statistics (Select opens it).
+* Criteria Screening is in four tabs, in working order: 1. Binarise: suggested cut-offs, 2. Quick screening (runs by itself; Bonferroni, Holm, Benjamini-Hochberg; "Tick only the associated ones"), 3. Review the variables, 4. Correlations and statistics (Select opens it).
 * Criteria Selection reviews each criterion: observable at registration, not an outcome indicator, validated by the community (with "tick all" per column). Only criteria with all three go on to the model; the others are held back and listed. The reviews moved here from the model step, are kept with the session and feed the export and the adopted scorecard.
 * Criteria Screening tables show 25 rows before scrolling (the suggestions table pages by 25); p-values show 4 decimals at most ("< 0.0001").
 * Stepwise selection can run backward, forward or both ways (with AIC or BIC); the direction is kept in the run history and the session and described in the design report.

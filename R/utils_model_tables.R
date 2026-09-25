@@ -27,6 +27,18 @@ p_pill <- function(p) {
   tags$span(class = paste("wfp-p", paste0("wfp-p-", p_level(p))), p_format(p))
 }
 
+#' A ratio for display: at most 4 decimals, trailing zeros dropped. A
+#' criterion that (almost) separates the groups has a huge or infinite
+#' ratio, printed as a bound rather than a 20-digit number.
+#' @noRd
+fmt_ratio <- function(x) {
+  out <- sub("\\.?0+$", "", sprintf("%.4f", x))
+  out[!is.na(x) & x > 9999] <- "> 9999"
+  out[!is.na(x) & x > 0 & x < 0.0001] <- "< 0.0001"
+  out[is.na(x)] <- "\u2013"
+  out
+}
+
 #' Odds ratio with its CI and a small forest-plot whisker on a log scale
 #' (OR 0.1 at the left edge, 10 at the right, 1 in the middle).
 #' @noRd
@@ -37,8 +49,8 @@ or_cell <- function(or, lo, hi) {
   tags$div(
     class = "wfp-or",
     tags$div(class = "wfp-or-num",
-             tags$strong(sprintf("%.2f", or)),
-             if (!is.na(lo)) tags$span(class = "wfp-or-ci", sprintf(" (%.2f\u2013%.2f)", lo, hi))),
+             tags$strong(fmt_ratio(or)),
+             if (!is.na(lo)) tags$span(class = "wfp-or-ci", sprintf(" (%s\u2013%s)", fmt_ratio(lo), fmt_ratio(hi)))),
     tags$div(
       class = paste("wfp-or-track", cls),
       tags$span(class = "wfp-or-one"),
@@ -178,8 +190,8 @@ model_tables_workbook <- function(screening = NULL, coefficients = NULL, compari
   if (!is.null(screening)) {
     add("Screening", data.frame(
       Criterion = screening$criterion, Prevalence = round(screening$prevalence, 4),
-      `Odds ratio` = round(screening$or, 3), `CI low` = round(screening$or_low, 3),
-      `CI high` = round(screening$or_high, 3), Direction = screening$direction,
+      `Odds ratio` = round(screening$or, 4), `CI low` = round(screening$or_low, 4),
+      `CI high` = round(screening$or_high, 4), Direction = screening$direction,
       Test = screening$test, p = screening$p_value, `p (adj.)` = screening$p_adj,
       Retained = ifelse(screening$retained, "yes", "no"), check.names = FALSE
     ), c("p", "p (adj.)"))
@@ -189,8 +201,8 @@ model_tables_workbook <- function(screening = NULL, coefficients = NULL, compari
       Criterion = coefficients$criterion, Beta = round(coefficients$coefficient, 4),
       SE = round(coefficients$std_error %||% NA_real_, 4),
       `Odds ratio` = round(coefficients$odds_ratio, 3),
-      `CI low` = round(coefficients$or_low %||% NA_real_, 3),
-      `CI high` = round(coefficients$or_high %||% NA_real_, 3),
+      `CI low` = round(coefficients$or_low %||% NA_real_, 4),
+      `CI high` = round(coefficients$or_high %||% NA_real_, 4),
       p = coefficients$p_value, Direction = coefficients$direction,
       Points = coefficients$weight, check.names = FALSE
     ), "p")

@@ -398,6 +398,7 @@ The visual layer is token-driven and lives in two stylesheets under `inst/app/ww
   tryCatch(bsicons::bs_icon(nm), error = function(e) "INVALID")
   ```
 - **Namespace every input you build inside a module** — including ones generated in a `lapply()` inside a modal or `renderUI`. `textInput(paste0("edit_", col), …)` looks fine and is silently unreachable: the input lands outside the module, `input[["edit_<col>"]]` reads `NULL`, and a `%||% ""` fallback then writes an empty string over real data. Same trap for `actionButton()` — the observer simply never fires. Always `ns(...)`.
+- **Numbers**: convert with `as_number(x)`, never `as.numeric(as.character(x))` (0.2 s per call on 100k numeric rows; `as_number` skips the text round trip for numeric columns). `run_app()` turns the JIT compiler off while the app runs (it spent ~9 s compiling the server closures); the package is byte-compiled at install.
 - **Never filter rows with a bare comparison**: `df[x >= lo & x <= hi, ]` turns every `NA` in `x` into a whole row of `NA`s in the result, which then flows into KPIs, charts and exports as phantom records. Wrap the condition in `which()` (or use `filter_by_date_range()` for dates).
 
 ### Large-data considerations

@@ -82,7 +82,7 @@ get_weights <- function(df, settings) {
   if (is.null(w_col) || !nzchar(w_col) || !w_col %in% names(df)) {
     return(rep(1, nrow(df)))
   }
-  w <- suppressWarnings(as.numeric(as.character(df[[w_col]])))
+  w <- as_number(df[[w_col]])
   w[is.na(w)] <- 0
   if (any(w < 0, na.rm = TRUE)) {
     warning("Negative sampling weights detected and set to 0.", call. = FALSE)
@@ -110,7 +110,7 @@ weighted_count <- function(df, settings) {
 #' @noRd
 weighted_sum <- function(df, col, settings) {
   if (!col %in% names(df)) return(0)
-  x <- suppressWarnings(as.numeric(as.character(df[[col]])))
+  x <- as_number(df[[col]])
   sum(x * get_weights(df, settings), na.rm = TRUE)
 }
 
@@ -123,7 +123,7 @@ weighted_sum <- function(df, col, settings) {
 #' @noRd
 weighted_mean <- function(df, col, settings) {
   if (!col %in% names(df)) return(NA_real_)
-  x <- suppressWarnings(as.numeric(as.character(df[[col]])))
+  x <- as_number(df[[col]])
   w <- get_weights(df, settings)
   valid <- !is.na(x) & !is.na(w) & w > 0
   if (sum(valid) == 0) return(NA_real_)
@@ -361,7 +361,14 @@ col_choice_groups <- function(...) {
 
 #' Numbers from any column (via as.character: a factor's codes are not its values)
 #' @noRd
-as_number <- function(x) suppressWarnings(as.numeric(as.character(x)))
+as_number <- function(x) {
+  # Already numbers: as they are. Going through as.character() turned 100,000
+  # numbers into text and back on every chart (0.2 s a call on large data).
+  if (is.numeric(x) && !is.factor(x)) return(as.numeric(x))
+  # Categories, yes/no values and dates: as before (a category by its label).
+  if (!is.character(x)) return(suppressWarnings(as.numeric(as.character(x))))
+  suppressWarnings(as.numeric(x))
+}
 
 info_tip <- function(text) {
   bslib::tooltip(bsicons::bs_icon("info-circle", class = "wfp-tip", `aria-label` = "More information"), text)

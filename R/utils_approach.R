@@ -191,7 +191,7 @@ select_households <- function(df, settings, approach = "hybrid",
                                   length(r$missing_criteria)))
       }
     } else if (shiny::isTruthy(settings$v_score) && settings$v_score %in% names(df)) {
-      score <- suppressWarnings(as.numeric(as.character(df[[settings$v_score]])))
+      score <- as_number(df[[settings$v_score]])
       lo <- score_range[1]; hi <- score_range[2]
       # which() semantics: an unscorable household does not qualify.
       scored <- !is.na(score) & score >= lo & score <= hi
@@ -239,7 +239,7 @@ select_households <- function(df, settings, approach = "hybrid",
     rank_score <- score
     if (all(is.na(rank_score)) && shiny::isTruthy(settings$v_score) &&
         settings$v_score %in% names(df)) {
-      rank_score <- suppressWarnings(as.numeric(as.character(df[[settings$v_score]])))
+      rank_score <- as_number(df[[settings$v_score]])
       rank_by <- "v_score"
     }
     if (all(is.na(rank_score))) {
@@ -254,7 +254,7 @@ select_households <- function(df, settings, approach = "hybrid",
       # first k households.
       hs <- settings$hh_size
       size <- if (identical(prioritization$count, "people") && shiny::isTruthy(hs) && hs %in% names(df)) {
-        z <- suppressWarnings(as.numeric(as.character(df[[hs]]))); z[is.na(z) | z < 0] <- 1; z
+        z <- as_number(df[[hs]]); z[is.na(z) | z < 0] <- 1; z
       }
       take <- function(idx, k) {
         if (is.null(size)) return(utils::head(idx, round(k)))
@@ -331,7 +331,7 @@ ipc_by_area <- function(df, area) {
     }
   }
   if (!is.na(pop_col)) {
-    pv <- suppressWarnings(as.numeric(as.character(df[[pop_col]])))
+    pv <- as_number(df[[pop_col]])
     if (any(!is.na(pv))) {
       out$pop <- tapply(pv, u, function(v) if (all(is.na(v))) NA_real_ else max(v, na.rm = TRUE))
       out$pop_col <- pop_col

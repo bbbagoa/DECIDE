@@ -169,7 +169,7 @@ mod_scorecard_ui <- function(id) {
                            actionButton(ns("qs_apply"), "Tick only the associated ones", icon = icon("check-double"),
                                         class = "btn-outline-primary")))),
               bslib::nav_panel(
-                value = "screen", title = tagList(bsicons::bs_icon("list-check"), " 3. Screen the variables"),
+                value = "screen", title = tagList(bsicons::bs_icon("list-check"), " 3. Review the variables"),
                 tags$div(class = "pt-3", uiOutput(ns("screen_note")), uiOutput(ns("screen_table")))),
               bslib::nav_panel(
                 value = "corr", title = tagList(bsicons::bs_icon("grid-3x3"), " 4. Correlations and statistics"),
@@ -930,7 +930,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
     output$varscreen_ui <- renderUI({
       d <- var_screen()
       if (is.null(d)) return(empty_state("No suggestion",
-        "Every variable is already yes/no, or none has a clear link with vulnerability. Go on to Screen the variables.", icon = "check2-circle"))
+        "Every variable is already yes/no, or none has a clear link with vulnerability. Go on to Review the variables.", icon = "check2-circle"))
       bslib::card(
         class = "mb-3",
         bslib::card_header(bsicons::bs_icon("magic"), sprintf(" Suggested yes/no versions of %d other variable%s", nrow(d), if (nrow(d) == 1) "" else "s")),
@@ -938,7 +938,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
           tags$div(class = "small text-muted mb-2",
                    "Variables with several answers or numbers cannot be criteria as they are. Each gets a suggested yes/no version: the answers where",
                    " vulnerability is above average, or the cut-off that separates vulnerable households best. Tick the ones you want and create them:",
-                   " they join '3. Screen the variables' (built with the variable calculator, which lists them)."),
+                   " they join '3. Review the variables' (built with the variable calculator, which lists them)."),
           DT::DTOutput(ns("varscreen_table"), fill = FALSE),
           tags$div(class = "d-flex justify-content-end mt-2",
                    actionButton(ns("varscreen_add"), "Create the selected yes/no variables", icon = icon("plus"), class = "btn-outline-primary"))
@@ -986,8 +986,9 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
         for (nm in names(made)) audit_add(modification_log, "Design", "Variable created", sprintf("%s = %s (from the variable screening)", nm, made[[nm]]))
       }
       need_ok(length(made) > 0, "Nothing to create for the selected rows.")
-      bslib::nav_select("screen_tabs", "screen", session = session)
-      showNotification(sprintf("%d yes/no variable%s created (%s): they are in '3. Screen the variables'.",
+      # Next step: the quick screening, which reruns with the new variables.
+      bslib::nav_select("screen_tabs", "quick", session = session)
+      showNotification(sprintf("%d yes/no variable%s created (%s): the quick screening now includes them.",
                                length(made), if (length(made) == 1) "" else "s", paste(names(made), collapse = ", ")),
                        type = "message", duration = 8)
     })
@@ -1157,7 +1158,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
 
     output$selection_ui <- renderUI({
       if (is.null(selection_set())) return(empty_state("Nothing selected yet",
-        "Tick variables in '3. Screen the variables' and click Select: their correlations and statistics show here.", icon = "grid-3x3"))
+        "Tick variables in '3. Review the variables' and click Select: their correlations and statistics show here.", icon = "grid-3x3"))
       si <- selection_info()
       drop <- lapply(seq_len(nrow(si$prof)), function(i)
         checkboxInput(ns(paste0("dv_", i)), NULL, value = !is.na(si$prof$suggest[i])))
@@ -1247,7 +1248,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
                                "Associated: points away from vulnerability"),
                         "No clear association on its own"))
       fmt_p <- function(p) ifelse(is.na(p), "\u2013", ifelse(p < 0.0001, "< 0.0001", sprintf("%.4f", p)))
-      fmt_or <- function(o, lo, hi) ifelse(is.na(o), "\u2013", sprintf("%.2f (%.2f\u2013%.2f)", o, lo, hi))
+      fmt_or <- function(o, lo, hi) ifelse(is.na(o), "\u2013", sprintf("%s (%s\u2013%s)", fmt_ratio(o), fmt_ratio(lo), fmt_ratio(hi)))
       ord <- order(!r$significant, r$p_adj, na.last = TRUE)
       tagList(
         tags$hr(),

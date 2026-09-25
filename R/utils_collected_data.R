@@ -135,7 +135,10 @@ looks_multiselect <- function(x) {
   if (!is.character(x)) return(FALSE)
   a <- trimws(x[!is.na(x) & nzchar(trimws(x))])
   v <- unique(a)
-  if (length(v) < 2 || !any(grepl("\\s", v))) return(FALSE)
+  # Quick rejections before splitting anything: identifiers and free text
+  # have thousands of different answers; choice codes are lower-case words.
+  if (length(v) < 2 || length(v) > 5000 || !any(grepl("\\s", v))) return(FALSE)
+  if (!all(grepl("^[a-z0-9_-]+(\\s+[a-z0-9_-]+)*$", v))) return(FALSE)
   tk <- strsplit(v, "\\s+")
   all_t <- unlist(tk, use.names = FALSE)
   if (!all(grepl("^[a-z0-9_-]+$", all_t))) return(FALSE)

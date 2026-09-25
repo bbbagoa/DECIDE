@@ -404,7 +404,7 @@ mod_pdm_server <- function(id, workspace = NULL, country_office = reactive(NULL)
       wcol <- input$pdm_weight
       strata <- NULL
       wts <- if (identical(mode, "column") && !is.null(wcol) && wcol %in% names(df)) {
-        v <- suppressWarnings(as.numeric(as.character(df[[wcol]])))
+        v <- as_number(df[[wcol]])
         v[is.na(v) | v < 0] <- 0
         v
       } else if (identical(mode, "population")) {

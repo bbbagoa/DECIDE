@@ -298,8 +298,8 @@ mod_overview_server <- function(id, uploaded_df, user_setup) {
     df <- filtered_data()
     req(user_setup$lon %in% names(df), user_setup$lat %in% names(df))
 
-    lng <- suppressWarnings(as.numeric(as.character(df[[user_setup$lon]])))
-    lat <- suppressWarnings(as.numeric(as.character(df[[user_setup$lat]])))
+    lng <- as_number(df[[user_setup$lon]])
+    lat <- as_number(df[[user_setup$lat]])
     ok <- is.finite(lng) & is.finite(lat) &
       abs(lng) <= 180 & abs(lat) <= 90 & !(lng == 0 & lat == 0)
 
@@ -424,7 +424,7 @@ mod_overview_server <- function(id, uploaded_df, user_setup) {
       }
 
       w <- get_weights(df, user_setup)
-      sc <- suppressWarnings(as.numeric(as.character(df[[score_col]])))
+      sc <- as_number(df[[score_col]])
       unit <- as.character(df[[unit_col]])
 
       agg <- do.call(rbind, lapply(split(seq_len(nrow(df)), unit), function(idx) {
@@ -660,7 +660,7 @@ mod_overview_server <- function(id, uploaded_df, user_setup) {
     vuln_col <- user_setup$v_groups
     size_col <- user_setup$hh_size
     w <- get_weights(df, user_setup)
-    size_num <- suppressWarnings(as.numeric(as.character(df[[size_col]])))
+    size_num <- as_number(df[[size_col]])
 
     # 1. Aggregate and calculate weighted percentages
     summary_df <- df |>

@@ -132,7 +132,7 @@ rule_eval <- function(df, rule, settings) {
   # Numeric comparison when both sides make sense as numbers; otherwise fall
   # back to string equality (so "is"/"is not" work on categories too).
   nv <- suppressWarnings(as.numeric(val[1]))
-  nx <- suppressWarnings(as.numeric(as.character(x)))
+  nx <- as_number(x)
   if (!is.na(nv) && any(!is.na(nx))) {
     out <- switch(op,
       "==" = nx == nv, "!=" = nx != nv,

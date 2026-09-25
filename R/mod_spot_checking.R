@@ -875,7 +875,7 @@ sample_pps <- function(df, n, settings) {
 
   size_col <- settings$hh_size
   if (isTruthy(size_col) && size_col %in% names(df)) {
-    sizes <- suppressWarnings(as.numeric(as.character(df[[size_col]])))
+    sizes <- as_number(df[[size_col]])
   } else {
     sizes <- NULL
   }

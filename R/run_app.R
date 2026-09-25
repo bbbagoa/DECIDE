@@ -48,6 +48,18 @@ run_app <- function(
   options(shiny.launch.browser = open_in_default_browser)
   options$launch.browser <- open_in_default_browser
 
+  # R's just-in-time compiler compiles every large server function the first
+  # time it runs (measured: ~9 s of a session on 100k households, and the
+  # first import 2.5x slower). The package code is already byte-compiled at
+  # installation, so turning it off costs nothing here. The previous level
+  # comes back when the app stops.
+  jit <- compiler::enableJIT(0)
+  on_start <- onStart
+  onStart <- function() {
+    shiny::onStop(function() compiler::enableJIT(jit))
+    if (is.function(on_start)) on_start()
+  }
+
   with_golem_options(
     app = shinyApp(
       ui = app_ui,

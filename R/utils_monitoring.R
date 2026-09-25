@@ -35,7 +35,7 @@ chart_aggregate <- function(df, spec) {
   }
   if (!nrow(df)) return(NULL)
   lab <- function(v) { v <- as.character(v); v[is.na(v) | !nzchar(trimws(v))] <- "(missing)"; v }
-  num <- function(k) suppressWarnings(as.numeric(as.character(df[[spec[[k]]]])))
+  num <- function(k) as_number(df[[spec[[k]]]])
   type <- spec$type %||% "count"
 
   if (identical(type, "crosstab")) {
@@ -183,7 +183,7 @@ apply_preset <- function(preset, df) {
   }
   # a numeric "value" column that is not a number is no use
   for (k in c("value", "den")) {
-    if (nzchar(spec[[k]]) && all(is.na(suppressWarnings(as.numeric(as.character(df[[spec[[k]]]])))))) spec[[k]] <- ""
+    if (nzchar(spec[[k]]) && all(is.na(as_number(df[[spec[[k]]]])))) spec[[k]] <- ""
   }
   spec
 }

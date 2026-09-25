@@ -88,7 +88,7 @@ dq_enumerator_server <- function(input, output, session, ns, core) {
 
     hh_size_col <- user_setup$hh_size
     size_num <- if (shiny::isTruthy(hh_size_col) && hh_size_col %in% names(df)) {
-      suppressWarnings(as.numeric(as.character(df[[hh_size_col]])))
+      as_number(df[[hh_size_col]])
     } else {
       rep(NA_real_, nrow(df))
     }
