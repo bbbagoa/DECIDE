@@ -49,7 +49,8 @@ read_import_file <- function(path, ext) {
     parquet = as.data.frame(nanoparquet::read_parquet(path), stringsAsFactors = FALSE),
     stop("Unsupported file type: ", ext)
   )
-  utf8_frame(as.data.frame(df, stringsAsFactors = FALSE))
+  # Select-multiple answers become one Yes/No column per choice, as for MODA.
+  split_multiselect(utf8_frame(as.data.frame(df, stringsAsFactors = FALSE)))
 }
 
 #' Text as UTF-8, whatever the file was saved in

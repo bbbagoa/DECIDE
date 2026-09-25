@@ -75,6 +75,10 @@ parse_total_pages <- function(link_header) {
 # This helper picks a common type for each column and coerces every page to it
 # before binding rows.
 harmonize_pages <- function(pages) {
+  # Lists (_geolocation, repeat groups, attachments) become plain columns
+  # first; the type coercion below would turn them into "c(12.3, -1.5)".
+  kinds <- list_column_kinds(pages)
+  pages <- lapply(pages, flatten_list_columns, kinds = kinds)
   all_names <- unique(unlist(lapply(pages, names), use.names = FALSE))
 
   target_types <- sapply(all_names, function(nm) {
@@ -167,6 +171,8 @@ build_odk_label_map <- function(odk_path) {
     label_map[[var]] <- lookup
   }
 
+  # Which questions are select_multiple: they are split into 0/1 columns.
+  attr(label_map, "multiple") <- unique(survey$var_name[grepl("^select_multiple", as.character(survey[[type_col]]))])
   label_map
 }
 
@@ -194,21 +200,25 @@ apply_odk_labels <- function(df, label_map) {
     return(df)
   }
 
+  multiple <- attr(label_map, "multiple") %||% character(0)
   for (var in names(label_map)) {
     if (!var %in% names(df)) next
     lookup <- label_map[[var]]
     old_vals <- as.character(df[[var]])
-    is_multiple <- any(grepl("\\s", old_vals[!is.na(old_vals)]))
+    is_multiple <- var %in% multiple || any(grepl("\\s", old_vals[!is.na(old_vals)]))
 
     if (is_multiple) {
+      # One 0/1 column per choice (<question>_<choice>), next to the question.
+      df <- insert_columns(df, var, split_multiple(old_vals, names(lookup), var))
       # select_multiple: space-separated names. Translate each distinct value
       # once (a 1M-row column usually has a few hundred distinct combinations)
-      # instead of splitting every row.
+      # instead of splitting every row. Labels are joined with "; ": they can
+      # contain spaces themselves.
       uniq <- unique(old_vals[!is.na(old_vals)])
       translated <- vapply(strsplit(uniq, "\\s+", perl = TRUE), function(parts) {
         labelled <- lookup[parts]
         labelled[is.na(labelled)] <- parts[is.na(labelled)]
-        paste(labelled, collapse = " ")
+        paste(labelled, collapse = "; ")
       }, character(1))
       new_vals <- translated[match(old_vals, uniq)]
     } else {
@@ -254,11 +264,19 @@ moda_async_fetch <- function(form_id, token, existing_df = NULL, page_size = MOD
   state$done <- FALSE
 
   w <- waiter::Waiter$new(
-    html = waiter_content("Syncing MODA data...", percent = 0),
+    html = waiter_content(sprintf("Checking MODA form %s...", form_id), percent = 0),
     color = "rgba(10, 30, 50, 0.65)"
   )
   w$show()
   if (!is.null(session)) session$flushOutput()
+  info <- moda_form_info(form_id, token)
+  if (!isTRUE(info$ok) && !is.na(info$status)) {
+    w$hide()
+    if (is.function(on_error)) on_error(info$message)
+    return(invisible(NULL))
+  }
+  label <- moda_form_label(info, form_id)
+  if (!is.null(session)) waiter_progress(session, message = paste("Downloading", label), subtitle = "Connecting to MODA...")
 
   handle_error <- function(msg) {
     w$hide()
@@ -269,6 +287,9 @@ moda_async_fetch <- function(form_id, token, existing_df = NULL, page_size = MOD
     if (state$done) return()
     state$done <- TRUE
     on.exit(w$hide(), add = TRUE)
+    # Each step written into the loader in place (no redraw).
+    step <- function(msg) if (!is.null(session)) waiter_progress(session, message = msg, percent = 100, subtitle = "") else
+      w$update(html = waiter_content(msg))
 
     if (length(state$all_pages) == 0) {
       # An incremental re-sync that finds nothing is a success, not an error
@@ -280,21 +301,22 @@ moda_async_fetch <- function(form_id, token, existing_df = NULL, page_size = MOD
       return()
     }
 
-    w$update(html = waiter_content("Reading submissions..."))
+    step(paste("Reading the submissions of", label))
     state$all_pages <- harmonize_pages(state$all_pages)
     df <- dplyr::bind_rows(state$all_pages)
     state$all_pages <- NULL   # release the per-page copies before merging
     names(df) <- make_unique_names(strip_prefix(names(df)))
     df <- utf8_frame(df)   # same text handling as file imports
 
-    w$update(html = waiter_content("Downloading form definition..."))
+    step(paste("Downloading the form definition of", label))
     odk_path <- download_moda_xlsform(form_id, token)
 
-    w$update(html = waiter_content("Applying choice labels..."))
+    step("Applying choice labels...")
     label_map <- build_odk_label_map(odk_path)
     df <- apply_odk_labels(df, label_map)
+    df <- split_multiselect(split_geopoints(df))   # GPS -> coordinates; multi-selects the form did not name -> Yes/No columns
 
-    w$update(html = waiter_content("Merging with existing data..."))
+    step("Merging with the data already loaded...")
     if (!is.null(existing_df) && nrow(existing_df) > 0) {
       id_col <- intersect(c("_id", "_uuid"), names(existing_df))[1]
       new_id_col <- intersect(c("_id", "_uuid"), names(df))[1]
@@ -317,12 +339,12 @@ moda_async_fetch <- function(form_id, token, existing_df = NULL, page_size = MOD
     page_url = function(pg) paste0(base_url, "/", form_id, ".json?page=", pg, "&page_size=", page_size, query),
     token = token, page_size = page_size,
     progress = function(done, total, rows) {
-      w$update(html = waiter_content(
-        message = "Downloading MODA data...",
+      if (is.null(session)) return()
+      waiter_progress(session,
         percent = if (is.na(total)) NULL else round(100 * done / total),
-        subtitle = paste0(if (is.na(total)) paste(done, "pages") else paste0(done, "/", total, " pages"), " | ",
-                          prettyNum(rows, big.mark = ",", scientific = FALSE), " records downloaded")))
-      if (!is.null(session)) session$flushOutput()
+        subtitle = paste0(if (is.na(total)) paste(done, "pages") else paste0(done, "/", total, " pages"), " \u00b7 ",
+                          prettyNum(rows, big.mark = ",", scientific = FALSE), " records"))
+      session$flushOutput()
     },
     finished = function(pages) { state$all_pages <- pages; finalize() },
     failed = function(msg, cancelled = FALSE) handle_error(msg),
@@ -487,10 +509,9 @@ mod_moda_import_server <- function(id) {
           token = input$token,
           page_size = MODA_PAGE_SIZE,
           progress = function(page, rows) {
-            w$update(html = waiter_content(
-              paste0("Downloading from ", p$label, "..."),
-              subtitle = paste(format(rows, big.mark = ","), "records so far")
-            ))
+            waiter_progress(session, message = paste0("Downloading from ", p$label, "..."),
+                            subtitle = paste(format(rows, big.mark = ","), "records so far"))
+            session$flushOutput()
           }
         ),
         error = function(e) {
@@ -499,7 +520,7 @@ mod_moda_import_server <- function(id) {
         }
       )
       req(df)
-      df <- utf8_frame(df)
+      df <- split_multiselect(split_geopoints(flatten_list_columns(utf8_frame(df))))
 
       if (nrow(df) == 0) {
         show_moda_status("warning", "The form has no submissions yet.")
@@ -513,17 +534,64 @@ mod_moda_import_server <- function(id) {
       )
     })
 
+    # MODA: Sync Now first checks the form (title, submissions, last one
+    # received) and asks for confirmation; Download then fetches it.
+    moda_pending <- reactiveVal(NULL)
     observeEvent(input$do_sync, {
       req(identical(input$provider %||% "moda", "moda"))
-      req(input$form_id, input$token)
       req(!download_running())
+      form_id <- trimws(input$form_id %||% ""); token <- trimws(input$token %||% "")
+      if (!nzchar(form_id) || !nzchar(token)) {
+        show_moda_status("warning", "Enter the form ID and the API key.")
+        return()
+      }
+      api_key_set(session, token, "moda")
+      w <- waiter::Waiter$new(html = waiter_content(sprintf("Checking MODA form %s...", form_id)),
+                              color = "rgba(10, 30, 50, 0.65)")
+      w$show(); on.exit(w$hide(), add = TRUE)
+      session$flushOutput()
+      info <- moda_form_info(form_id, token)
+      moda_pending(list(form_id = form_id, token = token, info = info))
+      # A refused key or an unknown form stops here; an unreachable forms
+      # endpoint still lets the officer try the download.
+      if (!isTRUE(info$ok) && !is.na(info$status)) {
+        show_moda_status("danger", info$message)
+        return()
+      }
+      when <- if (isTRUE(info$ok) && nzchar(info$last)) format(as.POSIXct(substr(info$last, 1, 19), format = "%Y-%m-%dT%H:%M:%S", tz = "UTC"), "%d %b %Y %H:%M") else NA
+      output$sync_status <- renderUI(tags$div(
+        class = "wfp-moda-confirm mt-3",
+        if (isTRUE(info$ok)) tagList(
+          tags$div(class = "small text-muted", "Form to download"),
+          tags$div(class = "wfp-moda-title", info$title),
+          tags$div(class = "small text-muted mb-2",
+                   paste(c(sprintf("ID %s", form_id), if (nzchar(info$id_string)) info$id_string,
+                           if (!is.na(info$submissions)) sprintf("%s submissions", format(info$submissions, big.mark = ",")),
+                           if (!is.na(when)) paste("last received", when)), collapse = " \u00b7 ")))
+        else tags$div(class = "small text-warning mb-2", bsicons::bs_icon("exclamation-triangle"), " ", info$message,
+                      " You can still try the download."),
+        tags$div(class = "d-flex gap-2 justify-content-end",
+                 actionButton(ns("moda_change"), "Change form", class = "btn-outline-secondary btn-sm"),
+                 actionButton(ns("moda_confirm"), if (isTRUE(info$ok)) "Download" else "Download anyway",
+                              icon = icon("cloud-arrow-down"), class = "btn-primary btn-sm"))
+      ))
+    })
+    observeEvent(input$moda_change, { moda_pending(NULL); output$sync_status <- renderUI(NULL) })
+
+    observeEvent(input$moda_confirm, {
+      pend <- moda_pending(); req(pend)
+      req(!download_running())
+      output$sync_status <- renderUI(NULL)
 
       # Reset cancellation flag at the start of every sync
       cancel_requested(FALSE)
       download_running(TRUE)
 
+      form_id <- pend$form_id; token <- pend$token
+      label <- moda_form_label(pend$info, form_id)
       w <- waiter::Waiter$new(
-        html = waiter_content("Connecting to MODA server...", percent = 0, ns = ns),
+        html = waiter_content(paste0("Downloading ", label), percent = 0,
+                              subtitle = "Connecting to MODA...", ns = ns),
         color = "rgba(10, 30, 50, 0.65)"
       )
       w$show()
@@ -532,8 +600,6 @@ mod_moda_import_server <- function(id) {
 
       base_url <- "https://api.moda.wfp.org/api/v1/data"
       page_size <- MODA_PAGE_SIZE
-      form_id <- input$form_id; token <- input$token
-      api_key_set(session, token, "moda")
 
       state <- new.env()
       state$page <- 1
@@ -562,10 +628,8 @@ mod_moda_import_server <- function(id) {
           return()
         }
 
-        w$update(html = waiter_content(
-          paste0("Reading ", prettyNum(state$total_rows, big.mark = ",", scientific = FALSE), " submissions..."),
-          ns = ns
-        ))
+        waiter_progress(session, message = paste0("Reading ", prettyNum(state$total_rows, big.mark = ",", scientific = FALSE),
+                                                  " submissions of ", label), percent = 100, subtitle = "")
 
         state$all_pages <- harmonize_pages(state$all_pages)
         df <- dplyr::bind_rows(state$all_pages)
@@ -574,14 +638,15 @@ mod_moda_import_server <- function(id) {
         df <- utf8_frame(df)   # same text handling as file imports
 
         # Download the XLSForm definition from MODA and apply choice labels
-        w$update(html = waiter_content("Downloading form definition...", ns = ns))
+        waiter_progress(session, message = paste("Downloading the form definition of", label))
         odk_path <- download_moda_xlsform(form_id, token)
 
-        w$update(html = waiter_content("Applying choice labels...", ns = ns))
+        waiter_progress(session, message = "Applying choice labels...")
         label_map <- build_odk_label_map(odk_path)
         df <- apply_odk_labels(df, label_map)
+        df <- split_multiselect(split_geopoints(df))   # GPS -> coordinates; multi-selects the form did not name -> Yes/No columns
 
-        w$update(html = waiter_content("Finalizing...", ns = ns))
+        waiter_progress(session, message = "Finalizing...")
         moda_data(df)
         moda_credentials(list(form_id = form_id, token = token))
 
@@ -590,7 +655,7 @@ mod_moda_import_server <- function(id) {
           tags$div(
             class = "alert alert-success mt-3",
             icon("check-circle"),
-            " Success: ", prettyNum(nrow(df), big.mark = ",", scientific = FALSE), " records synced.", label_msg
+            " ", label, ": ", prettyNum(nrow(df), big.mark = ",", scientific = FALSE), " records downloaded.", label_msg
           )
         })
       }
@@ -600,12 +665,11 @@ mod_moda_import_server <- function(id) {
         token = token, page_size = page_size,
         progress = function(done, total, rows) {
           state$total_rows <- rows
-          w$update(html = waiter_content(
-            message = "Downloading MODA data...",
+          # Written into the loader in place: no redraw, no flicker.
+          waiter_progress(session,
             percent = if (is.na(total)) NULL else round(100 * done / total),
-            subtitle = paste0(if (is.na(total)) paste(done, "pages") else paste0(done, "/", total, " pages"), " | ",
-                              prettyNum(rows, big.mark = ",", scientific = FALSE), " records downloaded"),
-            ns = ns))
+            subtitle = paste0(if (is.na(total)) paste(done, "pages") else paste0(done, "/", total, " pages"), " \u00b7 ",
+                              prettyNum(rows, big.mark = ",", scientific = FALSE), " records"))
           session$flushOutput()
         },
         # The engine calls back from later(), outside any reactive context.

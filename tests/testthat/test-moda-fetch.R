@@ -14,7 +14,7 @@ fake_moda <- function(n = 2500, page_size = 1000) {
     }
     ids <- seq((pg - 1) * page_size + 1, min(n, pg * page_size))
     ids <- ids[ids <= n]
-    body <- jsonlite::toJSON(data.frame(`_id` = ids, village = paste0("Ségou ", ids), check.names = FALSE))
+    body <- jsonlite::toJSON(data.frame(`_id` = ids, village = paste0("S\u00e9gou ", ids), check.names = FALSE))
     list(status = 200L,
          headers = list("Content-Type" = "application/json; charset=utf-8",
                         Link = sprintf('<http://x/?page=2&page_size=%d>; rel="next", <http://x/?page=%d&page_size=%d>; rel="last"',
@@ -44,7 +44,7 @@ test_that("the MODA engine gets every page, in order, retrying a failed one", {
   df <- dplyr::bind_rows(out$pages)
   expect_equal(nrow(df), 2500)
   expect_equal(df$`_id`, 1:2500)                          # page order kept
-  expect_equal(df$village[1], "Ségou 1")             # UTF-8 kept
+  expect_equal(df$village[1], "S\u00e9gou 1")             # UTF-8 kept
   expect_true(srv$hits$failed)                             # the 503 happened and was retried
   expect_true(all(grepl("gzip", sub("^[0-9]+\\|", "", srv$hits$log))))   # compression asked for
   expect_equal(out$prog, 3)
@@ -91,4 +91,38 @@ test_that("the first API key is remembered for the session, per server, in memor
   expect_equal(TargetWise:::api_key_get(s), "KEY-1")
   TargetWise:::api_key_set(s, "KEY-2")                 # the user can change it
   expect_equal(TargetWise:::api_key_get(s), "KEY-2")
+})
+
+test_that("the form is identified before the download: title, submissions, or why not", {
+  skip_if_not_installed("callr")
+  # The check is a blocking call, so the fake MODA runs in another R process.
+  port <- httpuv::randomPort()
+  srv <- callr::r_bg(function(port) {
+    `%||%` <- function(a, b) if (is.null(a)) b else a
+    app <- list(call = function(req) {
+      id <- sub(".*/forms/", "", req$PATH_INFO)
+      if (!grepl("GOOD", req$HTTP_AUTHORIZATION %||% "")) return(list(status = 401L, headers = list(), body = "no"))
+      if (id != "123") return(list(status = 404L, headers = list(), body = "no"))
+      list(status = 200L, headers = list("Content-Type" = "application/json; charset=utf-8"),
+           body = as.character(jsonlite::toJSON(list(title = "Enqu\u00eate PDM S\u00e9gou", id_string = "pdm_segou",
+                                                     num_of_submissions = 2500, last_submission_time = "2026-09-20T10:15:00"),
+                                                auto_unbox = TRUE)))
+    })
+    httpuv::startServer("127.0.0.1", port, app)
+    httpuv::service(Inf)
+  }, args = list(port))
+  on.exit(srv$kill())
+  base <- sprintf("http://127.0.0.1:%d/forms", port)
+  ok <- NULL
+  for (i in 1:40) { ok <- TargetWise:::moda_form_info("123", "GOOD", base = base); if (!is.na(ok$status %||% 200L)) break; Sys.sleep(0.25) }
+  expect_true(ok$ok)
+  expect_equal(ok$title, "Enqu\u00eate PDM S\u00e9gou")
+  expect_equal(ok$submissions, 2500)
+  expect_equal(TargetWise:::moda_form_label(ok, "123"), "Enqu\u00eate PDM S\u00e9gou (form 123)")
+  bad_key <- TargetWise:::moda_form_info("123", "BAD", base = base)
+  expect_false(bad_key$ok); expect_equal(bad_key$status, 401L); expect_match(bad_key$message, "refused the API key")
+  no_form <- TargetWise:::moda_form_info("999", "GOOD", base = base)
+  expect_equal(no_form$status, 404L); expect_match(no_form$message, "No form with ID 999")
+  down <- TargetWise:::moda_form_info("123", "GOOD", base = sprintf("http://127.0.0.1:%d/forms", httpuv::randomPort()))
+  expect_false(down$ok); expect_true(is.na(down$status))
 })

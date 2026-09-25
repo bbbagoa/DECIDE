@@ -177,15 +177,19 @@ waiter_content <- function(message = "Working\u2026",
   }
 
   # A small card over a light scrim: spinner, one plain line, and a slim bar
-  # when the progress is known.
+  # when the progress is known. Every part is always there (hidden when
+  # empty), so waiter_progress() can update it in place without redrawing.
+  has_sub <- !is.null(subtitle) && !is.na(subtitle)
+  hide <- function(show) if (show) NULL else "display:none"
   content <- tags$div(
     class = "wfp-wait", role = "status", `aria-live` = "polite",
     tags$div(class = "wfp-wait-row",
              tags$span(class = "wfp-wait-ring"),
              tags$span(class = "wfp-wait-msg", message),
-             if (has_pct) tags$span(class = "wfp-wait-pct", paste0(percent, "%"))),
-    if (has_pct) tags$div(class = "wfp-wait-bar", tags$span(style = paste0("width:", percent, "%"))),
-    if (!is.null(subtitle) && !is.na(subtitle)) tags$div(class = "wfp-wait-sub", subtitle),
+             tags$span(class = "wfp-wait-pct", style = hide(has_pct), if (has_pct) paste0(percent, "%"))),
+    tags$div(class = "wfp-wait-bar", style = hide(has_pct),
+             tags$span(style = paste0("width:", if (has_pct) percent else 0, "%"))),
+    tags$div(class = "wfp-wait-sub", style = hide(has_sub), if (has_sub) subtitle),
     cancel_btn
   )
 
@@ -631,4 +635,14 @@ cascade_pickers <- function(session, input, ids, cols, data, hint = NULL) {
       if (length(sel)) keep <- (if (is.null(keep)) TRUE else keep) & v %in% sel
     }
   })
+}
+
+#' Update the open waiter in place (no redraw, so it does not flicker)
+#'
+#' For progress during long operations: changes the message, the percent bar
+#' and the subtitle of the waiter already on screen. NULL leaves a part as is;
+#' NA hides it.
+#' @noRd
+waiter_progress <- function(session, message = NULL, percent = NULL, subtitle = NULL) {
+  session$sendCustomMessage("tw-wait-progress", list(message = message, percent = percent, subtitle = subtitle))
 }

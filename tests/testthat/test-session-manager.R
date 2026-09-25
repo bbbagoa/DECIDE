@@ -157,3 +157,34 @@ test_that("the country-office settings file is not listed as a saved session", {
   TargetWise:::app_setting_set("country_office", "Mali")
   expect_equal(TargetWise:::list_saved_sessions()$name, "real")
 })
+
+test_that("a session saved as 'settings' no longer breaks the country office (raw to character)", {
+  dir <- withr::local_tempdir()
+  withr::local_envvar(TARGETWISE_SESSION_DIR = dir)
+  # The state of the computer that crashed: settings.rds holds an encrypted
+  # session (raw bytes), as when a session was saved under the name "settings".
+  TargetWise:::save_session(data.frame(a = 1:3), list(admin1 = "a"), data.frame(), name = "settings")
+  expect_true(is.raw(readRDS(file.path(dir, "settings.rds"))))
+  expect_silent(TargetWise:::app_setting_set("country_office", "Mali"))
+  expect_equal(TargetWise:::app_setting_get("country_office"), "Mali")
+  # the session is still there, listed and loadable
+  expect_true("settings" %in% TargetWise:::list_saved_sessions()$name)
+  expect_equal(TargetWise:::load_session("settings")$uploaded_df$a, 1:3)
+  # and saving a session called "settings" again leaves the country office alone
+  TargetWise:::save_session(data.frame(a = 4), list(), data.frame(), name = "settings")
+  expect_equal(TargetWise:::app_setting_get("country_office"), "Mali")
+})
+
+test_that("settings from an older version (a list in settings.rds) are carried over once", {
+  dir <- withr::local_tempdir()
+  withr::local_envvar(TARGETWISE_SESSION_DIR = dir)
+  saveRDS(list(country_office = "Niger"), file.path(dir, "settings.rds"))
+  expect_equal(TargetWise:::app_setting_get("country_office"), "Niger")
+  expect_false(file.exists(file.path(dir, "settings.rds")))
+  expect_false("settings" %in% TargetWise:::list_saved_sessions()$name)
+  # anything unreadable in the settings file reads as no settings, not an error
+  writeLines("garbage", file.path(dir, "app.settings"))
+  expect_null(TargetWise:::app_setting_get("country_office"))
+  expect_silent(TargetWise:::app_setting_set("country_office", "Chad"))
+  expect_equal(TargetWise:::app_setting_get("country_office"), "Chad")
+})

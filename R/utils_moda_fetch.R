@@ -172,3 +172,46 @@ api_key_set <- function(session, key, provider = "moda") {
   ud$api_keys <- keys
   invisible(key)
 }
+
+#' What a MODA form is, before downloading it
+#'
+#' One quick call to the ONA forms endpoint: the title, the number of
+#' submissions and when the last one came in, so the officer can confirm it is
+#' the right form. Also tells a refused key from a wrong form ID.
+#' @return list(ok = TRUE, title, id_string, submissions, last) or
+#'   list(ok = FALSE, status, message).
+#' @noRd
+moda_form_info <- function(form_id, token, base = "https://api.moda.wfp.org/api/v1/forms", timeout = 20L) {
+  h <- curl::new_handle()
+  curl::handle_setopt(h, connecttimeout = 15L, timeout = as.integer(timeout), followlocation = TRUE,
+                      accept_encoding = "gzip, deflate")
+  curl::handle_setheaders(h, Authorization = paste("Token", token), Accept = "application/json",
+                          `User-Agent` = "TargetWise")
+  res <- tryCatch(curl::curl_fetch_memory(paste0(base, "/", utils::URLencode(trimws(form_id), reserved = TRUE)), handle = h),
+                  error = function(e) e)
+  if (inherits(res, "error"))
+    return(list(ok = FALSE, status = NA_integer_,
+                message = paste("MODA could not be reached to check the form:", conditionMessage(res))))
+  code <- res$status_code
+  if (code %in% c(401L, 403L))
+    return(list(ok = FALSE, status = code, message = "MODA refused the API key. Check the key (it is the API Gateway Key of your MODA account)."))
+  if (code == 404L)
+    return(list(ok = FALSE, status = code, message = sprintf("No form with ID %s on MODA, or this key cannot see it.", form_id)))
+  if (code != 200L)
+    return(list(ok = FALSE, status = code, message = sprintf("MODA returned HTTP %d while checking the form.", code)))
+  txt <- rawToChar(res$content); Encoding(txt) <- "UTF-8"
+  j <- tryCatch(jsonlite::fromJSON(txt, simplifyVector = TRUE), error = function(e) NULL)
+  if (!is.list(j)) return(list(ok = FALSE, status = code, message = "MODA's answer about the form could not be read."))
+  pick <- function(k) { v <- j[[k]]; if (is.null(v) || !length(v) || all(is.na(v))) NULL else v[[1]] }
+  list(ok = TRUE,
+       title = as.character(pick("title") %||% pick("id_string") %||% paste("Form", form_id)),
+       id_string = as.character(pick("id_string") %||% ""),
+       submissions = suppressWarnings(as.numeric(pick("num_of_submissions") %||% NA)),
+       last = as.character(pick("last_submission_time") %||% ""))
+}
+
+#' A form in words for loaders and messages: "Title (form 123456)"
+#' @noRd
+moda_form_label <- function(info, form_id) {
+  if (isTRUE(info$ok) && nzchar(info$title %||% "")) sprintf("%s (form %s)", info$title, form_id) else sprintf("form %s", form_id)
+}

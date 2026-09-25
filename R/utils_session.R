@@ -113,12 +113,12 @@ get_session_file <- function(name = "default", user = NULL) {
 #' @noRd
 list_saved_sessions <- function(user = NULL) {
   dir <- get_session_dir(user)
+  settings_file(user)   # moves old settings out of settings.rds first
   files <- list.files(dir, pattern = "\\.rds$", full.names = TRUE)
-  # Audit-log companions (<name>_audit.rds) are not sessions
+  # Audit-log companions (<name>_audit.rds) are not sessions. (settings.rds is
+  # no longer the settings file: if it is still there, it is a session saved
+  # under that name.)
   files <- files[!grepl("_audit\\.rds$", files)]
-  # The per-install settings (country office) live next to the sessions and
-  # are not one.
-  files <- files[basename(files) != "settings.rds"]
   if (length(files) == 0) {
     return(data.frame(name = character(), saved_at = as.POSIXct(character()), stringsAsFactors = FALSE))
   }
@@ -432,20 +432,46 @@ after_flush <- function(session, fn) {
 
 #' Small per-install settings (the country office), kept next to the sessions
 #'
-#' Unlike a session they are not encrypted: they hold no household data.
+#' Unlike a session they are not encrypted: they hold no household data. They
+#' live in `app.settings`, a name no session can take: they used to be
+#' `settings.rds`, which a session saved as "settings" overwrote with its
+#' ciphertext, and every later country-office save then failed with
+#' "incompatible types (from raw to character)".
+#' @noRd
+settings_file <- function(user = NULL) {
+  dir <- get_session_dir(user)
+  new <- file.path(dir, "app.settings")
+  # Once: carry settings over from the old settings.rds -- only when it holds
+  # settings (a small list); an encrypted session under that name stays a
+  # session.
+  old <- file.path(dir, "settings.rds")
+  if (!file.exists(new) && file.exists(old) && isTRUE(file.size(old) < 1e5)) {
+    s <- tryCatch(readRDS(old), error = function(e) NULL)
+    if (is.list(s)) {
+      saveRDS(s, new)
+      file.remove(old)
+    }
+  }
+  new
+}
+
+#' @noRd
+read_settings <- function(user = NULL) {
+  f <- settings_file(user)
+  s <- if (file.exists(f)) tryCatch(readRDS(f), error = function(e) NULL) else NULL
+  if (is.list(s)) s else list()
+}
+
 #' @noRd
 app_setting_get <- function(key, user = NULL) {
-  f <- file.path(get_session_dir(user), "settings.rds")
-  if (!file.exists(f)) return(NULL)
-  tryCatch(readRDS(f)[[key]], error = function(e) NULL)
+  read_settings(user)[[key]]
 }
 
 #' @noRd
 app_setting_set <- function(key, value, user = NULL) {
-  f <- file.path(get_session_dir(user), "settings.rds")
-  s <- if (file.exists(f)) tryCatch(readRDS(f), error = function(e) list()) else list()
+  s <- read_settings(user)
   s[[key]] <- value
-  saveRDS(s, f)
+  saveRDS(s, settings_file(user))
   invisible(value)
 }
 

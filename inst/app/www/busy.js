@@ -23,7 +23,15 @@
     }
     return box;
   }
+  // A full-screen waiter already says what is running: the small card would
+  // only blink on top of it between steps.
+  function waiterOn() {
+    var w = document.querySelectorAll(".waiter-overlay");
+    for (var i = 0; i < w.length; i++) if (w[i].offsetParent !== null || getComputedStyle(w[i]).display !== "none") return true;
+    return false;
+  }
   function show(text) {
+    if (waiterOn()) return;
     el().querySelector(".wfp-wait-msg").textContent = text;
     box.classList.add("on");
   }
@@ -93,6 +101,25 @@
     Shiny.addCustomMessageHandler("tw-when-settled", function (m) {
       settle = m.id; arm();
       setTimeout(function () { if (settle === m.id) { Shiny.setInputValue(m.id, Date.now(), { priority: "event" }); settle = null; } }, 60000);
+    });
+    // Progress of a long operation, written into the waiter on screen.
+    Shiny.addCustomMessageHandler("tw-wait-progress", function (m) {
+      var waits = document.querySelectorAll(".waiter-overlay .wfp-wait");
+      if (!waits.length) return;
+      var w = waits[waits.length - 1];
+      function set(sel, text) {
+        var n = w.querySelector(sel); if (!n || text === null || text === undefined) return;
+        if (text === "" || (typeof text === "number" && isNaN(text))) { n.style.display = "none"; return; }
+        n.textContent = text; n.style.display = "";
+      }
+      set(".wfp-wait-msg", m.message);
+      set(".wfp-wait-sub", m.subtitle);
+      if (m.percent !== null && m.percent !== undefined) {
+        var p = Math.max(0, Math.min(100, Math.round(m.percent)));
+        set(".wfp-wait-pct", p + "%");
+        var bar = w.querySelector(".wfp-wait-bar");
+        if (bar) { bar.style.display = ""; bar.firstElementChild.style.width = p + "%"; }
+      }
     });
     Shiny.addCustomMessageHandler("tw-download-done", function (m) {
       downloads = Math.max(0, downloads - 1);

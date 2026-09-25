@@ -2523,3 +2523,40 @@ table.dataTable tr.dtrg-group td { background: var(--surface-3) !important; font
   .wfp-vc { grid-template-columns: 1fr; }
   .wfp-vc-col + .wfp-vc-col { border-left: 0; border-top: 1px solid var(--border); }
 }
+
+/* Progress written in place (waiter_progress): the bar glides, nothing redraws. */
+.wfp-wait-bar > span { transition: width .45s ease; }
+/* MODA: the form to download, confirmed before the download starts. */
+.wfp-moda-confirm { border: 1px solid var(--border); border-radius: var(--card-radius-sm); padding: .75rem .9rem; background: var(--surface); }
+.wfp-moda-title { font-weight: 600; font-size: 1rem; color: var(--body-text); margin: .1rem 0 .15rem; overflow-wrap: anywhere; }
+
+/* Import summary dialog */
+.tw-imp-head { display: flex; align-items: center; gap: .75rem; }
+.tw-imp-icon { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px;
+  border-radius: 50%; background: var(--accent-success-bg); color: var(--accent-success); font-size: 1.15rem; }
+.tw-imp-title { font-size: 1.05rem; font-weight: 600; line-height: 1.2; }
+.tw-imp-source { font-size: .8rem; color: var(--text-muted); font-weight: 400; }
+.tw-imp-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border: 1px solid var(--border);
+  border-radius: var(--card-radius-sm); margin-bottom: 1rem; }
+.tw-imp-stat { padding: .7rem .9rem; }
+.tw-imp-stat + .tw-imp-stat { border-left: 1px solid var(--border); }
+.tw-imp-label, .tw-imp-panel-title { font-size: .7rem; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--text-muted); }
+.tw-imp-value { font-size: 1.35rem; font-weight: 600; color: var(--body-text); line-height: 1.3; }
+.tw-imp-sub { font-size: .75rem; color: var(--text-muted); }
+.tw-imp-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+.tw-imp-panel { border: 1px solid var(--border); border-radius: var(--card-radius-sm); padding: .7rem .9rem; }
+.tw-imp-panel-title { margin-bottom: .4rem; }
+.tw-imp-row { display: flex; justify-content: space-between; gap: 1rem; padding: .3rem 0; font-size: .86rem;
+  border-bottom: 1px solid var(--border); }
+.tw-imp-row:last-of-type { border-bottom: 0; }
+.tw-imp-row > span:last-child { font-variant-numeric: tabular-nums; font-weight: 500; }
+.tw-imp-flag { color: var(--accent-danger); }
+.tw-imp-note { font-size: .75rem; color: var(--text-muted); margin-top: .4rem; }
+.tw-imp-chips { display: flex; flex-wrap: wrap; gap: .35rem; }
+.tw-imp-chip { font-family: var(--bs-font-monospace); font-size: .75rem; padding: .15rem .5rem; border-radius: 6px;
+  background: var(--accent-primary-bg); color: var(--body-text); }
+.tw-imp-more { font-size: .78rem; color: var(--text-muted); align-self: center; }
+@media (max-width: 700px) {
+  .tw-imp-stats, .tw-imp-cols { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .tw-imp-stat:nth-child(3) { border-left: 0; }
+}
