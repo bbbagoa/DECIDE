@@ -307,19 +307,20 @@ moda_async_fetch <- function(form_id, token, existing_df = NULL, page_size = MOD
     }
 
     step(paste("Reading the submissions of", label))
-    state$all_pages <- harmonize_pages(state$all_pages)
-    df <- dplyr::bind_rows(state$all_pages)
+    log_step <- function(text, expr) if (is.null(session)) expr else tw_step(text, expr, session = session)
+    state$all_pages <- log_step("harmonise the pages (list and GPS columns)", harmonize_pages(state$all_pages))
+    df <- log_step("bind the pages into one table", dplyr::bind_rows(state$all_pages))
     state$all_pages <- NULL   # release the per-page copies before merging
     names(df) <- make_unique_names(strip_prefix(names(df)))
-    df <- utf8_frame(df)   # same text handling as file imports
+    df <- log_step("check text encoding (UTF-8)", utf8_frame(df))   # same text handling as file imports
 
     step(paste("Downloading the form definition of", label))
-    odk_path <- download_moda_xlsform(form_id, token)
+    odk_path <- log_step("GET the form definition (XLSForm)", download_moda_xlsform(form_id, token))
 
     step("Applying choice labels...")
-    label_map <- build_odk_label_map(odk_path)
-    df <- apply_odk_labels(df, label_map)
-    df <- split_multiselect(split_geopoints(df))   # GPS -> coordinates; multi-selects the form did not name -> Yes/No columns
+    label_map <- log_step("read the choice labels", build_odk_label_map(odk_path))
+    df <- log_step("apply the labels and split select_multiple questions", apply_odk_labels(df, label_map))
+    df <- log_step("split GPS points and other multiple-choice answers", split_multiselect(split_geopoints(df)))   # GPS -> coordinates; multi-selects the form did not name -> Yes/No columns
 
     step("Merging with the data already loaded...")
     if (!is.null(existing_df) && nrow(existing_df) > 0) {
@@ -345,6 +346,9 @@ moda_async_fetch <- function(form_id, token, existing_df = NULL, page_size = MOD
     token = token, page_size = page_size,
     progress = function(done, total, rows) {
       if (is.null(session)) return()
+      # One console line per page received, as a package manager would.
+      waiter_log(sprintf("GET %s page %s%s  [%s records]", form_id, done, if (is.na(total)) "" else paste0("/", total),
+                         prettyNum(rows, big.mark = ",", scientific = FALSE)), "ok", session = session)
       waiter_progress(session,
         percent = if (is.na(total)) NULL else round(100 * done / total),
         subtitle = paste0(if (is.na(total)) paste(done, "pages") else paste0(done, "/", total, " pages"), " \u00b7 ",

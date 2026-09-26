@@ -194,10 +194,15 @@ mod_chart_builder_server <- function(id, data, source, dataset_name = reactive("
       }
       title <- trimws(input$title %||% "")
       if (!nzchar(title)) title <- chart_value_label(spec())
+      # A finding written from the numbers, offered as a suggestion in the
+      # report list ("Use it"); the comment stays what the officer typed.
+      cap <- tryCatch(chart_caption(d, spec()), error = function(e) "")
+      comment <- input$comment %||% ""
       add_item(list(id = paste0("it", format(as.numeric(Sys.time()) * 1000, scientific = FALSE), sample.int(999, 1)),
                     source = source, dataset = dataset_name(), title = title,
-                    comment = input$comment %||% "", spec = spec(), data = d,
-                    display = input$display %||% "chart"))
+                    comment = comment, caption = cap, spec = spec(), data = d,
+                    display = input$display %||% "chart",
+                    preset = if (!identical(input$preset, "custom")) input$preset))
       update_rich_text(session, "comment", "")
       showNotification(sprintf("'%s' added to the monitoring report.", title), type = "message")
     })

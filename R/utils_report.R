@@ -313,8 +313,15 @@ design_report_captions <- function() {
 #' @noRd
 write_design_report <- function(file, x, plots = list(), lang = "en") {
   md <- design_report_md(x, names(plots))
+  # Charts capped to the most relevant variables say so under their title.
+  caps <- design_report_captions()
+  for (k in names(plots)) {
+    of <- attr(plots[[k]], "tw_of")
+    if (!is.null(of)) caps[[k]] <- sprintf("%s (the %d most relevant of %d; all of them are in the Excel scorecard, sheet Report_tables)",
+                                          caps[[k]] %||% k, of[["shown"]], of[["of"]])
+  }
   report_write_page(
-    file, md, plots, captions = design_report_captions(), lang = lang,
+    file, md, plots, captions = caps, lang = lang,
     title = "Targeting design report", record = "Targeting design record",
     meta = c("Country office" = x$country_office %||% "",
              "Generated" = x$generated %||% format(Sys.time(), "%Y-%m-%d %H:%M"),

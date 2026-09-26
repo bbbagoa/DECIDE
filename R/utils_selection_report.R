@@ -3,8 +3,8 @@
 #' The selection written up like the design and verification reports: the
 #' headline figures, the data and how it was prepared, the design that drew
 #' the list, who was selected (by area, and against who was not), a map of
-#' selected and non-selected households, and the accuracy against a mapped
-#' eligibility. One self-contained HTML file (see `report_write_page()`).
+#' selected and non-selected households. Accuracy is measured in Targeting
+#' Design and Monitoring, not here. One self-contained HTML file (see `report_write_page()`).
 #'
 #' @param x List: `country_office`, `sections` (from the module's
 #'   `selection_sections()`), `totals` (named numbers: households, eligible,
@@ -81,35 +81,6 @@ write_selection_report <- function(file, x, lang = "en") {
         "@@FIG:map@@", "")
   }
 
-  add(sprintf("## %d. Accuracy of the selection", 4 + (!is.null(bp)) + (!is.null(x$map) && nrow(x$map) > 0)), "")
-  acc <- x$accuracy
-  if (is.null(acc)) {
-    add("_Not measured: no eligibility column is mapped in the variable setup, so there is nothing to compare the selection with._", "")
-  } else {
-    ed <- acc$design; es <- acc$served
-    pc <- function(v) if (is.na(v)) "n/a" else sprintf("%.1f%%", 100 * v)
-    add(sprintf("The list is compared with the eligibility recorded in the registration data (column `%s`), household by household (%s households with a known eligibility).",
-                acc$column, format(ed$n, big.mark = ",")), "",
-        "@@ACC_CARDS@@", "",
-        "### What the two errors mean", "",
-        sprintf("- **Inclusion error %s** = %s / %s: of the households the selection made eligible, the share the eligibility column says are not eligible. They would receive assistance they may not need.",
-                pc(ed$inclusion_error), format(ed$included_not_in_need, big.mark = ","), format(ed$correctly_included + ed$included_not_in_need, big.mark = ",")),
-        sprintf("- **Exclusion error %s** = %s / %s: of the households the eligibility column says are eligible, the share the selection left out. They need assistance and would not get it.",
-                pc(ed$exclusion_error), format(ed$excluded_in_need, big.mark = ","), format(ed$correctly_included + ed$excluded_in_need, big.mark = ",")),
-        "- Both are read from the matrix below. They are computed on the **eligible-by-design** list, before prioritisation: households cut only because resources ran out are excluded by design, not wrongly excluded (Targeting Advisory 2/2025).",
-        "- The eligibility column is itself an assessment (for example a verification visit or a proxy score); the errors say how far the approach, rules and scorecard agree with it, not whether it is right.", "",
-        "### Selection against eligibility", "", "@@ACC_MATRIX@@", "")
-    if (!is.null(es) && !identical(es$exclusion_error, ed$exclusion_error)) {
-      add("### After prioritisation", "",
-          sprintf("Counting only the households actually served, the exclusion error is %s (%s eligible households not served), %s points more than as designed: that difference is the unmet need left by the caseload, reported separately from the design error.",
-                  pc(es$exclusion_error), format(es$excluded_in_need, big.mark = ","),
-                  sprintf("%+.1f", 100 * (es$exclusion_error - ed$exclusion_error))), "")
-    }
-    add("### Other measures", "",
-        sprintf("- **Coverage** %s: share of all households with a known eligibility that the selection makes eligible.", pc(ed$coverage)),
-        sprintf("- **Precision** %s = 1 - inclusion error; **recall** %s = 1 - exclusion error.",
-                pc(1 - ed$inclusion_error), pc(1 - ed$exclusion_error)), "")
-  }
   add("## Notes", "")
   for (nm in intersect("Notes", names(sec))) add(kv(sec[[nm]]), "")
   if ("Variable mapping" %in% names(sec)) add("### Variable mapping", "", kv(sec[["Variable mapping"]]), "")
@@ -147,11 +118,7 @@ write_selection_report <- function(file, x, lang = "en") {
     footer = "This record documents the selection so it can be reviewed, explained and challenged.",
     blocks = list("@@KPI@@" = selection_kpis(x$totals, lang),
                   "@@PROFILE@@" = profile_tiles(bp$tiles, lang),
-                  "@@AREAS@@" = area_summary_html(ga),
-                  "@@ACC_CARDS@@" = if (is.null(acc)) "" else report_error_cards(list(errors = acc$design, tolerance = acc$tolerance %||% c(0.05, 0.20)), lang),
-                  "@@ACC_MATRIX@@" = if (is.null(acc)) "" else report_error_matrix(
-                    acc$design, lang = lang, row_title = "Selection", row_labels = c("Eligible by design", "Not selected"),
-                    col_title = "Eligibility column", col_value = acc$column, col_labels = c("Eligible", "Not eligible"))))
+                  "@@AREAS@@" = area_summary_html(ga)))
 }
 
 #' Headline figures of the selection, as quiet tiles
@@ -315,6 +282,10 @@ profile_icon <- function(name) {
     family = '<circle cx="7" cy="5" r="2.3"/><circle cx="17" cy="5" r="2.3"/><circle cx="12" cy="11" r="1.8"/><path d="M4 9h6v7H9v5H5v-5H4zM14 9h6v7h-1v5h-4v-5h-1zM10.5 14h3v7h-3z"/>',
     child = '<circle cx="12" cy="6" r="2.6"/><path d="M8.5 10h7l-1 6h-1.5v5h-3v-5H9.5z"/>',
     elderly = '<circle cx="10" cy="4" r="2.2"/><path d="M8 7.5h3.5l1.5 4 2 1-1 1.5-2.4-1.2L12 16l1.5 5h-2.2L10 17l-1 4H7l1.2-6L8 7.5z"/><path d="M15.5 12h1l1 9h-1z"/>',
+    field = '<path d="M4 5h16v2H4zM4 11h16v2H4zM4 17h10v2H4z"/>',
+    flag = '<path d="M5 3h2v18H5z"/><path d="M8 4h11l-2.5 4L19 12H8z"/>',
+    person = '<circle cx="12" cy="6" r="3"/><path d="M6 21v-4.5C6 13.5 8.7 12 12 12s6 1.5 6 4.5V21z"/>',
+    pin = '<path d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/>',
     '<circle cx="12" cy="12" r="8"/>')
   sprintf('<svg viewBox="0 0 24 24" aria-hidden="true">%s</svg>', p)
 }

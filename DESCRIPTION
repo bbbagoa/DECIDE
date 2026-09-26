@@ -16,6 +16,7 @@ License: GPL (>= 3) + file LICENSE
 Depends: 
     R (>= 4.6.0)
 Imports: 
+    callr,
     compiler,
     billboarder,
     bsicons,
@@ -47,6 +48,7 @@ Imports:
     shinycssloaders,
     shinyWidgets,
     sodium,
+    stringdist,
     stringr,
     thematic,
     tidyr,

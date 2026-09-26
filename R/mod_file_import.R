@@ -37,7 +37,9 @@ mod_file_import_ui <- function(id, display = FALSE) {
 #' @return A plain data.frame (haven-labelled columns converted to factors).
 #' @noRd
 read_import_file <- function(path, ext) {
-  df <- switch(ext,
+  size <- file.size(path)
+  reader <- switch(ext, csv = "data.table::fread", parquet = "nanoparquet", sav = , dta = "haven", "readxl")
+  df <- tw_step(sprintf("read %.1f MB of .%s with %s", size / 1024^2, ext, reader), switch(ext,
     xlsx = as.data.frame(readxl::read_excel(path), stringsAsFactors = FALSE),
     xls  = as.data.frame(readxl::read_excel(path), stringsAsFactors = FALSE),
     sav  = haven::as_factor(haven::read_sav(path)),
@@ -48,9 +50,14 @@ read_import_file <- function(path, ext) {
                              na.strings = c("", "NA", "NULL"), showProgress = FALSE),
     parquet = as.data.frame(nanoparquet::read_parquet(path), stringsAsFactors = FALSE),
     stop("Unsupported file type: ", ext)
-  )
+  ))
+  waiter_log(dim_text(df))
+  df <- tw_step("check text encoding (UTF-8 / Windows-1252)", utf8_frame(as.data.frame(df, stringsAsFactors = FALSE)))
   # Select-multiple answers become one Yes/No column per choice, as for MODA.
-  split_multiselect(utf8_frame(as.data.frame(df, stringsAsFactors = FALSE)))
+  n <- ncol(df)
+  df <- tw_step("split multiple-choice answers into Yes/No columns", split_multiselect(df))
+  if (ncol(df) > n) waiter_log(sprintf("%s Yes/No columns added", format(ncol(df) - n, big.mark = ",")))
+  df
 }
 
 #' Text as UTF-8, whatever the file was saved in
@@ -91,17 +98,10 @@ mod_file_import_server <- function(id, display = FALSE){
   moduleServer(id, function(input, output, session){
     ns <- session$ns
 
-    # 1. Create a reactive trigger/container
-    raw_data <- reactive({
-      req(input$file_in)
-
-      w <- waiter::Waiter$new(
-        html = waiter_content("Reading uploaded file..."),
-        color = "rgba(10, 30, 50, 0.65)"
-      )
-      w$show()
-      on.exit(w$hide(), add = TRUE)
-
+    # 1. Read the upload in the background worker (bg_run): the page stays
+    # usable and the cross on the loader stops a long read.
+    raw_df <- reactiveVal(NULL)
+    observeEvent(input$file_in, {
       ext <- tolower(tools::file_ext(input$file_in$name))
       allowed <- c("xlsx", "xls", "sav", "dta", "csv", "parquet")
 
@@ -111,25 +111,28 @@ mod_file_import_server <- function(id, display = FALSE){
           type = "error",
           duration = 10
         )
-        return(NULL)
+        return()
       }
 
       max_size <- 2 * 1024^3 # 2 GB
       if (input$file_in$size > max_size) {
         showNotification("File is too large. Maximum allowed size is 2 GB.", type = "error", duration = 10)
-        return(NULL)
+        return()
       }
-
-      w$update(html = waiter_content("Parsing data..."))
 
       # 2. Load the data into a dataframe. xlsx is inherently slow (XML) and
       # kept for convenience; for 1 GB-class extracts CSV (multi-threaded
       # fread) and Parquet (columnar, ~5-10x smaller to upload) are the fast
       # paths.
-      df <- read_import_file(input$file_in$datapath, ext)
-
-      w$update(html = waiter_content("Building summary..."))
-      return(df)
+      raw_df(NULL)
+      bg_run(sprintf("Reading %s...", input$file_in$name), import_job,
+             list(path = input$file_in$datapath, ext = ext),
+             on_done = function(df) raw_df(df),
+             on_error = function(msg) showNotification(paste("Could not read the file:", msg), type = "error", duration = 12))
+    })
+    raw_data <- reactive({
+      req(raw_df())
+      raw_df()
     })
 
     # 3. Simple feedback for the user

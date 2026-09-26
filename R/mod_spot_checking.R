@@ -9,32 +9,31 @@ mod_spot_checking_ui <- function(id) {
     bslib::layout_sidebar(
       fillable = FALSE,
       sidebar = bslib::sidebar(
-        title = "Areas and search",
-        width = 300,
-        shinyWidgets::pickerInput(
-          inputId = ns("sc_admin1"), label = "Admin 1:",
-          choices = character(0), multiple = TRUE,
-          options = shinyWidgets::pickerOptions(actionsBox = TRUE, liveSearch = TRUE)
-        ),
-        shinyWidgets::pickerInput(
-          inputId = ns("sc_admin2"), label = "Admin 2:",
-          choices = character(0), multiple = TRUE,
-          options = shinyWidgets::pickerOptions(actionsBox = TRUE, liveSearch = TRUE)
-        ),
-        shinyWidgets::pickerInput(
-          inputId = ns("sc_admin3"), label = "Admin 3:",
-          choices = character(0), multiple = TRUE,
-          options = shinyWidgets::pickerOptions(actionsBox = TRUE, liveSearch = TRUE)
-        ),
-        textInput(ns("sc_search"), "Search in records:", placeholder = "e.g. household ID"),
-        hr(),
-        tags$div(
-          class = "d-flex gap-2 mt-2",
-          actionButton(ns("sc_apply"), "Apply", class = "btn-outline-primary btn-sm flex-fill", icon = icon("filter")),
-          actionButton(ns("sc_clear"), label = NULL, icon = icon("xmark"), class = "btn-outline-secondary btn-sm")
-        ),
-        hr(),
-        downloadButton(ns("download_spot"), "Export Sample", class = "btn-outline-primary w-100")
+        width = 300, class = "wfp-side",
+        side_steps(
+          side_step("1. Areas", "geo-alt",
+            shinyWidgets::pickerInput(
+              inputId = ns("sc_admin1"), label = "Admin 1", choices = character(0), multiple = TRUE, width = "100%",
+              options = shinyWidgets::pickerOptions(container = "body", actionsBox = TRUE, liveSearch = TRUE)),
+            shinyWidgets::pickerInput(
+              inputId = ns("sc_admin2"), label = "Admin 2", choices = character(0), multiple = TRUE, width = "100%",
+              options = shinyWidgets::pickerOptions(container = "body", actionsBox = TRUE, liveSearch = TRUE)),
+            shinyWidgets::pickerInput(
+              inputId = ns("sc_admin3"), label = "Admin 3", choices = character(0), multiple = TRUE, width = "100%",
+              options = shinyWidgets::pickerOptions(container = "body", actionsBox = TRUE, liveSearch = TRUE))),
+          side_step("2. Search", "search",
+            textInput(ns("sc_search"), NULL, placeholder = "e.g. household ID", width = "100%"))),
+        side_actions(
+          tags$div(
+            class = "d-flex gap-2",
+            actionButton(ns("sc_apply"), "Apply", class = "btn-outline-primary btn-sm flex-fill", icon = icon("filter")),
+            actionButton(ns("sc_clear"), label = NULL, icon = icon("xmark"), class = "btn-outline-secondary btn-sm",
+                         title = "Clear the filters")),
+          tags$div(class = "wfp-sb-group", "Back-check results"),
+          downloadButton(ns("verif_report"), "Verification report (HTML)", class = "btn-outline-primary btn-sm w-100",
+                         icon = icon("file-lines")),
+          downloadButton(ns("verif_download"), "Comparison (Excel)", class = "btn-outline-secondary btn-sm w-100",
+                         icon = icon("file-excel")))
       ),
       bslib::layout_columns(
         bslib::value_box(
@@ -104,8 +103,11 @@ mod_spot_checking_ui <- function(id) {
             bslib::card_header(
               tags$div(class = "d-flex justify-content-between align-items-center gap-2",
                        tags$span("Sampled households"),
-                       actionButton(ns("sc_go_verify"), "Continue to verification", icon = icon("arrow-right"),
-                                    class = "btn-outline-primary btn-sm"))),
+                       tags$div(class = "d-flex gap-2",
+                                downloadButton(ns("download_spot"), "Export sample (Excel)", class = "btn-outline-secondary btn-sm",
+                                               icon = icon("file-excel")),
+                                actionButton(ns("sc_go_verify"), "Continue to verification", icon = icon("arrow-right"),
+                                             class = "btn-outline-primary btn-sm")))),
             tags$p(class = "small text-muted mb-2",
                    "Export this list, re-visit these households, then load what the team collected in the Verification tab."),
             DT::DTOutput(ns("spot_table"), fill = FALSE)
@@ -180,10 +182,6 @@ mod_spot_checking_ui <- function(id) {
               ),
               tags$div(
                 class = "wfp-vc-actions",
-                downloadButton(ns("verif_download"), "Excel", class = "btn-outline-secondary btn-sm",
-                               icon = icon("file-excel"), title = "Comparison (Excel)"),
-                downloadButton(ns("verif_report"), "Report", class = "btn-outline-secondary btn-sm",
-                               icon = icon("file-lines"), title = "Verification report (HTML)"),
                 actionButton(ns("verif_run"), "Run comparison", class = "btn-primary", icon = icon("code-compare"))
               )
             )
@@ -568,6 +566,25 @@ mod_spot_checking_server <- function(id, uploaded_df, user_setup, workspace = NU
       )
     })
 
+    # Before the re-collected data arrives, the key already shows the
+    # household id of the sample, so the user sees what records match on.
+    observe({
+      req(is.null(verification_df()))
+      s <- tryCatch(sampled_data(), error = function(e) NULL)
+      req(s)
+      uid <- user_setup$unique_id
+      if (shiny::isTruthy(uid) && uid %in% names(s)) {
+        shinyWidgets::updatePickerInput(session, "verif_key", choices = names(s), selected = uid)
+      }
+    })
+
+    # The back-check exports wait for a comparison.
+    observe({
+      ok <- !is.null(comparison())
+      gate_button("verif_report", ok, "Run the comparison first.")
+      gate_button("verif_download", ok, "Run the comparison first.")
+    })
+
     # Refresh the key / field pickers whenever either side changes
     observe({
       v <- verification_df()
@@ -758,6 +775,20 @@ mod_spot_checking_server <- function(id, uploaded_df, user_setup, workspace = NU
       DT::datatable(out, rownames = FALSE, options = list(pageLength = 15, scrollX = TRUE))
     })
 
+    # Where the discordances sit (enumerator, areas) and what changes: for the
+    # report and the workbook.
+    verif_insights <- function() {
+      r <- comparison()
+      if (is.null(r)) return(NULL)
+      col <- function(k) { v <- as.character(user_setup[[k]] %||% "")[1]; if (is.na(v)) "" else v }
+      groups <- c(Enumerator = col("enumerator_id"), "Admin 1" = col("admin1"), "Admin 2" = col("admin2"))
+      orig <- sampled_data()
+      ver <- verification_df()
+      matched <- if (!is.null(orig) && !is.null(ver) && r$key_col %in% names(orig) && r$key_col %in% names(ver))
+        intersect(as.character(orig[[r$key_col]]), as.character(ver[[r$key_col]]))
+      tryCatch(verification_insights(r, orig, groups[nzchar(groups)], matched = matched), error = function(e) NULL)
+    }
+
     output$verif_report <- download_handler(
       filename = function() export_file_name("Verification_report", "html", "%Y-%m-%d_%Hh%M"),
       content = function(file) {
@@ -775,7 +806,7 @@ mod_spot_checking_server <- function(id, uploaded_df, user_setup, workspace = NU
                         n = nrow(sampled_data()), population = nrow(sample_pool()),
                         seed = applied$seed, filters = if (length(flt)) paste(flt, collapse = "; ") else "none"),
           source = verif_source(), n_verification = if (is.null(verification_df())) NA else nrow(verification_df()),
-          tolerance = input$verif_tolerance, comparison = comparison()),
+          tolerance = input$verif_tolerance, comparison = comparison(), insights = verif_insights()),
           lang = if (identical(lang, "fr")) "fr" else "en")
       }
     )
@@ -823,6 +854,14 @@ mod_spot_checking_server <- function(id, uploaded_df, user_setup, workspace = NU
             band(">=95", "#D4EDDA", "#0F5132"); band("<90", "#F8D7DA", "#842029")
             openxlsx::conditionalFormatting(wb, "By_field", cols = 5, rows = rows, type = "between", rule = c(90, 94.999),
                                             style = openxlsx::createStyle(bgFill = "#FFF3CD", fontColour = "#664D03"))
+          }
+          ins <- verif_insights()
+          for (lab in names(ins$by_group)) {
+            g <- ins$by_group[[lab]]
+            xl_data_sheet(wb, paste0("By_", gsub("[^A-Za-z0-9]+", "_", tolower(lab))),
+                          sanitize_for_excel(stats::setNames(
+                            data.frame(g$group, g$households, g$with_discordance, g$discordant_answers, round(100 * g$agreement, 1)),
+                            c(lab, "Households", "With a discordance", "Answers that differ", "Agreement (%)"))))
           }
           d <- r$discordances
           names(d) <- c("Household", "Field", "First round", "Back-check")[seq_along(d)]

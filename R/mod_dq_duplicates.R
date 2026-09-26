@@ -19,7 +19,8 @@ dq_duplicates_ui <- function(ns) {
         tags$div(class = "pb-3",
           shinyWidgets::awesomeCheckbox(inputId = ns("duplicate_fuzzy"), label = "Fuzzy matching", value = FALSE)),
         tags$div(style = "flex: 0 1 200px;",
-          sliderInput(ns("duplicate_fuzzy_dist"), "Max string distance", min = 0, max = 5, value = 1, step = 1, width = "100%")),
+          sliderInput(ns("duplicate_fuzzy_dist"), tagList("Similarity", info_tip("How alike two records must be to count as the same household: 90% lets about one character in ten differ, so longer names allow more typos than short ones. 100% means identical.")),
+                      min = 50, max = 100, value = 90, step = 1, post = "%", width = "100%")),
         tags$div(class = "d-flex gap-2 pb-3",
           actionButton(ns("btn_refresh_duplicates"), "Find duplicates", class = "btn-primary", icon = icon("magnifying-glass")),
           downloadButton(ns("download_duplicates"), "Export", class = "btn-outline-secondary"))
@@ -82,10 +83,9 @@ dq_duplicates_server <- function(input, output, session, ns, core) {
     cols <- names(uploaded_df())
     # A restored session's columns win over whatever the picker holds now:
     # this observer also runs when the restored data arrives.
+    # Nothing is picked for the user: they choose the columns that define a
+    # duplicate (the household id alone is rarely what they want to check).
     cur <- intersect(isolate(restored_vars()) %||% isolate(input$duplicate_vars) %||% character(0), cols)
-    if (!length(cur) && !is.null(user_setup$unique_id) && user_setup$unique_id %in% cols) {
-      cur <- user_setup$unique_id
-    }
     shinyWidgets::updatePickerInput(session = session, inputId = "duplicate_vars", choices = cols, selected = cur)
   })
 
@@ -104,22 +104,29 @@ dq_duplicates_server <- function(input, output, session, ns, core) {
       after_flush(session, function() {
         shinyWidgets::updatePickerInput(session, "duplicate_vars", selected = s$vars)
         shinyWidgets::updateAwesomeCheckbox(session, "duplicate_fuzzy", value = isTRUE(s$fuzzy))
-        if (!is.null(s$dist)) updateSliderInput(session, "duplicate_fuzzy_dist", value = s$dist)
+        # Sessions saved before the percentage kept a distance of 0-5 characters.
+        if (!is.null(s$dist)) updateSliderInput(session, "duplicate_fuzzy_dist", value = if (s$dist <= 5) 90 else s$dist)
       })
     })
 
   duplicate_analysis <- eventReactive(list(input$btn_refresh_duplicates, rerun()), {
-    req(dq_filtered_data(), input$duplicate_vars)
+    req(dq_filtered_data())
+    # Nothing is picked by default: say so after a click, stay quiet before.
+    if (!length(input$duplicate_vars)) {
+      if (isTRUE(input$btn_refresh_duplicates > 0)) need_ok(FALSE, "Pick the columns that identify a household first.")
+      req(FALSE)
+    }
     df <- dq_filtered_data()
     vars <- input$duplicate_vars
     req(all(vars %in% names(df)))
 
     use_fuzzy <- isTRUE(input$duplicate_fuzzy)
-    max_dist <- as.integer(input$duplicate_fuzzy_dist)
+    similarity <- as.numeric(input$duplicate_fuzzy_dist %||% 90)
+    if (is.na(similarity) || similarity <= 5) similarity <- 90   # an old 0-5 distance
 
-    if (use_fuzzy && max_dist > 0) {
+    if (use_fuzzy && similarity < 100) {
       key <- do.call(paste, c(df[vars], list(sep = "|")))
-      groups <- fuzzy_match_groups(key, max_dist = max_dist)
+      groups <- fuzzy_match_groups(key, similarity = similarity / 100)
       dup_index <- groups > 0
       dup_df <- df[dup_index, , drop = FALSE]
       dup_df$.dup_group <- groups[dup_index]

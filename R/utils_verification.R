@@ -181,3 +181,84 @@ compare_verification <- function(original, verification, key_col, cols = NULL,
     overall_agreement = if (total_cmp > 0) sum(field_summary$agree) / total_cmp else NA_real_
   )
 }
+
+#' What the back-check says beyond the field table
+#'
+#' Where the discordances concentrate (by enumerator, by area), the answers
+#' that most often change between the two rounds, the households with the
+#' most discordances, and, for number fields, whether the back-check tends to
+#' record more or less. Everything is computed from `compare_verification()`
+#' plus the original records (for the enumerator and the areas).
+#'
+#' @param r Output of `compare_verification()`.
+#' @param original Original records (the sample), with `r$key_col`.
+#' @param groups Named character vector: label -> column in `original`
+#'   (e.g. c(Enumerator = "enum", "Admin 1" = "province")).
+#' @param matched Keys present in both rounds (the households compared).
+#' @return list(by_group, patterns, households, direction), or NULL.
+#' @noRd
+verification_insights <- function(r, original = NULL, groups = character(0), matched = NULL) {
+  if (is.null(r) || !r$matched_n || !length(r$cols)) return(NULL)
+  d <- r$discordances
+  n_fields <- length(r$cols)
+  keys <- if (!is.null(original) && r$key_col %in% names(original)) as.character(original[[r$key_col]]) else character(0)
+  if (length(keys) && !is.null(matched)) {
+    keep <- keys %in% as.character(matched)
+    original <- original[keep, , drop = FALSE]; keys <- keys[keep]
+  }
+
+  # Agreement per enumerator / area: answers that agree among those compared.
+  by_group <- list()
+  for (lab in names(groups)) {
+    col <- groups[[lab]]
+    if (!length(keys) || !nzchar(col) || !col %in% names(original)) next
+    g <- as.character(original[[col]]); g[is.na(g) | !nzchar(trimws(g))] <- "(missing)"
+    first <- !duplicated(keys)
+    map <- stats::setNames(g[first], keys[first])
+    hh <- table(map)
+    dg <- if (nrow(d)) table(factor(map[d$key], levels = names(hh))) else hh * 0
+    hd <- if (nrow(d)) table(factor(map[unique(d$key)], levels = names(hh))) else hh * 0
+    out <- data.frame(group = names(hh), households = as.integer(hh),
+                      with_discordance = as.integer(hd[names(hh)]),
+                      discordant_answers = as.integer(dg[names(hh)]), stringsAsFactors = FALSE)
+    out$agreement <- 1 - out$discordant_answers / pmax(1, out$households * n_fields)
+    out <- out[order(out$agreement, -out$households), , drop = FALSE]
+    rownames(out) <- NULL
+    by_group[[lab]] <- out
+  }
+
+  # The answers that most often change, per field.
+  patterns <- NULL
+  if (nrow(d)) {
+    o <- ifelse(is.na(d$original) | !nzchar(trimws(d$original)), "(blank)", trimws(d$original))
+    v <- ifelse(is.na(d$verification) | !nzchar(trimws(d$verification)), "(blank)", trimws(d$verification))
+    p <- stats::aggregate(list(n = rep(1L, nrow(d))), list(field = d$variable, first = o, back = v), sum)
+    patterns <- utils::head(p[order(-p$n, p$field), , drop = FALSE], 15)
+    rownames(patterns) <- NULL
+  }
+
+  # Households with the most discordances.
+  households <- NULL
+  if (nrow(d)) {
+    per <- split(d$variable, d$key)
+    households <- data.frame(household = names(per), fields = lengths(per),
+                             which = vapply(per, function(f) paste(utils::head(unique(f), 6), collapse = ", "), character(1)),
+                             stringsAsFactors = FALSE)
+    households <- utils::head(households[order(-households$fields, households$household), , drop = FALSE], 15)
+    rownames(households) <- NULL
+  }
+
+  # Number fields: does the back-check record more, or less?
+  direction <- NULL
+  if (nrow(d)) {
+    a <- suppressWarnings(as.numeric(d$original)); b <- suppressWarnings(as.numeric(d$verification))
+    ok <- !is.na(a) & !is.na(b)
+    if (any(ok)) {
+      s <- stats::aggregate(list(higher = b[ok] > a[ok], lower = b[ok] < a[ok], gap = b[ok] - a[ok]),
+                            list(field = d$variable[ok]), function(x) if (is.logical(x)) sum(x) else mean(x))
+      direction <- s[order(-(s$higher + s$lower)), , drop = FALSE]
+      rownames(direction) <- NULL
+    }
+  }
+  list(by_group = by_group, patterns = patterns, households = households, direction = direction)
+}

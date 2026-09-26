@@ -2042,61 +2042,40 @@ table.wfp-corr .wfp-corr-empty { background: transparent; }
 [data-bs-theme="dark"] .tooltip .tooltip-inner { background-color: #eef2f7 !important; color: #1f2a37 !important; }
 
 /* ---------------------------------------------------------------------------
-   Verdict card: archery animation (verdict_card() in utils_helpers.R)
+   Verdict card (verdict_card() in utils_helpers.R): a status panel with a
+   household icon in the verdict colour, the Advisory's wording and the two
+   errors against their tolerance.
    ------------------------------------------------------------------------- */
-.wfp-verdict { --vd: #6c757d; display: flex; gap: 18px; align-items: center; margin-top: .5rem;
-  padding: 14px 18px; border-radius: var(--card-radius, 12px); border: 1px solid transparent;
-  background: color-mix(in srgb, var(--vd) 9%, transparent); border-color: color-mix(in srgb, var(--vd) 28%, transparent); }
-.wfp-verdict.is-good { --vd: #3f7e44; }
-.wfp-verdict.is-review { --vd: #d08a00; }
-.wfp-verdict.is-redesign { --vd: #c5192d; }
-.wfp-verdict .vd-stage { position: relative; flex: 0 0 120px; height: 92px; }
-.wfp-verdict .vd-svg { width: 120px; height: 92px; overflow: visible; }
-.wfp-verdict .vd-text { min-width: 0; }
-.wfp-verdict .vd-head { font-size: 1.15rem; font-weight: 700; color: var(--vd); line-height: 1.2; }
-.wfp-verdict .vd-sub { display: block; font-size: .8rem; font-weight: 500; opacity: .85; margin-top: 2px; }
-.wfp-verdict .vd-interp { font-weight: 600; margin-top: 6px; }
-.wfp-verdict .vd-action { margin-top: 2px; }
-.wfp-verdict .vd-q { font: 700 38px Commissioner, sans-serif; fill: #1f2a37; }
-.wfp-verdict.is-unknown .vd-target { filter: grayscale(1); opacity: .35; }
-.wfp-verdict .vd-target { transform-box: fill-box; transform-origin: center; }
-.wfp-verdict .vd-arrow { transform-box: view-box; }
-
-/* the arrow flies in from the left */
-@keyframes vd-fly { 0% { transform: translateX(-110px); opacity: 0; } 15% { opacity: 1; } 100% { transform: translateX(0); } }
-/* ...and quivers when it sticks */
-@keyframes vd-quiver { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(-4deg); } 75% { transform: rotate(3deg); } }
-/* a miss: flies past, then drops */
-@keyframes vd-miss { 0% { transform: translateX(-130px); opacity: 0; } 15% { opacity: 1; }
-  60% { transform: translateX(0); } 80% { transform: translate(2px, 4px) rotate(8deg); } 100% { transform: translate(0, 2px) rotate(4deg); } }
-@keyframes vd-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.1); } }
-@keyframes vd-wobble { 0%, 100% { transform: rotate(0); } 30% { transform: rotate(-5deg); } 60% { transform: rotate(4deg); } }
-@keyframes vd-shake { 0%, 100% { transform: translateX(0); } 20%, 60% { transform: translateX(-3px); } 40%, 80% { transform: translateX(3px); } }
-@keyframes vd-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
-@keyframes vd-burst { 0% { transform: translate(0, 0) rotate(0) scale(.4); opacity: 1; }
-  100% { transform: translate(var(--dx), var(--dy)) rotate(var(--r)) scale(1); opacity: 0; } }
-@keyframes vd-pop { 0% { transform: scale(.6); opacity: 0; } 60% { transform: scale(1.08); opacity: 1; } 100% { transform: scale(1); } }
-
-.wfp-verdict .vd-head { animation: vd-pop .45s ease-out .5s both; transform-origin: left center; }
-.wfp-verdict.is-good .vd-arrow { animation: vd-fly .5s cubic-bezier(.2,.8,.3,1) both, vd-quiver .35s ease-in-out .5s 2; }
-.wfp-verdict.is-good .vd-target { animation: vd-pulse .5s ease-in-out .5s; }
-.wfp-verdict.is-review .vd-arrow { animation: vd-fly .5s cubic-bezier(.2,.8,.3,1) both, vd-quiver .35s ease-in-out .5s 2; }
-.wfp-verdict.is-review .vd-target { animation: vd-wobble .6s ease-in-out .5s; }
-.wfp-verdict.is-redesign .vd-arrow { animation: vd-miss 1s ease-in both; }
-.wfp-verdict.is-redesign .vd-target { animation: vd-shake .45s ease-in-out .55s; }
-.wfp-verdict.is-unknown .vd-q { animation: vd-bob 1.6s ease-in-out infinite; }
-.wfp-verdict .vd-confetti { position: absolute; left: 58%; top: 50%; pointer-events: none; }
-.wfp-verdict .vd-confetti i { position: absolute; width: 7px; height: 11px; border-radius: 2px; background: var(--c);
-  opacity: 0; animation: vd-burst .9s ease-out .5s both; }
-
-/* final frame only: when the verdict is unchanged, or motion is unwanted */
-.wfp-verdict.no-anim *, .wfp-verdict.no-anim .vd-head { animation: none !important; }
-.wfp-verdict.no-anim .vd-confetti { display: none; }
-@media (prefers-reduced-motion: reduce) {
-  .wfp-verdict *, .wfp-verdict .vd-head { animation: none !important; }
-  .wfp-verdict .vd-confetti { display: none; }
-}
-@media (max-width: 575px) { .wfp-verdict { flex-direction: column; align-items: flex-start; } }
+.wfp-verdict { --vd: #6c757d; --vd-bg: rgba(108, 117, 125, .10); display: flex; gap: 16px; align-items: flex-start;
+  margin-top: .5rem; padding: 14px 16px; border: 1px solid var(--border);
+  border-radius: 10px; background: var(--surface); animation: vd-rise .35s ease-out both; }
+.wfp-verdict.is-good { --vd: #3f7e44; --vd-bg: rgba(63, 126, 68, .12); }
+.wfp-verdict.is-review { --vd: #b87400; --vd-bg: rgba(247, 184, 37, .16); }
+.wfp-verdict.is-redesign { --vd: #c5192d; --vd-bg: rgba(197, 25, 45, .10); }
+.wfp-verdict .vd-icon { flex: 0 0 56px; height: 56px; border-radius: 50%; display: flex; align-items: center;
+  justify-content: center; color: var(--vd); background: var(--vd-bg); }
+.wfp-verdict .vd-text { min-width: 0; flex: 1 1 auto; }
+.wfp-verdict .vd-head { margin: 0 0 6px; }
+.wfp-verdict .vd-status { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: .8rem; font-weight: 700;
+  color: #fff; background: var(--vd); }
+.wfp-verdict .vd-interp { font-weight: 600; line-height: 1.35; }
+.wfp-verdict .vd-action { margin-top: 4px; line-height: 1.35; }
+.wfp-verdict .vd-metrics { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.wfp-verdict .vd-metric { display: grid; grid-template-columns: auto auto; column-gap: 10px; align-items: baseline;
+  padding: 6px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface-2, transparent); }
+.wfp-verdict .vd-metric-label { font-size: .75rem; color: var(--text-muted); }
+.wfp-verdict .vd-metric-value { font-size: 1rem; font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; }
+.wfp-verdict .vd-metric-tol { grid-column: 1 / -1; font-size: .7rem; color: var(--text-muted); }
+.wfp-verdict .vd-metric.is-ok .vd-metric-value { color: #3f7e44; }
+.wfp-verdict .vd-metric.is-mid .vd-metric-value { color: #b87400; }
+.wfp-verdict .vd-metric.is-bad .vd-metric-value { color: #c5192d; }
+[data-bs-theme="dark"] .wfp-verdict .vd-metric.is-ok .vd-metric-value { color: #6fcf97; }
+[data-bs-theme="dark"] .wfp-verdict .vd-metric.is-mid .vd-metric-value { color: #f7b825; }
+[data-bs-theme="dark"] .wfp-verdict .vd-metric.is-bad .vd-metric-value { color: #ff7b7b; }
+@keyframes vd-rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.wfp-verdict.no-anim { animation: none; }
+@media (prefers-reduced-motion: reduce) { .wfp-verdict { animation: none; } }
+@media (max-width: 575px) { .wfp-verdict { flex-direction: column; } }
 
 /* ==========================================================================
    Density & polish (last, so it wins over the earlier layers)
@@ -2209,7 +2188,7 @@ table.dataTable tbody td .btn { font-size: .72rem; padding: .15rem .5rem; }
 @media (max-width: 1440px) {
   .navbar-brand .brand-text { display: none; }
   .navbar .nav-link { padding: .4rem .45rem !important; }
-  .wfp-co-btn { max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
+  .wfp-co-btn { max-width: 210px; overflow: hidden; text-overflow: ellipsis; }   /* long enough for the French label */
 }
 
 /* HTML tables scroll inside their frame too; the header stays (sticky th) */
@@ -2232,7 +2211,6 @@ table.dataTable tbody td .btn { font-size: .72rem; padding: .15rem .5rem; }
   background: var(--surface-2); border-top: 1px solid var(--border); }
 
 /* ---- Overview map --------------------------------------------------------- */
-.wfp-map-card .card-header .shiny-text-output { text-transform: none; letter-spacing: 0; }
 .wfp-map-toolbar { display: flex; align-items: center; justify-content: space-between; gap: .75rem; flex-wrap: wrap;
   padding: .55rem 1rem; border-bottom: 1px solid var(--border); }
 .wfp-map-toolbar-label { font-size: .72rem; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--text-muted); white-space: nowrap; }
@@ -2371,12 +2349,34 @@ table.dataTable tr.dtrg-group td { background: var(--surface-3) !important; font
 .wfp-scroll-page { overflow-y: auto; min-height: 0; padding-bottom: 2rem; }
 
 /* Non-blocking loader (www/busy.js): the same card as the full-screen waiter
-   (.wfp-wait), bottom-centre, with no scrim so the page stays usable. */
-.tw-busy { position: fixed; left: 50%; bottom: 22px; z-index: 2000; transform: translate(-50%, 12px);
-  opacity: 0; pointer-events: none; transition: opacity 180ms ease, transform 180ms ease; }
-.tw-busy.on { opacity: 1; transform: translate(-50%, 0); }
-.tw-busy .wfp-wait { min-width: 240px; max-width: 460px; padding: .7rem 1rem; animation: none; }
-.tw-busy .wfp-wait-msg { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+   (.wfp-wait), centred over the same light scrim as the full-screen waiter. */
+.tw-busy { position: fixed; inset: 0; z-index: 2000; display: flex; align-items: center; justify-content: center;
+  background-color: rgba(15, 23, 42, .28); backdrop-filter: blur(1.5px);
+  opacity: 0; pointer-events: none; transition: opacity 180ms ease; }
+.tw-busy.on { opacity: 1; }   /* clicks go through: a stuck card must never freeze the page */
+.tw-busy .wfp-wait { animation: none; }
+.tw-busy.instant { transition: none; }
+.wfp-wait-msg { overflow: hidden; text-overflow: ellipsis; }
+
+/* The console under the waiter: what runs in the background, one line per
+   step, like an installer log. Dark in both themes, as a terminal. */
+.wfp-wait:has(.wfp-wait-log:not([style*="none"])) { width: min(480px, 92vw); max-width: 480px; }
+.wfp-wait-log { font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace; font-size: .7rem;
+  line-height: 1.5; background: #0e1422; color: #c9d4e3; border-radius: 8px; padding: .5rem .7rem;
+  border: 1px solid rgba(255, 255, 255, .06); }
+.wfp-wait-log .tw-line { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wfp-wait-log .tw-line::before { display: inline-block; width: 1.3em; }
+.wfp-wait-log .cmd { color: #ffffff; }
+.wfp-wait-log .cmd::before { content: "$"; color: #6fcf97; }
+.wfp-wait-log .run::before { content: "\25B8"; color: #26bde2; }
+.wfp-wait-log .run:last-child::after { content: "_"; margin-left: .15em; animation: tw-caret 1s steps(1) infinite; }
+.wfp-wait-log .ok { color: #8fa3bb; }
+.wfp-wait-log .ok::before { content: "\2713"; color: #6fcf97; }
+.wfp-wait-log .err { color: #ffb4b4; }
+.wfp-wait-log .err::before { content: "\2717"; color: #ff7b7b; }
+.wfp-wait-log .info::before { content: "\00B7"; color: #8fa3bb; }
+@keyframes tw-caret { 50% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .wfp-wait-log .run:last-child::after { animation: none; } }
 
 /* Monitoring report items: a two-column board; half-width items share a row. */
 .wfp-items { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .6rem; }
@@ -2443,12 +2443,20 @@ table.dataTable tr.dtrg-group td { background: var(--surface-3) !important; font
 .wfp-guide-tip { margin-top: .6rem; padding: .55rem .8rem; border-radius: 8px; background: var(--accent-warning-bg); font-size: .84rem; }
 
 /* Monitoring set-up: a compact sidebar of collapsible steps. */
-.wfp-mon-sidebar .accordion-button { padding: .55rem .75rem; font-size: .84rem; font-weight: 600; }
-.wfp-mon-sidebar .accordion-body { padding: .6rem .75rem .4rem; }
-.wfp-mon-sidebar .accordion-item { border-color: var(--border); }
-.wfp-mon-sidebar .form-group, .wfp-mon-sidebar .shiny-input-container { margin-bottom: .55rem; }
-.wfp-mon-sidebar .form-label, .wfp-mon-sidebar .control-label { font-size: .78rem; margin-bottom: .2rem; }
-.wfp-mon-sidebar .radio label { font-size: .84rem; }
+.wfp-mon-sidebar .accordion-button, .wfp-side .accordion-button { padding: .55rem .75rem; font-size: .84rem; font-weight: 600; }
+.wfp-mon-sidebar .accordion-body, .wfp-side .accordion-body { padding: .6rem .75rem .4rem; }
+.wfp-mon-sidebar .accordion-item, .wfp-side .accordion-item { border-color: var(--border); }
+.wfp-mon-sidebar .form-group, .wfp-mon-sidebar .shiny-input-container,
+.wfp-side .form-group, .wfp-side .shiny-input-container { margin-bottom: .55rem; }
+.wfp-mon-sidebar .form-label, .wfp-mon-sidebar .control-label,
+.wfp-side .form-label, .wfp-side .control-label { font-size: .78rem; margin-bottom: .2rem; }
+.wfp-mon-sidebar .radio label, .wfp-side .radio label { font-size: .84rem; }
+/* Every sidebar: the sections start at the top (no title above them), and the
+   action block closes the list with the same spacing. */
+.wfp-side .accordion { margin-top: .1rem; }
+.wfp-side .wfp-sb-actions .btn + .btn, .wfp-side .wfp-sb-actions > * + * { margin-top: .5rem; }
+.wfp-side .wfp-sb-note { font-size: .76rem; color: var(--text-muted); text-align: center; margin-top: .5rem; }
+.wfp-side .wfp-sb-group { font-size: .7rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--text-muted); margin: .75rem 0 .35rem; }
 .wfp-scope .wfp-scope-level { margin-bottom: .35rem; }
 .wfp-scope .wfp-scope-level .form-group { margin-bottom: .3rem; }
 
@@ -2496,7 +2504,8 @@ table.dataTable tr.dtrg-group td { background: var(--surface-3) !important; font
 /* Monitoring pages sit under the navbar AND a tab strip: bound the sidebar by
    the space really left, or its last pickers and the Compute / Export block
    fall below the window. */
-.bslib-sidebar-layout > .sidebar.wfp-mon-sidebar > .sidebar-content { max-height: calc(100vh - 150px); }
+.bslib-sidebar-layout > .sidebar.wfp-mon-sidebar > .sidebar-content,
+.bslib-sidebar-layout > .sidebar.wfp-side > .sidebar-content { max-height: calc(100vh - 150px); }
 
 /* A row of controls on one line, wrapping only when the controls (each at
    its minimum width) do not fit (spot-check sampling and back-check bars). */
@@ -2579,3 +2588,49 @@ table.dataTable tr.dtrg-group td { background: var(--surface-3) !important; font
 [id$="-screen_table"] .wfp-model-table-wrap, [id$="-qs_out"] .wfp-model-table-wrap,
 [id$="-selection_ui"] .wfp-model-table-wrap, [id$="-criteria_review"] .wfp-model-table-wrap { max-height: 1150px; }
 [id$="-screen_table"] .wfp-model-table-wrap, [id$="-criteria_review"] .wfp-model-table-wrap { max-height: 1450px; }
+
+/* The cross on the waiter that stops a background task (bg_run()). */
+.wfp-wait { position: relative; }
+.tw-wait-cancel { position: absolute; top: 6px; right: 8px; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 50%;
+  background: transparent; color: var(--text-muted); font-size: 18px; line-height: 22px; cursor: pointer; }
+.tw-wait-cancel:hover { background: var(--surface-3, rgba(128,128,128,.15)); color: var(--body-text); }
+.tw-wait-cancel:disabled { opacity: .4; cursor: default; }
+.wfp-wait:has(.tw-wait-cancel) .wfp-wait-row { padding-right: 24px; }
+
+/* --------------------------------------------------------------------------
+   Targeting Monitoring report: templates and rounds, suggested findings,
+   pre-export checks (mod_monitoring.R).
+   -------------------------------------------------------------------------- */
+.wfp-mon-draft { border: 1px solid var(--border); border-radius: var(--card-radius-sm, 8px); padding: .6rem .75rem; margin-bottom: .9rem; background: var(--surface); }
+.wfp-mon-suggest { margin-top: .35rem; padding: .35rem .55rem; border-radius: 6px; background: var(--accent-primary-bg, rgba(10, 110, 180, .08)); line-height: 1.35; }
+.wfp-mon-suggest .bi { color: var(--wfp-blue, #0A6EB4); }
+.wfp-mon-checks li { margin-bottom: .25rem; }
+.wfp-mon-draft > summary { cursor: pointer; color: var(--body-text); }
+
+/* PDM sidebar: the Compute block comes after the steps instead of sticking
+   over them (the steps used to scroll underneath it). */
+.wfp-sb-actions.wfp-sb-actions-end { position: static; margin: .75rem 0 0; padding: .75rem 0 0; background: none; border-top: 1px solid var(--border); }
+
+/* Narrow windows (about 1,000-1,200 px, before the menu collapses): the
+   navbar used to overflow, pushing the session toolbar outside the bar and
+   widening the whole page. Items now wrap to a second line if they must, the
+   country office button keeps only its icon (its name is in the tooltip) and
+   the language picker narrows. */
+@media (max-width: 1200px) {
+  /* A few pixels of invisible flex margin made the page wider than the
+     window, which cut the navbar's right end. clip (not hidden) keeps the
+     sticky navbar working. */
+  html, body { overflow-x: clip; }
+  .navbar .navbar-collapse { flex-wrap: wrap; row-gap: .25rem; }
+  /* The tabs, the country office, the language, the session buttons and the
+     theme switch all sit in one row: let it wrap, and drop the icons before
+     the page names, so nothing runs past the window. */
+  .navbar .navbar-nav { flex-wrap: wrap; row-gap: .25rem; min-width: 0; }
+  .navbar .nav-link > i, .navbar .nav-link > svg, .navbar .nav-link .bi { display: none !important; }
+  .navbar .nav-link { padding: .4rem .35rem !important; font-size: .76rem !important; }
+  /* icon only: the label is hidden, the icon keeps its size */
+  .wfp-co-btn { padding: .3rem .55rem !important; max-width: none; }
+  .wfp-co-btn .action-label { display: none !important; }
+  .wfp-co-btn .action-icon, .wfp-co-btn i, .wfp-co-btn svg { font-size: .85rem !important; margin: 0 !important; }
+  .navbar .mini-theme-selector select { width: 70px !important; }
+}

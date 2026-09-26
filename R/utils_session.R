@@ -102,9 +102,170 @@ sanitize_session_name <- function(name) {
   name
 }
 
-get_session_file <- function(name = "default", user = NULL) {
-  name <- sanitize_session_name(name)
-  file.path(get_session_dir(user), paste0(name, ".rds"))
+get_session_file <- function(name = "default", user = NULL, kind = NULL) {
+  file.path(get_session_dir(user), paste0(session_stem(name, kind), ".rds"))
+}
+
+#' File name (without extension) of a session: "<name>.<workstream>"
+#'
+#' A session holds one workstream (see `session_kinds()`); older sessions,
+#' which hold everything, have no suffix. `name` may already carry the suffix
+#' (the ids listed by `list_saved_sessions()`).
+#' @noRd
+session_stem <- function(name, kind = NULL) {
+  pat <- "\\.(design|selection|monitoring)$"
+  if (grepl(pat, name)) {
+    kind <- kind %||% sub("^.*\\.", "", name)
+    name <- sub(pat, "", name)
+  }
+  s <- sanitize_session_name(name)
+  if (is.null(kind) || identical(kind, "all")) s else paste0(s, ".", kind)
+}
+
+#' The three workstreams, each saved as its own session
+#'
+#' Design works on the assessment data, Selection on the registration data,
+#' Monitoring on PDM and process data. Saving them apart keeps a session to
+#' the data it needs: a selection save no longer rewrites the design dataset.
+#' The adopted scorecard and the eligibility rules travel with the sessions
+#' that use them.
+#' @noRd
+session_kinds <- function() {
+  c(design = "Targeting Design", selection = "Beneficiary Selection", monitoring = "Targeting Monitoring")
+}
+
+#' Which workstream a module's saved work belongs to (unknown keys: Selection)
+#' @noRd
+workstream_of <- function(key) {
+  if (key %in% c("scorecard", "scorecard_scope")) return("design")
+  if (key %in% c("pdm", "pdm_scope", "pm_scope", "monitoring")) return("monitoring")
+  "selection"
+}
+
+#' @noRd
+workstream_of_page <- function(page) {
+  switch(page %||% "", scorecard_panel = "design", pdm_panel = "monitoring", "selection")
+}
+
+#' @noRd
+workstream_phase <- function(kind) c(design = "Design", selection = "Selection", monitoring = "Monitoring")[[kind]]
+
+#' Audit entries of one workstream (plus the session entries)
+#' @noRd
+log_for <- function(log, kind) {
+  if (!is.data.frame(log) || !nrow(log) || identical(kind, "all")) return(log)
+  log[audit_phase(log$action) %in% c(workstream_phase(kind), "Session"), , drop = FALSE]
+}
+
+#' Put a workstream's saved audit entries back beside the other phases' ones
+#' @noRd
+log_merge <- function(cur, saved, kind) {
+  if (!is.data.frame(saved) || !nrow(saved)) return(cur)
+  if (!is.data.frame(cur) || !nrow(cur) || identical(kind, "all")) return(saved)
+  keep <- cur[audit_phase(cur$action) != workstream_phase(kind), , drop = FALSE]
+  out <- dplyr::bind_rows(keep, saved)
+  out <- out[!duplicated(out), , drop = FALSE]
+  out <- out[order(out$timestamp), , drop = FALSE]
+  rownames(out) <- NULL
+  out
+}
+
+#' The part of the app state one workstream saves
+#'
+#' Selection carries the registration data, its mapping and the MODA form;
+#' Design and Monitoring carry only the setup they read (the adopted
+#' scorecard, the eligibility rules, the country office).
+#' @noRd
+workstream_state <- function(kind, uploaded_df, original_df, user_setup, log, moda_credentials, work) {
+  work <- work %||% list()
+  w <- work[vapply(names(work), workstream_of, character(1)) == kind]
+  keys <- switch(kind, design = c("scorecard", "country_office"),
+                 monitoring = c("scorecard", "rules", "country_office"), NULL)
+  sel <- identical(kind, "selection")
+  list(uploaded_df = if (sel) uploaded_df,
+       original_df = if (sel) original_df,
+       user_setup = if (is.null(keys)) user_setup else user_setup[intersect(keys, names(user_setup))],
+       modification_log = log_for(log, kind),
+       moda_credentials = if (sel) moda_credentials,
+       workspace = w)
+}
+
+#' Whether a workstream holds work worth a session file
+#' @noRd
+workstream_has_work <- function(st, kind) {
+  if (length(st$workspace)) return(TRUE)
+  if (!identical(kind, "selection") || is.null(st$uploaded_df)) return(FALSE)
+  lg <- st$modification_log
+  mapped <- any(vapply(st$user_setup, function(x) is.character(x) && length(x) == 1 && nzchar(x), logical(1)))
+  mapped || (is.data.frame(lg) && any(audit_phase(lg$action) != "Session"))
+}
+
+#' Fingerprint of a workstream, to autosave only what changed. Session
+#' entries are left out: saving writes one, which would set off another save.
+#' @noRd
+workstream_signature <- function(st) {
+  lg <- st$modification_log
+  n <- if (is.data.frame(lg) && nrow(lg)) sum(audit_phase(lg$action) != "Session") else 0
+  workspace_signature(list(st$workspace, st$user_setup, st$uploaded_df, n))
+}
+
+#' Data frames in a session are stored as Parquet (7x smaller than R's own
+#' format on survey data, so the encryption and the file shrink with them).
+#'
+#' Column attributes Parquet has no place for (SPSS labels and formats, factor
+#' levels, time zones) are kept beside the bytes and put back on load. Frames
+#' with other column types (lists, matrices, ordered factors...) or under
+#' 1,000 rows stay as they are.
+#' @noRd
+frame_to_parquet <- function(d) {
+  plain <- c("character", "numeric", "integer", "logical", "factor", "Date", "POSIXct", "POSIXt")
+  ok <- nrow(d) >= 1000 && ncol(d) > 0 && !anyDuplicated(names(d)) && all(nzchar(names(d))) &&
+    all(vapply(d, function(x) is.atomic(x) && is.null(dim(x)) && all(class(x) %in% plain), logical(1)))
+  if (!ok) return(d)
+  tryCatch({
+    f <- tempfile(fileext = ".parquet")
+    on.exit(unlink(f), add = TRUE)
+    nanoparquet::write_parquet(d, f)
+    fa <- attributes(d)
+    structure(list(bytes = readBin(f, "raw", file.size(f)),
+                   columns = lapply(d, attributes),
+                   frame = fa[setdiff(names(fa), c("names", "row.names"))],
+                   row_names = if (.row_names_info(d) > 0) attr(d, "row.names")),
+              class = "tw_parquet")
+  }, error = function(e) d)
+}
+
+#' @noRd
+parquet_to_frame <- function(p) {
+  f <- tempfile(fileext = ".parquet")
+  on.exit(unlink(f), add = TRUE)
+  writeBin(p$bytes, f)
+  d <- as.data.frame(nanoparquet::read_parquet(f))
+  for (i in seq_along(d)) {
+    a <- p$columns[[i]]
+    x <- d[[i]]
+    if (!is.null(a$levels)) x <- factor(as.character(x), levels = a$levels)
+    x <- unclass(x)
+    attributes(x) <- a
+    d[[i]] <- x
+  }
+  attributes(d) <- c(list(names = names(d), row.names = p$row_names %||% .set_row_names(nrow(d))), p$frame)
+  d
+}
+
+#' Parquet every large data frame in a session state (and back), however deep
+#' @noRd
+pack_frames <- function(x) {
+  if (is.data.frame(x)) return(frame_to_parquet(x))
+  if (is.list(x) && !is.object(x) && length(x)) x[] <- lapply(x, pack_frames)
+  x
+}
+
+#' @noRd
+unpack_frames <- function(x) {
+  if (inherits(x, "tw_parquet")) return(parquet_to_frame(x))
+  if (is.list(x) && !is.object(x) && length(x)) x[] <- lapply(x, unpack_frames)
+  x
 }
 
 #' List all saved sessions
@@ -125,8 +286,12 @@ list_saved_sessions <- function(user = NULL) {
 
   info <- file.info(files)
   names <- tools::file_path_sans_ext(basename(files))
+  pat <- "\\.(design|selection|monitoring)$"
   df <- data.frame(
     name = names,
+    label = sub(pat, "", names),
+    kind = ifelse(grepl(pat, names), sub("^.*\\.", "", names), "all"),
+    size = info$size,
     saved_at = info$mtime,
     row.names = NULL,
     stringsAsFactors = FALSE
@@ -244,8 +409,8 @@ decrypt_session <- function(cipher, passphrase = session_passphrase(), user = NU
 #' @noRd
 save_session <- function(uploaded_df, user_setup, modification_log, theme = "wfp",
                           moda_credentials = NULL, name = "default", user = NULL,
-                          workspace = NULL, ui = NULL, original_df = NULL) {
-  session_file <- get_session_file(name, user)
+                          workspace = NULL, ui = NULL, original_df = NULL, kind = NULL) {
+  session_file <- get_session_file(name, user, kind)
 
   # Never persist the MODA API token in session files
   if (is.list(moda_credentials) && !is.null(moda_credentials$token)) {
@@ -264,13 +429,16 @@ save_session <- function(uploaded_df, user_setup, modification_log, theme = "wfp
     workspace = workspace,
     ui = ui,
     saved_at = Sys.time(),
-    name = name
+    name = name,
+    kind = kind %||% "all"
   )
 
-  cipher <- encrypt_session(state, user = user)
+  packed <- tw_step("store the data as Parquet", pack_frames(state))
+  cipher <- tw_step("encrypt (libsodium)", encrypt_session(packed, user = user))
   # The ciphertext is incompressible, so gzip in saveRDS() would only burn CPU
   # (it dominated the 20 s save of a 174k-row dataset). readRDS() auto-detects.
-  saveRDS(cipher, session_file, compress = FALSE)
+  tw_step(sprintf("write %s (%.1f MB)", basename(session_file), length(cipher) / 1024^2),
+          saveRDS(cipher, session_file, compress = FALSE))
   invisible(session_file)
 }
 
@@ -303,9 +471,11 @@ load_session <- function(name = "default", user = NULL) {
 
   tryCatch(
     {
-      raw_or_state <- readRDS(session_file)
+      raw_or_state <- tw_step(sprintf("read %s (%.1f MB)", basename(session_file), file.size(session_file) / 1024^2),
+                              readRDS(session_file))
       if (is.raw(raw_or_state)) {
-        decrypt_session(raw_or_state, user = user)
+        state <- tw_step("decrypt (libsodium)", decrypt_session(raw_or_state, user = user))
+        tw_step("unpack the data", unpack_frames(state))
       } else {
         raw_or_state
       }
@@ -333,7 +503,7 @@ has_saved_session <- function(user = NULL) {
 delete_session <- function(name, user = NULL) {
   session_file <- get_session_file(name, user)
   if (file.exists(session_file)) file.remove(session_file)
-  audit_file <- file.path(get_session_dir(user), paste0(sanitize_session_name(name), "_audit.rds"))
+  audit_file <- file.path(get_session_dir(user), paste0(session_stem(name), "_audit.rds"))
   if (file.exists(audit_file)) file.remove(audit_file)
   invisible(TRUE)
 }
@@ -359,8 +529,7 @@ clear_session <- function(user = NULL) {
 #' @return Invisibly returns the path to the saved audit log file.
 #' @noRd
 save_audit_log <- function(modification_log, name = "default", user = NULL) {
-  name <- sanitize_session_name(name)
-  audit_file <- file.path(get_session_dir(user), paste0(name, "_audit.rds"))
+  audit_file <- file.path(get_session_dir(user), paste0(session_stem(name), "_audit.rds"))
   saveRDS(modification_log, audit_file)
   invisible(audit_file)
 }
@@ -371,8 +540,7 @@ save_audit_log <- function(modification_log, name = "default", user = NULL) {
 #' @return A data frame, or `NULL` if no audit log exists.
 #' @noRd
 load_audit_log <- function(name = "default", user = NULL) {
-  name <- sanitize_session_name(name)
-  audit_file <- file.path(get_session_dir(user), paste0(name, "_audit.rds"))
+  audit_file <- file.path(get_session_dir(user), paste0(session_stem(name), "_audit.rds"))
   if (!file.exists(audit_file)) {
     return(NULL)
   }

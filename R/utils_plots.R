@@ -87,7 +87,7 @@ empty_state <- function(title, subtitle = NULL, icon = "clipboard-data") {
 #'   categorical bar charts and for weighted quantiles in boxplots. If `NULL`,
 #'   raw counts / unweighted quantiles are used.
 #' @export
-create_profile_plot <- function(data, view_col, demo_col, weights = NULL) {
+create_profile_plot <- function(data, view_col, demo_col, weights = NULL, title = NULL) {
 
   # WFP token palette (blue / cyan / amber / green / red)
   wfp_pal <- c("#0A6EB4", "#26bde2", "#f7b825", "#3f7e44", "#c5192d")
@@ -184,7 +184,7 @@ create_profile_plot <- function(data, view_col, demo_col, weights = NULL) {
   p |> plotly::layout(
 
     # Text colors are left unset so thematic supplies theme-aware (light/dark) values
-    title = list(text = paste0(view_col, " By ", demo_col),
+    title = list(text = title %||% paste(view_col, "by", demo_col),
                  font = list(size = 10)),
 
     showlegend = FALSE, # REMOVE LEGEND

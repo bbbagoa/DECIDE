@@ -12,40 +12,40 @@ mod_overview_ui <- function(id) {
     bslib::layout_sidebar(
       fillable = FALSE,
       sidebar = bslib::sidebar(
-        title = "Dashboard Filters",
-        width = 290,
-        shinyWidgets::pickerInput(
-          inputId = ns("filter_admin1"), label = "Admin 1:", choices = character(0), multiple = TRUE,
-          options = shinyWidgets::pickerOptions(container = "body", actionsBox = TRUE, liveSearch = TRUE, selectedTextFormat = "count > 3")
-        ),
-        shinyWidgets::pickerInput(
-          inputId = ns("filter_admin2"), label = "Admin 2:", choices = character(0), multiple = TRUE,
-          options = shinyWidgets::pickerOptions(container = "body", actionsBox = TRUE, liveSearch = TRUE)
-        ),
-        shinyWidgets::pickerInput(
-          inputId = ns("filter_admin3"), label = "Admin 3:", choices = character(0), multiple = TRUE,
-          options = shinyWidgets::pickerOptions(container = "body", actionsBox = TRUE, liveSearch = TRUE)
-        ),
-        hr(),
-        shinyWidgets::airDatepickerInput(
-          inputId = ns("filter_date"), label = "Observation Period:", range = TRUE,
-          value = c("2026-01-01", Sys.Date()), dateFormat = "yyyy-mm-dd", autoClose = TRUE
-        ),
-        hr(),
-        tags$div(
-          class = "d-flex gap-2 mt-2",
-          actionButton(ns("btn_apply_filters"), "Apply", class = "btn-primary btn-sm flex-fill", icon = icon("filter")),
-          actionButton(ns("btn_clear_filters"), label = NULL, icon = icon("xmark"), class = "btn-outline-secondary btn-sm")
-        ),
-        hr(),
-        # What this page shows, as a report: covers the filters above.
-        downloadButton(ns("overview_report"), "Data summary report (HTML)", class = "btn-outline-primary btn-sm w-100")
+        width = 300, class = "wfp-side",
+        side_steps(
+          side_step("1. Areas", "geo-alt",
+            shinyWidgets::pickerInput(
+              inputId = ns("filter_admin1"), label = "Admin 1", choices = character(0), multiple = TRUE, width = "100%",
+              options = shinyWidgets::pickerOptions(container = "body", actionsBox = TRUE, liveSearch = TRUE, selectedTextFormat = "count > 3")),
+            shinyWidgets::pickerInput(
+              inputId = ns("filter_admin2"), label = "Admin 2", choices = character(0), multiple = TRUE, width = "100%",
+              options = shinyWidgets::pickerOptions(container = "body", actionsBox = TRUE, liveSearch = TRUE)),
+            shinyWidgets::pickerInput(
+              inputId = ns("filter_admin3"), label = "Admin 3", choices = character(0), multiple = TRUE, width = "100%",
+              options = shinyWidgets::pickerOptions(container = "body", actionsBox = TRUE, liveSearch = TRUE))),
+          side_step("2. Interview dates", "calendar-range",
+            shinyWidgets::airDatepickerInput(
+              inputId = ns("filter_date"), label = NULL, range = TRUE,
+              value = c("2026-01-01", Sys.Date()), autoClose = TRUE, width = "100%"))),
+        side_actions(
+          tags$div(
+            class = "d-flex gap-2",
+            actionButton(ns("btn_apply_filters"), "Apply", class = "btn-primary btn-sm flex-fill", icon = icon("filter")),
+            actionButton(ns("btn_clear_filters"), label = NULL, icon = icon("xmark"), class = "btn-outline-secondary btn-sm",
+                         title = "Clear the filters")),
+          # What this page shows, as a report: covers the filters above.
+          downloadButton(ns("overview_report"), "Data summary report (HTML)", class = "btn-outline-primary btn-sm w-100"))
       ),
 
       bslib::layout_column_wrap(
         width = 1 / 5, fill = FALSE,
-        bslib::value_box(title = "Households", value = textOutput(ns("stat_hh")), showcase = bsicons::bs_icon("house-door"), theme = "primary"),
-        bslib::value_box(title = "Individuals", value = textOutput(ns("stat_indiv")), showcase = bsicons::bs_icon("people"), theme = "secondary"),
+        # With a sampling weight the counts are estimates: say so, beside the
+        # number of records, so 94 here and 60 at import do not look like lost data.
+        bslib::value_box(title = "Households", value = textOutput(ns("stat_hh")), showcase = bsicons::bs_icon("house-door"), theme = "primary",
+                         tags$p(class = "small text-muted mb-0", textOutput(ns("stat_hh_note"), inline = TRUE))),
+        bslib::value_box(title = "Individuals", value = textOutput(ns("stat_indiv")), showcase = bsicons::bs_icon("people"), theme = "secondary",
+                         tags$p(class = "small text-muted mb-0", textOutput(ns("stat_indiv_note"), inline = TRUE))),
         bslib::value_box(title = "Communities", value = textOutput(ns("stat_comm")), showcase = bsicons::bs_icon("geo-alt"), theme = "info"),
         bslib::value_box(title = "Daily Sync Rate", value = textOutput(ns("stat_rate")), showcase = plotly::plotlyOutput(ns("stat_rate_plot")), full_screen = TRUE, theme = "danger"),
         bslib::value_box(title = "Avg Survey Time", value = textOutput(ns("stat_duration")), showcase = bsicons::bs_icon("stopwatch"), theme = "dark")
@@ -56,7 +56,7 @@ mod_overview_ui <- function(id) {
         # filling the rest of the card so it matches the summary next to it.
         bslib::card(
           full_screen = TRUE, class = "wfp-map-card",
-          bslib::card_header(bsicons::bs_icon("map"), " ", textOutput(ns("map_area_title"), inline = TRUE)),
+          bslib::card_header(bsicons::bs_icon("map"), " Map"),
           bslib::card_body(
             class = "p-0 gap-0", fillable = FALSE, fill = FALSE,
           tags$div(
@@ -506,6 +506,19 @@ mod_overview_server <- function(id, uploaded_df, user_setup) {
     format(round(weighted_count(filtered_data(), user_setup)), big.mark = ",")
   })
 
+  weighted <- reactive({
+    w <- as.character(user_setup$weight %||% "")[1]
+    !is.na(w) && nzchar(w) && w %in% names(filtered_data())
+  })
+  output$stat_hh_note <- renderText({
+    req(filtered_data())
+    if (weighted()) sprintf("weighted estimate, %s records", format(nrow(filtered_data()), big.mark = ",")) else "records"
+  })
+  output$stat_indiv_note <- renderText({
+    req(filtered_data())
+    if (weighted()) "weighted estimate" else "in these households"
+  })
+
   # Metric 2: Total Individuals (Weighted sum of HH Size)
   output$stat_indiv <- renderText({
     req(filtered_data(), user_setup$hh_size)
@@ -635,8 +648,6 @@ mod_overview_server <- function(id, uploaded_df, user_setup) {
     dynamic_title()
   })
 
-  # Pass this to the UI
-  output$map_area_title <- renderText(dynamic_title())
 
   # Rows missing from the map are said, not left to be guessed at.
   output$map_note <- renderText({
@@ -681,23 +692,27 @@ mod_overview_server <- function(id, uploaded_df, user_setup) {
         `% Indiv` = Individuals / sum(Individuals)
       ) |>
       dplyr::arrange(Vulnerability)
+    # Short headers: the table shares its row with the donut.
+    names(summary_df) <- c("Group", "Households", "People", "% HH", "% people")
 
     # 3. Create Table with Percentage Formatting
     DT::datatable(
       summary_df,
-      options = list(dom = 't', paging = FALSE, ordering = FALSE),
-      rownames = FALSE
+      # A small table: no scroll frame (the app-wide default cut its last
+      # column), it sizes to the card.
+      options = list(dom = 't', paging = FALSE, ordering = FALSE, scrollX = FALSE, scrollY = NULL, autoWidth = FALSE),
+      rownames = FALSE, class = "compact", width = "100%"
     ) |>
       # Format big numbers with commas
       DT::formatCurrency(
-        c('Households', 'Individuals'),
+        c('Households', 'People'),
         currency = "",
         interval = 3,
         mark = ",",
         digits = 0
       ) |>
       # Format the new columns as Percentages
-      DT::formatPercentage(c('% HH', '% Indiv'), digits = 1)
+      DT::formatPercentage(c('% HH', '% people'), digits = 1)
   })
 
   ### ----------------- The Eligibility Donut Chart
@@ -838,6 +853,13 @@ mod_overview_server <- function(id, uploaded_df, user_setup) {
   #     plotly::config(displayModeBar = FALSE)
   # })
 
+  # "Head of household sex": the mapped field in words, not the raw column name.
+  profile_title <- function(key) {
+    # The "Profile by" toggle above already names the view: the title is the
+    # field alone, short enough for a third of the card.
+    dq_field_labels()[[key]]
+  }
+
   ### ----------------- Vulnerability Profile
   # -----------------------------------------------------------------------------------
 
@@ -859,7 +881,8 @@ mod_overview_server <- function(id, uploaded_df, user_setup) {
       filtered_data(),
       view_col,
       user_setup$hhh_sex,
-      weights = get_weights(filtered_data(), user_setup)
+      weights = get_weights(filtered_data(), user_setup),
+      title = profile_title("hhh_sex")
     )
   })
 
@@ -879,7 +902,8 @@ mod_overview_server <- function(id, uploaded_df, user_setup) {
       data = filtered_data(),
       view_col = view_col_name,
       demo_col = user_setup$disability,
-      weights = get_weights(filtered_data(), user_setup)
+      weights = get_weights(filtered_data(), user_setup),
+      title = profile_title("disability")
     )
   })
 
@@ -900,7 +924,8 @@ mod_overview_server <- function(id, uploaded_df, user_setup) {
       data = filtered_data(),
       view_col = view_col_name,
       demo_col = user_setup$hh_size,
-      weights = get_weights(filtered_data(), user_setup)
+      weights = get_weights(filtered_data(), user_setup),
+      title = profile_title("hh_size")
     )
   })
 
@@ -921,7 +946,8 @@ mod_overview_server <- function(id, uploaded_df, user_setup) {
       data = filtered_data(),
       view_col = view_col_name,
       demo_col = user_setup$hhh_age,
-      weights = get_weights(filtered_data(), user_setup)
+      weights = get_weights(filtered_data(), user_setup),
+      title = profile_title("hhh_age")
     )
   })
 
@@ -942,7 +968,8 @@ mod_overview_server <- function(id, uploaded_df, user_setup) {
       data = filtered_data(),
       view_col = view_col_name,
       demo_col = user_setup$residency,
-      weights = get_weights(filtered_data(), user_setup)
+      weights = get_weights(filtered_data(), user_setup),
+      title = profile_title("residency")
     )
   })
 
@@ -963,7 +990,8 @@ mod_overview_server <- function(id, uploaded_df, user_setup) {
       data = filtered_data(),
       view_col = view_col_name,
       demo_col = user_setup$childU5,
-      weights = get_weights(filtered_data(), user_setup)
+      weights = get_weights(filtered_data(), user_setup),
+      title = profile_title("childU5")
     )
   })
 
@@ -1107,7 +1135,7 @@ mod_overview_server <- function(id, uploaded_df, user_setup) {
         plotly::layout(
           title = if (truncated) list(text = sprintf("First %d of %d numeric variables", max_vars, length(mapped_num) + sum(!num_cols %in% mapped_num)), font = list(size = 11)) else NULL,
           margin = list(l = 120, b = 110, t = if (truncated) 36 else 16),
-          xaxis = list(tickangle = -45, tickfont = list(size = 10)),
+          xaxis = list(tickangle = -90, tickfont = list(size = 10)),
           yaxis = list(tickfont = list(size = 10))
         )
     })

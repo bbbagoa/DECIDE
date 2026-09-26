@@ -56,6 +56,27 @@ mod_monitoring_ui <- function(id) {
         bslib::card(
           bslib::card_header(bsicons::bs_icon("pencil"), " Your analysis"),
           bslib::card_body(
+            # Start from a template: ready-made charts on the data loaded, or a
+            # report saved from an earlier round (compared with it).
+            tags$details(
+              class = "wfp-mon-draft",
+              tags$summary(class = "small fw-bold", bsicons::bs_icon("magic"), " Start from a template (optional)"),
+              tags$p(class = "small text-muted mt-2 mb-2",
+                     "Fills the report with ready-made charts from the data you loaded, each with a suggested finding you can edit. ",
+                     "Your own charts and texts are kept unless you choose to replace them."),
+              tags$div(class = "d-flex gap-2 align-items-end",
+                       tags$div(class = "flex-fill", selectInput(ns("tpl"), NULL, choices = character(0), width = "100%")),
+                       tags$div(class = "pb-3", actionButton(ns("tpl_apply"), "Draft", icon = icon("wand-magic-sparkles"),
+                                                             class = "btn-outline-primary",
+                                                             title = "Fill the report with this template's charts, with findings written from the numbers"))),
+              tags$p(class = "small text-muted mb-1",
+                     "At the end of a round, save this report as a template: next round, pick it and click Draft to compare."),
+              tags$div(class = "d-flex gap-2 flex-wrap",
+                       actionButton(ns("tpl_save"), "Save as template", icon = icon("floppy-disk"),
+                                    class = "btn-outline-secondary btn-sm"),
+                       actionButton(ns("tpl_delete"), NULL, icon = icon("trash"), class = "btn-outline-danger btn-sm",
+                                    title = "Delete the saved template picked above")),
+              uiOutput(ns("rounds_note"))),
             rich_text_input(ns("context"), "Context", rows = 3,
                             placeholder = "Programme, area, period, targeting approach, who collected what."),
             rich_text_input(ns("findings"), "Key findings", rows = 3,
@@ -63,7 +84,12 @@ mod_monitoring_ui <- function(id) {
             rich_text_input(ns("recommendations"), "Recommendations", rows = 3,
                             placeholder = "What to change in the next round, and who does it."),
             checkboxInput(ns("include_pdm"), "Include the implementation errors from the PDM / baseline analysis", value = TRUE),
-            downloadButton(ns("report"), "Targeting monitoring report (HTML)", class = "btn-primary w-100")
+            # Checked first (small groups, missing titles or comments...), then
+            # downloaded through the hidden link below.
+            actionButton(ns("report_check"), "Targeting monitoring report (HTML)", icon = icon("download"), class = "btn-primary w-100"),
+            tags$div(class = "small text-muted mt-1", "The report is checked first (titles, comments, small groups); you can still export as it is."),
+            tags$div(style = "display:none", downloadButton(ns("report"), "Download")),
+            tags$script(HTML("$(function(){Shiny.addCustomMessageHandler('tw-mon-download',function(m){var a=document.getElementById(m.id);if(a)a.click();});});"))
           )
         ),
         bslib::card(
@@ -141,11 +167,111 @@ mod_monitoring_server <- function(id, workspace = NULL, country_office = reactiv
 
     observe(gate_button("pm_remove", length(datasets()) > 0, "No dataset loaded yet."))
 
+    # --- templates, drafts and rounds ---------------------------------------------
+    who <- app_user(session)
+    saved_templates <- reactiveVal(tryCatch(app_setting_get("monitoring_templates", who), error = function(e) NULL) %||% list())
+    previous_rounds <- reactiveVal(list())   # earlier rounds of the template in use, oldest first
+    observe({
+      bi <- monitoring_templates()
+      ch <- list(`Ready-made` = as.list(stats::setNames(paste0("builtin:", names(bi)), vapply(bi, `[[`, character(1), "label"))))
+      sv <- saved_templates()
+      if (length(sv)) ch$`Saved from earlier rounds` <- as.list(stats::setNames(paste0("saved:", names(sv)),
+        vapply(names(sv), function(n) sprintf("%s (%d round%s)", n, length(sv[[n]]$rounds), if (length(sv[[n]]$rounds) == 1) "" else "s"), character(1))))
+      updateSelectInput(session, "tpl", choices = ch, selected = isolate(input$tpl))
+    })
+    pdm_label <- function() {
+      a <- pdm$areas()
+      paste0(pdm$name(), if (!identical(a, "All areas")) paste0(" (", a, ")") else "")
+    }
+    process_sets <- function() lapply(datasets(), function(df) tryCatch(pm_scope$filter(df), error = function(e) df))
+    apply_template <- function(mode) {
+      removeModal()
+      sel <- input$tpl %||% ""
+      res <- if (startsWith(sel, "builtin:")) {
+        monitoring_draft(sub("^builtin:", "", sel), pdm$df(), process_sets(), pdm_label())
+      } else {
+        t <- saved_templates()[[sub("^saved:", "", sel)]]
+        need_ok(!is.null(t), "Pick a template first.")
+        previous_rounds(t$rounds %||% list())
+        items_from_template(t$items, pdm$df(), process_sets(), pdm_label())
+      }
+      if (!length(res$items)) {
+        showNotification(paste("Nothing to draft: none of this template's charts found its columns.",
+                               "Load the PDM data (tab 1) and the targeting-process datasets (tab 2) first."), type = "warning", duration = 10)
+        return()
+      }
+      items(if (identical(mode, "add")) c(items(), res$items) else res$items)
+      audit_add(modification_log, "Monitoring", "Report drafted from a template",
+                sprintf("%s: %d charts", sel, length(res$items)))
+      showNotification(paste0(sprintf("%d chart%s drafted, each with a finding written from its numbers: review and edit them.",
+                                      length(res$items), if (length(res$items) == 1) "" else "s"),
+                              if (length(res$skipped)) paste(" Not found in the data:", paste(res$skipped, collapse = ", "), ".") else ""),
+                       type = "message", duration = 10)
+    }
+    observeEvent(input$tpl_apply, {
+      need_ok(nzchar(input$tpl %||% ""), "Pick a template first.")
+      if (!length(items())) return(apply_template("replace"))
+      showModal(modalDialog(
+        title = tagList(icon("wand-magic-sparkles"), " Draft from the template"), size = "s", easyClose = TRUE,
+        tags$p(class = "small", sprintf("The report already has %d item%s.", length(items()), if (length(items()) == 1) "" else "s")),
+        footer = tagList(modalButton("Cancel"),
+                         actionButton(ns("tpl_add"), "Add to them", class = "btn-outline-primary"),
+                         actionButton(ns("tpl_replace"), "Replace them", class = "btn-primary"))))
+    })
+    observeEvent(input$tpl_add, apply_template("add"))
+    observeEvent(input$tpl_replace, apply_template("replace"))
+
+    observeEvent(input$tpl_save, {
+      need_ok(length(items()) > 0, "Add charts to the report first: the template keeps them (without the data).")
+      cur <- sub("^saved:", "", input$tpl %||% "")
+      showModal(modalDialog(
+        title = tagList(icon("floppy-disk"), " Save as template"), size = "m", easyClose = TRUE,
+        tags$p(class = "small text-muted",
+               "Keeps the charts (not the data) and this round's figures. Next round, pick the template and click Draft:",
+               " the same charts are drawn on the new data and the report shows what changed since this round."),
+        textInput(ns("tpl_name"), "Template name", value = if (startsWith(input$tpl %||% "", "saved:")) cur else "Monitoring report", width = "100%"),
+        textInput(ns("tpl_round"), "This round", value = format(Sys.Date(), "%B %Y"), width = "100%"),
+        footer = tagList(modalButton("Cancel"), actionButton(ns("tpl_save_go"), "Save", class = "btn-primary", icon = icon("floppy-disk")))))
+    })
+    observeEvent(input$tpl_save_go, {
+      nm <- trimws(input$tpl_name %||% ""); rd <- trimws(input$tpl_round %||% "")
+      need_ok(nzchar(nm) && nzchar(rd), "Name the template and the round.")
+      sv <- saved_templates()
+      t <- sv[[nm]] %||% list(name = nm, rounds = list())
+      t$items <- template_from_items(items())
+      t$rounds <- c(Filter(function(r) !identical(r$label, rd), t$rounds %||% list()),
+                    list(monitoring_round(rd, report_pdm(checks = TRUE), items())))
+      sv[[nm]] <- t
+      saved_templates(sv)
+      tryCatch(app_setting_set("monitoring_templates", sv, who), error = function(e) NULL)
+      removeModal()
+      updateSelectInput(session, "tpl", selected = paste0("saved:", nm))
+      audit_add(modification_log, "Monitoring", "Report saved as a template", sprintf("%s, round %s", nm, rd))
+      showNotification(sprintf("Saved '%s' with the figures of %s.", nm, rd), type = "message")
+    })
+    observeEvent(input$tpl_delete, {
+      sel <- input$tpl %||% ""
+      need_ok(startsWith(sel, "saved:"), "Pick one of your saved templates to delete (the ready-made ones stay).")
+      sv <- saved_templates(); sv[[sub("^saved:", "", sel)]] <- NULL
+      saved_templates(sv)
+      tryCatch(app_setting_set("monitoring_templates", sv, who), error = function(e) NULL)
+      showNotification("Template deleted.", type = "message")
+    })
+    output$rounds_note <- renderUI({
+      r <- previous_rounds()
+      if (!length(r)) return(NULL)
+      last <- r[[length(r)]]
+      tags$div(class = "small mt-1", bsicons::bs_icon("clock-history"),
+               sprintf(" Compared with %s (%s)%s.", last$label, last$date,
+                       if (length(r) > 1) sprintf(" and %d earlier round%s", length(r) - 1, if (length(r) > 2) "s" else "") else ""))
+    })
+
     # --- the report's items: reorder, edit the comment, remove -------------------
     # The list is redrawn when items are added, removed, moved or resized, not
     # when a comment changes: a redraw would take the text from under the cursor.
     items_shape <- reactiveVal(NULL)
-    observe(items_shape(lapply(items(), function(it) it[c("id", "title", "width", "source", "dataset", "display")])))
+    redraw <- reactiveVal(0)   # a comment replaced from outside the editor
+    observe(items_shape(list(redraw(), lapply(items(), function(it) it[c("id", "title", "width", "source", "dataset", "display")]))))
     output$items_ui <- renderUI({
       items_shape()
       its <- isolate(items())
@@ -186,7 +312,13 @@ mod_monitoring_server <- function(id, workspace = NULL, country_office = reactiv
                             tags$button(type = "button", class = "btn btn-outline-danger", title = "Remove",
                                         onclick = js("remove", it$id), icon("xmark")))),
           tags$div(class = "mt-2", rich_text_input(value = it$comment, placeholder = "Comment", rows = 2, compact = TRUE,
-                                                   send = ns("item_comment"), item = it$id))
+                                                   send = ns("item_comment"), item = it$id)),
+          # The suggestion, unless the comment already says it.
+          if (nzchar(it$caption %||% "") && !grepl(it$caption, rich_text(it$comment %||% ""), fixed = TRUE)) tags$div(
+            class = "wfp-mon-suggest small",
+            bsicons::bs_icon("lightbulb"), tags$span(class = "text-muted", " Suggested finding: "), it$caption, " ",
+            tags$button(type = "button", class = "btn btn-link btn-sm p-0 align-baseline", onclick = js("caption", it$id),
+                        "Use it"))
         )
       })))
     })
@@ -204,6 +336,12 @@ mod_monitoring_server <- function(id, workspace = NULL, country_office = reactiv
       else if (identical(a$what, "width")) its[[i]]$width <- if (identical(its[[i]]$width, "half")) "full" else "half"
       else if (identical(a$what, "up") && i > 1) its[c(i - 1, i)] <- its[c(i, i - 1)]
       else if (identical(a$what, "down") && i < length(its)) its[c(i, i + 1)] <- its[c(i + 1, i)]
+      else if (identical(a$what, "caption")) {
+        old <- rich_text(its[[i]]$comment)
+        its[[i]]$comment <- if (nzchar(old) && !grepl(its[[i]]$caption, old, fixed = TRUE)) paste(old, its[[i]]$caption) else its[[i]]$caption
+        items(its); redraw(redraw() + 1)
+        return()
+      }
       items(its)
     })
     observeEvent(input$item_comment, {
@@ -214,37 +352,64 @@ mod_monitoring_server <- function(id, workspace = NULL, country_office = reactiv
     })
 
     # --- the report --------------------------------------------------------------
+    # The implementation errors as the report takes them (NULL when not
+    # computed, or not included unless `checks`).
+    report_pdm <- function(checks = FALSE) {
+      r <- pdm$results()
+      if (is.null(r) || (!checks && !isTRUE(input$include_pdm))) return(NULL)
+      tol <- pdm$tolerance()
+      list(metrics = r$metrics, n = r$n, by_unit = r$by_unit, excl_design = r$excl_design, tolerance = tol,
+           elig_source = r$elig_source, weighting = r$weighting, strata = r$strata, no_nonbenef = r$no_nonbenef,
+           kind = pdm$kind(), areas = pdm$areas(), unit_col = r$unit_col,
+           verdict = tryCatch(error_verdict(r$metrics$inclusion_error, r$metrics$exclusion_error, tol[1], tol[2],
+                                            stage = "implementation"), error = function(e) NULL))
+    }
+    observeEvent(input$report_check, {
+      w <- monitoring_checks(items(), report_pdm(checks = TRUE),
+                             c(context = input$context %||% "", findings = input$findings %||% "",
+                               recommendations = input$recommendations %||% ""),
+                             include_pdm = isTRUE(input$include_pdm))
+      if (!length(w)) return(session$sendCustomMessage("tw-mon-download", list(id = ns("report"))))
+      showModal(modalDialog(
+        title = tagList(bsicons::bs_icon("clipboard-check"), " Before you export"), size = "m", easyClose = TRUE,
+        tags$p(class = "small text-muted", sprintf("%d point%s worth a look:", length(w), if (length(w) == 1) "" else "s")),
+        tags$ul(class = "small wfp-mon-checks", lapply(w, tags$li)),
+        footer = tagList(
+          modalButton("Go back"),
+          tags$button(type = "button", class = "btn btn-primary",
+                      onclick = sprintf("document.getElementById('%s').click(); $('#shiny-modal').modal('hide');", ns("report")),
+                      icon("download"), " Export anyway"))))
+    })
     output$report <- download_handler(
       filename = function() export_file_name("Targeting_monitoring_report", "html", "%Y-%m-%d_%Hh%M"),
       content = function(file) {
-        r <- pdm$results()
-        tol <- pdm$tolerance()
-        p <- if (isTRUE(input$include_pdm) && !is.null(r)) list(
-          metrics = r$metrics, n = r$n, by_unit = r$by_unit, excl_design = r$excl_design, tolerance = tol,
-          elig_source = r$elig_source, weighting = r$weighting, strata = r$strata, no_nonbenef = r$no_nonbenef,
-          kind = pdm$kind(), areas = pdm$areas(),
-          verdict = tryCatch(error_verdict(r$metrics$inclusion_error, r$metrics$exclusion_error, tol[1], tol[2],
-                                           stage = "implementation"), error = function(e) NULL))
+        p <- report_pdm()
+        pts <- if (!is.null(p)) tryCatch(monitoring_area_points(pdm$df(), p$unit_col, p$by_unit), error = function(e) NULL)
         lang <- session$rootScope()$input$lang_selector
         write_monitoring_report(file, list(country_office = country_office(), context = input$context,
                                            findings = input$findings, recommendations = input$recommendations,
-                                           pdm = p, items = items(), kind = pdm$kind()),
+                                           pdm = p, items = items(), kind = pdm$kind(),
+                                           previous = previous_rounds(), area_points = pts),
                                 lang = if (identical(lang, "fr")) "fr" else "en")
         audit_add(modification_log, "Monitoring", "Monitoring report exported",
                   sprintf("%d charts and tables%s", length(items()), if (is.null(p)) "" else ", with implementation errors"))
       }
     )
+    # The link is hidden: it must still be ready when clicked.
+    outputOptions(output, "report", suspendWhenHidden = FALSE)
 
     # --- saved with the session ------------------------------------------------------
     workspace_register(workspace, "monitoring",
       snapshot = function() {
-        if (!length(datasets()) && !length(items()) && !nzchar(paste0(input$context, input$findings, input$recommendations))) return(NULL)
+        if (!length(datasets()) && !length(items()) && !length(previous_rounds()) &&
+            !nzchar(paste0(input$context, input$findings, input$recommendations))) return(NULL)
         list(datasets = datasets(), active = input$pm_active, items = items(),
              context = input$context, findings = input$findings, recommendations = input$recommendations,
-             include_pdm = input$include_pdm)
+             include_pdm = input$include_pdm, previous = previous_rounds(), template = input$tpl)
       },
       restore = function(s) {
-        datasets(s$datasets %||% list()); items(s$items %||% list())
+        datasets(s$datasets %||% list()); items(s$items %||% list()); previous_rounds(s$previous %||% list())
+        if (!is.null(s$template)) after_flush(session, function() updateSelectInput(session, "tpl", selected = s$template))
         updateSelectInput(session, "pm_active", choices = names(s$datasets %||% list()), selected = s$active)
         for (k in c("context", "findings", "recommendations")) update_rich_text(session, k, s[[k]] %||% "")
         if (!is.null(s$include_pdm)) updateCheckboxInput(session, "include_pdm", value = s$include_pdm)

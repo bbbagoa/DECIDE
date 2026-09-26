@@ -175,7 +175,7 @@ mod_setup_server <- function(id, r_data, parent_session, trigger_open = reactive
         size = "xl",
         footer = tagList(
           modalButton("Cancel"),
-          actionButton(ns("save"), "Save Setup", class = "btn-success")
+          actionButton(ns("save"), "Save Setup", class = "btn-primary")
         ),
 
         ### ----- Variable Lists
@@ -186,7 +186,7 @@ mod_setup_server <- function(id, r_data, parent_session, trigger_open = reactive
 
         helpText(
           "Optional: Leave fields as 'Select a column...' if they do not exist in your dataset.
-                 Stared fields (*) are mandatory"
+                 Starred fields (*) are mandatory"
         ),
 
         hr(),
@@ -481,9 +481,9 @@ mod_setup_server <- function(id, r_data, parent_session, trigger_open = reactive
           tags$div(
             class = "d-flex flex-wrap gap-2 align-items-center",
             actionButton(ns("profile_apply"), "Apply", icon = icon("wand-magic-sparkles"),
-                         class = "btn-primary btn-sm"),
+                         class = "btn-outline-primary btn-sm"),
             actionButton(ns("profile_save"), "Save", icon = icon("floppy-disk"),
-                         class = "btn-success btn-sm"),
+                         class = "btn-outline-secondary btn-sm"),
             downloadButton(ns("profile_download"), "Export", icon = icon("download"),
                            class = "btn-outline-secondary btn-sm"),
             tags$div(
@@ -656,6 +656,7 @@ mod_setup_server <- function(id, r_data, parent_session, trigger_open = reactive
         return()
       }
 
+      waiter_log(sprintf("%d required fields mapped", length(required_fields)), "ok")
       # 2b. Check for Duplicates
       if (anyDuplicated(actual_selections) > 0) {
         showNotification("The same column is mapped to two fields.", type = "error")
@@ -714,7 +715,7 @@ mod_setup_server <- function(id, r_data, parent_session, trigger_open = reactive
       id_col <- input$unique_id
 
       # We use 'anyDuplicated' because it's extremely fast on 1GB data
-      if (anyDuplicated(df[[id_col]]) > 0) {
+      if (tw_step(sprintf("check %s household ids are unique", format(nrow(df), big.mark = ",")), anyDuplicated(df[[id_col]])) > 0) {
         dup_count <- sum(duplicated(df[[id_col]]))
 
         showModal(modalDialog(
@@ -742,6 +743,7 @@ mod_setup_server <- function(id, r_data, parent_session, trigger_open = reactive
       settings$coercion_blanked <- blanked
 
       removeModal()
+      waiter_log("open the Overview: KPIs, map and profiles")
 
       # Use parent_session to reach the main navbar outside the module
       bslib::nav_select(

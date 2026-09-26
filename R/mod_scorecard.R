@@ -19,41 +19,18 @@ mod_scorecard_ui <- function(id) {
     bslib::layout_sidebar(
       fillable = FALSE,
       sidebar = bslib::sidebar(
-        title = "Scorecard",
-        width = 320,
-        uiOutput(ns("data_status")),
-        hr(),
-        mod_area_scope_ui(ns("scope")),
-        hr(),
-        actionButton(ns("btn_use"), "Use this scorecard", icon = icon("check"),
-                     class = "btn-success w-100"),
-        tags$div(class = "small text-muted mt-1", textOutput(ns("use_status"))),
-        hr(),
-        downloadButton(ns("download"), "Export scorecard (Excel)",
-                       class = "btn-outline-primary w-100"),
-        downloadButton(ns("download_json"), "Export scorecard (JSON)",
-                       class = "btn-outline-secondary w-100 mt-2"),
-        # The whole design as a document: data, variables, screening, models,
-        # threshold, errors, figures.
-        downloadButton(ns("download_report"), "Design report (HTML)",
-                       class = "btn-outline-secondary w-100 mt-2")
-      ),
-
-      # The data and its tools on one side, the analysis chain on the other.
-      bslib::layout_columns(
-        col_widths = c(4, 8), fill = FALSE, class = "mb-3 wfp-design-top",
-        bslib::card(
-          class = "mb-0",
-          bslib::card_header(bsicons::bs_icon("clipboard-data"), " Needs-assessment data"),
-          bslib::card_body(
+        width = 320, class = "wfp-side",
+        side_steps(
+          open = c("data", "adopt"),
+          # The assessment data and its tools.
+          side_step("1. Assessment data", "clipboard-data", value = "data",
             tags$p(class = "small text-muted mb-2",
-                   "An assessment survey carrying a food-security outcome (EFSA, VAM...): ",
-                   "not the registration data selected from, nor the PDM data."),
+                   "An assessment survey with a food-security outcome (EFSA, VAM...), not the registration or PDM data."),
             fileInput(ns("assessment_file"), NULL, width = "100%",
                       placeholder = "Load assessment data",
                       accept = c(".xlsx", ".xls", ".sav", ".dta", ".csv", ".parquet")),
             tags$div(
-              class = "d-flex gap-2 wfp-data-tools",
+              class = "d-flex flex-wrap gap-2 wfp-data-tools",
               # The same data from a MODA / ONA form.
               tags$div(class = "flex-fill",
                        mod_moda_import_ui(ns("moda"), "MODA", class = "btn-outline-secondary btn-sm w-100")),
@@ -66,15 +43,29 @@ mod_scorecard_ui <- function(id) {
               # two-level CARI, a dependency-ratio flag).
               tags$div(class = "flex-fill",
                        mod_var_calc_ui(ns("calc"), "Calculator",
-                                       class = "btn-outline-secondary btn-sm w-100")))
-          )
-        ),
-        # The whole design as one path, data to final model: done, current and
-        # next are visible at a glance, and the next action is one click.
-        uiOutput(ns("flow"))
+                                       class = "btn-outline-secondary btn-sm w-100"))),
+            uiOutput(ns("data_status"))),
+          side_step("2. Areas covered", "geo-alt", value = "areas",
+            mod_area_scope_ui(ns("scope"), title = NULL)),
+          side_step("3. Use and export", "box-arrow-up-right", value = "adopt",
+            actionButton(ns("btn_use"), "Use this scorecard", icon = icon("check"),
+                         class = "btn-outline-primary btn-sm w-100"),
+            tags$div(class = "small text-muted mt-1 mb-2", textOutput(ns("use_status"))),
+            downloadButton(ns("download"), "Export scorecard (Excel)",
+                           class = "btn-outline-primary btn-sm w-100"),
+            downloadButton(ns("download_json"), "Export scorecard (JSON)",
+                           class = "btn-outline-secondary btn-sm w-100 mt-2"),
+            # The whole design as a document: data, variables, screening, models,
+            # threshold, errors, figures.
+            downloadButton(ns("download_report"), "Design report (HTML)",
+                           class = "btn-outline-secondary btn-sm w-100 mt-2")))
       ),
 
-      bslib::navset_card_pill(
+      # The whole design as one slim bar, data to adoption: done, current and
+      # next at a glance, each step one click away, the next action inline.
+      uiOutput(ns("flow")),
+
+      tags$div(class = "wfp-design-steps", bslib::navset_card_pill(
         id = ns("steps"),
 
         bslib::nav_panel(
@@ -166,7 +157,7 @@ mod_scorecard_ui <- function(id) {
                   ),
                   uiOutput(ns("qs_out")),
                   tags$div(class = "d-flex justify-content-end mt-2",
-                           actionButton(ns("qs_apply"), "Tick only the associated ones", icon = icon("check-double"),
+                           actionButton(ns("qs_apply"), "Continue to 3. Review the variables", icon = icon("arrow-right"),
                                         class = "btn-outline-primary")))),
               bslib::nav_panel(
                 value = "screen", title = tagList(bsicons::bs_icon("list-check"), " 3. Review the variables"),
@@ -338,9 +329,9 @@ mod_scorecard_ui <- function(id) {
               col_widths = c(7, 5), fill = FALSE, class = "mb-2 wfp-thr-setup",
               tags$div(
                 class = "border-0 bg-body-tertiary rounded-3 px-3 pt-2 h-100",
+                uiOutput(ns("threshold_ui")),
                 bslib::layout_columns(
-                  col_widths = c(6, 2, 2, 2), fill = FALSE,
-                  uiOutput(ns("threshold_ui")),
+                  col_widths = c(3, 3, 6), fill = FALSE,
                   numericInput(ns("tol_lower"),
                                tagList("Lower %", info_tip("Lower bound of the tolerance band (Advisory 2/2025). Errors below it are acceptable without action.")),
                                value = 5,
@@ -350,7 +341,7 @@ mod_scorecard_ui <- function(id) {
                                value = 20,
                                min = 1, max = 49, step = 1, width = "100%"),
                   numericInput(ns("caseload_pct"),
-                               tagList("Caseload", info_tip("Share of households the programme can serve. Used by 'Fit to caseload' to set the highest threshold that stays within it.")),
+                               tagList("Caseload (% of households)", info_tip("Share of households the programme can serve. Used by 'Fit to caseload' to set the highest threshold that stays within it.")),
                                value = NA, min = 1, max = 100, step = 1, width = "100%")
                 ),
                 tags$div(
@@ -373,7 +364,8 @@ mod_scorecard_ui <- function(id) {
               # Advisory 2/2025: COs must document the rationale behind their
               # threshold bandwidth. It travels in the exported workbook.
               rich_text_input(ns("tol_rationale"),
-                              "Rationale for the tolerance band and the threshold (goes into the export)",
+                              tagList("Rationale for the band and the threshold",
+                                      info_tip("Required by Targeting Advisory 2/2025; it goes into the exported scorecard and the design report.")),
                               placeholder = paste("e.g. Lower 15% / upper 25% agreed with the programme",
                                                   "team given field access constraints; threshold set to",
                                                   "fit a caseload of 40% of households."),
@@ -455,7 +447,7 @@ mod_scorecard_ui <- function(id) {
             uiOutput(ns("nav_threshold"))
           )
         )
-      )
+      ))
     )
   )
 }
@@ -629,7 +621,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
         updateSelectInput(session, "model_method", selected = i$model_method)
         updateSelectInput(session, "model_scheme", selected = i$model_scheme)
         for (k in c("holdout_pct", "split_seed", "corr_cutoff", "tol_lower", "tol_upper", "caseload_pct")) {
-          if (!is.null(i[[k]])) updateNumericInput(session, k, value = i[[k]])
+          if (length(i[[k]]) == 1 && is.finite(suppressWarnings(as.numeric(i[[k]])))) updateNumericInput(session, k, value = i[[k]])
         }
         if (!is.null(i$run_benchmarks)) updateCheckboxInput(session, "run_benchmarks", value = i$run_benchmarks)
         if (!is.null(i$compare_models)) shinyWidgets::updatePickerInput(session, "compare_models", selected = i$compare_models)
@@ -644,11 +636,14 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
         if (!is.null(i$tol_rationale)) update_rich_text(session, "tol_rationale", i$tol_rationale)
         if (!is.null(s$threshold)) {
           thr_pending(s$threshold)
-          updateSliderInput(session, "threshold", value = s$threshold)
+          set_threshold(s$threshold)
         }
         if (!is.null(s$step)) go_step(s$step)
-        # Safety net: never leave the rebuilds switched off.
-        later::later(function() shiny::withReactiveDomain(session, restoring(NULL)), 10)
+        # Safety net: never leave the rebuilds switched off. It starts once the
+        # restored design has been drawn (which takes seconds on large data):
+        # counting from here, it fired while the browser was still sending the
+        # inputs back, and the next rebuild wiped the fitted model.
+        after_flush(session, function() later::later(function() shiny::withReactiveDomain(session, restoring(NULL)), 30))
       })
 
     observe({
@@ -922,7 +917,12 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
       d <- screen_variables(df, y, exclude = unique(c(input$outcome_col, out_like)))
       if (is.null(d)) return(NULL)
       d <- d[d$kind != "yes/no", , drop = FALSE]
-      done <- vapply(d$variable, function(v) any(startsWith(names(df), paste0(v, "_ge")) | names(df) == paste0(v, "_grp")), logical(1))
+      # Already binarised: named Targ_<variable>_ge.../_grp (or, in older
+      # sessions, without the Targ_ prefix).
+      done <- vapply(d$variable, function(v) {
+        pre <- c(v, paste0("Targ_", v))
+        any(vapply(pre, function(p) any(startsWith(names(df), paste0(p, "_ge")) | names(df) == paste0(p, "_grp")), logical(1)))
+      }, logical(1))
       d <- d[!done, , drop = FALSE]
       if (nrow(d)) d else NULL
     })
@@ -1056,7 +1056,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
         plotly::add_bars(y = ~ 100 * (1 - share), name = "Not vulnerable", marker = list(color = "#3f7e44"),
                          hovertext = hover(d$households - d$vulnerable, "Not vulnerable"), hoverinfo = "text") |>
         plotly::layout(barmode = "stack", bargap = 0.35,
-                       xaxis = list(title = "", tickangle = if (nrow(d) > 8) -35 else 0, automargin = TRUE),
+                       xaxis = list(title = "", tickangle = if (nrow(d) > 8) -90 else 0, automargin = TRUE),
                        yaxis = list(title = "Households (%)", range = c(0, 100), ticksuffix = "%"),
                        legend = list(orientation = "h", x = 0, y = 1.1, xanchor = "left", yanchor = "bottom"),
                        shapes = list(list(type = "line", xref = "paper", x0 = 0, x1 = 1, y0 = overall, y1 = overall,
@@ -1220,6 +1220,14 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
                                     outcome_positive = input$outcome_pos),
                     error = function(e) { if (!quiet) showNotification(paste("Screening failed:", conditionMessage(e)), type = "error"); NULL })
       qs_result(r); qs_for(res$criterion)
+      # The review starts from the quick screening: the associated variables
+      # ticked, the others listed unticked (field knowledge can add them
+      # back). When none is associated, the review keeps its default ticks.
+      sig <- if (is.null(r)) character(0) else r$criterion[which(r$significant)]
+      if (length(sig)) {
+        res$retained <- res$criterion %in% sig
+        screened(res)
+      }
     }
     observeEvent(screened(), {
       if (!is.null(isolate(restoring()))) return()
@@ -1282,11 +1290,12 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
     observeEvent(input$qs_apply, {
       r <- qs_result(); res <- screened()
       if (is.null(r)) { showNotification("Click Screen first.", type = "warning"); return() }
+      # The ticks were set when the screening ran; any the analyst changed
+      # since in the review stay as they are.
       sig <- r$criterion[which(r$significant)]
-      res$retained <- res$criterion %in% sig
-      screened(res)
       bslib::nav_select("screen_tabs", "screen", session = session)
-      showNotification(sprintf("%d associated variables ticked. Click Select to review their correlations.", length(sig)), type = "message")
+      showNotification(sprintf("%d associated variable%s ticked from the quick screening. Adjust if needed, then click Select to see their correlations.",
+                               length(sig), if (length(sig) == 1) "" else "s"), type = "message")
     })
 
     output$screen_note <- renderUI({
@@ -1341,7 +1350,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
           class = "wfp-model-table",
           tags$thead(tags$tr(tags$th(style = "width: 3rem;", "Use"), tags$th("Criterion"), tags$th(class = "num", "Prevalence"),
                              tags$th(class = "num", "Among vulnerable"), tags$th(class = "num", "Among others"),
-                             tags$th(class = "num", "Missing"), tags$th(style = "min-width: 14rem;", "What it tells"), tags$th("Status"))),
+                             tags$th(class = "num", "Missing"), tags$th(class = "wfp-col-text", "What it tells"), tags$th("Status"))),
           tags$tbody(rows))),
         tags$details(
           class = "wfp-qs-how small mt-2",
@@ -1380,79 +1389,56 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
         return()
       }
 
-      w <- waiter::Waiter$new(html = waiter_content("Fitting the model..."),
-                              color = "rgba(10, 30, 50, 0.65)")
-      w$show(); on.exit(w$hide(), add = TRUE)
-
       y <- outcome_binary()
       sp <- split_train_test(y, holdout = (input$holdout_pct %||% 0) / 100,
                              seed = input$split_seed %||% 123)
       wcol <- input$model_weights
       wts_vec <- if (shiny::isTruthy(wcol) && wcol %in% names(df)) df[[wcol]] else NULL
+      # Everything the fit needs, taken now: the inputs may change while it runs.
+      a <- list(df = df[, unique(c(input$outcome_col, keep)), drop = FALSE],
+                outcome_col = input$outcome_col, keep = keep, outcome_pos = input$outcome_pos,
+                method = input$model_method %||% "logit",
+                stepwise = if (isTRUE(input$stepwise_on)) input$stepwise_ic %||% "aic" else "none",
+                stepwise_dir = input$stepwise_dir %||% "backward",
+                scheme = input$model_scheme %||% "odds_ratio",
+                sp = sp, weights = wts_vec, compare = input$compare_models,
+                benchmarks = isTRUE(input$run_benchmarks), seed = input$split_seed %||% 123)
+      settings <- list(method = input$model_method, scheme = input$model_scheme, stepwise = a$stepwise,
+                       stepwise_dir = a$stepwise_dir, holdout = input$holdout_pct, seed = input$split_seed)
+      waiter_log(sprintf("%d criteria, %s households for training", length(keep), format(length(sp$train), big.mark = ",")))
 
-      out <- tryCatch(
-        fit_scorecard_advanced(df, input$outcome_col, keep,
-                               outcome_positive = input$outcome_pos,
-                               method = input$model_method %||% "logit",
-                               stepwise = if (isTRUE(input$stepwise_on)) input$stepwise_ic %||% "aic" else "none",
-                               stepwise_dir = input$stepwise_dir %||% "backward",
-                               scheme = input$model_scheme %||% "odds_ratio",
-                               rows = sp$train, weights = wts_vec),
-        error = function(e) {
-          showNotification(paste("Model failed:", conditionMessage(e)),
-                           type = "error", duration = 12)
-          NULL
-        }
-      )
-      req(out)
-      split_state(sp)
-      fitted(out)
-      # Every additive model on the same rows, for the per-variable view.
-      w$update(html = waiter_content("Comparing models per variable..."))
-      effects(tryCatch(model_effects(df, input$outcome_col, keep, input$outcome_pos,
-                                     rows = sp$train, weights = wts_vec,
-                                     methods = unique(c(out$method, input$compare_models))),
-                       error = function(e) NULL))
-      saved_points(NULL); weight_bump(weight_bump() + 1)
+      # The fit runs in the background worker (bg_run): the page stays usable
+      # and the cross on the loader stops it.
+      bg_run(sprintf("Fitting the %s model...", a$method), design_fit_job, a,
+        on_error = function(msg) showNotification(paste("Model failed:", msg), type = "error", duration = 12),
+        on_done = function(res) {
+          out <- res$out
+          split_state(sp)
+          fitted(out)
+          effects(res$effects)
+          saved_points(NULL); weight_bump(weight_bump() + 1)
+          bench(res$bench)
 
-      # Benchmarks use the same split, so every AUC in the comparison table is
-      # measured on the same households.
-      if (isTRUE(input$run_benchmarks)) {
-        w$update(html = waiter_content("Fitting benchmark models..."))
-        sc0 <- build_scorecard(out$weights)
-        b <- tryCatch(
-          benchmark_models(df, input$outcome_col, keep, input$outcome_pos, sp,
-                           scorecard_score = apply_scorecard(df, sc0)$score,
-                           seed = input$split_seed %||% 123),
-          error = function(e) list(error = conditionMessage(e))
-        )
-        bench(b)
-      } else {
-        bench(NULL)
-      }
-
-      # Keep every fit so a worse iteration never loses a better one.
-      yb <- outcome_binary()
-      sc_score <- apply_scorecard(df, build_scorecard(out$weights))$score
-      auc_rows <- if (length(sp$test)) sp$test else sp$train
-      rl <- runs()
-      rl[[length(rl) + 1]] <- list(
-        id = length(rl) + 1, at = format(Sys.time(), "%H:%M:%S"),
-        fit = out, split = sp, bench = bench(), criteria = keep, effects = effects(),
-        settings = list(method = input$model_method, scheme = input$model_scheme,
-                        stepwise = if (isTRUE(input$stepwise_on)) input$stepwise_ic %||% "aic" else "none",
-                        stepwise_dir = input$stepwise_dir %||% "backward",
-                        holdout = input$holdout_pct, seed = input$split_seed),
-        auc = roc_curve(sc_score[auc_rows], yb[auc_rows])$auc,
-        held_out = length(sp$test) > 0
-      )
-      runs(rl)
-      current_run(length(rl))
-      audit_add(modification_log, "Design", "Model fitted",
-                sprintf("Run #%d: %s, %s, %d criteria, AUC %.3f", length(rl),
-                        names(scorecard_model_choices())[scorecard_model_choices() == out$method][1],
-                        names(scorecard_scheme_choices())[scorecard_scheme_choices() == out$scheme][1],
-                        nrow(out$weights), rl[[length(rl)]]$auc %||% NA_real_))
+          # Keep every fit so a worse iteration never loses a better one.
+          yb <- outcome_binary()
+          sc_score <- apply_scorecard(df, build_scorecard(out$weights))$score
+          auc_rows <- if (length(sp$test)) sp$test else sp$train
+          rl <- runs()
+          rl[[length(rl) + 1]] <- list(
+            id = length(rl) + 1, at = format(Sys.time(), "%H:%M:%S"),
+            fit = out, split = sp, bench = res$bench, criteria = keep, effects = res$effects,
+            settings = settings,
+            auc = roc_curve(sc_score[auc_rows], yb[auc_rows])$auc,
+            held_out = length(sp$test) > 0
+          )
+          runs(rl)
+          current_run(length(rl))
+          audit_add(modification_log, "Design", "Model fitted",
+                    sprintf("Run #%d: %s, %s, %d criteria, AUC %.3f", length(rl),
+                            names(scorecard_model_choices())[scorecard_model_choices() == out$method][1],
+                            names(scorecard_scheme_choices())[scorecard_scheme_choices() == out$scheme][1],
+                            nrow(out$weights), rl[[length(rl)]]$auc %||% NA_real_))
+        })
     })
 
     runs <- reactiveVal(list())
@@ -2097,15 +2083,29 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
       roc_curve(s$score[r], y[r])
     })
 
+    score_max <- reactive({
+      df <- assessment_df(); w <- tryCatch(current_weights(), error = function(e) NULL)
+      if (is.null(df) || is.null(w) || !nrow(w)) return(10)
+      m <- suppressWarnings(max(apply_scorecard(df, build_scorecard(w, threshold = 0))$score, na.rm = TRUE))
+      if (is.finite(m) && m > 0) ceiling(m * 100) / 100 else 10
+    })
     output$threshold_ui <- renderUI({
-      s <- tryCatch(scored(), error = function(e) NULL)
-      max_score <- if (is.null(s) || !length(s$score)) 10 else max(s$score, na.rm = TRUE)
+      mx <- score_max()
+      v <- isolate(thr_pending() %||% input$threshold) %||% 0
       sliderInput(ns("threshold"),
                   tagList("Eligible when score is above", info_tip("Households scoring strictly above this value are eligible. Moving it trades inclusion error against exclusion error.")),
-                  min = 0, max = round(max_score, 5),
-                  value = isolate(thr_pending() %||% input$threshold) %||% 0,
-                  step = 0.00001, width = "100%")
+                  min = 0, max = mx, value = min(max(0, v), mx),
+                  step = 0.0001, ticks = FALSE, width = "100%")
     })
+    # Every programmatic move of the slider goes through here: nothing that
+    # is not a finite number reaches the browser, and it stays in range.
+    set_threshold <- function(t) {
+      t <- suppressWarnings(as.numeric(t))
+      if (length(t) != 1 || !is.finite(t)) return(invisible(FALSE))
+      t <- round(min(max(0, t), isolate(score_max())), 5)
+      updateSliderInput(session, "threshold", value = t)
+      invisible(TRUE)
+    }
 
     # A new fit starts from the threshold that keeps both errors lowest,
     # rather than from 0 (everyone with any point eligible).
@@ -2120,7 +2120,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
       }
       t <- round(b$threshold, 5)
       thr_pending(t)
-      updateSliderInput(session, "threshold", value = t)
+      set_threshold(t)
       if (announce) thr_msg(sprintf(
         "Suggested threshold %s keeps both errors as low as possible together: inclusion %.1f%%, exclusion %.1f%% (the larger of the two is minimised).",
         fmt5(t), 100 * b$inclusion_error, 100 * b$exclusion_error))
@@ -2147,7 +2147,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
       r <- roc()
       need_ok(is.finite(r$youden), "Fit a model first: the Youden point comes from its ROC curve.")
       t <- max(0, r$youden)
-      updateSliderInput(session, "threshold", value = round(t, 5))
+      set_threshold(t)
       thr_msg(sprintf("Youden's J cut-point: score > %s (maximises recall minus false-positive rate).", fmt5(t)))
     })
 
@@ -2165,7 +2165,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
       # than k households qualify: a caseload is a budget ceiling, and ties at
       # the boundary must fall below it rather than above.
       t <- if (k >= n) 0 else sc[k + 1]
-      updateSliderInput(session, "threshold", value = round(max(0, t), 5))
+      set_threshold(t)
       got <- sum(s$score > t)
       thr_msg(sprintf("Threshold %s selects %s households (%.1f%%) against a %s%% caseload.",
                       fmt5(t), format(got, big.mark = ","), 100 * got / n, pct))
@@ -2328,6 +2328,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
       animate <- !identical(v$level, verdict_seen)
       verdict_seen <<- v$level
       verdict_card(v, animate = animate,
+        errors = c(inclusion = e$inclusion_error, exclusion = e$exclusion_error), tolerance = c(lower, upper),
         tags$div(class = "small mt-2 text-muted",
                  sprintf("Judged against a tolerance band of %.0f%%-%.0f%%. ",
                          100 * lower, 100 * upper),
@@ -2553,17 +2554,8 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
                               else if (!is.na(num)) as.character(num) else bsicons::bs_icon(x$icon)),
                     tags$span(class = "wfp-flow-label", x$label))
       })
-      # Back and forward through the step tabs, either side of the chart.
-      at <- match(here, names(panels))
-      arrow <- function(to, icon_name, side) {
-        ok <- !is.na(to) && to >= 1 && to <= length(panels)
-        tags$button(type = "button", class = paste("wfp-flow-arrow", side), disabled = if (!ok) NA,
-                    title = if (ok) paste(if (side == "prev") "Back to" else "Next:", panels[[to]]) else NULL,
-                    `aria-label` = if (side == "prev") "Previous step" else "Next step",
-                    onclick = if (ok) go(names(panels)[to]), bsicons::bs_icon(icon_name))
-      }
       btn <- function(panel, text, icon_name) tags$button(
-        type = "button", class = "btn btn-primary btn-sm ms-2", onclick = go(panel),
+        type = "button", class = "btn btn-outline-primary btn-sm ms-2", onclick = go(panel),
         if (identical(icon_name, "arrow-left")) bsicons::bs_icon(icon_name), paste(text, panels[[panel]]),
         if (!identical(icon_name, "arrow-left")) bsicons::bs_icon(icon_name))
       # What to do now, seen from the tab the user is on.
@@ -2578,11 +2570,8 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
         else tagList(tags$strong("This step is done. Next: "), t$todo, btn(t$panel, "Continue to", "arrow-right"))
       }
       tags$div(
-        class = "wfp-flow mb-3",
-        tags$div(class = "wfp-flow-row",
-                 arrow(at - 1, "chevron-left", "prev"),
-                 tags$div(class = "wfp-flow-track", items),
-                 arrow(at + 1, "chevron-right", "next")),
+        class = "wfp-flow wfp-flow-slim mb-3",
+        tags$div(class = "wfp-flow-row", tags$div(class = "wfp-flow-track", items)),
         tags$div(class = "wfp-flow-next", guide)
       )
     })
@@ -2657,6 +2646,40 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
               length(sc$items), fmt5(sc$threshold %||% 0))
     })
 
+    # The full tables behind the design report's charts (which show the 15
+    # most relevant variables): the Report_tables sheet of the scorecard.
+    design_full_tables <- function(s) {
+      safe <- function(expr) tryCatch(expr, error = function(e) NULL)
+      df <- assessment_df(); y <- safe(outcome_binary())
+      kept <- if (is.null(screened())) character(0) else screened()$criterion[screened()$retained]
+      out <- list()
+      if (!is.null(df) && length(kept) && length(y) == nrow(df)) {
+        p <- safe(criteria_profile(df, kept, y))
+        if (!is.null(p)) out[["How common each criterion is (all criteria)"]] <- data.frame(
+          Criterion = p$criterion, `Among vulnerable (%)` = round(100 * p$prev_vuln, 1),
+          `Among others (%)` = round(100 * p$prev_not, 1), `Gap (pts)` = round(100 * p$gap, 1), check.names = FALSE)
+        cm <- if (length(kept) > 1) safe(criteria_cor(df, kept))
+        if (!is.null(cm)) out[["Correlation between the selected variables"]] <- data.frame(Variable = rownames(cm), round(cm, 3), check.names = FALSE)
+      }
+      w <- safe(current_weights())
+      if (!is.null(w) && nrow(w)) out[["Points by criterion (all criteria)"]] <- data.frame(
+        Criterion = w$criterion, Direction = w$direction, Points = w$weight, check.names = FALSE)
+      det <- s$detail
+      if (!is.null(det) && ncol(det)) {
+        tot <- vapply(det, function(v) sum(abs(v), na.rm = TRUE), numeric(1))
+        dr <- data.frame(Criterion = names(det), `Share of points (%)` = round(100 * tot / max(sum(tot), 1e-9), 1), check.names = FALSE)
+        if (length(y) == nrow(det) && length(s$eligible) == nrow(det)) {
+          pc <- function(m, v) { x <- s$eligible[m & y %in% v]; if (length(x)) round(100 * mean(x), 1) else NA }
+          dr[["Holders eligible, vulnerable (%)"]] <- vapply(names(det), function(cl) pc(det[[cl]] != 0, 1), numeric(1))
+          dr[["Holders eligible, others (%)"]] <- vapply(names(det), function(cl) pc(det[[cl]] != 0, 0), numeric(1))
+        }
+        out[["What drives the score, and coverage by criterion (all criteria)"]] <- dr[order(-dr[[2]]), , drop = FALSE]
+      }
+      va <- safe(vuln_area_tab())
+      if (is.data.frame(va) && nrow(va)) out[["Vulnerable households by area (all areas)"]] <- va
+      out
+    }
+
     output$download <- download_handler(
       filename = function() export_file_name("Targeting_Scorecard", "xlsx", "%Y-%m-%d_%Hh%Mm"),
       content = function(file) {
@@ -2724,7 +2747,8 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
           comparison = if (!is.null(b)) b$table else NULL,
           bands = list(Quartiles = score_bands(s$score, 4L),
                        Quintiles = score_bands(s$score, 5L)),
-          roc = r$curve
+          roc = r$curve,
+          report_tables = design_full_tables(s)
         )
         save_workbook_readonly(wb, file)
       }

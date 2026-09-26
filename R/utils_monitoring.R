@@ -237,7 +237,9 @@ monitoring_item_chart <- function(item, lang = "en") {
 #' @param x List: `country_office`, `context`, `findings`, `recommendations`,
 #'   `pdm` (list with `metrics`, `verdict`, `tolerance`, `n`, `by_unit`,
 #'   `excl_design`, or NULL), `items` (report items: `title`, `comment`,
-#'   `source`, `spec`, `data`).
+#'   `source`, `spec`, `data`), `previous` (earlier rounds, oldest first, from
+#'   `monitoring_round()`; optional), `area_points` (from
+#'   `monitoring_area_points()`; optional).
 #' @noRd
 write_monitoring_report <- function(file, x, lang = "en") {
   L <- character(0)
@@ -256,14 +258,43 @@ write_monitoring_report <- function(file, x, lang = "en") {
   items <- x$items %||% list()
   p <- x$pdm
   kind <- x$kind %||% p$kind %||% "PDM"
+  rounds <- x$previous %||% list()
+  last <- if (length(rounds)) rounds[[length(rounds)]]
+  ind <- monitoring_indicators(p, items)
+  todo <- monitoring_todo(x$recommendations, p$verdict$action)
+  has_map <- !is.null(x$area_points) && nrow(x$area_points) > 0
+  trend <- if (length(rounds)) tryCatch(monitoring_trend_chart(rounds, ind, lang), error = function(e) NULL)
+  # This round against the last one, for an item of the same title.
+  change_table <- function(it) {
+    old <- last$items[[it$title]]
+    now <- item_figures(it$data)
+    if (is.null(old) || is.null(now)) return(NULL)
+    k <- utils::head(intersect(names(now), names(old)), 12)
+    if (!length(k)) return(NULL)
+    d <- now[k] - old[k]
+    data.frame(Category = k, Previous = unname(old[k]), Now = unname(now[k]),
+               Change = ifelse(d > 0, sprintf("\u25b2 %+g", round(d, 2)), ifelse(d < 0, sprintf("\u25bc %+g", round(d, 2)), "=")),
+               check.names = FALSE)
+  }
 
   add("# Targeting monitoring report", "",
       "This report brings together how the targeting was carried out on the ground (targeting process) and how accurately",
       if (identical(kind, "Baseline")) "it reached the intended households (baseline survey)." else "it reached the intended households (post-distribution monitoring).", "")
   if (!is.null(p)) add("## Key results", "", "@@IMPL@@", "")
+  # The error gauges above already show the two errors; their tiles are only
+  # repeated when there is a previous round to compare with.
+  if (!is.null(p) && is.null(last)) ind <- ind[setdiff(names(ind), c("inclusion", "exclusion"))]
+  if (length(ind) || length(todo) || has_map) {
+    add("## Executive summary", "",
+        if (!is.null(last)) sprintf("_Changes are shown against the previous round, %s (%s)._", last$label, last$date) else NULL, "",
+        "@@EXEC@@", "",
+        if (has_map && !is.null(trend)) "@@FIG:areamap,trend@@" else if (has_map) "@@FIG:areamap@@" else if (!is.null(trend)) "@@FIG:trend@@" else NULL, "")
+  }
   add("## 1. Context", "", quote_block(x$context), "")
+  # What the officer concluded comes straight after the context; the evidence follows.
+  add("## 2. Key findings", "", quote_block(x$findings), "")
 
-  add(sprintf("## 2. Implementation accuracy (%s)", kind), "")
+  add(sprintf("## 3. Implementation accuracy (%s)", kind), "")
   if (is.null(p)) {
     add(sprintf("_No %s analysis was run._", kind), "")
   } else {
@@ -304,6 +335,7 @@ write_monitoring_report <- function(file, x, lang = "en") {
     if (identical(it$display, "table")) commonmark::markdown_html(paste(md_table(chart_table(it$data, it$spec)), collapse = "\n"), extensions = TRUE)
     else sprintf("<p>@@FIG:%s@@</p>", it$id),
     if (identical(it$spec$type, "crosstab")) sprintf('<p class="note"><em>%s</em></p>', esc(crosstab_test_text(crosstab_test(it$data)))) else "",
+    if (!is.null(ct <- change_table(it))) commonmark::markdown_html(paste(c(sprintf("**Change since %s**", last$label), "", md_table(ct)), collapse = "\n"), extensions = TRUE) else "",
     if (nzchar(rich_html(it$comment))) sprintf('<div class="rich">%s</div>', rich_html(it$comment)) else "",
     sprintf('<p class="note"><em>%s</em></p>', esc(source_line(it, src))), '</div>'), character(1)), collapse = ""), '</div>')
   section <- function(num, title, src, empty) {
@@ -324,15 +356,16 @@ write_monitoring_report <- function(file, x, lang = "en") {
       add(sprintf("### %s", it$title), "",
           if (identical(it$display, "table")) md_table(chart_table(it$data, it$spec)) else sprintf("@@FIG:%s@@", it$id), "",
           if (identical(it$spec$type, "crosstab")) c(sprintf("_%s_", crosstab_test_text(crosstab_test(it$data))), "") else NULL)
+      ct <- change_table(it)
+      if (!is.null(ct)) add(sprintf("**Change since %s**", last$label), "", md_table(ct), "")
       if (nzchar(rich_html(it$comment))) add(quote_block(it$comment), "")
       add(sprintf("_Source: %s; %s._", it$dataset %||% src, tolower(names(chart_types())[chart_types() == it$spec$type][1] %||% "")), "")
     }
   }
-  section(3, "Targeting process", "process", "No targeting-process chart was added.")
-  section(4, sprintf("Insights from the %s data", kind), "pdm", sprintf("No %s chart was added.", kind))
+  section(4, "Targeting process", "process", "No targeting-process chart was added.")
+  section(5, sprintf("Insights from the %s data", kind), "pdm", sprintf("No %s chart was added.", kind))
 
-  add("## 5. Key findings", "", quote_block(x$findings), "",
-      "## 6. Recommendations", "", quote_block(x$recommendations), "",
+  add("## 6. Recommendations", "", quote_block(x$recommendations), "",
       "## 7. Method", "",
       paste(sprintf("**Implementation errors** are measured on the %s sample.", kind), "Eligibility is re-established for each surveyed household",
             "(from a column of the survey data, or by applying the adopted scorecard or eligibility rules to its answers).",
@@ -344,7 +377,10 @@ write_monitoring_report <- function(file, x, lang = "en") {
             "They show whether the criteria were applied correctly on the ground, not whether the criteria were right (that is the design error).",
             "Eligible households left out because of prioritisation are excluded by design and reported separately (Targeting Advisory 2/2025)."), "",
       paste("**Targeting process** charts count records, total or average a number, or divide two totals (for example women among",
-            "participants), by area or category, as chosen by the officer, shown as a chart or a table; each carries the officer's comment."), "")
+            "participants), by area or category, as chosen by the officer, shown as a chart or a table; each carries the officer's comment."), "",
+      paste("**Executive summary.** The errors are judged against the tolerance band set on the PDM tab; coverage, satisfaction and",
+            "awareness are good from 80% (watch from 60%), complaints resolved from 80% (watch from 50%), women among participants from 50%",
+            "(watch from 40%). The exclusion error of an area on the map is 1 - its coverage of eligible households."), "")
 
   plots <- list(); caps <- character(0)
   for (it in items) {
@@ -353,6 +389,9 @@ write_monitoring_report <- function(file, x, lang = "en") {
     # the item's heading already names the chart
     if (!is.null(ch)) { plots[[it$id]] <- ch; caps[[it$id]] <- "" }
   }
+  if (has_map) plots$areamap <- tryCatch(monitoring_area_map(x$area_points, p$tolerance %||% c(0.05, 0.20), lang), error = function(e) NULL)
+  if (!is.null(trend)) plots$trend <- trend
+  caps <- c(caps, areamap = "Exclusion error by area", trend = "Headline indicators over the rounds (%)")
   impl <- if (is.null(p)) "" else implementation_cards(p, lang)
   report_write_page(
     file, paste(L, collapse = "\n"), plots, captions = caps, lang = lang,
@@ -360,7 +399,8 @@ write_monitoring_report <- function(file, x, lang = "en") {
     meta = c("Country office" = x$country_office %||% "", "Generated" = format(Sys.time(), "%Y-%m-%d %H:%M"),
              "Charts" = as.character(length(items))),
     footer = "This record documents how the targeting was implemented so it can be reviewed and improved.",
-    blocks = c(list("@@IMPL@@" = impl), pairs))
+    blocks = c(list("@@IMPL@@" = impl,
+                    "@@EXEC@@" = monitoring_summary_html(ind, last$indicators, last$label, todo, lang)), pairs))
 }
 
 #' Implementation error gauges for the monitoring report

@@ -160,7 +160,8 @@ weighted_table <- function(df, col, settings) {
 waiter_content <- function(message = "Working\u2026",
                             percent = NULL,
                             subtitle = NULL,
-                            ns = NULL) {
+                            ns = NULL,
+                           cancel_id = NULL) {
   has_pct <- !is.null(percent) && !is.na(percent)
   cancel_btn <- NULL
   if (!is.null(ns)) {
@@ -176,6 +177,13 @@ waiter_content <- function(message = "Working\u2026",
     )
   }
 
+  # A cross that stops a background task (bg_run()): it sets a root input the
+  # app hears because the work runs in another process.
+  cross <- if (!is.null(cancel_id)) tags$button(
+    type = "button", class = "tw-wait-cancel", title = "Stop this task", `aria-label` = "Stop this task",
+    onclick = sprintf("Shiny.setInputValue('%s', Date.now(), {priority: 'event'}); this.disabled = true;", cancel_id),
+    HTML("&times;"))
+
   # A small card over a light scrim: spinner, one plain line, and a slim bar
   # when the progress is known. Every part is always there (hidden when
   # empty), so waiter_progress() can update it in place without redrawing.
@@ -183,6 +191,7 @@ waiter_content <- function(message = "Working\u2026",
   hide <- function(show) if (show) NULL else "display:none"
   content <- tags$div(
     class = "wfp-wait", role = "status", `aria-live` = "polite",
+    cross,
     tags$div(class = "wfp-wait-row",
              tags$span(class = "wfp-wait-ring"),
              tags$span(class = "wfp-wait-msg", message),
@@ -190,6 +199,8 @@ waiter_content <- function(message = "Working\u2026",
     tags$div(class = "wfp-wait-bar", style = hide(has_pct),
              tags$span(style = paste0("width:", if (has_pct) percent else 0, "%"))),
     tags$div(class = "wfp-wait-sub", style = hide(has_sub), if (has_sub) subtitle),
+    # The console of steps, filled by waiter_log() / tw_step() (www/busy.js).
+    tags$div(class = "wfp-wait-log", style = "display:none"),
     cancel_btn
   )
 
@@ -244,35 +255,55 @@ filter_by_date_range <- function(df, date_col, range) {
 
 #' Build fuzzy-match groups from a character vector
 #'
-#' Uses base R `agrep` to assign group numbers to strings that are within
-#' `max_dist` of each other. Strings without any near-match receive group 0.
-#' This is intentionally simple to avoid an extra package dependency.
+#' Two keys belong together when the whole texts are close: their edit
+#' distance (letters added, removed or changed; case ignored) is at most
+#' `max_dist`, or, with `similarity`, when 1 - distance / length of the longer
+#' text reaches it (0.9 lets about one character in ten differ, so long names
+#' allow more typos than short ones). `agrep()` was used before: it matches a
+#' pattern anywhere INSIDE the other text, so with a share-of-length distance
+#' "Jean Baptiste Mukendi" and "Marie Kahindo" fell in one group.
 #'
 #' @param keys Character vector of keys (e.g. pasted duplicate columns).
-#' @param max_dist Maximum string distance passed to `agrep`.
+#' @param max_dist Maximum number of edits (used when `similarity` is NULL).
+#' @param similarity Minimum similarity between 0 and 1, or NULL.
+#' @param window Neighbours compared in each sorted order.
 #' @return Integer vector of group IDs (0 = no near-match).
 #' @noRd
-fuzzy_match_groups <- function(keys, max_dist = 1) {
-  keys <- as.character(keys)
-  n <- length(keys)
-  groups <- integer(n)
-  next_group <- 1L
+fuzzy_match_groups <- function(keys, max_dist = 1, similarity = NULL, window = 10) {
+  keys <- tolower(trimws(as.character(keys)))
+  keys[is.na(keys)] <- ""
+  # Each distinct text once: exact copies share its group.
+  u <- unique(keys)
+  idx <- match(keys, u)
+  n <- length(u)
+  len <- nchar(u)
+  parent <- seq_len(n)
+  find <- function(x) { while (parent[x] != x) x <- parent[x] <- parent[parent[x]]; x }
 
-  for (i in seq_len(n)) {
-    if (groups[i] > 0) next
-    matches <- agrep(
-      pattern = keys[i],
-      x = keys,
-      max.distance = max_dist,
-      ignore.case = TRUE,
-      fixed = FALSE
-    )
-    if (length(matches) > 1) {
-      groups[matches] <- next_group
-      next_group <- next_group + 1L
+  # Sorted neighbourhood (the usual record-linkage shortcut): sort the texts,
+  # compare each with its `window` next neighbours, then again sorted on the
+  # reversed text so a typo near the start is caught too. Comparing every
+  # pair took hours on a registration list; this is n x window comparisons.
+  if (n > 1) {
+    rev_txt <- vapply(strsplit(u, ""), function(ch) paste(rev(ch), collapse = ""), character(1))
+    for (ord in list(order(u), order(rev_txt))) {
+      for (k in seq_len(min(window, n - 1))) {
+        a <- ord[seq_len(n - k)]; b <- ord[(k + 1):n]
+        d <- stringdist::stringdist(u[a], u[b], method = "lv")
+        close <- if (is.null(similarity)) d <= max_dist else 1 - d / pmax(len[a], len[b], 1) >= similarity
+        for (m in which(close)) {
+          ra <- find(a[m]); rb <- find(b[m])
+          if (ra != rb) parent[max(ra, rb)] <- min(ra, rb)
+        }
+      }
     }
   }
-  groups
+  root <- vapply(seq_len(n), find, integer(1))
+  # A text is in a group when it has a near match or an exact copy.
+  size <- tabulate(root[idx], nbins = n)
+  out <- ifelse(size[root[idx]] > 1, root[idx], 0L)
+  out[out > 0] <- match(out[out > 0], unique(out[out > 0]))
+  as.integer(out)
 }
 
 #' Count fully duplicated rows
@@ -438,54 +469,49 @@ write_data <- function(wb, sheet, x, ...) openxlsx::writeData(wb, sheet, export_
 #' @noRd
 fmt5 <- function(x) format(round(as.numeric(x), 5), scientific = FALSE, drop0trailing = TRUE, trim = TRUE)
 
-#' Verdict card with a small archery animation
+#' Verdict card: the Advisory's verdict as a status panel
 #'
-#' The Advisory's wording stays as it is; the card adds a headline and an
-#' animated target: the arrow hits the bullseye (with confetti) when both
-#' errors are within tolerance, lands in an outer ring when the design needs a
-#' second look, and misses when it needs redesigning. `animate = FALSE` shows
-#' the final frame, so dragging the threshold does not replay the animation
-#' until the verdict actually changes. Motion is off for users who ask their
-#' system for reduced motion.
+#' A household icon in the verdict's colour (reached / to review / missed),
+#' a status badge, the Advisory's wording unchanged (interpretation and
+#' action), and, when given, the two errors against their tolerance. The card
+#' fades in only when the verdict changes (`animate`), so dragging the
+#' threshold does not replay it; no motion for users who ask for less.
 #' @param v A list from `error_verdict()`.
 #' @param ... Extra content under the action (notes).
+#' @param errors Optional c(inclusion = , exclusion = ) as proportions.
+#' @param tolerance Optional c(lower, upper) as proportions.
+#' @param stage "design" or "implementation" (the wording of the badge).
 #' @noRd
-verdict_card <- function(v, ..., animate = TRUE) {
+verdict_card <- function(v, ..., animate = TRUE, errors = NULL, tolerance = NULL, stage = "design") {
   lvl <- if (isTRUE(v$level %in% c("good", "review", "redesign"))) v$level else "unknown"
-  head <- c(good = "Bullseye!", review = "Close, but not quite a bullseye",
-            redesign = "Missed the target", unknown = "Hard to say yet")[[lvl]]
-  sub <- c(good = "Both errors are within tolerance.", review = "Nearly there: worth a second look.",
-           redesign = "Back to the drawing board.", unknown = "Not enough to judge.")[[lvl]]
-  # where the arrow tip lands, and at what angle
-  pose <- c(good = "translate(70,50)", review = "translate(88,34) rotate(-8)",
-            redesign = "translate(126,90) rotate(26)", unknown = "translate(70,50)")[[lvl]]
-  confetti <- if (lvl == "good") lapply(1:12, function(i) {
-    a <- 2 * pi * i / 12
-    tags$i(style = sprintf("--dx:%.0fpx;--dy:%.0fpx;--c:%s;--r:%ddeg", 70 * cos(a), 60 * sin(a),
-                           c("#0A6EB4", "#f7b825", "#26bde2", "#3f7e44", "#c5192d")[i %% 5 + 1], 40 * i))
-  })
-  svg <- HTML(sprintf(paste0(
-    '<svg class="vd-svg" viewBox="0 0 130 100" aria-hidden="true">',
-    '<g class="vd-target">',
-    '<circle cx="70" cy="50" r="38" fill="#c5192d"/><circle cx="70" cy="50" r="29" fill="#fff"/>',
-    '<circle cx="70" cy="50" r="20" fill="#c5192d"/><circle cx="70" cy="50" r="11" fill="#fff"/>',
-    '<circle cx="70" cy="50" r="4" fill="#c5192d"/></g>',
-    '%s',
-    '</svg>'),
-    if (lvl == "unknown") '<text class="vd-q" x="70" y="62" text-anchor="middle">?</text>' else sprintf(paste0(
-      '<g transform="%s"><g class="vd-arrow">',
-      '<line x1="-6" y1="0" x2="-52" y2="0" stroke="#1f2a37" stroke-width="3" stroke-linecap="round"/>',
-      '<path d="M0 0 L-10 -5 L-10 5 Z" fill="#1f2a37"/>',
-      '<path d="M-46 0 L-56 -8 L-50 -8 L-40 0 L-50 8 L-56 8 Z" fill="#f7b825"/>',
-      '</g></g>'), pose)))
+  impl <- identical(stage, "implementation")
+  status <- c(good = "Within tolerance", review = "Review recommended",
+              redesign = if (impl) "Corrective action required" else "Redesign required",
+              unknown = if (identical(v$level, "invalid")) "Tolerance not valid" else "Not enough data")[[lvl]]
+  icon <- c(good = "house-check-fill", review = "house-exclamation-fill",
+            redesign = "house-x-fill", unknown = "house-fill")[[lvl]]
+  chip <- function(label, x) {
+    if (is.null(x) || is.na(x)) return(NULL)
+    up <- if (length(tolerance) == 2) tolerance[2] else NA
+    lo <- if (length(tolerance) == 2) tolerance[1] else NA
+    cls <- if (is.na(up)) "" else if (x <= lo) "is-ok" else if (x <= up) "is-mid" else "is-bad"
+    tags$div(class = paste("vd-metric", cls),
+             tags$span(class = "vd-metric-label", label),
+             tags$span(class = "vd-metric-value", sprintf("%.1f%%", 100 * x)),
+             if (!is.na(up)) tags$span(class = "vd-metric-tol", sprintf("good \u2264 %.0f%% \u00b7 limit \u2264 %.0f%%", 100 * lo, 100 * up)))
+  }
+  metrics <- if (length(errors)) tags$div(class = "vd-metrics",
+                                          chip("Inclusion error", errors[["inclusion"]]),
+                                          chip("Exclusion error", errors[["exclusion"]]))
   tags$div(
     class = paste("wfp-verdict", paste0("is-", lvl), if (!animate) "no-anim"), role = "status",
-    tags$div(class = "vd-stage", svg, if (length(confetti)) tags$div(class = "vd-confetti", confetti)),
+    tags$div(class = "vd-icon", bsicons::bs_icon(icon, size = "1.9rem")),
     tags$div(
       class = "vd-text",
-      tags$div(class = "vd-head", head, tags$span(class = "vd-sub", sub)),
+      tags$div(class = "vd-head", tags$span(class = "vd-status", status)),
       tags$div(class = "vd-interp", v$interpretation),
-      tags$div(class = "vd-action", tags$em("Action: "), v$action),
+      tags$div(class = "vd-action", tags$strong("Recommended action: "), v$action),
+      metrics,
       ...
     )
   )
@@ -654,6 +680,45 @@ waiter_progress <- function(session, message = NULL, percent = NULL, subtitle = 
   session$sendCustomMessage("tw-wait-progress", list(message = message, percent = percent, subtitle = subtitle))
 }
 
+#' A line in the waiter's console
+#'
+#' Heavy operations say what they are doing, one line per step, under the
+#' waiter on screen, like an installer log. `state` is "run" (under way),
+#' "ok", "err" or "info"; a line sent again with the same `id` replaces the
+#' earlier one. Does nothing outside a Shiny session (tests, scripts).
+#' @noRd
+waiter_log <- function(text, state = "info", id = NULL, session = shiny::getDefaultReactiveDomain()) {
+  if (is.null(session)) return(invisible(NULL))
+  session$sendCustomMessage("tw-wait-log", list(text = text, state = state, id = id))
+  invisible(NULL)
+}
+
+tw_log_ids <- new.env(parent = emptyenv())
+
+#' Run one step of a heavy operation, logged in the waiter with its time
+#'
+#' `tw_step("read the csv file", fread(...))` shows the step under way, then
+#' ticks it with the seconds it took (or marks it failed and lets the error
+#' go on).
+#' @noRd
+tw_step <- function(label, expr, session = shiny::getDefaultReactiveDomain()) {
+  if (is.null(session)) return(expr)
+  n <- (tw_log_ids$n %||% 0) + 1
+  tw_log_ids$n <- n
+  id <- paste0("step", n)
+  waiter_log(label, "run", id, session)
+  t0 <- proc.time()[["elapsed"]]
+  out <- withCallingHandlers(expr, error = function(e) waiter_log(paste0(label, ": ", conditionMessage(e)), "err", id, session))
+  waiter_log(sprintf("%s (%.1f s)", label, proc.time()[["elapsed"]] - t0), "ok", id, session)
+  out
+}
+
+#' "13,208 rows x 1,294 columns"
+#' @noRd
+dim_text <- function(df) {
+  sprintf("%s rows x %s columns", format(nrow(df), big.mark = ","), format(ncol(df), big.mark = ","))
+}
+
 #' The country office set in the app (session), or "" outside a session
 #' @noRd
 country_office_now <- function() {
@@ -674,4 +739,25 @@ export_file_name <- function(stem, ext, time_format = "%Y-%m-%d_%Hh%M", country 
   co <- iconv(country %||% "", "UTF-8", "ASCII//TRANSLIT", sub = "")
   co <- gsub("^_+|_+$", "", gsub("[^A-Za-z0-9]+", "_", co %||% ""))
   paste0(stem, if (nzchar(co)) paste0("_", co), "_", format(Sys.time(), time_format), ".", ext)
+}
+
+#' Sidebars, one look everywhere (as on Targeting Monitoring)
+#'
+#' Numbered sections that fold, each with an icon (`side_step()` inside
+#' `side_steps()`), then the page's actions in one block at the bottom
+#' (`side_actions()`, kept in view while the sections scroll). Give the
+#' sidebar `class = "wfp-side"`.
+#' @noRd
+side_steps <- function(..., id = NULL, open = TRUE) {
+  bslib::accordion(..., id = id, multiple = TRUE, open = open)
+}
+
+#' @noRd
+side_step <- function(title, icon_name, ..., value = NULL) {
+  bslib::accordion_panel(title = title, value = value %||% title, icon = bsicons::bs_icon(icon_name), ...)
+}
+
+#' @noRd
+side_actions <- function(..., sticky = TRUE) {
+  tags$div(class = paste("wfp-sb-actions", if (!sticky) "wfp-sb-actions-end"), ...)
 }

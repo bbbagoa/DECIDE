@@ -24,18 +24,18 @@ mod_ben_selection_ui <- function(id) {
       # The sidebar holds the filters only; the design of the selection
       # (approach, rules, score, prioritisation) has its own tab.
       sidebar = bslib::sidebar(
-        title = "Areas covered",
         width = 300,
-        class = "wfp-ben-sidebar",
+        class = "wfp-ben-sidebar wfp-side",
         # Not a criterion: the part of the registration data this selection
         # covers. Households elsewhere are left out of every count, list and
         # report, which then say which areas they cover.
-        step("Areas covered",
+        side_steps(
+          side_step("1. Areas covered", "geo-alt",
              tags$p(class = "small text-muted mb-2",
                     "Leave empty to cover every area. Households outside the chosen areas are left out of the selection and its reports."),
              picker("ben_admin1", "Admin 1"),
              picker("ben_admin2", "Admin 2"),
-             picker("ben_admin3", "Admin 3")),
+             picker("ben_admin3", "Admin 3"))),
         tags$div(
           class = "wfp-sb-actions",
           tags$div(
@@ -160,7 +160,8 @@ mod_ben_selection_ui <- function(id) {
             class = "wfp-design-foot",
             tags$span(class = "small text-muted", bsicons::bs_icon("info-circle"),
                       " The design and the filters take effect together when you apply the selection."),
-            tags$button(type = "button", class = "btn btn-primary btn-sm",
+            # The sidebar's Apply selection is the page's one primary action.
+            tags$button(type = "button", class = "btn btn-outline-primary btn-sm",
                         onclick = sprintf("document.getElementById('%s').click()", ns("ben_apply")),
                         icon("filter"), " Apply selection")
           )
@@ -200,11 +201,6 @@ mod_ben_selection_ui <- function(id) {
                           icon("file-excel"), " Download the list (Excel)")),
             DT::DTOutput(ns("ben_table"), fill = FALSE)
           )
-        ),
-        bslib::nav_panel(
-          value = "accuracy", title = tagList(bsicons::bs_icon("bullseye"), " Accuracy"),
-          # Shown only when an eligibility column is mapped; otherwise says so.
-          uiOutput(ns("ben_diagnostics_ui"))
         )
       )
     )
@@ -1451,123 +1447,6 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
     })
 
     # -----------------------------------------------------------------------
-    # Targeting-accuracy diagnostics (activate only when eligibility is mapped)
-    # -----------------------------------------------------------------------
-
-    # Eligible-by-design flag aligned with the FULL uploaded dataset, so
-    # coverage and inclusion/exclusion error are measured against the whole
-    # population. Households cut by prioritisation are excluded by design and
-    # must not count as exclusion errors (Targeting Advisory 2/2025).
-    selection_mask <- reactive({
-      s <- selection(); req(s)
-      if (!s$list_produced) return(NULL)
-      s$eligible
-    })
-
-    ben_metrics <- reactive({
-      elig_col <- user_setup$eligibility
-      df <- uploaded_df()
-      if (!shiny::isTruthy(elig_col) || !elig_col %in% names(df)) return(NULL)
-      sel_mask <- selection_mask()
-      if (is.null(sel_mask)) return(NULL)
-      elig <- eligibility_flag(df[[elig_col]])
-      if (!any(!is.na(elig))) return(NULL)  # eligibility not binary -> no-op
-      targeting_metrics(sel_mask, elig)
-    })
-
-    # Only render the diagnostics block when metrics are computable
-    output$ben_diagnostics_ui <- renderUI({
-      if (is.null(ben_metrics())) {
-        return(tags$div(class = "mt-3", empty_state(
-          "No accuracy check yet",
-          "Map an eligibility column in the variable setup and apply a selection: coverage, inclusion and exclusion errors are measured against it.",
-          icon = "bullseye")))
-      }
-      ns <- session$ns
-      tagList(
-        bslib::card(
-          class = "mt-3",
-          full_screen = TRUE,
-          bslib::card_header(
-            bsicons::bs_icon("bullseye"), " Targeting Accuracy (eligible by design vs mapped eligibility)"
-          ),
-          bslib::card_body(
-            bslib::layout_columns(
-              bslib::value_box(title = "Coverage Rate",   value = textOutput(ns("ben_coverage")),   showcase = bsicons::bs_icon("percent"),       theme = "success"),
-              # "scale-balanced" is a Font Awesome name; bs_icon() threw on it and
-              # this value box rendered "Error: [object Object]" as its icon.
-              bslib::value_box(title = "Selection Ratio", value = textOutput(ns("ben_sel_ratio")),  showcase = bsicons::bs_icon("arrow-left-right"), theme = "info"),
-              # box-arrow-* are Bootstrap Icons; arrow-*-bracket are Font Awesome
-              # names and rendered as "Error: [object Object]" in these boxes.
-              bslib::value_box(title = "Inclusion Error", value = textOutput(ns("ben_incl_err")),   showcase = bsicons::bs_icon("box-arrow-in-right"), theme = "danger"),
-              bslib::value_box(title = "Exclusion Error", value = textOutput(ns("ben_excl_err")),   showcase = bsicons::bs_icon("box-arrow-right"), theme = "warning"),
-              col_widths = c(3, 3, 3, 3)
-            ),
-            bslib::layout_columns(
-              bslib::card(
-                bslib::card_header("Coverage by Admin 1"),
-                DT::DTOutput(ns("ben_coverage_table"), fill = FALSE)
-              ),
-              bslib::card(
-                bslib::card_header("Precision / Recall"),
-                textOutput(ns("ben_precision_recall"))
-              ),
-              col_widths = c(7, 5)
-            )
-          )
-        )
-      )
-    })
-
-    output$ben_coverage <- renderText({
-      m <- ben_metrics(); if (is.null(m) || is.na(m$coverage_rate)) return("-")
-      paste0(round(m$coverage_rate * 100, 1), "%")
-    })
-    output$ben_sel_ratio <- renderText({
-      m <- ben_metrics(); if (is.null(m) || is.na(m$selection_ratio)) return("-")
-      paste0(round(m$selection_ratio, 2), "x")
-    })
-    output$ben_incl_err <- renderText({
-      m <- ben_metrics(); if (is.null(m) || is.na(m$inclusion_error)) return("-")
-      paste0(round(m$inclusion_error * 100, 1), "%")
-    })
-    output$ben_excl_err <- renderText({
-      m <- ben_metrics(); if (is.null(m) || is.na(m$exclusion_error)) return("-")
-      paste0(round(m$exclusion_error * 100, 1), "%")
-    })
-
-    output$ben_coverage_table <- DT::renderDT({
-      m <- ben_metrics(); req(m)
-      df <- uploaded_df(); elig_col <- user_setup$eligibility
-      unit_col <- user_setup$admin1
-      if (!shiny::isTruthy(unit_col) || !unit_col %in% names(df)) return(DT::datatable(data.frame()))
-      cov <- coverage_by_unit(df, selection_mask(), eligibility_flag(df[[elig_col]]), unit_col)
-      cov$coverage <- paste0(round(cov$coverage * 100, 1), "%")
-      colnames(cov) <- c("Admin 1", "Eligible", "Selected", "Coverage")
-      DT::datatable(cov, options = list(pageLength = 12, scrollX = TRUE), rownames = FALSE) |>
-        DT::formatCurrency(c("Eligible", "Selected"), currency = "", interval = 3, mark = ",", digits = 0)
-    })
-
-    output$ben_precision_recall <- renderText({
-      m <- ben_metrics(); if (is.null(m)) return("")
-      out <- sprintf("Precision: %s   |   Recall: %s",
-                     if (is.na(m$precision)) "-" else paste0(round(m$precision * 100, 1), "%"),
-                     if (is.na(m$recall)) "-" else paste0(round(m$recall * 100, 1), "%"))
-      # The OGN notes exclusion rises by definition once prioritisation cuts
-      # the list; show by how much, kept apart from the design error above.
-      s <- selection()
-      if (any(s$eligible & !s$prioritized)) {
-        df <- uploaded_df()
-        mp <- targeting_metrics(s$prioritized, eligibility_flag(df[[user_setup$eligibility]]))
-        if (!is.null(mp) && !is.na(mp$exclusion_error)) {
-          out <- paste0(out, sprintf("   |   After prioritisation, %.1f%% of eligible households are not served (+%.1f pts, excluded by design).",
-                                     100 * mp$exclusion_error, 100 * (mp$exclusion_error - m$exclusion_error)))
-        }
-      }
-      out
-    })
-
-    # -----------------------------------------------------------------------
     # Export: the user picks the variables, then downloads. The choice is kept
     # for the next export in this session.
     # -----------------------------------------------------------------------
@@ -1638,9 +1517,6 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
         caseload = sprintf("total caseload of %s %s. Rationale: %s", applied$prio_n, applied$prio_count %||% "households",
                            applied$prio_rationale %||% "not recorded"),
         per_unit = sprintf("%s households per %s", applied$prio_n, applied$quota_unit))
-      m <- ben_metrics()
-      mpct <- function(x) if (is.null(m) || is.na(x)) "n/a" else sprintf("%.1f%%", 100 * x)
-      mnum <- function(x) if (is.null(m) || is.na(x)) "n/a" else sprintf("%.2f", x)
       full <- selected_data()
       n_ind <- if (shiny::isTruthy(user_setup$hh_size) && user_setup$hh_size %in% names(full))
         sum(as_number(full[[user_setup$hh_size]]), na.rm = TRUE) else NA
@@ -1700,10 +1576,6 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
           "Criteria" = paste(vapply(sc$items, function(it) sprintf("%s (%s%s)", it$criterion,
             if (identical(it$direction, "exclusion")) "-" else "+", fmt5(it$weight)), character(1)), collapse = "; "))
           else c("Scorecard" = "not used"),
-        "Accuracy against mapped eligibility" = c(
-          "Coverage rate" = mpct(m$coverage_rate), "Selection ratio" = mnum(m$selection_ratio),
-          "Inclusion error" = mpct(m$inclusion_error), "Exclusion error" = mpct(m$exclusion_error),
-          "Precision" = mpct(m$precision), "Recall" = mpct(m$recall)),
         "Variable mapping" = stats::setNames(ifelse(nzchar(mapping), mapping, "not mapped"), map_keys),
         "Notes" = c("Notes" = if (length(s$notes)) paste(s$notes, collapse = " | ") else "none",
                     "Excluded by design" = "Eligible households not served for lack of resources: unmet need, not counted as exclusion error (Targeting Advisory 2/2025).")
@@ -1735,7 +1607,6 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
           profile = if (any(sel) && !all(sel)) current_profile(df_all, sel),
           beneficiary_profile = beneficiary_profile(df_all[which(sel), , drop = FALSE], user_setup),
           rates = selection_rates(df_all, user_setup, sel),
-          accuracy = selection_accuracy(df_all, user_setup, s),
           caseload = caseload_table(s, df_all),
           map = mp, map_n = attr(mp, "n_total")),
           lang = if (identical(lang, "fr")) "fr" else "en")
@@ -1744,7 +1615,7 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
       }
     )
 
-    # Self-documenting export: rows + a metadata sheet (filters, totals, accuracy)
+    # Self-documenting export: rows + a metadata sheet (filters, totals, rules)
     output$download_selection <- download_handler(
       filename = function() {
         export_file_name("Targeting_BeneficiarySelection", if (identical(input$export_split, "area")) "zip" else "xlsx")
@@ -1934,16 +1805,4 @@ area_file_suffix <- function(areas) {
   x <- gsub("^_+|_+$", "", x)
   x[!nzchar(x)] <- "area"
   make.unique(x, sep = "_")
-}
-
-#' Selection against the mapped eligibility, as designed and as served
-#' @return list(column, design, served) of `design_errors()` results, or NULL
-#'   when no binary eligibility column is mapped.
-#' @noRd
-selection_accuracy <- function(df, settings, s) {
-  el <- as.character(settings$eligibility %||% "")[1]
-  if (is.na(el) || !nzchar(el) || !el %in% names(df)) return(NULL)
-  f <- eligibility_flag(df[[el]])
-  if (!any(!is.na(f))) return(NULL)
-  list(column = el, design = design_errors(s$eligible, f), served = design_errors(s$prioritized, f))
 }

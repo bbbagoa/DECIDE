@@ -16,78 +16,33 @@ mod_dq_ui <- function(id) {
         bslib::layout_sidebar(
           fillable = FALSE,
           sidebar = bslib::sidebar(
-            title = "Filters",
-            width = 300,
-
-            shinyWidgets::pickerInput(
-              ns("dq_filter_adm1"),
-              label = "Select Admin1:",
-              choices = character(0),
-              multiple = TRUE,
-              options = shinyWidgets::pickerOptions(
-                container = "body",
-                actionsBox = TRUE,
-                title = "admin1",
-                liveSearch = TRUE,
-                size = 10
-              )
-            ),
-
-            shinyWidgets::pickerInput(
-              ns("dq_filter_adm2"),
-              label = "Select Admin2:",
-              choices = character(0),
-              multiple = TRUE,
-              options = shinyWidgets::pickerOptions(
-                container = "body",
-                actionsBox = TRUE,
-                title = "admin2",
-                liveSearch = TRUE,
-                size = 10
-              )
-            ),
-
-            shinyWidgets::pickerInput(
-              ns("dq_filter_adm3"),
-              label = "Select Admin3:",
-              choices = character(0),
-              multiple = TRUE,
-              options = shinyWidgets::pickerOptions(
-                container = "body",
-                actionsBox = TRUE,
-                title = "admin3",
-                liveSearch = TRUE,
-                size = 10
-              )
-            ),
-
-            shinyWidgets::airDatepickerInput(
-              ns("dq_filter_date"),
-              label = "Select date range:",
-              range = TRUE,
-              autoClose = TRUE,
-              placeholder = "Date Range",
-              width = "100%",
-              addon = "none"
-            ),
-
-            hr(),
-            tags$div(
-              class = "d-flex gap-2 mt-2",
-              actionButton(ns("btn_apply_dq_filters"), "Apply", class = "btn-primary btn-sm flex-fill", icon = icon("filter")),
-              actionButton(ns("btn_clear_dq_filters"), label = NULL, icon = icon("xmark"), class = "btn-outline-secondary btn-sm")
-            ),
-            hr(),
-            actionButton(
-              ns("btn_reset_data"),
-              "Reset to Original Data",
-              class = "btn-outline-danger w-100",
-              icon = icon("rotate-left")
-            ),
-            tags$div(
-              class = "mt-3 text-center small text-muted",
-              textOutput(ns("dq_filtered_rows"))
-            )
+            width = 300, class = "wfp-side",
+            side_steps(
+              side_step("1. Areas", "geo-alt",
+                shinyWidgets::pickerInput(
+                  inputId = ns("dq_filter_adm1"), label = "Admin 1", choices = character(0), multiple = TRUE, width = "100%",
+                  options = shinyWidgets::pickerOptions(container = "body", actionsBox = TRUE, liveSearch = TRUE, size = 10)),
+                shinyWidgets::pickerInput(
+                  inputId = ns("dq_filter_adm2"), label = "Admin 2", choices = character(0), multiple = TRUE, width = "100%",
+                  options = shinyWidgets::pickerOptions(container = "body", actionsBox = TRUE, liveSearch = TRUE, size = 10)),
+                shinyWidgets::pickerInput(
+                  inputId = ns("dq_filter_adm3"), label = "Admin 3", choices = character(0), multiple = TRUE, width = "100%",
+                  options = shinyWidgets::pickerOptions(container = "body", actionsBox = TRUE, liveSearch = TRUE, size = 10))),
+              side_step("2. Interview dates", "calendar-range",
+                shinyWidgets::airDatepickerInput(
+                  ns("dq_filter_date"), label = NULL, range = TRUE, autoClose = TRUE,
+                  placeholder = "All dates", width = "100%", addon = "none"))),
+            side_actions(
+              tags$div(
+                class = "d-flex gap-2",
+                actionButton(ns("btn_apply_dq_filters"), "Apply", class = "btn-primary btn-sm flex-fill", icon = icon("filter")),
+                actionButton(ns("btn_clear_dq_filters"), label = NULL, icon = icon("xmark"), class = "btn-outline-secondary btn-sm",
+                             title = "Clear the filters")),
+              downloadButton(ns("dq_report"), "Data quality report (HTML)", class = "btn-outline-primary btn-sm w-100",
+                             icon = icon("file-lines")),
+              actionButton(ns("btn_reset_data"), "Reset to original data", class = "btn-outline-danger btn-sm w-100",
+                           icon = icon("rotate-left")),
+              tags$div(class = "wfp-sb-note", textOutput(ns("dq_filtered_rows"))))
           ),
 
           # Main Content
@@ -173,6 +128,15 @@ mod_dq_server <- function(id, uploaded_df, user_setup, modification_log, origina
   })
 
   # --- STEP 2: each admin level lists only the areas inside those picked above ---
+  # The pickers carry the mapped column names ("Province"), as the data does.
+  observe({
+    for (k in 1:3) {
+      col <- as.character(user_setup[[paste0("admin", k)]] %||% "")[1]
+      lab <- if (is.na(col) || !nzchar(col)) sprintf("Admin %d", k) else col
+      shinyWidgets::updatePickerInput(session, paste0("dq_filter_adm", k), label = paste0(lab, ":"))
+    }
+  })
+
   cascade_pickers(session, input, c("dq_filter_adm1", "dq_filter_adm2", "dq_filter_adm3"),
                   cols = reactive(vapply(c("admin1", "admin2", "admin3"), function(l) as.character(user_setup[[l]] %||% "")[1], character(1))),
                   data = uploaded_df)
@@ -250,6 +214,27 @@ mod_dq_server <- function(id, uploaded_df, user_setup, modification_log, origina
   # Shared reactive state handed to every sub-tab. Each sub-server aliases these
   # names locally so its verbatim body reads identically to the original.
   # ---------------------------------------------------------------------------
+  # One record of every check, on the data in scope (Data quality report).
+  output$dq_report <- download_handler(
+    filename = function() export_file_name("Data_quality_report", "html", "%Y-%m-%d_%Hh%M"),
+    content = function(file) {
+      df <- dq_filtered_data()
+      req(df)
+      setup <- reactiveValuesToList(user_setup)
+      x <- tw_step("check completeness, duplicates, outliers, GPS, names and enumerators",
+                   dq_report_data(df, setup, modification_log()))
+      f <- reactiveValuesToList(applied_dq_filters)
+      lv <- c(admin1 = "Admin 1", admin2 = "Admin 2", admin3 = "Admin 3")
+      scope <- unlist(lapply(names(lv), function(k) if (length(f[[k]])) paste0(lv[[k]], ": ", paste(f[[k]], collapse = ", "))))
+      if (length(f$date) == 2) scope <- c(scope, paste("dates", paste(format(as.Date(f$date)), collapse = " to ")))
+      x$scope <- if (length(scope)) paste(scope, collapse = "; ") else "All areas"
+      x$country_office <- user_setup$country_office
+      lang <- session$rootScope()$input$lang_selector
+      tw_step("write the report", write_dq_report(file, x, lang = if (identical(lang, "fr")) "fr" else "en"))
+      audit_add(modification_log, "Selection", "Data quality report exported", sprintf("%s records", format(nrow(df), big.mark = ",")))
+    }
+  )
+
   core <- list(
     dq_filtered_data = dq_filtered_data,
     uploaded_df      = uploaded_df,

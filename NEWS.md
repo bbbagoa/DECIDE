@@ -1,5 +1,35 @@
 # TargetWise 1.0.0
 
+* Yes/no variables created in Criteria Screening (Binarise) are named with a Targ_ prefix (e.g. Targ_hh_size_ge7).
+* Every sidebar has the Targeting Monitoring look: numbered sections that fold, each with an icon, and the page's actions in one block at the bottom (Overview, Data Quality, Spot Checking, Beneficiary Selection, Targeting Design).
+* Interface pass after a full walkthrough:
+  * the Overview date shows months again;
+  * weighted counts say so ("94, weighted estimate, 60 records");
+  * the language switch no longer logs errors;
+  * the navbar fits narrow windows (no sideways scroll; wraps below 1,000 px);
+  * Targeting Design has one slim step bar, a readable threshold slider and wrapping review tables;
+  * one primary button per view;
+  * the Data Quality sidebar uses the mapped names;
+  * Spelling & Integrity, Outliers, Spot Checking, the Audit Trail and the PDM sidebar are clearer;
+  * the Overview profile titles are readable;
+  * more of the interface is in French.
+* Targeting Design report: each per-variable chart shows the 15 most relevant variables (largest points, gap or share of the score) and says so; the Excel scorecard has a Report_tables sheet with every table in full.
+* Monitoring report: Key findings come right after the Context.
+* Long tasks (reading an imported file, fitting a Targeting Design model) run in a background R process: the page stays usable and a cross on the loader stops them.
+* The loader stays up through tasks that run back to back and closes once everything is done, instead of blinking between them.
+* Fuzzy duplicate matching is fast on large lists (sorted neighbourhood, a few seconds for 50,000 households; it used to run for hours) and catches typos in the first letter too. New dependency: stringdist.
+* Targeting Monitoring report: start from a template (PDM targeting accuracy, process monitoring, donor brief) with a finding written from each chart's numbers; an executive summary with traffic lights, an error map and what to do; save the report as a template to compare the next round; checks before export. Everything that existed stays as it was.
+* Data quality report (HTML) on the Data Quality sidebar: completeness, duplicate IDs and records, outliers in the mapped numbers, GPS, area-name spelling variants, enumerators to review and the corrections made.
+* Spot-check report: insight tiles, agreement by enumerator and area, the most frequent changes, which way number answers move, households to re-check first; only the fields that need attention are tabled and the chart shows the 15 lowest. The Excel export adds By_enumerator / By_admin sheets. Export sample sits with the sample; the back-check exports are on the sidebar.
+* Duplicates: no column is picked by default; fuzzy matching uses a similarity percentage on the whole text (it used to match inside longer texts and group unrelated records).
+* Enumerator performance: taller charts, insight tiles (workload balance, interview length, busiest day, daily pace, empty answers), flagged enumerators and the team's usual range on the charts, and a daily workload heatmap.
+* One loader for the whole app: the busy card and the full-screen waiter are the same card, with a console of the steps running in the background (reading, encoding, splitting, encrypting, fitting, MODA pages, panels redrawn).
+* The design and implementation verdicts are a clear status panel: household icon, status, the Advisory's wording and both errors against the tolerance.
+* Beneficiary Selection: the Accuracy tab is removed (accuracy belongs to Design and Monitoring), as is the accuracy section of the selection report and Excel summary.
+* Criteria screening: the quick screening ticks the associated variables in Review the variables when it runs.
+* Chart axis labels are horizontal or vertical, never slanted.
+* Sessions are split by phase: Design, Selection and Monitoring each save to their own file and load beside the others; datasets are stored as Parquet inside the encrypted session (a 164 MB session became 18 MB + 5 MB). Autosave saves only the phase that changed.
+* Restoring a Targeting Design on large data no longer loses the fitted model.
 * Criteria screening: creating suggested yes/no variables now leads to the Quick screening tab; "Review the variables" is renamed "Review the variables"; odds ratios and their 95% CI show at most 4 decimals (huge ratios read "> 9999").
 * Faster on large data (measured on 102,000 households): start 32 s to 21 s, import 20 s to 7 s, setup validation to Overview 17 s to 10 s.
 * The app opens in your default browser, not the RStudio/Positron viewer.

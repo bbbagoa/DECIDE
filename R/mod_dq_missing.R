@@ -43,7 +43,7 @@ dq_missing_ui <- function(ns) {
                   actionButton(
                     ns("btn_apply_missing"),
                     "Apply",
-                    class = "btn-primary",
+                    class = "btn-outline-primary",
                     icon = icon("filter")
                   )
                 )

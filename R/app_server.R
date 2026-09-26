@@ -152,12 +152,13 @@ app_server <- function(input, output, session) {
     if (!is.null(session) && exists("flushOutput", session)) {
       try(session$flushOutput(), silent = TRUE)
     }
-    showModal(import_summary_modal(
+    waiter_log(dim_text(df))
+    showModal(tw_step("summarise missing values, duplicates and column types", import_summary_modal(
       df, label = label %||% if (identical(source, "File")) "File upload" else source, notes = notes,
       footer = tagList(
         modalButton("Import another file"),
         actionButton("btn_import_to_setup", "Continue to variable setup", class = "btn-primary", icon = icon("arrow-right"))
-      )))
+      ))))
   }
 
   # 1. Start the module and capture the returned reactive dataframe
@@ -342,7 +343,9 @@ app_server <- function(input, output, session) {
     co <- user_setup$country_office
     actionButton("co_open", if (shiny::isTruthy(co)) co else "Set country office",
                  icon = icon("location-dot"), class = "btn-sm wfp-co-btn",
-                 title = "Country office: shown on every report and export")
+                 # The name is in the tooltip too: on narrow screens only the icon shows.
+                 title = if (shiny::isTruthy(co)) paste0("Country office: ", co, " (shown on every report and export)")
+                         else "Set the country office: shown on every report and export")
   })
   observeEvent(input$co_open, {
     showModal(modalDialog(

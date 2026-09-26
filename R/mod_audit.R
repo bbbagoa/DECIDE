@@ -66,7 +66,13 @@ mod_audit_server <- function(id, modification_log) {
 
     output$tab_mod_log <- DT::renderDT({
       dat <- shown()
+      # The Phase column says it already: the action without its "Phase: ".
+      dat$action <- sub("^(Design|Selection|Monitoring|Session): ", "", dat$action)
       names(dat) <- c("Phase", "When", "Record", "Field", "Old value", "New value", "Action", "User", "Reason")[seq_along(dat)]
+      # Columns empty in every row shown (most entries are decisions, not
+      # edits of a value) are left out; the export keeps them all.
+      empty <- vapply(dat, function(x) all(is.na(x) | !nzchar(trimws(as.character(x)))), logical(1))
+      dat <- dat[, !empty | names(dat) %in% c("Phase", "When", "Action"), drop = FALSE]
       DT::datatable(dat, options = list(pageLength = 15, scrollX = TRUE,
                                         language = list(emptyTable = "Nothing logged yet.")),
                     rownames = FALSE)

@@ -1,0 +1,29 @@
+/* ---------------------------------------------------------------------------
+   Targeting Design (mod_scorecard.R).
+   Loaded before wfp-ui.css (alphabetical bundle), so every rule here carries
+   an extra class to win on specificity.
+   ------------------------------------------------------------------------- */
+
+/* One navigation: the step bar. The pill tabs of the steps card repeated it;
+   they stay for switching content (go_step(), input$steps) but are hidden. */
+.wfp-design-steps > .card > .card-header { display: none; }
+
+/* The step bar, slim: dots and labels on one line, the next action under. */
+.wfp-flow.wfp-flow-slim { padding: .5rem .9rem; }
+.wfp-flow-slim .wfp-flow-track { display: flex; align-items: center; gap: 0; flex-wrap: nowrap; }
+.wfp-flow-slim .wfp-flow-step { flex: 1 1 auto; flex-direction: row; align-items: center; gap: .4rem;
+  padding: .15rem .1rem; font-size: .76rem; min-width: 0; }
+.wfp-flow-slim .wfp-flow-step:not(:last-child)::after { position: static; content: ""; flex: 1 1 14px; min-width: 10px;
+  height: 2px; margin: 0 .35rem; }
+.wfp-flow-slim .wfp-flow-dot { width: 24px; height: 24px; flex: none; font-size: .72rem; }
+.wfp-flow-slim .wfp-flow-label { text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wfp-flow-slim .wfp-flow-next { margin-top: .4rem; padding-top: .4rem; font-size: .82rem; }
+@media (max-width: 1280px) { .wfp-flow-slim .wfp-flow-step:not(.is-current) .wfp-flow-label { display: none; } }
+
+/* Review tables: headers and the explanation column wrap, so the table fits
+   the page instead of scrolling sideways. */
+.wfp-design-steps .wfp-model-table th { white-space: normal; vertical-align: bottom; line-height: 1.25; }
+.wfp-design-steps .wfp-model-table td { overflow-wrap: anywhere; }
+.wfp-design-steps .wfp-model-table .wfp-col-text { min-width: 11rem; }
+.wfp-design-steps .wfp-review-table th { min-width: 6.5rem; text-align: center; }
+.wfp-design-steps .wfp-review-table th:first-child { min-width: 10rem; text-align: left; }

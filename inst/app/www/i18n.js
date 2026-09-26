@@ -97,7 +97,13 @@
     return null;
   }
 
-  function skipped(el) { return !el || (el.closest && el.closest(SKIP)); }
+  // .tw-i18n marks the app's own labels inside skipped areas (the Details
+  // button in a data table): translated, while the data around stays as is.
+  function skipped(el) {
+    if (!el) return true;
+    if (el.closest && el.closest(".tw-i18n")) return false;
+    return !!(el.closest && el.closest(SKIP));
+  }
 
   function doText(node) {
     var parent = node.parentElement;
@@ -141,7 +147,11 @@
     if (!ready || !root) return;
     if (root.nodeType === 3) { doText(root); return; }
     if (root.nodeType !== 1) return;
-    if (skipped(root)) return;
+    if (skipped(root)) {
+      // A skipped area (a table body) can still hold marked labels.
+      if (root.querySelectorAll) root.querySelectorAll(".tw-i18n").forEach(walk);
+      return;
+    }
     doAttrs(root);
     var tw = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT, null);
     var n;
@@ -211,3 +221,18 @@
     mode: function (s) { translate(s); return lastMode; }
   };
 })();
+
+// shiny.i18n's language input hands jQuery's change event to Shiny's input
+// callback, which Shiny 1.14 rejects ("Unexpected input value mode"), so every
+// language switch logged an error. Its message now translates the tagged
+// labels directly (getValue does the work) without the rejected event; the
+// server keeps the language through update_lang() as before.
+$(function () {
+  var entry = Shiny.inputBindings.getBindings().map(function (x) { return x.binding; })
+    .find(function (b) { return b && b.find && String(b.find).indexOf("i18n-state") >= 0; });
+  if (!entry) return;
+  entry.receiveMessage = function (el, data) {
+    $(el).data("lang", data.lang);
+    try { entry.getValue(el); } catch (e) {}
+  };
+});

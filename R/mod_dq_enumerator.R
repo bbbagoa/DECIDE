@@ -31,18 +31,30 @@ dq_enumerator_ui <- function(ns) {
               ),
               bslib::nav_panel(
                 title = tagList(bsicons::bs_icon("bar-chart"), " Workload and speed"),
+                tags$div(class = "mt-3", uiOutput(ns("enum_speed_insights"))),
                 bslib::layout_columns(
-                  class = "mt-3", col_widths = c(6, 6),
+                  col_widths = c(6, 6),
                   bslib::card(
-                full_screen = TRUE,
-                bslib::card_header("Interviews by enumerator (top 20)"),
-                plotly::plotlyOutput(ns("enum_interviews_plot"), height = "320px")
-              ),
+                    full_screen = TRUE,
+                    bslib::card_header("Interviews by enumerator"),
+                    tags$div(class = "small text-muted px-3 pt-2",
+                             "Red: flagged for review. Dashed line: the team median."),
+                    plotly::plotlyOutput(ns("enum_interviews_plot"), height = "560px")
+                  ),
                   bslib::card(
-                full_screen = TRUE,
-                bslib::card_header("Average interview duration (top 20)"),
-                plotly::plotlyOutput(ns("enum_duration_plot"), height = "320px")
-              )
+                    full_screen = TRUE,
+                    bslib::card_header("Average interview duration"),
+                    tags$div(class = "small text-muted px-3 pt-2",
+                             "Green band: the team's usual range (IQR fences). Red: shorter; amber: longer. The enumerators furthest from the median are shown."),
+                    plotly::plotlyOutput(ns("enum_duration_plot"), height = "560px")
+                  )
+                ),
+                bslib::card(
+                  full_screen = TRUE,
+                  bslib::card_header("Interviews per day, by enumerator"),
+                  tags$div(class = "small text-muted px-3 pt-2",
+                           "Darker cells are busier days. A cell far darker than the rest of its row is a day worth checking."),
+                  plotly::plotlyOutput(ns("enum_daily_plot"), height = "560px")
                 )
               ),
               bslib::nav_panel(
@@ -56,8 +68,8 @@ dq_enumerator_ui <- function(ns) {
               ),
                   bslib::card(
                 full_screen = TRUE,
-                bslib::card_header("Missingness by enumerator (top 20)"),
-                plotly::plotlyOutput(ns("enum_missingness_plot"), height = "360px")
+                bslib::card_header("Empty answers by enumerator"),
+                plotly::plotlyOutput(ns("enum_missingness_plot"), height = "560px")
               )
                 )
               )
@@ -82,75 +94,7 @@ dq_enumerator_server <- function(input, output, session, ns, core) {
 
   enum_metrics <- reactive({
     req(dq_filtered_data(), user_setup$enumerator_id)
-    df <- dq_filtered_data()
-    enum_col <- user_setup$enumerator_id
-    w <- get_weights(df, user_setup)
-
-    hh_size_col <- user_setup$hh_size
-    size_num <- if (shiny::isTruthy(hh_size_col) && hh_size_col %in% names(df)) {
-      as_number(df[[hh_size_col]])
-    } else {
-      rep(NA_real_, nrow(df))
-    }
-
-    if (all(c("start", "end") %in% names(df))) {
-      t_start <- lubridate::as_datetime(df[["start"]])
-      t_end <- lubridate::as_datetime(df[["end"]])
-    } else if (all(c("starttime", "endtime") %in% names(df))) {
-      t_start <- lubridate::as_datetime(df[["starttime"]])
-      t_end <- lubridate::as_datetime(df[["endtime"]])
-    } else {
-      t_start <- t_end <- rep(NA_real_, nrow(df))
-    }
-    durations <- as.numeric(difftime(t_end, t_start, units = "mins"))
-    valid_dur <- !is.na(durations) & durations > 5 & durations < 180
-
-    miss_cols <- setdiff(names(df), c(enum_col, user_setup$weight))
-    row_missing <- rowMeans(is.na(df[, miss_cols, drop = FALSE]))
-
-    m <- data.frame(
-      enumerator_id = df[[enum_col]],
-      w = w,
-      valid_dur = valid_dur,
-      duration = durations,
-      size = size_num,
-      row_missing = row_missing,
-      stringsAsFactors = FALSE
-    ) |>
-      dplyr::filter(!is.na(.data$enumerator_id), .data$enumerator_id != "", .data$w > 0) |>
-      dplyr::group_by(.data$enumerator_id) |>
-      dplyr::summarise(
-        interviews = sum(.data$w, na.rm = TRUE),
-        avg_duration = ifelse(
-          sum(.data$valid_dur) == 0,
-          NA_real_,
-          sum(.data$duration[.data$valid_dur] * .data$w[.data$valid_dur], na.rm = TRUE) /
-            sum(.data$w[.data$valid_dur], na.rm = TRUE)
-        ),
-        missingness_rate = sum(.data$row_missing * .data$w, na.rm = TRUE) / sum(.data$w, na.rm = TRUE),
-        avg_hh_size = ifelse(
-          sum(!is.na(.data$size)) == 0,
-          NA_real_,
-          sum(.data$size[!is.na(.data$size)] * .data$w[!is.na(.data$size)], na.rm = TRUE) /
-            sum(.data$w[!is.na(.data$size)], na.rm = TRUE)
-        ),
-        .groups = "drop"
-      ) |>
-      dplyr::arrange(dplyr::desc(.data$interviews))
-
-    # Busiest day per enumerator, when a date is mapped.
-    date_col <- user_setup$date
-    per_day <- NULL
-    if (shiny::isTruthy(date_col) && date_col %in% names(df)) {
-      day <- suppressWarnings(as.Date(df[[date_col]]))
-      ok <- !is.na(day) & !is.na(df[[enum_col]]) & as.character(df[[enum_col]]) != ""
-      if (any(ok)) {
-        per_day <- as.data.frame(table(enumerator_id = as.character(df[[enum_col]][ok]), day = as.character(day[ok])),
-                                 stringsAsFactors = FALSE)
-        per_day <- per_day[per_day$Freq > 0, , drop = FALSE]
-      }
-    }
-    enumerator_flags(m, per_day)
+    enumerator_metrics(dq_filtered_data(), user_setup)
   })
 
   output$enum_rules <- renderUI({
@@ -226,31 +170,110 @@ dq_enumerator_server <- function(input, output, session, ns, core) {
     format(round(avg, 1), big.mark = ",")
   })
 
+  # Interviews per enumerator and day (when a date is mapped).
+  enum_per_day <- reactive({
+    df <- dq_filtered_data(); req(df, user_setup$enumerator_id)
+    date_col <- user_setup$date
+    if (!shiny::isTruthy(date_col) || !date_col %in% names(df)) return(NULL)
+    day <- suppressWarnings(as.Date(df[[date_col]]))
+    enum <- as.character(df[[user_setup$enumerator_id]])
+    ok <- !is.na(day) & !is.na(enum) & nzchar(enum)
+    if (!any(ok)) return(NULL)
+    d <- as.data.frame(table(enumerator_id = enum[ok], day = format(day[ok])), stringsAsFactors = FALSE)
+    d[d$Freq > 0, , drop = FALSE]
+  })
+
+  output$enum_speed_insights <- renderUI({
+    m <- enum_metrics(); req(m, nrow(m) > 0)
+    th <- attr(m, "thresholds") %||% list()
+    tiles <- list()
+    # Workload balance: how much the busiest fifth carries.
+    iv <- sort(m$interviews, decreasing = TRUE)
+    top <- max(1, ceiling(0.2 * length(iv)))
+    share <- sum(iv[seq_len(top)]) / max(1, sum(iv))
+    busiest <- m[which.max(m$interviews), ]
+    tiles[[length(tiles) + 1]] <- ben_insight("people", "Workload balance",
+      sprintf("%.0f%%", 100 * share),
+      sprintf("of interviews by the busiest %d of %d enumerators. Busiest: %s (%s; median %s).", top, length(iv),
+              busiest$enumerator_id, format(round(busiest$interviews), big.mark = ","),
+              format(round(stats::median(m$interviews)), big.mark = ",")))
+    # Interview length against the team.
+    dur <- m$avg_duration[!is.na(m$avg_duration)]
+    if (length(dur)) {
+      short <- if (is.na(th$dur_lo %||% NA)) 0 else sum(dur < th$dur_lo)
+      long <- if (is.na(th$dur_hi %||% NA)) 0 else sum(dur > th$dur_hi)
+      tiles[[length(tiles) + 1]] <- ben_insight("stopwatch", "Interview length",
+        sprintf("%.0f min", stats::median(dur)),
+        if (is.na(th$dur_lo %||% NA)) "team median (too few enumerators to set a usual range)"
+        else sprintf("team median. %d usually shorter than %.0f min, %d longer than %.0f min.", short, th$dur_lo, long, th$dur_hi))
+    }
+    pd <- enum_per_day()
+    if (!is.null(pd) && nrow(pd)) {
+      b <- pd[which.max(pd$Freq), ]
+      tiles[[length(tiles) + 1]] <- ben_insight("calendar-event", "Busiest day",
+        sprintf("%d interviews", b$Freq),
+        sprintf("by %s on %s%s.", b$enumerator_id, b$day,
+                if (is.na(th$day_hi %||% NA)) "" else sprintf(" (the team's usual maximum is %.0f)", th$day_hi)))
+      pace <- stats::aggregate(pd$Freq, list(pd$enumerator_id), stats::median)$x
+      tiles[[length(tiles) + 1]] <- ben_insight("speedometer2", "Daily pace",
+        sprintf("%.1f / day", stats::median(pace)),
+        sprintf("median interviews per working day per enumerator, over %d days of fieldwork.", length(unique(pd$day))))
+    }
+    worst <- m[which.max(m$missingness_rate), ]
+    tiles[[length(tiles) + 1]] <- ben_insight("ui-checks", "Empty answers",
+      sprintf("%.1f%%", 100 * stats::weighted.mean(m$missingness_rate, m$interviews, na.rm = TRUE)),
+      sprintf("of fields left empty on average. Highest: %s (%.1f%%).", worst$enumerator_id, 100 * worst$missingness_rate))
+    tags$div(class = "wfp-insights", tiles)
+  })
+
+  # A dashed vertical line with a small label, for the charts below.
+  vline <- function(x, label, color = "#f7b825") {
+    list(shape = list(type = "line", x0 = x, x1 = x, y0 = 0, y1 = 1, yref = "paper",
+                      line = list(color = color, dash = "dash", width = 1.5)),
+         note = list(x = x, y = 1, yref = "paper", text = label, showarrow = FALSE, yanchor = "bottom",
+                     font = list(size = 11, color = color)))
+  }
+
   output$enum_interviews_plot <- render_wfp_plotly({
-    req(dq_filtered_data(), user_setup$enumerator_id)
-    df <- dq_filtered_data()
-
-    tab <- weighted_table(df, user_setup$enumerator_id, user_setup) |>
-      dplyr::slice_max(.data$n, n = 20) |>
-      dplyr::mutate(value = substr(.data$value, 1, 20)) |>
-      dplyr::arrange(.data$n)
-
+    m <- enum_metrics(); req(m, nrow(m) > 0)
+    tab <- utils::head(m[order(-m$interviews), , drop = FALSE], 30)
+    tab <- tab[order(tab$interviews), , drop = FALSE]
+    tab$label <- substr(as.character(tab$enumerator_id), 1, 24)
+    med <- stats::median(m$interviews)
+    ml <- vline(med, sprintf("median %s", format(round(med), big.mark = ",")))
     plotly::plot_ly(
-      tab,
-      x = ~n,
-      y = ~reorder(value, n),
-      type = "bar",
-      marker = list(color = "#0A6EB4"),
-      hovertemplate = "%{y}: %{x:,.0f}<extra></extra>"
+      tab, x = ~interviews, y = ~factor(label, levels = label), type = "bar",
+      marker = list(color = ifelse(tab$flag == "Review", "#c5192d", "#0A6EB4")),
+      customdata = ~ifelse(nzchar(reasons), reasons, "No flag"),
+      hovertemplate = "%{y}: %{x:,.0f} interviews<br>%{customdata}<extra></extra>"
     ) |>
       plotly::layout(
-        xaxis = list(title = "", gridcolor = "rgba(128,128,128,0.2)"),
-        yaxis = list(title = "", gridcolor = "rgba(128,128,128,0.2)"),
-        paper_bgcolor = 'rgba(0,0,0,0)',
-        plot_bgcolor = 'rgba(0,0,0,0)',
-        margin = list(t = 40, b = 40, l = 120, r = 20)
-      ) |>
-      plotly::config(displayModeBar = FALSE)
+        xaxis = list(title = "Interviews", gridcolor = "rgba(128,128,128,0.2)"),
+        yaxis = list(title = "", automargin = TRUE),
+        shapes = list(ml$shape), annotations = list(ml$note),
+        margin = list(t = 30, b = 40, r = 20))
+  })
+
+  output$enum_daily_plot <- render_wfp_plotly({
+    pd <- enum_per_day()
+    validate(need(!is.null(pd) && nrow(pd) > 0, "Map the interview date in the variable setup to see the daily workload."))
+    tot <- sort(tapply(pd$Freq, pd$enumerator_id, sum), decreasing = TRUE)
+    keep <- names(tot)[seq_len(min(30, length(tot)))]
+    pd <- pd[pd$enumerator_id %in% keep, , drop = FALSE]
+    days <- sort(unique(pd$day))
+    z <- matrix(0, nrow = length(keep), ncol = length(days), dimnames = list(keep, days))
+    z[cbind(match(pd$enumerator_id, keep), match(pd$day, days))] <- pd$Freq
+    z <- z[rev(seq_len(nrow(z))), , drop = FALSE]
+    plotly::plot_ly(
+      x = days, y = substr(rownames(z), 1, 24), z = z, type = "heatmap",
+      colorscale = list(c(0, "rgba(10,110,180,0.04)"), c(0.01, "#d7e8f5"), c(1, "#0A6EB4")),
+      hovertemplate = "%{y}<br>%{x}: %{z} interviews<extra></extra>",
+      colorbar = list(title = "Interviews", thickness = 12)
+    ) |>
+      plotly::layout(
+        xaxis = list(title = "", tickangle = if (length(days) > 10) -90 else 0, type = "category"),
+        yaxis = list(title = "", automargin = TRUE),
+        margin = list(t = 10, b = 60, r = 10))
   })
 
   output$enum_total_int <- renderText({
@@ -265,70 +288,54 @@ dq_enumerator_server <- function(input, output, session, ns, core) {
   })
 
   output$enum_duration_plot <- render_wfp_plotly({
-    req(enum_metrics())
-    tab <- enum_metrics() |>
-      dplyr::filter(!is.na(.data$avg_duration)) |>
-      dplyr::slice_max(.data$avg_duration, n = 20) |>
-      dplyr::mutate(enumerator_id = substr(as.character(.data$enumerator_id), 1, 20)) |>
-      dplyr::arrange(.data$avg_duration)
-
-    if (nrow(tab) == 0) {
-      return(plotly::plot_ly() |> plotly::layout(
-        title = "No duration data available",
-        paper_bgcolor = "rgba(0,0,0,0)",
-        plot_bgcolor = "rgba(0,0,0,0)"
-      ))
-    }
-
+    m <- enum_metrics(); req(m)
+    tab <- m[!is.na(m$avg_duration), , drop = FALSE]
+    validate(need(nrow(tab) > 0, "No interview durations: the data needs start and end times (start/end or starttime/endtime)."))
+    th <- attr(m, "thresholds") %||% list()
+    med <- stats::median(tab$avg_duration)
+    # The 30 furthest from the team median, then in order.
+    tab <- utils::head(tab[order(-abs(tab$avg_duration - med)), , drop = FALSE], 30)
+    tab <- tab[order(tab$avg_duration), , drop = FALSE]
+    tab$label <- substr(as.character(tab$enumerator_id), 1, 24)
+    lo <- th$dur_lo %||% NA; hi <- th$dur_hi %||% NA
+    col <- ifelse(!is.na(lo) & tab$avg_duration < lo, "#c5192d",
+                  ifelse(!is.na(hi) & tab$avg_duration > hi, "#f7b825", "#0A6EB4"))
+    ml <- vline(med, sprintf("median %.0f min", med))
+    shapes <- list(ml$shape)
+    if (!is.na(lo) && !is.na(hi)) shapes <- c(list(list(type = "rect", x0 = lo, x1 = hi, y0 = 0, y1 = 1, yref = "paper",
+                                                           fillcolor = "rgba(63,126,68,0.10)", line = list(width = 0), layer = "below")), shapes)
     plotly::plot_ly(
-      tab,
-      x = ~avg_duration,
-      y = ~reorder(enumerator_id, avg_duration),
-      type = "bar",
-      marker = list(color = "#0A6EB4"),
-      hovertemplate = "%{y}: %{x:.1f} min<extra></extra>"
+      tab, x = ~avg_duration, y = ~factor(label, levels = label), type = "bar",
+      marker = list(color = col),
+      customdata = ~format(round(interviews), big.mark = ","),
+      hovertemplate = "%{y}: %{x:.1f} min on average<br>%{customdata} interviews<extra></extra>"
     ) |>
       plotly::layout(
         xaxis = list(title = "Minutes", gridcolor = "rgba(128,128,128,0.2)"),
-        yaxis = list(title = ""),
-        paper_bgcolor = "rgba(0,0,0,0)",
-        plot_bgcolor = "rgba(0,0,0,0)",
-        margin = list(l = 120)
-      ) |>
-      plotly::config(displayModeBar = FALSE)
+        yaxis = list(title = "", automargin = TRUE),
+        shapes = shapes, annotations = list(ml$note),
+        margin = list(t = 30, b = 40, r = 20))
   })
 
   output$enum_missingness_plot <- render_wfp_plotly({
-    req(enum_metrics())
-    tab <- enum_metrics() |>
-      dplyr::slice_max(.data$missingness_rate, n = 20) |>
-      dplyr::mutate(enumerator_id = substr(as.character(.data$enumerator_id), 1, 20)) |>
-      dplyr::arrange(.data$missingness_rate)
-
-    if (nrow(tab) == 0) {
-      return(plotly::plot_ly() |> plotly::layout(
-        title = "No missingness data available",
-        paper_bgcolor = "rgba(0,0,0,0)",
-        plot_bgcolor = "rgba(0,0,0,0)"
-      ))
-    }
-
+    m <- enum_metrics(); req(m, nrow(m) > 0)
+    th <- attr(m, "thresholds") %||% list()
+    tab <- utils::head(m[order(-m$missingness_rate), , drop = FALSE], 30)
+    tab <- tab[order(tab$missingness_rate), , drop = FALSE]
+    tab$label <- substr(as.character(tab$enumerator_id), 1, 24)
+    hi <- th$miss_hi %||% NA
+    notes <- list(); shapes <- list()
+    if (!is.na(hi)) { l <- vline(100 * hi, sprintf("team limit %.1f%%", 100 * hi), "#c5192d"); shapes <- list(l$shape); notes <- list(l$note) }
     plotly::plot_ly(
-      tab,
-      x = ~missingness_rate * 100,
-      y = ~reorder(enumerator_id, missingness_rate),
-      type = "bar",
-      marker = list(color = "#c5192d"),
-      hovertemplate = "%{y}: %{x:.1f}%<extra></extra>"
+      tab, x = ~missingness_rate * 100, y = ~factor(label, levels = label), type = "bar",
+      marker = list(color = ifelse(!is.na(hi) & tab$missingness_rate > hi, "#c5192d", "#8a96a3")),
+      hovertemplate = "%{y}: %{x:.1f}% of fields empty<extra></extra>"
     ) |>
       plotly::layout(
-        xaxis = list(title = "Missingness (%)", gridcolor = "rgba(128,128,128,0.2)"),
-        yaxis = list(title = ""),
-        paper_bgcolor = "rgba(0,0,0,0)",
-        plot_bgcolor = "rgba(0,0,0,0)",
-        margin = list(l = 120)
-      ) |>
-      plotly::config(displayModeBar = FALSE)
+        xaxis = list(title = "Fields left empty (%)", gridcolor = "rgba(128,128,128,0.2)"),
+        yaxis = list(title = "", automargin = TRUE),
+        shapes = shapes, annotations = notes,
+        margin = list(t = 30, b = 40, r = 20))
   })
 
   output$enum_metrics_table <- DT::renderDT({
@@ -426,4 +433,80 @@ enumerator_flags <- function(m, per_day = NULL) {
   m$flag <- ifelse(nzchar(m$reasons), "Review", "OK")
   attr(m, "thresholds") <- list(dur_lo = dur_lo, dur_hi = dur_hi, miss_hi = miss_hi, day_hi = day_hi)
   m
+}
+
+#' Interviews, duration, empty answers and household size per enumerator,
+#' flagged against the team (`enumerator_flags()`)
+#' @param df The records.
+#' @param setup The variable mapping (list or reactiveValues).
+#' @noRd
+enumerator_metrics <- function(df, setup) {
+  enum_col <- setup$enumerator_id
+  w <- get_weights(df, setup)
+
+  hh_size_col <- setup$hh_size
+  size_num <- if (shiny::isTruthy(hh_size_col) && hh_size_col %in% names(df)) {
+    as_number(df[[hh_size_col]])
+  } else {
+    rep(NA_real_, nrow(df))
+  }
+
+  if (all(c("start", "end") %in% names(df))) {
+    t_start <- lubridate::as_datetime(df[["start"]])
+    t_end <- lubridate::as_datetime(df[["end"]])
+  } else if (all(c("starttime", "endtime") %in% names(df))) {
+    t_start <- lubridate::as_datetime(df[["starttime"]])
+    t_end <- lubridate::as_datetime(df[["endtime"]])
+  } else {
+    t_start <- t_end <- rep(NA_real_, nrow(df))
+  }
+  durations <- as.numeric(difftime(t_end, t_start, units = "mins"))
+  valid_dur <- !is.na(durations) & durations > 5 & durations < 180
+
+  miss_cols <- setdiff(names(df), c(enum_col, setup$weight))
+  row_missing <- rowMeans(is.na(df[, miss_cols, drop = FALSE]))
+
+  m <- data.frame(
+    enumerator_id = df[[enum_col]],
+    w = w,
+    valid_dur = valid_dur,
+    duration = durations,
+    size = size_num,
+    row_missing = row_missing,
+    stringsAsFactors = FALSE
+  ) |>
+    dplyr::filter(!is.na(.data$enumerator_id), .data$enumerator_id != "", .data$w > 0) |>
+    dplyr::group_by(.data$enumerator_id) |>
+    dplyr::summarise(
+      interviews = sum(.data$w, na.rm = TRUE),
+      avg_duration = ifelse(
+        sum(.data$valid_dur) == 0,
+        NA_real_,
+        sum(.data$duration[.data$valid_dur] * .data$w[.data$valid_dur], na.rm = TRUE) /
+          sum(.data$w[.data$valid_dur], na.rm = TRUE)
+      ),
+      missingness_rate = sum(.data$row_missing * .data$w, na.rm = TRUE) / sum(.data$w, na.rm = TRUE),
+      avg_hh_size = ifelse(
+        sum(!is.na(.data$size)) == 0,
+        NA_real_,
+        sum(.data$size[!is.na(.data$size)] * .data$w[!is.na(.data$size)], na.rm = TRUE) /
+          sum(.data$w[!is.na(.data$size)], na.rm = TRUE)
+      ),
+      .groups = "drop"
+    ) |>
+    dplyr::arrange(dplyr::desc(.data$interviews))
+
+  # Busiest day per enumerator, when a date is mapped.
+  date_col <- setup$date
+  per_day <- NULL
+  if (shiny::isTruthy(date_col) && date_col %in% names(df)) {
+    day <- suppressWarnings(as.Date(df[[date_col]]))
+    ok <- !is.na(day) & !is.na(df[[enum_col]]) & as.character(df[[enum_col]]) != ""
+    if (any(ok)) {
+      per_day <- as.data.frame(table(enumerator_id = as.character(df[[enum_col]][ok]), day = as.character(day[ok])),
+                               stringsAsFactors = FALSE)
+      per_day <- per_day[per_day$Freq > 0, , drop = FALSE]
+    }
+  }
+  enumerator_flags(m, per_day)
 }

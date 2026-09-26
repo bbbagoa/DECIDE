@@ -64,6 +64,25 @@ rp_roc_chart <- function(d, cols, tr, point = NULL) {
 }
 
 rp_cap <- function(x) paste0(toupper(substr(x, 1, 1)), substring(x, 2))
+
+#' The design report shows at most this many variables per chart (the most
+#' relevant); the Excel scorecard carries them all (sheet Report_tables).
+#' @noRd
+RP_TOP <- 15
+
+#' Indices of the `n` most relevant entries (largest `rel`), in their order
+#' @noRd
+rp_top <- function(rel, n = RP_TOP) {
+  keep <- order(-abs(rel))[seq_len(min(n, length(rel)))]
+  sort(keep)
+}
+
+#' Mark a chart as showing `shown` of `of` variables (read by the captions)
+#' @noRd
+rp_of <- function(chart, shown, of) {
+  if (of > shown) attr(chart, "tw_of") <- c(shown = shown, of = of)
+  chart
+}
 rp_grp <- function(tr) stats::setNames(c(rp_cols$vuln, rp_cols$not), tr(c("Vulnerable", "Not vulnerable")))
 
 #' @noRd
@@ -74,14 +93,16 @@ design_report_plots <- function(weights = NULL, roc = NULL, roc_point = NULL,
 
   # Points by criterion: inclusion adds, exclusion subtracts.
   if (!is.null(weights) && nrow(weights)) {
+    n_all <- nrow(weights)
+    weights <- weights[rp_top(weights$weight), , drop = FALSE]
     signed <- ifelse(weights$direction == "exclusion", -weights$weight, weights$weight)
     o <- order(signed, decreasing = TRUE)
     d <- data.frame(criterion = weights$criterion[o],
                     a = round(ifelse(weights$direction[o] == "exclusion", 0, signed[o]), 3),
                     b = round(ifelse(weights$direction[o] == "exclusion", signed[o], 0), 3))
     names(d)[2:3] <- rp_cap(tr(c("inclusion", "exclusion")))
-    out$weights <- rp_hbars(d, stats::setNames(c(rp_cols$incl, rp_cols$excl), names(d)[2:3]),
-                            tr("Points added (+) or subtracted (-)"), stacked = TRUE)
+    out$weights <- rp_of(rp_hbars(d, stats::setNames(c(rp_cols$incl, rp_cols$excl), names(d)[2:3]),
+                                  tr("Points added (+) or subtracted (-)"), stacked = TRUE), nrow(d), n_all)
   }
 
   # ROC curve with the chosen threshold marked.
@@ -132,11 +153,14 @@ design_report_extra_plots <- function(df = NULL, criteria = NULL, vulnerable = N
   # Prevalence of each kept criterion among vulnerable and not-vulnerable households
   if (!is.null(df) && length(criteria) && length(vulnerable) == nrow(df)) {
     p <- criteria_profile(df, criteria, as.integer(vulnerable))
+    n_all <- nrow(p)
+    # The most relevant: the largest gap between vulnerable and not.
+    p <- p[rp_top(p$gap), , drop = FALSE]
     p <- p[order(p$gap, decreasing = TRUE), , drop = FALSE]
     d <- data.frame(criterion = p$criterion, a = round(100 * p$prev_vuln, 1), b = round(100 * p$prev_not, 1))
     names(d)[2:3] <- tr(c("Vulnerable", "Not vulnerable"))
-    out$prevalence <- rp_hbars(d, rp_grp(tr), tr("% households meeting it"))
-    if (length(criteria) > 1) out$correlation <- rp_corr_table(criteria_cor(df, criteria))
+    out$prevalence <- rp_of(rp_hbars(d, rp_grp(tr), tr("% households meeting it")), nrow(d), n_all)
+    if (nrow(p) > 1) out$correlation <- rp_of(rp_corr_table(criteria_cor(df, p$criterion)), nrow(p), n_all)
   }
 
   # ROC curve of every model on the held-out households
@@ -180,15 +204,18 @@ design_report_extra_plots <- function(df = NULL, criteria = NULL, vulnerable = N
   if (!is.null(detail) && ncol(detail)) {
     tot <- vapply(detail, function(v) sum(abs(v), na.rm = TRUE), numeric(1))
     share <- round(100 * tot / max(sum(tot), 1e-9), 1)
+    # The criteria that carry the most points, for the per-criterion charts.
+    top_cols <- names(detail)[rp_top(tot)]
     dir <- unname(directions[names(detail)] %||% rep("inclusion", length(tot)))
     dir[is.na(dir)] <- "inclusion"
     o <- order(share, decreasing = TRUE)
+    o <- o[names(detail)[o] %in% top_cols]
     d <- data.frame(criterion = names(detail)[o],
                     a = ifelse(dir[o] == "exclusion", 0, share[o]),
                     b = ifelse(dir[o] == "exclusion", share[o], 0))
     names(d)[2:3] <- rp_cap(tr(c("inclusion", "exclusion")))
-    out$drivers <- rp_hbars(d, stats::setNames(c(rp_cols$incl, rp_cols$excl), names(d)[2:3]),
-                            tr("Share of points (%)"), stacked = TRUE)
+    out$drivers <- rp_of(rp_hbars(d, stats::setNames(c(rp_cols$incl, rp_cols$excl), names(d)[2:3]),
+                                  tr("Share of points (%)"), stacked = TRUE), nrow(d), ncol(detail))
 
     if (length(eligible) == nrow(detail)) {
       met <- rowSums(detail != 0, na.rm = TRUE)
@@ -205,9 +232,9 @@ design_report_extra_plots <- function(df = NULL, criteria = NULL, vulnerable = N
 
       if (length(vulnerable) == nrow(detail)) {
         pct <- function(m, v) { x <- eligible[m & vulnerable %in% v]; if (length(x)) round(100 * mean(x), 1) else NA }
-        d <- data.frame(criterion = names(detail),
-                        a = vapply(names(detail), function(cl) pct(detail[[cl]] != 0, TRUE), numeric(1)),
-                        b = vapply(names(detail), function(cl) pct(detail[[cl]] != 0, FALSE), numeric(1)))
+        d <- data.frame(criterion = top_cols,
+                        a = vapply(top_cols, function(cl) pct(detail[[cl]] != 0, TRUE), numeric(1)),
+                        b = vapply(top_cols, function(cl) pct(detail[[cl]] != 0, FALSE), numeric(1)))
         d <- d[order(d$a, decreasing = TRUE), , drop = FALSE]
         names(d)[2:3] <- tr(c("Vulnerable", "Not vulnerable"))
         out$coverage <- rp_hbars(d, rp_grp(tr), tr("% of holders eligible")) |>

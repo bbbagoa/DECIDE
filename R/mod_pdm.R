@@ -86,7 +86,9 @@ mod_pdm_ui <- function(id, explore = NULL) {
                 conditionalPanel(sprintf("input['%s'] === 'unit'", ns("pop_scope")),
                                  tags$div(class = "small text-muted", "Type the sizes per area in the table on the right."))))
       ),
-      tags$div(class = "wfp-sb-actions",
+      # After the four steps (not stuck over them: the steps scrolled under it).
+      tags$div(class = "wfp-sb-actions wfp-sb-actions-end",
+               tags$div(class = "small fw-semibold mb-2", "5. Compute"),
                actionButton(ns("pdm_run"), "Compute implementation errors", class = "btn-primary btn-sm w-100", icon = icon("calculator")),
                downloadButton(ns("pdm_download"), "Export (Excel)", class = "btn-outline-secondary btn-sm w-100 mt-2"),
                tags$div(class = "small text-muted mt-2", bsicons::bs_icon("info-circle"),
@@ -99,9 +101,12 @@ mod_pdm_ui <- function(id, explore = NULL) {
       bslib::nav_panel(
         value = "errors", title = tagList(bsicons::bs_icon("bullseye"), " Errors and verdict"),
         uiOutput(ns("pdm_results")),
-        tags$div(class = "d-flex gap-3 flex-wrap align-items-end mt-2 wfp-tol-row",
-                 tags$div(style = "flex: 0 1 200px;", numericInput(ns("tol_lower"), "Lower error tolerance (%)", value = 5, min = 0, max = 49, step = 1, width = "100%")),
-                 tags$div(style = "flex: 0 1 200px;", numericInput(ns("tol_upper"), "Upper error tolerance (%)", value = 20, min = 1, max = 49, step = 1, width = "100%"))),
+        # The tolerance band only means something once there is data to judge.
+        conditionalPanel(
+          sprintf("output['%s']", ns("has_data")),
+          tags$div(class = "d-flex gap-3 flex-wrap align-items-end mt-2 wfp-tol-row",
+                   tags$div(style = "flex: 0 1 200px;", numericInput(ns("tol_lower"), "Lower error tolerance (%)", value = 5, min = 0, max = 49, step = 1, width = "100%")),
+                   tags$div(style = "flex: 0 1 200px;", numericInput(ns("tol_upper"), "Upper error tolerance (%)", value = 20, min = 1, max = 49, step = 1, width = "100%")))),
         uiOutput(ns("pdm_verdict"))
       ),
       bslib::nav_panel(
@@ -502,6 +507,9 @@ mod_pdm_server <- function(id, workspace = NULL, country_office = reactive(NULL)
     })
 
     # --- Render -----------------------------------------------------------
+    output$has_data <- reactive(!is.null(pdm_all()))
+    outputOptions(output, "has_data", suspendWhenHidden = FALSE)
+
     output$pdm_hint <- renderUI({
       if (is.null(pdm_df())) {
         return(empty_state(
@@ -588,7 +596,8 @@ mod_pdm_server <- function(id, workspace = NULL, country_office = reactive(NULL)
                                              interpretation = conditionMessage(e),
                                              action = "Lower the upper tolerance below 50%."))
       verdict_card(
-        v,
+        v, stage = "implementation",
+        errors = c(inclusion = m$inclusion_error, exclusion = m$exclusion_error), tolerance = c(lower, upper),
         tags$div(class = "small mt-2 text-muted",
                  sprintf("Implementation errors, judged against a %.0f%%-%.0f%% band. ",
                          100 * lower, 100 * upper),

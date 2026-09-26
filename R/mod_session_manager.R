@@ -47,14 +47,50 @@ mod_session_manager_server <- function(
     # NULL on a local desktop run, which keeps the single-user layout.
     who <- app_user(session)
 
-    current_session_name <- reactiveVal("default")
+    # Each workstream (Design, Selection, Monitoring) is its own session file,
+    # under its own name: loading a Design session names only the Design work.
+    kinds <- names(session_kinds())
+    session_names <- reactiveValues(design = NULL, selection = NULL, monitoring = NULL)
+    any_named <- function() any(vapply(kinds, function(k) !is.null(isolate(session_names[[k]])), logical(1)))
+    default_name <- function() {
+      nm <- unlist(lapply(kinds, function(k) isolate(session_names[[k]])))
+      if (length(nm)) nm[1] else format(Sys.time(), "session_%Y-%m-%d_%Hh%M")
+    }
 
     # Where the background writes (autosave + audit companion) go. Before the
     # user names a session they land in "autosave"; afterwards they follow the
     # named session, so it never goes stale while the user keeps working.
-    persist_name <- function() {
-      nm <- current_session_name()
-      if (identical(nm, "default")) "autosave" else nm
+    persist_name <- function(kind) {
+      session_stem(isolate(session_names[[kind]]) %||% "autosave", kind)
+    }
+
+    # What each workstream would save now.
+    current_state <- function(kind, work = workspace_snapshot(workspace)) {
+      isolate(workstream_state(kind, uploaded_df(), if (is.function(original_df)) original_df(),
+                               reactiveValuesToList(user_setup), modification_log(), moda_credentials(), work))
+    }
+    save_kind <- function(kind, name, st) {
+      page <- current_ui()
+      save_session(
+        uploaded_df = st$uploaded_df, user_setup = st$user_setup, modification_log = st$modification_log,
+        theme = isolate(theme()), moda_credentials = st$moda_credentials, name = name, user = who,
+        workspace = st$workspace, original_df = st$original_df, kind = kind,
+        ui = if (identical(workstream_of_page(page$main_nav), kind)) page
+      )
+      assign(kind, workstream_signature(st), envir = sigs)
+    }
+    sigs <- new.env(parent = emptyenv())   # last saved fingerprint per workstream
+    kind_label <- function(kind) session_kinds()[[kind]]
+
+    # Saved sessions as a grouped picker: one group per workstream.
+    session_choices <- function(sessions) {
+      lab <- c(session_kinds(), all = "Older sessions (all the work)")
+      mb <- ifelse(sessions$size < 1024^2, sprintf("%.0f KB", sessions$size / 1024), sprintf("%.1f MB", sessions$size / 1024^2))
+      opts <- stats::setNames(sessions$name, sprintf("%s (%s, %s)", sessions$label, format(sessions$saved_at, "%Y-%m-%d %H:%M"), mb))
+      grp <- split(opts, factor(sessions$kind, levels = names(lab)))
+      grp <- grp[lengths(grp) > 0]
+      # a one-option group would render as a single option named after the group
+      stats::setNames(lapply(grp, as.list), lab[names(grp)])
     }
 
     restore_session <- function(name) {
@@ -74,6 +110,9 @@ mod_session_manager_server <- function(
         return()
       }
 
+      # A workstream session puts back its own part and leaves the others'
+      # work in memory as it is; an older session ("all") holds everything.
+      kind <- saved$kind %||% "all"
       if (!is.null(saved$uploaded_df)) {
         uploaded_df(saved$uploaded_df)
         # The pristine import comes back as the Reset baseline; sessions saved
@@ -86,18 +125,24 @@ mod_session_manager_server <- function(
         }
       }
       restored_log <- saved$modification_log
-      companion_log <- load_audit_log(name, user = who)
+      companion_log <- log_for(load_audit_log(name, user = who), kind)
       if (is.data.frame(companion_log) &&
           (is.null(restored_log) || nrow(companion_log) > nrow(restored_log))) {
         restored_log <- companion_log
       }
-      if (!is.null(restored_log)) modification_log(restored_log)
+      if (!is.null(restored_log)) modification_log(log_merge(isolate(modification_log()), restored_log, kind))
       if (!is.null(saved$moda_credentials) && is.function(moda_credentials)) {
         moda_credentials(saved$moda_credentials)
       }
       # Targeting Design, selection, spot-check and PDM work
       workspace_restore(workspace, saved$workspace)
-      current_session_name(name)
+      label <- sub("\\.(design|selection|monitoring)$", "", name)
+      # An older session is saved back as three workstream sessions of the same name.
+      for (k in if (kind == "all") kinds else kind) {
+        session_names[[k]] <- label
+        assign(k, workstream_signature(workstream_state(k, saved$uploaded_df, saved$original_df, saved$user_setup,
+                                                        restored_log, NULL, saved$workspace)), envir = sigs)
+      }
 
       if (!is.null(parent_session)) {
         # The registration-data pages open only when the session carries that
@@ -114,22 +159,21 @@ mod_session_manager_server <- function(
           bslib::nav_select("main_nav", pg, session = parent_session)
         }
       }
-      last_sig(workspace_signature(saved$workspace))
-
+      shown <- if (kind == "all") label else sprintf("%s (%s)", label, kind_label(kind))
       # Say what came back, so the user can trust they are where they left.
       got <- session_contents(saved)
       if (length(got)) {
         showModal(modalDialog(
-          title = tagList(bsicons::bs_icon("check2-circle"), sprintf(" Session \"%s\" restored", name)),
+          title = tagList(bsicons::bs_icon("check2-circle"), sprintf(" Session \"%s\" restored", shown)),
           size = "m", easyClose = TRUE, footer = modalButton("Continue"),
           tags$p(class = "small text-muted", sprintf("Saved %s.", format(saved$saved_at %||% Sys.time(), "%Y-%m-%d %H:%M"))),
           tags$ul(class = "small", lapply(got, tags$li))
         ))
       }
 
-      audit_add(modification_log, "Session", "Session loaded", name)
+      audit_add(modification_log, "Session", "Session loaded", shown)
       mark_saved()
-      showNotification(paste("Session", name, "loaded."), type = "message")
+      showNotification(paste("Session", shown, "loaded."), type = "message")
     }
 
     observeEvent(input$restore_settled, waiter::waiter_hide())
@@ -143,7 +187,7 @@ mod_session_manager_server <- function(
       sessions <- list_saved_sessions(who)
       if (nrow(sessions) == 0) return(NULL)
 
-      choices <- setNames(sessions$name, paste0(sessions$name, " (", format(sessions$saved_at, "%Y-%m-%d %H:%M"), ")"))
+      choices <- session_choices(sessions)
 
       showModal(modalDialog(
         title = "Restore a Saved Session",
@@ -153,6 +197,7 @@ mod_session_manager_server <- function(
           actionButton(ns("btn_start_fresh"), "Start Fresh", class = "btn-outline-secondary")
         ),
         p("Select a session to resume, or start fresh."),
+        p(class = "small text-muted", "Design, Selection and Monitoring are saved as separate sessions: load one, then another from Load to work on both."),
         selectInput(ns("restore_session_choice"), "Saved sessions:", choices = choices, width = "100%"),
         bslib::layout_columns(
           actionButton(ns("btn_restore_load"), "Load Session", class = "btn-primary w-100"),
@@ -167,7 +212,6 @@ mod_session_manager_server <- function(
     # to look around. Deleting stays behind the explicit Clear controls below.
     observeEvent(input$btn_start_fresh, {
       removeModal()
-      current_session_name("default")
       showNotification("Starting fresh. Saved sessions are untouched.", type = "message")
     })
 
@@ -194,7 +238,7 @@ mod_session_manager_server <- function(
           ))
           return()
         }
-        choices <- setNames(sessions$name, paste0(sessions$name, " (", format(sessions$saved_at, "%Y-%m-%d %H:%M"), ")"))
+        choices <- session_choices(sessions)
         showModal(modalDialog(
           title = "Restore a Saved Session",
           size = "m",
@@ -286,7 +330,26 @@ mod_session_manager_server <- function(
       sync_trigger(Sys.time())
     })
 
+    # The workstreams that hold work, each with what it would save.
+    kinds_with_work <- function() {
+      work <- workspace_snapshot(workspace)
+      Filter(function(k) workstream_has_work(current_state(k, work), k), kinds)
+    }
+    kind_summary <- function(k) {
+      st <- current_state(k)
+      bits <- switch(k,
+        design = if (!is.null(st$workspace$scorecard$data)) sprintf("assessment data, %s rows", format(nrow(st$workspace$scorecard$data), big.mark = ",")),
+        selection = if (!is.null(st$uploaded_df)) sprintf("registration data, %s households", format(nrow(st$uploaded_df), big.mark = ",")),
+        monitoring = paste(c(if (!is.null(st$workspace$pdm)) "PDM", if (!is.null(st$workspace$monitoring)) "process and report"), collapse = ", "))
+      if (length(bits) && nzchar(bits)) sprintf("%s (%s)", kind_label(k), bits) else kind_label(k)
+    }
     show_save_dialog <- function() {
+      have <- kinds_with_work()
+      if (!length(have)) {
+        showNotification("Nothing to save: no dataset is loaded and no work has been done.", type = "error")
+        return()
+      }
+      page_kind <- workstream_of_page(current_ui()$main_nav)
       showModal(modalDialog(
         title = "Save Session",
         size = "s",
@@ -295,23 +358,30 @@ mod_session_manager_server <- function(
           modalButton("Cancel"),
           actionButton(ns("btn_confirm_save"), "Save", class = "btn-primary", icon = icon("floppy-disk"))
         ),
-        textInput(ns("save_session_name"), "Session name:",
-                  value = if (identical(current_session_name(), "default")) format(Sys.time(), "session_%Y-%m-%d_%Hh%M") else current_session_name(),
-                  width = "100%")
+        textInput(ns("save_session_name"), "Session name:", value = default_name(), width = "100%"),
+        checkboxGroupInput(ns("save_kinds"), "Save", width = "100%",
+                           choiceNames = lapply(have, kind_summary), choiceValues = have, selected = have),
+        tags$p(class = "small text-muted mb-0",
+               "Each part is its own session file, so loading or saving one does not carry the others' data.",
+               if (page_kind %in% have && length(have) > 1) " Untick the parts you do not want to save now.")
       ))
     }
     observeEvent(input$btn_save_session, show_save_dialog())
 
     # Save everything under `name`; FALSE (with a notice) when there is
     # nothing to save or no name.
-    save_as <- function(name) {
+    # Save the chosen workstreams under `name`, one file each; FALSE (with a
+    # notice) when there is nothing to save or no name.
+    save_as <- function(name, which = kinds) {
       if (!shiny::isTruthy(name) || trimws(name) == "") {
         showNotification("Name the session first.", type = "error")
         return(FALSE)
       }
       name <- trimws(name)
       work <- workspace_snapshot(workspace)
-      if (is.null(uploaded_df()) && !length(work)) {
+      sts <- lapply(stats::setNames(which, which), current_state, work = work)
+      sts <- sts[vapply(names(sts), function(k) workstream_has_work(sts[[k]], k), logical(1))]
+      if (!length(sts)) {
         showNotification("Nothing to save: no dataset is loaded and no work has been done.", type = "error")
         return(FALSE)
       }
@@ -320,29 +390,22 @@ mod_session_manager_server <- function(
         color = "rgba(10, 30, 50, 0.65)"
       )
       on.exit(waiter::waiter_hide(), add = TRUE)
-      save_session(
-        uploaded_df = uploaded_df(),
-        user_setup = reactiveValuesToList(user_setup),
-        modification_log = modification_log(),
-        theme = theme(),
-        moda_credentials = moda_credentials(),
-        name = name,
-        user = who,
-        workspace = work,
-        ui = current_ui(),
-        original_df = if (is.function(original_df)) original_df()
-      )
-      last_sig(workspace_signature(work))
-      current_session_name(name)
-      audit_add(modification_log, "Session", "Session saved", name)
-      showNotification(paste("Session saved as", name), type = "message")
+      for (k in names(sts)) {
+        waiter_log(kind_label(k), "cmd")
+        save_kind(k, name, sts[[k]])
+        session_names[[k]] <- name
+      }
+      what <- paste(vapply(names(sts), kind_label, character(1)), collapse = ", ")
+      audit_add(modification_log, "Session", "Session saved", sprintf("%s (%s)", name, what))
+      showNotification(sprintf("Saved as %s: %s.", name, what), type = "message")
       mark_saved()
       TRUE
     }
 
     observeEvent(input$btn_confirm_save, {
+      need_ok(length(input$save_kinds) > 0, "Tick at least one part to save.")
       removeModal()
-      save_as(input$save_session_name)
+      save_as(input$save_session_name, input$save_kinds)
     })
 
     # Save this session, then start an empty one. The page reloads, which
@@ -354,8 +417,7 @@ mod_session_manager_server <- function(
         size = "s", easyClose = TRUE,
         if (has_work) tagList(
           tags$p(class = "small", "The current work is saved under this name, then the app starts empty. Load it again at any time from Load."),
-          textInput(ns("new_session_name"), "Save the current session as", value = if (identical(current_session_name(), "default"))
-            format(Sys.time(), "session_%Y-%m-%d_%Hh%M") else current_session_name(), width = "100%"))
+          textInput(ns("new_session_name"), "Save the current session as", value = default_name(), width = "100%"))
         else tags$p(class = "small", "Nothing is loaded yet, so there is nothing to save."),
         footer = tagList(
           modalButton("Cancel"),
@@ -381,7 +443,7 @@ mod_session_manager_server <- function(
         return()
       }
 
-      choices <- setNames(sessions$name, paste0(sessions$name, " (", format(sessions$saved_at, "%Y-%m-%d %H:%M"), ")"))
+      choices <- session_choices(sessions)
 
       showModal(modalDialog(
         title = "Load Saved Session",
@@ -406,7 +468,7 @@ mod_session_manager_server <- function(
         return()
       }
 
-      choices <- setNames(sessions$name, paste0(sessions$name, " (", format(sessions$saved_at, "%Y-%m-%d %H:%M"), ")"))
+      choices <- session_choices(sessions)
 
       showModal(modalDialog(
         title = "Clear Saved Sessions",
@@ -432,7 +494,7 @@ mod_session_manager_server <- function(
     observeEvent(input$btn_delete_all_sessions, {
       removeModal()
       clear_session(who)
-      current_session_name("default")
+      for (k in kinds) session_names[[k]] <- NULL
       showNotification("All saved sessions cleared.", type = "message")
     })
 
@@ -455,58 +517,40 @@ mod_session_manager_server <- function(
     # dataset is pure cost. Large datasets are skipped entirely (see
     # autosave_max_bytes()); the user is told once per session.
     autosave_skip_notified <- reactiveVal(FALSE)
-    last_sig <- reactiveVal(NULL)
     current_ui <- function() {
       if (is.null(parent_session)) return(NULL)
       list(main_nav = isolate(parent_session$input$main_nav))
     }
 
-    autosave <- function(state, work) {
-      has_work <- (!is.null(state$log) && nrow(state$log) > 0) || length(work) > 0 ||
-        any(vapply(state$setup, function(x) is.character(x) && length(x) == 1 && nzchar(x), logical(1)))
-      if (!has_work || (is.null(state$df) && !length(work))) return()
-
-      size <- as.numeric(utils::object.size(state$df)) + as.numeric(utils::object.size(work)) +
-        if (is.function(original_df)) as.numeric(utils::object.size(isolate(original_df()))) else 0
-      if (size > autosave_max_bytes()) {
-        if (!autosave_skip_notified()) {
-          autosave_skip_notified(TRUE)
-          showNotification(
-            "Autosave is off for this much data. Use Session \u203a Save to keep your work.",
-            type = "warning", duration = 8
-          )
+    # Each workstream is saved on its own, and only when it changed: a
+    # selection edit no longer rewrites the design dataset.
+    autosave <- function() {
+      work <- workspace_snapshot(workspace)
+      for (k in kinds) {
+        st <- current_state(k, work)
+        if (!workstream_has_work(st, k)) next
+        if (identical(workstream_signature(st), sigs[[k]])) next
+        if (as.numeric(utils::object.size(st)) > autosave_max_bytes()) {
+          if (!autosave_skip_notified()) {
+            autosave_skip_notified(TRUE)
+            showNotification(
+              sprintf("Autosave is off for this much data (%s). Use Save to keep your work.", kind_label(k)),
+              type = "warning", duration = 8
+            )
+          }
+          next
         }
-        return()
+        save_kind(k, persist_name(k), st)
       }
-      save_session(
-        uploaded_df = state$df,
-        user_setup = state$setup,
-        modification_log = state$log,
-        theme = state$theme,
-        moda_credentials = moda_credentials(),
-        name = persist_name(),
-        user = who,
-        workspace = work,
-        ui = current_ui(),
-        original_df = if (is.function(original_df)) isolate(original_df())
-      )
-      last_sig(workspace_signature(work))
     }
 
-    observeEvent(auto_save_trigger_d(), {
-      autosave(auto_save_trigger_d(), workspace_snapshot(workspace))
-    }, ignoreInit = TRUE)
+    observeEvent(auto_save_trigger_d(), autosave(), ignoreInit = TRUE)
 
     # Work in the modules that writes no audit entry (moving the threshold,
     # editing a comment...) is checked every 30 seconds and saved when it changed.
     observe({
       invalidateLater(30000)
-      work <- workspace_snapshot(workspace)
-      if (!length(work)) return()
-      sig <- workspace_signature(work)
-      if (identical(sig, isolate(last_sig()))) return()
-      autosave(isolate(list(df = uploaded_df(), setup = reactiveValuesToList(user_setup),
-                            log = modification_log(), theme = theme())), work)
+      autosave()
     })
 
     # -------------------------------------------------------------------------
@@ -538,7 +582,7 @@ mod_session_manager_server <- function(
       if (!isTRUE(mins > 0)) return()
       invalidateLater(1000 * max(5, min(60, mins * 30)))
       has_work <- !is.null(isolate(uploaded_df())) || length(workspace_snapshot(workspace)) > 0
-      covered <- !identical(isolate(current_session_name()), "default") && !isolate(autosave_skip_notified())
+      covered <- any_named() && !isolate(autosave_skip_notified())
       if (!has_work || covered || identical(state_sig(), isolate(saved_sig()))) { dirty_since(NULL); return() }
       if (is.null(isolate(dirty_since()))) dirty_since(Sys.time())
       last <- isolate(reminded_at())
@@ -570,7 +614,11 @@ mod_session_manager_server <- function(
     # -------------------------------------------------------------------------
     observeEvent(modification_log(), {
       req(modification_log())
-      save_audit_log(modification_log(), name = persist_name(), user = who)
+      for (k in kinds) {
+        lg <- log_for(modification_log(), k)
+        if (is.null(isolate(session_names[[k]])) && !any(audit_phase(lg$action) != "Session")) next
+        save_audit_log(lg, name = persist_name(k), user = who)
+      }
     }, ignoreInit = TRUE)
   })
 }

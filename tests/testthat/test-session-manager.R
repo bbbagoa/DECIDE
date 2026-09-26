@@ -188,3 +188,84 @@ test_that("settings from an older version (a list in settings.rds) are carried o
   expect_silent(TargetWise:::app_setting_set("country_office", "Chad"))
   expect_equal(TargetWise:::app_setting_get("country_office"), "Chad")
 })
+
+test_that("large frames go through Parquet and come back identical", {
+  n <- 1500
+  d <- data.frame(id = sprintf("h%04d", 1:n), size = c(NA, 2:n), score = runif(n),
+                  sex = factor(sample(c("M", "F", NA), n, TRUE), levels = c("M", "F")),
+                  day = as.Date("2026-01-01") + 0:(n - 1),
+                  at = as.POSIXct("2026-01-01 10:00", tz = "Africa/Kinshasa") + 1:n,
+                  ok = sample(c(TRUE, FALSE, NA), n, TRUE), stringsAsFactors = FALSE)
+  attr(d$size, "label") <- "Household size"
+  attr(d, "label") <- "Registration"
+  p <- TargetWise:::pack_frames(list(a = list(df = d), small = d[1:5, ]))
+  expect_s3_class(p$a$df, "tw_parquet")
+  expect_true(is.data.frame(p$small))
+  back <- TargetWise:::unpack_frames(p)$a$df
+  expect_equal(back, d)
+  expect_identical(levels(back$sex), c("M", "F"))
+  expect_identical(attr(back$size, "label"), "Household size")
+  expect_identical(attr(back$at, "tzone"), "Africa/Kinshasa")
+  # a list column stays as it is
+  d$l <- I(as.list(1:n))
+  expect_true(is.data.frame(TargetWise:::frame_to_parquet(d)))
+})
+
+test_that("each workstream saves its own part and loads beside the others", {
+  withr::local_envvar(TARGETWISE_SESSION_DIR = withr::local_tempdir())
+  log <- data.frame(timestamp = c("2026-01-01 10:00:00", "2026-01-01 11:00:00", "2026-01-01 12:00:00"),
+                    action = c("Design: Model fitted", "Duplicate deletion", "Monitoring: PDM loaded"),
+                    stringsAsFactors = FALSE)
+  setup <- list(unique_id = "id", scorecard = list(items = list(1)), rules = list("r"), country_office = "Chad")
+  work <- list(scorecard = list(data = data.frame(x = 1:3)), ben_selection = list(a = 1), pdm = list(df = data.frame(y = 1)))
+  st <- function(k) TargetWise:::workstream_state(k, data.frame(id = 1:4), NULL, setup, log, list(form_id = "1"), work)
+  d <- st("design"); s <- st("selection"); m <- st("monitoring")
+  expect_null(d$uploaded_df); expect_equal(names(d$workspace), "scorecard")
+  expect_equal(sort(names(d$user_setup)), c("country_office", "scorecard"))
+  expect_equal(d$modification_log$action, "Design: Model fitted")
+  expect_equal(nrow(s$uploaded_df), 4); expect_equal(names(s$workspace), "ben_selection")
+  expect_equal(s$modification_log$action, "Duplicate deletion")
+  expect_equal(names(m$workspace), "pdm"); expect_true("rules" %in% names(m$user_setup))
+
+  TargetWise:::save_session(d$uploaded_df, d$user_setup, d$modification_log, name = "Chad 2026",
+                            workspace = d$workspace, kind = "design")
+  TargetWise:::save_session(s$uploaded_df, s$user_setup, s$modification_log, name = "Chad 2026",
+                            workspace = s$workspace, kind = "selection")
+  l <- TargetWise:::list_saved_sessions()
+  expect_setequal(l$name, c("Chad_2026.design", "Chad_2026.selection"))
+  expect_setequal(l$kind, c("design", "selection"))
+  expect_equal(unique(l$label), "Chad_2026")
+  got <- TargetWise:::load_session("Chad_2026.design")
+  expect_equal(got$kind, "design"); expect_null(got$uploaded_df)
+  # loading Design puts its entries back and keeps the other phases' ones
+  merged <- TargetWise:::log_merge(log[2:3, ], got$modification_log, "design")
+  expect_equal(merged$action, log$action)
+  TargetWise:::delete_session("Chad_2026.design")
+  expect_equal(TargetWise:::list_saved_sessions()$name, "Chad_2026.selection")
+})
+
+test_that("Save writes one session per workstream and Load brings one back beside the rest", {
+  withr::local_envvar(TARGETWISE_SESSION_DIR = withr::local_tempdir(), TARGETWISE_SAVE_REMINDER_MIN = "0")
+  ws <- TargetWise:::workspace_new()
+  design <- NULL
+  TargetWise:::workspace_register(ws, "scorecard", function() list(data = data.frame(x = 1:3), threshold = 2),
+                                  function(s) design <<- s)
+  df <- shiny::reactiveVal(data.frame(id = 1:5))
+  setup <- shiny::reactiveValues(unique_id = "id", country_office = "Chad")
+  log <- shiny::reactiveVal(data.frame(timestamp = "2026-01-01 10:00:00", action = "Duplicate deletion", stringsAsFactors = FALSE))
+  shiny::testServer(TargetWise:::mod_session_manager_server,
+                    args = list(uploaded_df = df, user_setup = setup, modification_log = log, workspace = ws), {
+    session$setInputs(save_session_name = "Chad", save_kinds = c("design", "selection"), btn_confirm_save = 1)
+    l <- TargetWise:::list_saved_sessions()
+    expect_setequal(l$name, c("Chad.design", "Chad.selection"))
+    expect_null(TargetWise:::load_session("Chad.design")$uploaded_df)
+    expect_equal(nrow(TargetWise:::load_session("Chad.selection")$uploaded_df), 5)
+
+    # Loading the Design session leaves the registration data in memory.
+    df(data.frame(id = 1:9))
+    session$setInputs(load_session_choice = "Chad.design", btn_menu_load = 1)
+    expect_equal(design$threshold, 2)
+    expect_equal(nrow(df()), 9)
+    expect_equal(session_names$design, "Chad")
+  })
+})

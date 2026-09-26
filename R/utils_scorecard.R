@@ -1121,7 +1121,8 @@ scorecard_frame <- function(scorecard) {
 #' @return An `openxlsx` Workbook.
 #' @noRd
 scorecard_workbook <- function(scorecard, meta = list(), screening = NULL,
-                               bands = list(), roc = NULL, comparison = NULL) {
+                               bands = list(), roc = NULL, comparison = NULL,
+                               report_tables = list()) {
   wb <- openxlsx::createWorkbook()
 
   title <- openxlsx::createStyle(fontSize = 14, textDecoration = "bold",
@@ -1219,6 +1220,24 @@ scorecard_workbook <- function(scorecard, meta = list(), screening = NULL,
     openxlsx::setColWidths(wb, "ROC", cols = 1:ncol(roc), widths = "auto")
   }
 
+
+  # Everything the design report shortens (its charts show the 15 most
+  # relevant variables), in full: one titled table after another.
+  report_tables <- Filter(function(t) is.data.frame(t) && nrow(t) > 0, report_tables)
+  if (length(report_tables)) {
+    openxlsx::addWorksheet(wb, "Report_tables")
+    openxlsx::writeData(wb, "Report_tables", "Full tables behind the design report charts", startRow = 1)
+    openxlsx::addStyle(wb, "Report_tables", title, rows = 1, cols = 1)
+    row <- 3
+    for (nm in names(report_tables)) {
+      t <- round5(report_tables[[nm]])
+      openxlsx::writeData(wb, "Report_tables", nm, startRow = row)
+      openxlsx::addStyle(wb, "Report_tables", lab_st, rows = row, cols = 1)
+      openxlsx::writeData(wb, "Report_tables", t, startRow = row + 1, headerStyle = head_st)
+      row <- row + nrow(t) + 4
+    }
+    openxlsx::setColWidths(wb, "Report_tables", cols = 1:12, widths = c(34, rep(16, 11)))
+  }
   wb
 }
 

@@ -26,7 +26,7 @@ test_that("variable screening ranks variables and suggests yes/no versions", {
   nm <- TargetWise:::screen_new_name("hh_size", hs$rule[[1]], names(df))
   v <- TargetWise:::calc_condition(df, list(list(column = "hh_size", op = ">=", value = hs$rule[[1]]$value)), coding = "yesno")
   expect_equal(mean(v == "Yes"), hs$yes_share)
-  expect_match(nm, "^hh_size_ge[0-9]+$")
+  expect_match(nm, "^Targ_hh_size_ge[0-9]+$")
 })
 
 test_that("what a registration team cannot observe is never a criterion", {
@@ -42,7 +42,8 @@ test_that("what a registration team cannot observe is never a criterion", {
   expect_false("tent" %in% names(b))
   s <- TargetWise:::screen_variables(df, rbinom(50, 1, 0.5))
   expect_false(any(c("HHExpFood", "phone_number") %in% s$variable))
-  expect_equal(TargetWise:::screen_new_name("score", list(op = ">=", value = "-1.51"), character(0)), "score_ge_m1_51")
+  expect_equal(TargetWise:::screen_new_name("score", list(op = ">=", value = "-1.51"), character(0)), "Targ_score_ge_m1_51")
+  expect_equal(TargetWise:::screen_new_name("Targ_x", list(op = "in", value = "a"), character(0)), "Targ_x_grp")
 })
 
 test_that("screening odds ratios have 4 decimals at most", {

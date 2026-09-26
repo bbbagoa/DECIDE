@@ -1,39 +1,80 @@
-// Loading feedback for work that does not block the page.
+// Loading feedback: one waiter for the whole app.
 //
-// Whenever the server takes more than a moment, a small card appears at the
-// bottom of the page -- the same card as the app's full-screen waiter
-// (waiter_content(): ring + one line) -- saying WHAT is running: the button
-// the user pressed ("Fit model..."), or the panels being redrawn ("Updating:
-// Distribution and limits..."). Downloads do not make Shiny busy, so they
-// show it from the click until the server says the file is built
+// The full-screen waiter (waiter_show() + waiter_content()) and the busy card
+// shown here are the same card: ring, one line saying WHAT is running, and a
+// console of the steps under way, like an installer log. Heavy operations
+// write their steps from R (waiter_log(), tw_step() -> "tw-wait-log"); the
+// panels being redrawn add their own lines ("render Distribution and
+// limits", ticked with the time it took). When a waiter closes and the server
+// is still drawing, the busy card takes over with the same lines, so the
+// two never blink in turn. Downloads do not make Shiny busy, so they show it
+// from the click until the server says the file is built
 // (download_handler() sends tw-download-done).
 (function () {
   "use strict";
-  var box, timer, dlTimer, downloads = 0;
+  var box, timer, dlTimer, downloads = 0, busy = false;
   var action = null, actionAt = 0;      // the last button pressed, and when
   var updating = [];                     // titles of the panels being redrawn
+  var lines = [];                        // the console: {id, text, state, t0}
+  var pending = {};                      // output title -> outputs still drawing
+  var MAX_LINES = 7;
 
   function el() {
     if (!box) {
       box = document.createElement("div");
       box.className = "tw-busy";
       box.innerHTML = '<div class="wfp-wait" role="status" aria-live="polite"><div class="wfp-wait-row">' +
-                      '<span class="wfp-wait-ring"></span><span class="wfp-wait-msg"></span></div></div>';
+                      '<span class="wfp-wait-ring"></span><span class="wfp-wait-msg"></span></div>' +
+                      '<div class="wfp-wait-log" style="display:none"></div></div>';
       document.body.appendChild(box);
     }
     return box;
   }
-  // A full-screen waiter already says what is running: the small card would
-  // only blink on top of it between steps.
-  function waiterOn() {
+  function waiterCard() {
     var w = document.querySelectorAll(".waiter-overlay");
-    for (var i = 0; i < w.length; i++) if (w[i].offsetParent !== null || getComputedStyle(w[i]).display !== "none") return true;
-    return false;
+    for (var i = w.length - 1; i >= 0; i--) {
+      if (w[i].offsetParent !== null || getComputedStyle(w[i]).display !== "none") {
+        var c = w[i].querySelector(".wfp-wait");
+        return c || w[i];
+      }
+    }
+    return null;
   }
+  function waiterOn() { return waiterCard() !== null; }
+
+  // The console, drawn into whichever card is on screen.
+  function renderLog() {
+    var card = waiterCard() || (box && box.classList.contains("on") ? box.querySelector(".wfp-wait") : null);
+    if (!card || !card.classList.contains("wfp-wait")) return;
+    var log = card.querySelector(".wfp-wait-log");
+    if (!log) { log = document.createElement("div"); log.className = "wfp-wait-log"; card.appendChild(log); }
+    if (!lines.length) { log.style.display = "none"; return; }
+    log.style.display = "";
+    log.innerHTML = "";
+    lines.slice(-MAX_LINES).forEach(function (l) {
+      var d = document.createElement("div");
+      d.className = "tw-line " + l.state;
+      d.textContent = l.text;
+      log.appendChild(d);
+    });
+  }
+  function logLine(id, text, state) {
+    var l = null;
+    if (id) for (var i = 0; i < lines.length; i++) if (lines[i].id === id) { l = lines[i]; break; }
+    if (!l) { l = { id: id, t0: Date.now() }; lines.push(l); if (lines.length > 60) lines.shift(); }
+    l.text = text; l.state = state || "info";
+    renderLog();
+    return l;
+  }
+  function secs(l) { return " (" + ((Date.now() - l.t0) / 1000).toFixed(1) + " s)"; }
+
   function show(text) {
-    if (waiterOn()) return;
+    if (waiterOn()) { if (box) box.classList.remove("on"); renderLog(); return; }
+    // Straight after a full-screen waiter: no fade, the card simply stays.
+    el().classList.toggle("instant", Date.now() - lastWaiter < 500);
     el().querySelector(".wfp-wait-msg").textContent = text;
     box.classList.add("on");
+    renderLog();
   }
   function hide() { if (box && !downloads) box.classList.remove("on"); }
 
@@ -59,22 +100,63 @@
 
   $(document).on("click", "button.action-button, a.action-button", function () {
     var t = clean(this.textContent) || clean(this.getAttribute("title"));
-    if (t) { action = t; actionAt = Date.now(); }
+    if (t) { action = t; actionAt = Date.now(); logLine("cmd", t, "cmd"); }
   });
   $(document).on("shiny:recalculating", function (e) {
     var t = titleOf(e.target);
     if (t && updating.indexOf(t) < 0) updating.push(t);
+    var name = t || (e.target.id || "").replace(/^.*-/, "").replace(/_/g, " ");
+    if (name) {
+      pending[name] = (pending[name] || 0) + 1;
+      logLine("out:" + name, "render " + name, "run");
+    }
     if (box && box.classList.contains("on")) show(message());
   });
+  function outputDone(e) {
+    var t = titleOf(e.target) || (e.target.id || "").replace(/^.*-/, "").replace(/_/g, " ");
+    if (!t || !pending[t]) return;
+    if (--pending[t] > 0) return;
+    delete pending[t];
+    for (var i = 0; i < lines.length; i++) if (lines[i].id === "out:" + t) {
+      logLine("out:" + t, "render " + t + secs(lines[i]), e.type === "shiny:error" ? "err" : "ok");
+      break;
+    }
+  }
+  $(document).on("shiny:value shiny:error", outputDone);
+
+  // While the server works: the busy card after a moment, and it takes over
+  // from a full-screen waiter the moment that one closes.
+  // Tasks often run back to back (an import, then its summary, then the
+  // panels it redraws). The card stays up through the short gaps between them
+  // and closes only once the server has been quiet for a moment, so it does
+  // not blink on and off; when a full-screen waiter closes mid-way, the card
+  // takes over at once, with the same lines.
+  var idleTimer, lastWaiter = 0;
+  function tick() {
+    if (!busy) return;
+    if (waiterOn()) lastWaiter = Date.now();
+    show(message());
+    timer = setTimeout(tick, 100);
+  }
   $(document).on("shiny:busy", function () {
+    busy = true;
+    clearTimeout(idleTimer);
     clearTimeout(timer);
-    timer = setTimeout(function () { show(message()); }, 700);
+    var on = (box && box.classList.contains("on")) || waiterOn();
+    timer = setTimeout(tick, on ? 0 : 700);
   });
   $(document).on("shiny:idle", function () {
+    busy = false;
     clearTimeout(timer);
-    updating = [];
-    if (!downloads) action = null;
-    hide();
+    clearTimeout(idleTimer);
+    idleTimer = setTimeout(function () {
+      if (busy) return;
+      updating = [];
+      if (!downloads) action = null;
+      hide();
+      // A waiter can stay up between rounds (a session restore): keep its log.
+      if (!waiterOn() && !downloads) { lines = []; pending = {}; }
+    }, 600);
   });
 
   $(document).on("click", "a.shiny-download-link", function () {
@@ -120,6 +202,10 @@
         var bar = w.querySelector(".wfp-wait-bar");
         if (bar) { bar.style.display = ""; bar.firstElementChild.style.width = p + "%"; }
       }
+    });
+    // A step of a heavy operation, from R (waiter_log(), tw_step()).
+    Shiny.addCustomMessageHandler("tw-wait-log", function (m) {
+      logLine(m.id || null, m.text || "", m.state || "info");
     });
     Shiny.addCustomMessageHandler("tw-download-done", function (m) {
       downloads = Math.max(0, downloads - 1);

@@ -190,6 +190,7 @@ dq_outliers_server <- function(input, output, session, ns, core) {
     stats::setNames(keys[keep], cols[keep])
   })
 
+  last_default <- NULL
   observe({
     cols <- num_cols()
     req(length(cols))
@@ -199,8 +200,14 @@ dq_outliers_server <- function(input, output, session, ns, core) {
     choices <- col_choice_groups(`Mapped fields` = stats::setNames(mapped, lab),
                                  `Other numeric columns` = setdiff(cols, mapped))
     cur <- isolate(input$outlier_var)
+    # Start on a quantity (household size first), never on a coordinate, a
+    # weight or an id; a pick the app made itself follows the mapping when it
+    # arrives, one the user made stays.
+    def <- outlier_default_var(cols, mk, user_setup)
+    keep_cur <- isTRUE(cur %in% cols) && !identical(cur, last_default)
+    last_default <<- def
     shinyWidgets::updatePickerInput(session, "outlier_var", choices = choices,
-                                    selected = if (isTRUE(cur %in% cols)) cur else c(mapped, cols)[1])
+                                    selected = if (keep_cur) cur else def)
   })
 
   # --- allowed range, remembered per variable -------------------------------
@@ -829,4 +836,21 @@ dq_outliers_server <- function(input, output, session, ns, core) {
     shinyWidgets::updatePickerInput(session, "outlier_var", selected = s$variable[i])
     bslib::nav_select("outlier_tabs", "dist", session = session)
   })
+}
+
+#' The variable the Outliers tab starts on
+#'
+#' The first mapped quantity (household size, head's age, children under 5,
+#' score), else the first numeric column that is not a coordinate, a weight
+#' or an identifier.
+#' @param cols Numeric columns; `mk` column -> mapped key.
+#' @noRd
+outlier_default_var <- function(cols, mk, setup) {
+  for (k in c("hh_size", "hhh_age", "childU5", "v_score")) {
+    hit <- names(mk)[mk == k]
+    if (length(hit) && hit[1] %in% cols) return(hit[1])
+  }
+  avoid <- unlist(lapply(c("lon", "lat", "weight", "unique_id"), function(k) as.character(setup[[k]] %||% "")[1]))
+  rest <- cols[!cols %in% avoid & !grepl("(^|_)(lon|lat|long|longitude|latitude|gps|x|y|weight|wgt|id|uuid|index)($|_)", tolower(cols))]
+  c(rest, cols)[1]
 }

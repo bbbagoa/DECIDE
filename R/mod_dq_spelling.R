@@ -49,6 +49,7 @@ dq_spelling_ui <- function(ns) {
           downloadButton(ns("download_audit"), "Export", class = "btn-outline-secondary")
         )
       ),
+      uiOutput(ns("dq_names_empty")),
       DT::DTOutput(ns("dq_names_redflags"), fill = FALSE)
     )
   )
@@ -101,6 +102,30 @@ dq_spelling_server <- function(input, output, session, ns, core) {
     # No ignoreInit: when the data was already loaded (a restored session),
     # skipping the first run left the list empty until the data next changed.
   )
+
+  # Before a column is picked (or when every name is fine): say so, instead of
+  # a blank tab. The actions wait for something to act on.
+  output$dq_names_empty <- renderUI({
+    if (!length(input$dq_name_cols)) {
+      return(empty_state("Pick the name columns to audit",
+                         "Choose the columns holding names (head of household, alternates) above: records with missing or suspicious names are listed here.",
+                         icon = "spellcheck"))
+    }
+    bad <- tryCatch(bad_data_reactive(), error = function(e) NULL)
+    if (is.data.frame(bad) && !nrow(bad)) {
+      return(empty_state("No suspicious names", "Every record has a plausible name in the columns picked.", icon = "check2-circle"))
+    }
+    NULL
+  })
+  observe({
+    picked <- length(input$dq_name_cols) > 0
+    bad <- if (picked) tryCatch(bad_data_reactive(), error = function(e) NULL)
+    has_rows <- is.data.frame(bad) && nrow(bad) > 0
+    gate_button("btn_open_edit", picked && length(input$dq_names_redflags_rows_selected) > 0,
+                if (!picked) "Pick the name columns to audit first." else "Select a record in the table first.")
+    gate_button("btn_delete_all_missing", has_rows,
+                if (!picked) "Pick the name columns to audit first." else "No record with a missing name.")
+  })
 
   # 2. Reactive table for "Bad Names"
   output$dq_names_redflags <- DT::renderDT(

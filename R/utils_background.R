@@ -1,0 +1,146 @@
+#' Long tasks in a background R process, with a cancel cross
+#'
+#' R serves the whole app on one thread: while a model fits, the app cannot
+#' even hear a click. A task started with `bg_run()` runs in a second R
+#' process (one per browser session, started on first use and kept warm), so
+#' the app stays responsive and the waiter's cross can stop it: the process is
+#' killed and the user carries on. The first task of a session also loads the
+#' package in that process (a few seconds). `TARGETWISE_BACKGROUND=false`, or a
+#' session that is not a running app (unit tests, testServer), runs the task
+#' inline as before.
+#' @noRd
+NULL
+
+#' The background worker of this browser session
+#' @noRd
+bg_worker <- function(root) {
+  w <- root$userData$tw_worker
+  if (is.null(w) || !w$is_alive()) {
+    w <- callr::r_session$new(wait = FALSE)
+    root$userData$tw_worker <- w
+    if (!isTRUE(root$userData$tw_worker_hook)) {
+      root$userData$tw_worker_hook <- TRUE
+      root$onSessionEnded(function() {
+        ww <- root$userData$tw_worker
+        if (!is.null(ww)) try(ww$kill(), silent = TRUE)
+      })
+    }
+  }
+  w
+}
+
+#' @noRd
+bg_enabled <- function() {
+  !tolower(tw_env("BACKGROUND", "true")) %in% c("0", "false", "no", "off") &&
+    shiny::isRunning() && requireNamespace("callr", quietly = TRUE)
+}
+
+#' Run `job(args)` in the background worker
+#'
+#' @param label What the waiter says ("Fitting the model...").
+#' @param job A top-level package function taking one list argument (it is
+#'   called in the worker as `TargetWise:::<name>(args)`, so it must not be a
+#'   closure over the session).
+#' @param args One list, sent to the worker (keep it small: only the columns
+#'   the task needs).
+#' @param on_done function(result), called in the session's reactive domain.
+#' @param on_error function(message).
+#' @noRd
+bg_run <- function(label, job, args, on_done, on_error = function(msg) NULL,
+                   session = shiny::getDefaultReactiveDomain()) {
+  job_name <- deparse(substitute(job))
+  in_domain <- function(fn) shiny::withReactiveDomain(session, shiny::isolate(fn()))
+  if (!bg_enabled() || is.null(session)) {
+    res <- tryCatch(list(ok = TRUE, value = job(args)), error = function(e) list(ok = FALSE, msg = conditionMessage(e)))
+    if (res$ok) on_done(res$value) else on_error(res$msg)
+    return(invisible(NULL))
+  }
+  root <- session$rootScope()
+  cancel_id <- "tw_bg_cancel"
+  start_val <- shiny::isolate(root$input[[cancel_id]]) %||% 0
+  waiter::waiter_show(html = waiter_content(label, cancel_id = cancel_id), color = "rgba(10, 30, 50, 0.65)")
+  waiter_log("running in a background R process: the cross above stops it", "info", session = session)
+  w <- tryCatch(bg_worker(root), error = function(e) NULL)
+  if (is.null(w)) {
+    # No worker (callr failed): the task runs here, as before.
+    on.exit(waiter::waiter_hide(), add = TRUE)
+    res <- tryCatch(list(ok = TRUE, value = job(args)), error = function(e) list(ok = FALSE, msg = conditionMessage(e)))
+    if (res$ok) on_done(res$value) else on_error(res$msg)
+    return(invisible(NULL))
+  }
+  call <- eval(parse(text = sprintf("function(a) TargetWise:::%s(a)", job_name)), envir = globalenv())
+  started <- FALSE
+  t0 <- Sys.time()
+  poll <- function() in_domain(function() {
+    if (session$isClosed()) { try(w$kill(), silent = TRUE); return() }
+    if (!identical(root$input[[cancel_id]] %||% 0, start_val)) {
+      try(w$kill(), silent = TRUE)
+      root$userData$tw_worker <- NULL
+      waiter::waiter_hide()
+      showNotification(sprintf("Stopped: %s", sub("[.]+$", "", label)), type = "warning", duration = 6)
+      return()
+    }
+    st <- tryCatch(w$get_state(), error = function(e) "finished")
+    if (!started) {
+      if (st == "starting") {
+        if (identical(w$poll_process(0), "ready")) try(w$read(), silent = TRUE)
+      } else if (st == "idle") {
+        w$call(call, list(args))
+        started <<- TRUE
+        waiter_log("load the package and the data in the worker", "run", id = "bg-run", session = session)
+      } else {
+        waiter::waiter_hide(); root$userData$tw_worker <- NULL
+        on_error("The background process stopped. Try again.")
+        return()
+      }
+      later::later(poll, 0.2)
+      return()
+    }
+    if (identical(w$poll_process(0), "ready")) {
+      r <- tryCatch(w$read(), error = function(e) list(error = e))
+      waiter_log(sprintf("done (%.1f s)", as.numeric(difftime(Sys.time(), t0, units = "secs"))), "ok", id = "bg-run", session = session)
+      waiter::waiter_hide()
+      if (is.null(r$error)) {
+        on_done(r$result)
+      } else {
+        e <- r$error
+        msg <- conditionMessage(if (inherits(e$parent, "condition")) e$parent else e)
+        on_error(msg)
+      }
+      return()
+    }
+    waiter_log(sprintf("working (%.0f s)", as.numeric(difftime(Sys.time(), t0, units = "secs"))), "run", id = "bg-run", session = session)
+    later::later(poll, 0.5)
+  })
+  later::later(poll, 0.1)
+  invisible(NULL)
+}
+
+#' Targeting Design fit, run in the worker: the model, every model per
+#' variable, and the benchmarks (the slow part of Run the model)
+#' @param a list(df, outcome_col, keep, outcome_pos, method, stepwise,
+#'   stepwise_dir, scheme, sp, weights, compare, benchmarks, seed)
+#' @noRd
+design_fit_job <- function(a) {
+  out <- fit_scorecard_advanced(a$df, a$outcome_col, a$keep,
+                                outcome_positive = a$outcome_pos, method = a$method,
+                                stepwise = a$stepwise, stepwise_dir = a$stepwise_dir,
+                                scheme = a$scheme, rows = a$sp$train, weights = a$weights)
+  eff <- tryCatch(model_effects(a$df, a$outcome_col, a$keep, a$outcome_pos,
+                                rows = a$sp$train, weights = a$weights,
+                                methods = unique(c(out$method, a$compare))),
+                  error = function(e) NULL)
+  bench <- NULL
+  if (isTRUE(a$benchmarks)) {
+    bench <- tryCatch(benchmark_models(a$df, a$outcome_col, a$keep, a$outcome_pos, a$sp,
+                                       scorecard_score = apply_scorecard(a$df, build_scorecard(out$weights))$score,
+                                       seed = a$seed),
+                      error = function(e) list(error = conditionMessage(e)))
+  }
+  list(out = out, effects = eff, bench = bench)
+}
+
+#' File import, run in the worker (reading, encoding, multiple-choice split)
+#' @param a list(path, ext)
+#' @noRd
+import_job <- function(a) read_import_file(a$path, a$ext)

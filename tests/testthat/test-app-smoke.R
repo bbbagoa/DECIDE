@@ -95,6 +95,9 @@ test_that("the app boots, imports, maps variables and reveals the analysis tabs"
 
   # No saved sessions in a fresh store, so no restore modal to dismiss.
   app$upload_file(`file_import_1-file_in` = fixture)
+  # The file is read in the background worker, so the page is idle before the
+  # import summary shows: wait for the summary itself.
+  app$wait_for_js("!!document.getElementById('btn_import_to_setup')", timeout = 90 * 1000)
   app$wait_for_idle(timeout = 60 * 1000)
 
   # The import summary offers the way into variable setup.
@@ -152,6 +155,9 @@ test_that("a saved setup profile reapplies to a fresh import of the same form", 
   withr::defer(app$stop())
 
   app$upload_file(`file_import_1-file_in` = fixture)
+  # The file is read in the background worker, so the page is idle before the
+  # import summary shows: wait for the summary itself.
+  app$wait_for_js("!!document.getElementById('btn_import_to_setup')", timeout = 90 * 1000)
   app$wait_for_idle(timeout = 60 * 1000)
   app$click("btn_import_to_setup")
   app$wait_for_idle(timeout = 30 * 1000)

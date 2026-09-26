@@ -62,7 +62,7 @@ identification_cols <- function(df, settings, max_name_cols = 2) {
 record_detail_buttons <- function(keys, input_id) {
   safe <- gsub("'", "&#39;", htmltools::htmlEscape(as.character(keys)), fixed = TRUE)
   sprintf(
-    paste0("<button type='button' class='wfp-details-btn' title='Open this record' ",
+    paste0("<button type='button' class='wfp-details-btn tw-i18n' title='Open this record' ",
            # stopPropagation: in a table with row selection the click would
            # also select the row.
            "onclick=\"event.stopPropagation(); Shiny.setInputValue('%s', '%s', {priority:'event'})\">",
