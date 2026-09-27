@@ -163,11 +163,13 @@ cluster_assign <- function(M, w, method, k, seed = 123) {
     hclust = {
       set.seed(seed)
       idx <- if (nrow(M) > 5000) sort(sample(nrow(M), 5000)) else seq_len(nrow(M))
-      cl <- stats::cutree(stats::hclust(stats::dist(M[idx, , drop = FALSE]), method = "ward.D2"), k = k)
-      if (length(idx) == nrow(M)) return(cl)
+      hc <- stats::hclust(stats::dist(M[idx, , drop = FALSE]), method = "ward.D2")
+      cl <- stats::cutree(hc, k = k)
+      dendro <- tryCatch(dendro_structure(hc, k), error = function(e) NULL)
+      if (length(idx) == nrow(M)) return(structure(cl, dendro = dendro))
       cen <- t(vapply(seq_len(k), function(j) colMeans(M[idx[cl == j], , drop = FALSE]), numeric(ncol(M))))
       d <- vapply(seq_len(k), function(j) rowSums(sweep(M, 2, cen[j, ])^2), numeric(nrow(M)))
-      max.col(-matrix(d, nrow = nrow(M)), ties.method = "first")
+      structure(max.col(-matrix(d, nrow = nrow(M)), ties.method = "first"), dendro = dendro)
     },
     stop("Unknown clustering method.", call. = FALSE))
 }
@@ -286,6 +288,7 @@ fit_unsupervised <- function(df, criteria, method = "count", anchor = NULL, weig
       index <- r$diag; r$coef },
     lca = , kmeans = , hclust = , tree = {
       cl <- cluster_assign(M, w, method, k, seed)
+      dendro <- attr(cl, "dendro"); attr(cl, "dendro") <- NULL
       k <- max(cl)
       prof <- vapply(seq_len(k), function(j) colSums(M[cl == j, , drop = FALSE] * w[cl == j]) / sum(w[cl == j]), numeric(length(crit)))
       prof <- matrix(prof, nrow = length(crit), dimnames = list(crit, paste("Profile", seq_len(k))))
@@ -301,6 +304,7 @@ fit_unsupervised <- function(df, criteria, method = "count", anchor = NULL, weig
       index <- list(type = "cluster", algorithm = method, k = k, profiles = prof, size = size, level = level,
                     rank = rank, target = tg, assign = assign, alpha = alpha,
                     silhouette = silhouette_mean(M, cl, seed = seed), entropy = attr(cl, "entropy"), bic = attr(cl, "bic"))
+      if (!is.null(dendro)) { dendro$target <- tg; index$diagram <- list(kind = "dendrogram", data = dendro) }
       if (method == "tree") {
         # a tree that describes the targeted profiles: its rules, and points
         # from its average effects
@@ -308,6 +312,7 @@ fit_unsupervised <- function(df, criteria, method = "count", anchor = NULL, weig
         X <- as.data.frame(M); X$.y <- as.integer(cl %in% tg); X$.w <- w
         eff <- ml_effects(X, crit, "tree", seed = seed)
         index$rules <- tryCatch(tree_rules(attr(eff, "model")), error = function(e) NULL)
+        index$diagram <- model_diagram("tree", attr(eff, "model"))
         attr(eff, "model") <- NULL
         eff
       } else profile_points(M, w, cl %in% tg) })
@@ -333,7 +338,7 @@ fit_unsupervised <- function(df, criteria, method = "count", anchor = NULL, weig
   index$criteria <- crit
   list(weights = round5(out), dropped = u$dropped, model = NULL, n = nrow(M), filled = integer(0), converged = TRUE,
        method = method, scheme = "coefficient", stepwise = "none", stepwise_dir = "backward", index = index,
-       unsupervised = TRUE, tree_rules = index$rules)
+       unsupervised = TRUE, tree_rules = index$rules, diagram = index$diagram)
 }
 
 #' A starting threshold without an outcome

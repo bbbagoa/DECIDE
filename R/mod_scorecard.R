@@ -254,18 +254,7 @@ mod_scorecard_ui <- function(id) {
                 with_outcome(
                 selectInput(ns("model_scheme"),
                             tagList("Weighting scheme", info_tip("How model coefficients become points: odds ratios (APP-FA reference), log-odds, whole points out of 10, or 1 point per criterion.")),
-                            choices = scorecard_scheme_choices(), width = "100%", selectize = FALSE),
-                tags$div(
-                  class = "wfp-fit-pair",
-                  selectInput(ns("stepwise"),
-                              tagList("Stepwise", info_tip("Selection of the criteria before fitting, for any model. Backward removes criteria from the full set, forward adds them from none, both directions adds and may remove again.")),
-                              choices = c("No stepwise" = "none", "Backward" = "backward", "Forward" = "forward", "Both directions" = "both"),
-                              selected = "none", width = "100%", selectize = FALSE),
-                  conditionalPanel(
-                    condition = sprintf("input['%s'] !== 'none'", ns("stepwise")),
-                    selectInput(ns("stepwise_ic"),
-                                tagList("Criterion", info_tip("AIC is the usual choice; BIC penalises each criterion more (log of the sample size) and keeps fewer.")),
-                                choices = c("AIC" = "aic", "BIC" = "bic"), selected = "aic", width = "100%", selectize = FALSE)))),
+                            choices = scorecard_scheme_choices(), width = "100%", selectize = FALSE)),
                 without_outcome(tags$div(class = "small text-muted", textOutput(ns("unsup_note"))))),
               tags$div(
                 class = "wfp-fit-group",
@@ -300,6 +289,19 @@ mod_scorecard_ui <- function(id) {
                   options = shinyWidgets::pickerOptions(container = "body", actionsBox = TRUE,
                                                         selectedTextFormat = "count > 2",
                                                         countSelectedText = "{0} models"))),
+                # stepwise selection of the criteria, applied before the model
+                with_outcome(
+                tags$div(
+                  class = "wfp-fit-pair",
+                  selectInput(ns("stepwise"),
+                              tagList("Stepwise", info_tip("Selection of the criteria before fitting, for any model. Backward removes criteria from the full set, forward adds them from none, both directions adds and may remove again.")),
+                              choices = c("No stepwise" = "none", "Backward" = "backward", "Forward" = "forward", "Both directions" = "both"),
+                              selected = "none", width = "100%", selectize = FALSE),
+                  conditionalPanel(
+                    condition = sprintf("input['%s'] !== 'none'", ns("stepwise")),
+                    selectInput(ns("stepwise_ic"),
+                                tagList("Criterion", info_tip("AIC is the usual choice; BIC penalises each criterion more (log of the sample size) and keeps fewer.")),
+                                choices = c("AIC" = "aic", "BIC" = "bic"), selected = "aic", width = "100%", selectize = FALSE)))),
 
                 tags$div(
                   class = "wfp-fit-go",
@@ -318,6 +320,7 @@ mod_scorecard_ui <- function(id) {
             # question once the coefficients are read.
             uiOutput(ns("comparison_ui")),
             uiOutput(ns("effects_ui")),
+            uiOutput(ns("diagram_ui")),
             uiOutput(ns("tree_ui")),
             uiOutput(ns("weights_charts")),
             uiOutput(ns("nav_weights"))
@@ -1596,7 +1599,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
     # Model settings (PCA / MCA axes, number of profiles): kept here, set in a
     # dialog from the button beside the model, used by every fit.
     model_params <- reactiveValues(pca_mode = "axes", pca_axes = 1, pca_min_var = 60, n_clusters = 3,
-                                   holdout_pct = 20, split_seed = 123, tune = FALSE, folds = 5, auto_k = FALSE)
+                                   holdout_pct = 20, split_seed = 123, tune = FALSE, folds = 5, auto_k = FALSE, diagram = TRUE)
     has_axes <- function(m) isTRUE(m %in% c("pca", "mca"))
     output$params_summary <- renderUI({
       m <- input$model_method
@@ -1609,7 +1612,8 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
         if (isTRUE(m %in% cluster_methods()))
           sprintf("%s, seed %s", if (isTRUE(model_params$auto_k)) "profiles chosen by silhouette" else sprintf("%d profiles", as.integer(model_params$n_clusters)),
                   model_params$split_seed),
-        if (!no_outcome() && isTRUE(m %in% tunable_models()) && isTRUE(model_params$tune)) sprintf("tuned by %d-fold cross-validation", as.integer(model_params$folds)))
+        if (!no_outcome() && isTRUE(m %in% tunable_models()) && isTRUE(model_params$tune)) sprintf("tuned by %d-fold cross-validation", as.integer(model_params$folds)),
+        if (isTRUE(m %in% diagram_models()) && isFALSE(model_params$diagram)) "no diagram")
       if (!length(txt)) return(NULL)
       txt <- paste(txt, collapse = " \u00b7 ")
       tags$div(class = "small text-muted wfp-params-line", bsicons::bs_icon("sliders"), " ", txt, " \u00b7 ",
@@ -1652,6 +1656,13 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
                        value = model_params$n_clusters, min = 2, max = 8, step = 1, width = "100%"),
           numericInput(ns("split_seed"), tagList("Seed", info_tip("Fixes the random starts of the clustering, so the same settings give the same profiles.")),
                        value = model_params$split_seed, min = 1, step = 1, width = "100%")),
+        if (isTRUE(m %in% diagram_models())) checkboxInput(ns("diagram"),
+          tagList("Draw the model diagram", info_tip(paste(
+            "Shows the model as the standard picture for its kind, in the app and in the report:",
+            "the tree for a decision tree, the odds ratios with their intervals for a logistic regression,",
+            "the network for a neural network, variable importance for a random forest or XGBoost,",
+            "the dendrogram for Ward clustering."))),
+          value = !isFALSE(model_params$diagram)),
         # outcome models with hyperparameters: tuned by cross-validation
         if (!no_outcome() && isTRUE(m %in% tunable_models())) tagList(
           tags$div(class = "small fw-bold text-uppercase mb-2", "Hyperparameters"),
@@ -1687,6 +1698,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
       if (!is.null(input$tune)) model_params$tune <- isTRUE(input$tune)
       if (!is.null(input$folds)) model_params$folds <- round(num(input$folds, 2, 10, 5))
       if (!is.null(input$auto_k)) model_params$auto_k <- isTRUE(input$auto_k)
+      if (!is.null(input$diagram)) model_params$diagram <- isTRUE(input$diagram)
       removeModal()
     })
     pca_min_var_now <- function() if (identical(model_params$pca_mode, "var")) model_params$pca_min_var / 100
@@ -1970,12 +1982,26 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
         bslib::card_header(bsicons::bs_icon("diagram-2"), " Decision tree: the rules",
                            info_tip(if (nof) "Each row is a leaf of the tree: the answers that lead to it, how many households it holds and the share of them in the targeted profiles. The points of the ranking are the tree's average effects, so it stays additive; the rules show what the tree itself does."
                                     else "Each row is a leaf of the tree: the answers that lead to it, how many training households it holds and the share of them that is vulnerable. The points of the card are the tree's average effects, so the card stays additive; the rules show what the tree itself does.")),
-        bslib::card_body(tags$div(class = "wfp-model-table-wrap", tags$table(
+        bslib::card_body(
+          tags$div(class = "wfp-model-table-wrap", tags$table(
           class = "wfp-model-table",
           tags$thead(tags$tr(tags$th("If the household..."), tags$th(class = "num", "Households"), tags$th(class = "num", if (nof) "In targeted profiles" else "Vulnerable"))),
           tags$tbody(lapply(seq_len(nrow(rl)), function(i) tags$tr(
             tags$td(class = "small", rl$rule[i]), tags$td(class = "num", format(rl$households[i], big.mark = ",")),
             tags$td(class = "num", tags$strong(sprintf("%.0f%%", 100 * rl$share_vulnerable[i]))))))))))
+    })
+    # The model's diagram where one is standard (tree, forest plot, network,
+    # importance, dendrogram); switched off in the model settings
+    output$diagram_ui <- renderUI({
+      f <- fitted(); d <- f$diagram
+      if (is.null(d) || isFALSE(model_params$diagram)) return(NULL)
+      nof <- isTRUE(f$unsupervised)
+      svg <- diagram_svg(d, if (nof) "targeted" else "vulnerable")
+      if (!nzchar(svg)) return(NULL)
+      bslib::card(
+        class = "mt-3",
+        bslib::card_header(bsicons::bs_icon("diagram-3"), paste0(" ", diagram_title(d$kind)), info_tip(diagram_help(d$kind, nof))),
+        bslib::card_body(HTML(svg)))
     })
 
     output$weights_charts <- renderUI({
@@ -2586,7 +2612,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
             method_code = f$method, scheme_code = f$scheme, stepwise = f$stepwise %||% "none", stepwise_dir = f$stepwise_dir %||% "backward",
             n_train = f$n, n_test = length(sp$test), seed = model_params$split_seed,
             weights = input$model_weights, dropped = f$dropped, converged = f$converged,
-            tuning = f$tuning, tree_rules = f$tree_rules, k_quality = f$index$k_quality,
+            tuning = f$tuning, tree_rules = f$tree_rules, diagram = if (!isFALSE(model_params$diagram)) f$diagram, k_quality = f$index$k_quality,
             fit_stats = fit_stats),
           runs = runs_df, estimates = wts,
           index = if (isTRUE(f$unsupervised) || isTRUE(f$method %in% c("pca", "lda"))) f$index,

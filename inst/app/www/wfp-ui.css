@@ -2701,3 +2701,7 @@ td[data-tw], th[data-tw] { cursor: help; }
 .wfp-export-text { display: flex; flex-direction: column; line-height: 1.2; min-width: 0; }
 .wfp-export-title { font-size: .82rem; font-weight: 600; }
 .wfp-export-sub { font-size: .72rem; color: var(--text-muted); }
+
+/* Model diagrams (decision tree, forest plot): SVG on a light panel in both themes */
+.tw-diagram { overflow-x: auto; background: #ffffff; border: 1px solid var(--border); border-radius: var(--card-radius-sm); padding: 12px; margin-bottom: 14px; }
+.tw-diagram svg { display: block; margin: 0 auto; }

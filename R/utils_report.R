@@ -264,6 +264,8 @@ design_report_md <- function(x, figures = character(0)) {
                   paste(sprintf("%s = %s", names(tn$best), vapply(tn$best, function(v) format(signif(v, 3)), character(1))), collapse = ", "), tn$best_auc), "",
           md_table(utils::head(tn$table, 10)), "")
     }
+    dg <- x$model$diagram
+    if (!is.null(dg) && nzchar(diagram_svg(dg))) add(paste("###", diagram_title(dg$kind)), "", diagram_help(dg$kind, nof), "", "@@DIAGRAM@@", "")
     rl <- x$model$tree_rules
     if (!is.null(rl) && nrow(rl)) add("### Decision tree rules", "",
       if (nof) "Each leaf of the tree: the answers that lead to it, the households it holds and the share of them in the targeted profiles. The points of the ranking are the tree's average effects; the rules show what the tree itself does."
@@ -471,7 +473,7 @@ design_report_methods <- function(x) {
       woe = paste("Reference: Siddiqi (2017), *Intelligent Credit Scoring*, 2nd ed. **Weight of evidence**: each criterion's effect is its own log odds ratio against the outcome, log((a d) / (b c)) from its 2x2 table, with 0.5 added to every cell (Haldane correction) so empty cells stay finite. It never fails on separation or correlated criteria, but effects are not net of the other criteria, so overlapping criteria count twice."),
       rf = paste("References: Breiman (2001), *Machine Learning* 45; Molnar (2022), *Interpretable Machine Learning*. A **random forest** (ranger, 500 trees) of the outcome on the kept criteria. A forest has no coefficients, so each criterion's points are its **average marginal effect**: every household is scored with the criterion set to 1 and to 0, all else unchanged, and the mean difference in predicted log-odds is the criterion's effect. The card is additive; the interactions the forest captures are averaged out, and the held-out AUC shows what that costs."),
       xgb = paste("References: Chen & Guestrin (2016), XGBoost, KDD; Molnar (2022). **XGBoost** (gradient-boosted trees, depth 3, learning rate 0.1, 200 rounds). Points are the average marginal effects on the log-odds scale, computed as for the random forest."),
-      svm = paste("References: Cortes & Vapnik (1995), *Machine Learning* 20; Molnar (2022). A **support vector machine** (radial kernel, Platt-scaled probabilities; trained on at most 5,000 households). Points are the average marginal effects on the log-odds scale, computed as for the random forest. An SVM optimises a class boundary rather than probabilities, so criteria that never move a household across it receive close to zero points."),
+      svm = paste("References: Cortes & Vapnik (1995), *Machine Learning* 20; Molnar (2022). A **support vector machine** (radial kernel, Platt-scaled probabilities; trained on at most 3,000 households). Points are the average marginal effects on the log-odds scale, computed as for the random forest. An SVM optimises a class boundary rather than probabilities, so criteria that never move a household across it receive close to zero points."),
       nb = paste("Reference: Hastie, Tibshirani & Friedman (2009), *The Elements of Statistical Learning*, ch. 6. **Naive Bayes** (Laplace smoothing): the evidence of each criterion combined as if the criteria were independent given the outcome. Points are the average marginal effects on the log-odds scale, computed as for the random forest."),
       nnet = paste("Reference: Ripley (1996), *Pattern Recognition and Neural Networks*. A **neural network** with one hidden layer of 5 units and weight decay 0.01 (nnet). Points are the average marginal effects on the log-odds scale, computed as for the random forest."),
       stumps = paste("References: Friedman (2001), *Annals of Statistics* 29(5); Chen & Guestrin (2016), XGBoost, KDD. **Boosted stumps**: gradient boosting (xgboost, 300 rounds, learning rate 0.1) restricted to trees with a single split. With 0/1 criteria each tree depends on one criterion only, so the model is exactly additive; each criterion's effect is the difference in its contribution (SHAP value) between households that meet it and those that do not, on the log-odds scale."),
@@ -565,6 +567,7 @@ write_design_report <- function(file, x, plots = list(), lang = "en") {
     footer = "This record documents the design so it can be reviewed, reproduced and challenged.",
     blocks = list("@@RATIONALE@@" = sprintf('<div class="rich">%s</div>', rich_html(x$rationale)),
                   "@@RANK_CARDS@@" = if (nof) report_rank_cards(x, lang) else "",
+                  "@@DIAGRAM@@" = diagram_svg(x$model$diagram, if (nof) "targeted" else "vulnerable"),
                   "@@ERRORS@@" = report_error_cards(x, lang),
                   "@@MATRIX@@" = report_error_matrix(x$errors, x$threshold, x$outcome, x$outcome_pos, lang)))
 }
@@ -897,6 +900,7 @@ design_report_css <- function() {
   .err-matrix .m-count { font-size: 18px; font-weight: 700; color: var(--ink); line-height: 1.3; }
   .err-matrix .m-share { font-size: 11px; color: var(--muted); }
   .err-matrix .m-tot { background: var(--tint); }
+  .tw-diagram { overflow-x: auto; margin: 12px 0 22px; }
   .err-matrix tr.m-total th, .err-matrix tr.m-total td { border-top: 2px solid #c9d3de; }
   .err-detail strong { color: var(--ink); font-weight: 700; }
   .err-note { font-size: 13px; color: var(--muted); margin: 8px 0 18px; }

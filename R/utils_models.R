@@ -153,7 +153,7 @@ scorecard_model_note <- function(method) {
     stumps = "Gradient boosting restricted to one split per tree. With yes/no criteria that model is exactly additive, so each criterion still gets fixed points, but it can capture effects a logistic fit misses when criteria are unstable together.",
     rf = "Random forest (500 trees). Each criterion's points are its average marginal effect: how much the forest's prediction moves, on the log-odds scale, when a household meets the criterion rather than not. The card is additive; the forest's interactions are averaged out.",
     xgb = "XGBoost (gradient-boosted trees, depth 3). Points are average marginal effects on the log-odds scale, as for the random forest.",
-    svm = "Support vector machine (radial kernel, probability output). Points are average marginal effects on the log-odds scale. An SVM optimises a class boundary, not probabilities, so a criterion that never moves a household across the boundary gets close to zero points even when it matters: compare its held-out AUC before adopting it. Trained on at most 5,000 households.",
+    svm = "Support vector machine (radial kernel, probability output). Points are average marginal effects on the log-odds scale. An SVM optimises a class boundary, not probabilities, so a criterion that never moves a household across the boundary gets close to zero points even when it matters: compare its held-out AUC before adopting it. Trained on at most 3,000 households, which already gives it its full accuracy on yes/no criteria.",
     nb = "Naive Bayes: each criterion's evidence combined as if independent given the outcome. Fast and stable on small samples; overlapping criteria are over-counted. Points are average marginal effects on the log-odds scale.",
     nnet = "Neural network (one hidden layer of 5 units, weight decay). Can capture interactions between criteria; points are average marginal effects on the log-odds scale.",
     "")
@@ -187,18 +187,28 @@ ml_effects <- function(X, criteria, method, seed = 123, max_rows = 5000, params 
   m <- as.data.frame(lapply(X[, criteria, drop = FALSE], as.numeric))
   y <- X$.y; w <- X$.w
   set.seed(seed)
-  cap <- if (method == "svm") max_rows else 20000   # training sample cap, for large registries
+  # training sample cap, for large registries; an SVM's training time grows
+  # with the square of the rows and 3,000 already gives it its full AUC
+  cap <- if (method == "svm") min(max_rows, 3000) else 20000
+  if (method == "svm") max_rows <- min(max_rows, 2000)   # effects: a mean, 2,000 households estimate it well
   fit_rows <- if (nrow(m) > cap) sample.int(nrow(m), cap) else seq_len(nrow(m))
   predict_p <- ml_fit_predict(method, m[fit_rows, , drop = FALSE], y[fit_rows], w[fit_rows], params, seed)
   # Marginal effects on (at most) max_rows households keeps big data fast.
   eval_rows <- if (nrow(m) > max_rows) sample.int(nrow(m), max_rows) else seq_len(nrow(m))
   base <- m[eval_rows, , drop = FALSE]
   lo <- function(p) stats::qlogis(pmin(pmax(p, 1e-4), 1 - 1e-4))
-  out <- vapply(criteria, function(cl) {
-    a <- base; a[[cl]] <- 1
-    b <- base; b[[cl]] <- 0
-    mean(lo(predict_p(a)) - lo(predict_p(b)))
-  }, numeric(1))
+  # yes/no criteria repeat: score each distinct answer pattern once, and all
+  # the counterfactuals in one call (an SVM pays per call and per row)
+  a_all <- do.call(rbind, lapply(criteria, function(cl) { a <- base; a[[cl]] <- 1; a }))
+  b_all <- do.call(rbind, lapply(criteria, function(cl) { b <- base; b[[cl]] <- 0; b }))
+  both <- rbind(a_all, b_all)
+  key <- do.call(paste, c(both, sep = "
+"))
+  first <- !duplicated(key)
+  pr <- lo(predict_p(both[first, , drop = FALSE]))[match(key, key[first])]
+  n <- nrow(base); half <- nrow(a_all)
+  d <- pr[seq_len(half)] - pr[half + seq_len(half)]
+  out <- stats::setNames(vapply(seq_along(criteria), function(j) mean(d[(j - 1) * n + seq_len(n)]), numeric(1)), criteria)
   attr(out, "model") <- attr(predict_p, "model")
   out
 }
@@ -217,8 +227,9 @@ ml_fit_predict <- function(method, m, y, w, params = list(), seed = 123) {
     rf = {
       fit <- ranger::ranger(x = m, y = factor(y, levels = c(0, 1)), probability = TRUE,
                             num.trees = g("num.trees", 500), mtry = min(ncol(m), g("mtry", max(1, floor(sqrt(ncol(m)))))),
-                            min.node.size = g("min.node.size", 10), case.weights = w, seed = seed, num.threads = 1)
-      function(nd) stats::predict(fit, data = nd)$predictions[, "1"]
+                            min.node.size = g("min.node.size", 10), case.weights = w, seed = seed, num.threads = 1,
+                            importance = "impurity")
+      structure(function(nd) stats::predict(fit, data = nd)$predictions[, "1"], model = fit)
     },
     xgb = , stumps = {
       dm <- xgboost::xgb.DMatrix(as.matrix(m), label = y, weight = w)
@@ -226,13 +237,18 @@ ml_fit_predict <- function(method, m, y, w, params = list(), seed = 123) {
                                               max_depth = if (method == "stumps") 1 else g("max_depth", 3),
                                               eta = g("eta", 0.1), subsample = if (method == "stumps") 1 else 0.8),
                                 data = dm, nrounds = g("nrounds", if (method == "stumps") 300 else 200), verbose = 0)
-      function(nd) stats::predict(fit, xgboost::xgb.DMatrix(as.matrix(nd)))
+      structure(function(nd) stats::predict(fit, xgboost::xgb.DMatrix(as.matrix(nd))), model = fit)
     },
     svm = {
-      d <- m; d$.y <- factor(y, levels = c(0, 1))
-      fit <- e1071::svm(.y ~ ., data = d, kernel = "radial", probability = TRUE,
-                        cost = g("cost", 1), gamma = g("gamma", 1 / ncol(m)))
-      function(nd) attr(stats::predict(fit, nd, probability = TRUE), "probabilities")[, "1"]
+      # No probability = TRUE: libsvm would refit it 5 more times for its own
+      # Platt scaling. One logistic fit on the decision values does the same.
+      # Matrix interface: no model frame to build on every call.
+      fit <- e1071::svm(as.matrix(m), factor(y, levels = c(0, 1)), kernel = "radial", cost = g("cost", 1),
+                        gamma = g("gamma", 1 / ncol(m)), tolerance = 0.01, cachesize = 200)
+      dv <- function(nd) as.numeric(attr(stats::predict(fit, as.matrix(nd), decision.values = TRUE), "decision.values"))
+      cal <- stats::glm.fit(cbind(1, dv(m)), y, family = stats::quasibinomial())$coefficients
+      if (anyNA(cal)) cal <- c(0, 1)
+      function(nd) stats::plogis(cal[1] + cal[2] * dv(nd))
     },
     nb = {
       as_f <- function(dd) { dd[] <- lapply(dd, function(v) factor(v, levels = c(0, 1))); dd }
@@ -244,7 +260,7 @@ ml_fit_predict <- function(method, m, y, w, params = list(), seed = 123) {
       d <- m; d$.y <- factor(y, levels = c(0, 1))
       fit <- nnet::nnet(.y ~ ., data = d, weights = w, size = g("size", 5), decay = g("decay", 0.01),
                         maxit = 300, trace = FALSE)
-      function(nd) as.numeric(stats::predict(fit, nd, type = "raw"))
+      structure(function(nd) as.numeric(stats::predict(fit, nd, type = "raw")), model = fit)
     },
     tree = {
       d <- m; d$.y <- factor(y, levels = c(0, 1))
@@ -285,6 +301,7 @@ tune_ml <- function(X, criteria, method, folds = 5, seed = 123, max_rows = 5000)
   grid <- ml_grid(method, length(criteria)); if (is.null(grid)) return(NULL)
   m <- as.data.frame(lapply(X[, criteria, drop = FALSE], as.numeric)); y <- X$.y; w <- X$.w
   set.seed(seed)
+  if (method == "svm") max_rows <- min(max_rows, 2000)   # folds x grid fits: keep each one small
   if (nrow(m) > max_rows) { k <- sample.int(nrow(m), max_rows); m <- m[k, , drop = FALSE]; y <- y[k]; w <- w[k] }
   folds <- max(2L, min(as.integer(folds), 10L))
   fold <- integer(length(y))
@@ -523,7 +540,7 @@ fit_scorecard_advanced <- function(df, outcome, criteria, outcome_positive = NUL
     criteria <- sel
   }
 
-  index <- NULL; tuning <- NULL; rules <- NULL
+  index <- NULL; tuning <- NULL; rules <- NULL; diagram <- NULL
   if (method %in% c("woe", "stumps", "rf", "xgb", "svm", "nb", "nnet", "tree", "pca", "lda")) {
     # hyperparameters: tuned by cross-validation on the training households
     if (isTRUE(tune) && method %in% tunable_models()) tuning <- tune_ml(X, criteria, method, folds = folds)
@@ -534,6 +551,7 @@ fit_scorecard_advanced <- function(df, outcome, criteria, outcome_positive = NUL
                    pca = , lda = { r <- index_effects(X, criteria, method, axes = pca_axes, min_var = pca_min_var); index <- r$diag; r$coef },
                    ml_effects(X, criteria, method, params = params))
     if (method == "tree" && !is.null(attr(coef, "model"))) rules <- tryCatch(tree_rules(attr(coef, "model")), error = function(e) NULL)
+    diagram <- model_diagram(method, attr(coef, "model"))
     attr(coef, "model") <- NULL
     # An index's weights are its own coefficients (odds ratios mean nothing here).
     if (method %in% c("pca", "lda")) scheme <- "coefficient"
@@ -549,7 +567,7 @@ fit_scorecard_advanced <- function(df, outcome, criteria, outcome_positive = NUL
     rownames(out) <- NULL
     return(list(weights = round5(out), dropped = c(step_dropped, setdiff(criteria, kept)), model = NULL, filled = filled[filled > 0],
                 n = nrow(X), converged = TRUE, method = method, scheme = scheme, stepwise = stepwise, stepwise_dir = stepwise_dir,
-                index = index, tuning = tuning, tree_rules = rules))
+                index = index, tuning = tuning, tree_rules = rules, diagram = diagram))
   }
 
   converged <- TRUE
@@ -594,7 +612,8 @@ fit_scorecard_advanced <- function(df, outcome, criteria, outcome_positive = NUL
 
   list(weights = round5(out), dropped = dropped, model = model, n = nrow(X), filled = filled[filled > 0],
        converged = converged && isTRUE(model$converged),
-       method = method, scheme = scheme, stepwise = stepwise, stepwise_dir = stepwise_dir)
+       method = method, scheme = scheme, stepwise = stepwise, stepwise_dir = stepwise_dir,
+       diagram = model_diagram("logit", weights = out))
 }
 
 #' Benchmark the scorecard against models that cannot be written as one
