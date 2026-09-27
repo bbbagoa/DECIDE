@@ -81,6 +81,7 @@ write_selection_report <- function(file, x, lang = "en") {
         "@@FIG:map@@", "")
   }
 
+  if (length(x$variables_md)) add(x$variables_md)
   add("## Notes", "")
   for (nm in intersect("Notes", names(sec))) add(kv(sec[[nm]]), "")
   if ("Variable mapping" %in% names(sec)) add("### Variable mapping", "", kv(sec[["Variable mapping"]]), "")

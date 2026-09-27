@@ -61,6 +61,7 @@ Suggests:
     gitcreds,
     nnet,
     ranger,
+    rpart,
     testthat (>= 3.0.0),
     xgboost
 Config/testthat/edition: 3

@@ -117,28 +117,57 @@ bg_run <- function(label, job, args, on_done, on_error = function(msg) NULL,
 }
 
 #' Targeting Design fit, run in the worker: the model, every model per
-#' variable, and the benchmarks (the slow part of Run the model)
+#' variable, and their comparison (AUC, ROC) from those same fits
 #' @param a list(df, outcome_col, keep, outcome_pos, method, stepwise,
-#'   stepwise_dir, scheme, sp, weights, compare, benchmarks, seed)
+#'   stepwise_dir, scheme, sp, weights, compare, seed)
 #' @noRd
 design_fit_job <- function(a) {
+  # without an outcome: a ranking, nothing to compare per variable
+  if (isTRUE(a$unsupervised)) {
+    # the number of profiles chosen by silhouette when asked
+    kq <- NULL
+    if (isTRUE(a$auto_k) && a$method %in% cluster_methods()) {
+      kq <- profile_quality(a$df, a$keep, a$method, weights = a$weights, seed = a$seed %||% 123)
+      if (!is.null(kq) && any(is.finite(kq$silhouette))) a$k <- kq$k[which.max(kq$silhouette)]
+    }
+    out <- fit_unsupervised(a$df, a$keep, a$method, a$anchor, a$weights, a$k, a$pca_axes, a$pca_min_var,
+                            target = a$target, seed = a$seed %||% 123)
+    if (!is.null(kq)) out$index$k_quality <- kq
+    return(list(out = out, effects = NULL, bench = NULL))
+  }
   out <- fit_scorecard_advanced(a$df, a$outcome_col, a$keep,
                                 outcome_positive = a$outcome_pos, method = a$method,
                                 stepwise = a$stepwise, stepwise_dir = a$stepwise_dir,
-                                scheme = a$scheme, rows = a$sp$train, weights = a$weights)
+                                scheme = a$scheme, rows = a$sp$train, weights = a$weights,
+                                pca_axes = a$pca_axes %||% 1, pca_min_var = a$pca_min_var,
+                                tune = isTRUE(a$tune), folds = a$folds %||% 5)
   eff <- tryCatch(model_effects(a$df, a$outcome_col, a$keep, a$outcome_pos,
                                 rows = a$sp$train, weights = a$weights,
                                 methods = unique(c(out$method, a$compare))),
                   error = function(e) NULL)
-  bench <- NULL
-  if (isTRUE(a$benchmarks)) {
-    bench <- tryCatch(benchmark_models(a$df, a$outcome_col, a$keep, a$outcome_pos, a$sp,
-                                       scorecard_score = apply_scorecard(a$df, build_scorecard(out$weights))$score,
-                                       seed = a$seed),
-                      error = function(e) list(error = conditionMessage(e)))
-  }
+  # The comparison uses the fits made for the per-variable table, then those
+  # fits (model objects, possibly large) stay in the worker.
+  fits <- attr(eff, "fits")
+  if (!is.null(eff)) attr(eff, "fits") <- NULL
+  bench <- if (length(fits)) tryCatch(
+    compare_models_auc(a$df, a$outcome_col, a$outcome_pos, a$sp, fits,
+                       scorecard_score = apply_scorecard(a$df, build_scorecard(out$weights))$score),
+    error = function(e) list(error = conditionMessage(e)))
   list(out = out, effects = eff, bench = bench)
 }
+
+#' Stability of a ranking without an outcome, run in the worker
+#' @param a list(df, criteria, method, share, anchor, weights, k, pca_axes, pca_min_var)
+#' @noRd
+stability_job <- function(a) {
+  selection_stability(a$df, a$criteria, a$method, a$share, anchor = a$anchor, weights = a$weights, k = a$k,
+                      pca_axes = a$pca_axes %||% 1, pca_min_var = a$pca_min_var)
+}
+
+#' Profile quality for 2 to 8 profiles, run in the worker
+#' @param a list(df, criteria, method, weights, seed)
+#' @noRd
+profile_quality_job <- function(a) profile_quality(a$df, a$criteria, a$method, weights = a$weights, seed = a$seed %||% 123)
 
 #' File import, run in the worker (reading, encoding, multiple-choice split)
 #' @param a list(path, ext)

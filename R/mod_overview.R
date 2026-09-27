@@ -768,7 +768,7 @@ mod_overview_server <- function(id, uploaded_df, user_setup) {
       labels = counts$value,
       values = counts$n,
       type = 'pie',
-      hole = 0.85,
+      hole = 0.8,
       marker = list(colors = c("#0A6EB4", "#f7b825", "#6c757d")), # WFP blue / amber / grey (Other)
       textinfo = 'none',
       hoverinfo = 'label+percent'

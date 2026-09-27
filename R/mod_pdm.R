@@ -113,6 +113,11 @@ mod_pdm_ui <- function(id, explore = NULL) {
         value = "details", title = tagList(bsicons::bs_icon("table"), " Details by group and area"),
         uiOutput(ns("pdm_details"))
       ),
+      # A ranking adopted without an outcome gets its errors measured here.
+      bslib::nav_panel(
+        value = "calibrate", title = tagList(bsicons::bs_icon("sliders"), " Calibrate the ranking"),
+        tags$div(class = "mt-3", uiOutput(ns("calib_ui")))
+      ),
       if (!is.null(explore)) bslib::nav_panel(
         value = "explore", title = tagList(bsicons::bs_icon("bar-chart"), " Explore the data"),
         tags$div(class = "mt-3", explore)
@@ -193,7 +198,7 @@ mod_pdm_server <- function(id, workspace = NULL, country_office = reactive(NULL)
         return(tags$div(class = "small text-danger mb-2", bsicons::bs_icon("exclamation-triangle"), " ",
                         sprintf("This column has %d different answers; choose one with exactly two (received / not received).", length(lv))))
       sel <- isolate(input$pdm_benef_level)
-      radioButtons(ns("pdm_benef_level"), "Answer meaning 'received assistance'", choices = lv, inline = TRUE,
+      radioButtons(ns("pdm_benef_level"), "Answer meaning 'received assistance'", choices = value_choices(lv, input$pdm_beneficiary), inline = TRUE,
                    selected = if (isTRUE(sel %in% lv)) sel else guess_positive_answer(lv))
     })
     # TRUE = received, FALSE = not, NA = not answered; NULL when the column
@@ -507,6 +512,78 @@ mod_pdm_server <- function(id, workspace = NULL, country_office = reactive(NULL)
     })
 
     # --- Render -----------------------------------------------------------
+    # --- Calibrating a vulnerability ranking ----------------------------------
+    # The adopted ranking was built without an outcome indicator; PDM (or
+    # verification) data that carry one measure its errors for the first time.
+    calib <- reactiveVal(NULL)
+    output$calib_ui <- renderUI({
+      sc <- if (is.null(user_setup)) NULL else user_setup$scorecard
+      if (scorecard_is_empty(sc) || !is_ranking(sc))
+        return(empty_state("No vulnerability ranking adopted",
+                           "This tab measures the errors of a ranking built without an outcome indicator (Targeting Design, 'No outcome indicator'). A scorecard built on an outcome already has its design errors.",
+                           icon = "sliders"))
+      df <- pdm_df()
+      if (is.null(df)) return(empty_state("Load PDM or verification data", "Data with a food-security outcome and the ranking's criteria.", icon = "upload"))
+      miss <- pdm_scorecard_eligibility(df, sc)$missing
+      cols <- names(df)[vapply(df, function(v) { k <- length(unique(stats::na.omit(v))); k >= 2 && k <= 12 }, logical(1))]
+      tagList(
+        tags$p(class = "small text-muted",
+               "The adopted ranking was built without an outcome, so its inclusion and exclusion errors were unknown. Choose the food-security outcome",
+               " these data carry (CARI, FCS or rCSI class...) and the level that means vulnerable: the ranking is applied to these households and its errors,",
+               " its AUC and the threshold that keeps both errors lowest are measured."),
+        if (length(miss)) tags$div(class = "alert alert-warning small", sprintf("These data lack %d of the ranking's criteria (%s): they cannot be scored.",
+                                                                               length(miss), paste(utils::head(miss, 5), collapse = ", "))),
+        bslib::layout_columns(
+          col_widths = c(5, 4, 3), fill = FALSE,
+          selectizeInput(ns("calib_outcome"), "Outcome in these data", choices = c("Choose a column" = "", cols), width = "100%"),
+          selectInput(ns("calib_pos"), "Level meaning vulnerable", choices = NULL, width = "100%"),
+          tags$div(class = "wfp-inline-action", tags$label(class = "form-label", "\u00a0"),
+                   actionButton(ns("calib_run"), "Measure the errors", icon = icon("play"), class = "btn-primary w-100"))),
+        uiOutput(ns("calib_result")))
+    })
+    observeEvent(input$calib_outcome, {
+      df <- pdm_df(); req(df, shiny::isTruthy(input$calib_outcome), input$calib_outcome %in% names(df))
+      lv <- outcome_levels(df[[input$calib_outcome]])
+      updateSelectInput(session, "calib_pos", choices = lv, selected = guess_positive_level(lv))
+    })
+    observeEvent(input$calib_run, {
+      sc <- user_setup$scorecard; df <- pdm_df()
+      need_ok(!scorecard_is_empty(sc) && !is.null(df) && shiny::isTruthy(input$calib_outcome), "Choose the outcome column first.")
+      r <- pdm_scorecard_eligibility(df, sc)
+      need_ok(!length(r$missing), sprintf("These data lack the criteria %s.", paste(r$missing, collapse = ", ")))
+      y <- as_binary_outcome(df[[input$calib_outcome]], input$calib_pos)
+      res <- tryCatch(ranking_calibration(r$score, y, sc$threshold %||% 0), error = function(e) e)
+      need_ok(!inherits(res, "error"), if (inherits(res, "error")) conditionMessage(res) else "")
+      calib(c(res, list(outcome = input$calib_outcome, pos = input$calib_pos, threshold = sc$threshold %||% 0)))
+      audit_add(modification_log, "Monitoring", "Ranking calibrated",
+                sprintf("On %s households, outcome %s = %s: inclusion error %.1f%%, exclusion error %.1f%%, AUC %.3f",
+                        format(res$n, big.mark = ","), input$calib_outcome, input$calib_pos,
+                        100 * res$current$inclusion_error, 100 * res$current$exclusion_error, res$auc))
+    })
+    output$calib_result <- renderUI({
+      c0 <- calib(); req(c0)
+      e <- c0$current; b <- c0$balanced
+      pct <- function(v) if (is.na(v)) "n/a" else sprintf("%.1f%%", 100 * v)
+      tagList(
+        bslib::layout_columns(
+          col_widths = c(3, 3, 3, 3), fill = FALSE, class = "wfp-kpi-flat mt-2",
+          bslib::value_box(title = "AUC of the ranking", value = if (is.na(c0$auc)) "n/a" else sprintf("%.3f", c0$auc),
+                           showcase = bsicons::bs_icon("graph-up"), theme = "primary"),
+          bslib::value_box(title = "Inclusion error (adopted threshold)", value = pct(e$inclusion_error),
+                           showcase = bsicons::bs_icon("person-plus"), theme = "warning"),
+          bslib::value_box(title = "Exclusion error (adopted threshold)", value = pct(e$exclusion_error),
+                           showcase = bsicons::bs_icon("person-dash"), theme = "danger"),
+          bslib::value_box(title = "Households measured", value = format(c0$n, big.mark = ","),
+                           showcase = bsicons::bs_icon("people"), theme = "info")),
+        tags$div(class = "small mt-2",
+                 if (is.na(b$threshold)) "No threshold does better than selecting everyone on these data."
+                 else sprintf("The threshold that keeps both errors lowest on these data is %s (inclusion %s, exclusion %s), against %s adopted. Re-adopt the ranking in Targeting Design with it if the data are representative.",
+                              fmt5(b$threshold), pct(b$inclusion_error), pct(b$exclusion_error), fmt5(c0$threshold))),
+        tags$div(class = "small text-muted mt-1",
+                 sprintf("Outcome: %s = %s. An AUC near 0.5 means the ranking does not order households by this outcome: revisit the criteria or the method.",
+                         c0$outcome, c0$pos)))
+    })
+
     output$has_data <- reactive(!is.null(pdm_all()))
     outputOptions(output, "has_data", suspendWhenHidden = FALSE)
 

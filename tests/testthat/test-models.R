@@ -170,7 +170,8 @@ test_that("variable-selection profile, correlation and per-model effects line up
   expect_gt(cm["a", "b"], 0.7)
   expect_match(as.character(TargetWise:::correlation_html(cm, 0.7)), "is-high")
   eff <- TargetWise:::model_effects(df, "y", c("a", "cc"), "Food insecure")
-  expect_equal(length(unique(eff$model)), length(TargetWise:::scorecard_model_choices()))
+  # every model but the indices (PCA, LDA), whose weights are not log-odds effects
+  expect_equal(length(unique(eff$model)), sum(!TargetWise:::scorecard_model_choices() %in% c("pca", "lda")))
   expect_true(all(eff$effect[eff$criterion == "a"] > 0, na.rm = TRUE))
   expect_match(as.character(TargetWise:::effects_html(eff)), "wfp-eff-neg")
 })

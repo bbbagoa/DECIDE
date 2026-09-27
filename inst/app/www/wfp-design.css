@@ -27,3 +27,9 @@
 .wfp-design-steps .wfp-model-table .wfp-col-text { min-width: 11rem; }
 .wfp-design-steps .wfp-review-table th { min-width: 6.5rem; text-align: center; }
 .wfp-design-steps .wfp-review-table th:first-child { min-width: 10rem; text-align: left; }
+
+/* The step bar's line: status on the left, the way on at the right. */
+.wfp-flow-slim .wfp-flow-next { gap: .5rem; }
+.wfp-flow-slim .wfp-flow-status { min-width: 0; }
+.wfp-flow-slim .wfp-flow-earlier .btn-link { font-size: inherit; text-decoration: underline; }
+.wfp-flow-slim .wfp-flow-step { cursor: pointer; }

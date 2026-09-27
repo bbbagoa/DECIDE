@@ -309,6 +309,11 @@ write_csv_utf8 <- function(df, file) {
 #' Excel's Unprotect Sheet opens them, which still stops accidental edits.
 #' @noRd
 save_workbook_readonly <- function(wb, file) {
+  # The labelled columns this workbook shows, with their labels (Variables sheet).
+  strs <- tryCatch(gsub("^.*?<t[^>]*>|</t>.*$", "", unlist(wb$sharedStrings)), error = function(e) character(0))
+  reg <- label_registry()
+  known <- unique(strs[strs %in% c(names(reg$labels), names(reg$codes))])
+  if (length(known)) xl_variables_sheet(wb, known)
   pw <- tw_env("EXPORT_PASSWORD", "")
   pw <- if (nzchar(pw)) pw else NULL
   for (sh in names(wb)) {

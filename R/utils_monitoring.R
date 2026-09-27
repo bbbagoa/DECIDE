@@ -365,6 +365,7 @@ write_monitoring_report <- function(file, x, lang = "en") {
   section(4, "Targeting process", "process", "No targeting-process chart was added.")
   section(5, sprintf("Insights from the %s data", kind), "pdm", sprintf("No %s chart was added.", kind))
 
+  if (length(x$variables_md)) add(x$variables_md)
   add("## 6. Recommendations", "", quote_block(x$recommendations), "",
       "## 7. Method", "",
       paste(sprintf("**Implementation errors** are measured on the %s sample.", kind), "Eligibility is re-established for each surveyed household",

@@ -389,7 +389,9 @@ mod_monitoring_server <- function(id, workspace = NULL, country_office = reactiv
         write_monitoring_report(file, list(country_office = country_office(), context = input$context,
                                            findings = input$findings, recommendations = input$recommendations,
                                            pdm = p, items = items(), kind = pdm$kind(),
-                                           previous = previous_rounds(), area_points = pts),
+                                           previous = previous_rounds(), area_points = pts,
+                                           variables_md = variables_md(unlist(lapply(items(), function(it)
+                                             c(it$spec$x, it$spec$group, it$spec$value, it$spec$date, it$spec$den))), session)),
                                 lang = if (identical(lang, "fr")) "fr" else "en")
         audit_add(modification_log, "Monitoring", "Monitoring report exported",
                   sprintf("%d charts and tables%s", length(items()), if (is.null(p)) "" else ", with implementation errors"))

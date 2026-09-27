@@ -229,6 +229,7 @@ mod_dq_server <- function(id, uploaded_df, user_setup, modification_log, origina
       if (length(f$date) == 2) scope <- c(scope, paste("dates", paste(format(as.Date(f$date)), collapse = " to ")))
       x$scope <- if (length(scope)) paste(scope, collapse = "; ") else "All areas"
       x$country_office <- user_setup$country_office
+      x$variables_md <- variables_md(unlist(x$mapped), session)
       lang <- session$rootScope()$input$lang_selector
       tw_step("write the report", write_dq_report(file, x, lang = if (identical(lang, "fr")) "fr" else "en"))
       audit_add(modification_log, "Selection", "Data quality report exported", sprintf("%s records", format(nrow(df), big.mark = ",")))

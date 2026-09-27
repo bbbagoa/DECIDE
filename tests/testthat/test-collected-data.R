@@ -46,13 +46,13 @@ test_that("a MODA download comes out as plain columns: GPS, geolocation, multi-s
   expect_equal(tw("find_guess")(names(df), c("lat", "latitude")), "gps_latitude")
 
   # select_multiple: one Yes/No column per choice, next to the question
-  expect_equal(df$assets_radio, c("Yes", "No", NA)); expect_equal(df$assets_bike, c("Yes", "No", NA))
-  expect_equal(df$assets_phone, c("No", "No", NA)); expect_equal(df$assets_none, c("No", "Yes", NA))
-  expect_equal(df$assets, c("Radio; Bicycle", "None", NA))
+  expect_equal(as.character(df$assets_radio), c("Yes", "No", NA)); expect_equal(as.character(df$assets_bike), c("Yes", "No", NA))
+  expect_equal(as.character(df$assets_phone), c("No", "No", NA)); expect_equal(as.character(df$assets_none), c("No", "Yes", NA))
+  expect_equal(as.character(df$assets), c("Radio; Bicycle", "None", NA))
   i <- match("assets", names(df))
   expect_equal(names(df)[i + 1:4], c("assets_radio", "assets_bike", "assets_phone", "assets_none"))
   # select_one: labelled, not split
-  expect_equal(df$sex, c("Female", "Male", "Female"))
+  expect_equal(as.character(df$sex), c("Female", "Male", "Female"))
   expect_false("sex_f" %in% names(df))
 
   # repeat groups and attachments: how many entries

@@ -140,14 +140,22 @@ outcome_like_columns <- function(cols) {
 #' @return A named character vector: names are columns, values are reasons.
 #'   Columns that are fine do not appear.
 #' @noRd
-criterion_blockers <- function(df, cols, outcome) {
+criterion_blockers <- function(df, cols, outcome, strict = TRUE) {
   out <- character(0)
   for (cl in cols) {
     if (identical(cl, outcome)) {
       out[[cl]] <- "This is the outcome the scorecard predicts."
       next
     }
-    if (cl %in% outcome_like_columns(cl)) {
+    # names and identification variables are never criteria
+    if (is_identification_col(cl)) {
+      out[[cl]] <- "A name or identification variable: it identifies a household, it does not describe it."
+      next
+    }
+    # Without an outcome (strict = FALSE) outcome indicators and what a
+    # registration team cannot observe may rank households: after a shock
+    # they are often the best signal there is.
+    if (strict && cl %in% outcome_like_columns(cl)) {
       out[[cl]] <- paste(
         "Looks like a food-security outcome indicator. Outcome indicators",
         "measure the symptom of food insecurity, not intrinsic vulnerability,",
@@ -156,7 +164,7 @@ criterion_blockers <- function(df, cols, outcome) {
       )
       next
     }
-    why <- unobservable_reason(cl)
+    why <- if (strict) unobservable_reason(cl) else NA_character_
     if (!is.na(why)) {
       out[[cl]] <- sprintf(paste("Not observable at registration (%s): a registration team cannot see or verify it,",
                                  "so it is not a criterion, whatever its link with vulnerability."), why)
@@ -385,6 +393,41 @@ screen_criteria <- function(df, outcome, criteria, alpha = 0.05, adjust = "BH",
 #'
 #' @return A list with `keep` and `dropped` (named by the partner that beat it).
 #' @noRd
+#' Groups of criteria correlated at or above a cut-off
+#'
+#' Pairs with |r| >= `cutoff` are linked, and linked pairs form a group. The
+#' proposal comes from `drop_collinear()`: the members to remove so that no
+#' pair above the cut-off remains (one of each pair, the one overlapping most
+#' with the others).
+#' @return list(pairs = data.frame(group, a, b, r), groups = list of members,
+#'   drop = named character: removed -> the variable it repeats)
+#' @noRd
+correlated_groups <- function(df, criteria, cutoff = 0.8) {
+  none <- list(pairs = data.frame(group = integer(0), a = character(0), b = character(0), r = numeric(0),
+                                  stringsAsFactors = FALSE),
+               groups = list(), drop = character(0))
+  if (length(criteria) < 2) return(none)
+  cm <- criteria_cor(df, criteria)
+  hit <- which(!is.na(cm) & abs(cm) >= cutoff & upper.tri(cm), arr.ind = TRUE)
+  if (!nrow(hit)) return(none)
+  root <- seq_along(criteria)
+  find <- function(i) { while (root[i] != i) i <- root[i]; i }
+  for (k in seq_len(nrow(hit))) {
+    a <- find(hit[k, 1]); b <- find(hit[k, 2])
+    if (a != b) root[b] <- a
+  }
+  top <- vapply(seq_along(criteria), find, integer(1))
+  involved <- sort(unique(c(hit)))
+  gid <- match(top, unique(top[involved]))
+  pairs <- data.frame(group = gid[hit[, 1]], a = criteria[hit[, 1]], b = criteria[hit[, 2]], r = cm[hit],
+                      stringsAsFactors = FALSE)
+  pairs <- pairs[order(pairs$group, -abs(pairs$r)), , drop = FALSE]
+  rownames(pairs) <- NULL
+  groups <- lapply(sort(unique(gid[involved])), function(g) criteria[involved][gid[involved] == g])
+  drop <- drop_collinear(df, criteria, cutoff = cutoff)$dropped
+  list(pairs = pairs, groups = groups, drop = drop[names(drop) %in% criteria[involved]])
+}
+
 drop_collinear <- function(df, criteria, cutoff = 0.8) {
   if (length(criteria) < 2) return(list(keep = criteria, dropped = character(0)))
   m <- vapply(criteria, function(cl) as.numeric(as_binary_criterion(df[[cl]])),
@@ -531,7 +574,7 @@ scorecard_fingerprint <- function(sc) {
 #'   programmatic decision to be made on the ROC curve.
 #' @noRd
 build_scorecard <- function(weights, outcome = NA_character_,
-                            outcome_positive = NA_character_, threshold = 0) {
+                            outcome_positive = NA_character_, threshold = 0, kind = "scorecard") {
   items <- lapply(seq_len(nrow(weights)), function(i) {
     list(
       criterion = weights$criterion[i],
@@ -552,9 +595,10 @@ build_scorecard <- function(weights, outcome = NA_character_,
   # The OGN asks for scorecard weights to be revisited as new assessment
   # data arrives (every 2-3 years in stable contexts, annually in dynamic
   # ones), so the card records when it was designed.
+  # kind: "scorecard" (predicts an outcome) or "ranking" (no outcome indicator)
   list(outcome = outcome, outcome_positive = outcome_positive,
        threshold = as.numeric(threshold), items = items,
-       created = format(Sys.Date()))
+       created = format(Sys.Date()), kind = kind)
 }
 
 #' Months since a scorecard was designed, or NA when not recorded
@@ -587,6 +631,11 @@ apply_scorecard <- function(df, scorecard) {
   missing <- character(0)
   detail <- list()
   score <- rep(0, n)
+  # A vulnerability ranking counts the points of every criterion met in the
+  # vulnerable direction: an inclusion criterion met, an exclusion criterion
+  # NOT met. It orders households as the unfloored sum and never needs the
+  # floor, so a profile defined by what households lack still scores.
+  rk <- is_ranking(scorecard)
 
   for (it in scorecard$items) {
     # A crosswalk (see match_scorecard_columns()) points the criterion at a
@@ -604,7 +653,7 @@ apply_scorecard <- function(df, scorecard) {
     }
     x[is.na(x)] <- 0L     # an unmet criterion is not a met criterion
     pts <- x * as.numeric(it$weight)
-    if (identical(it$direction, "exclusion")) pts <- -pts
+    if (identical(it$direction, "exclusion")) pts <- if (rk) (1 - x) * as.numeric(it$weight) else -pts
     detail[[cl]] <- pts
     score <- score + pts
   }
@@ -748,6 +797,11 @@ balanced_threshold <- function(score, vulnerable) {
 #' @return A list with `level` ("good", "review", "redesign"), `interpretation`
 #'   and `action`.
 #' @noRd
+#' The default tolerance band of the design errors, in % (Advisory 2/2025);
+#' a design that changes it has to say why.
+#' @noRd
+TOL_DEFAULT <- c(5, 20)
+
 error_verdict <- function(inclusion_error, exclusion_error, lower = 0.05, upper = 0.20,
                           stage = c("design", "implementation")) {
   stage <- match.arg(stage)
@@ -1156,7 +1210,24 @@ scorecard_workbook <- function(scorecard, meta = list(), screening = NULL,
     ),
     stringsAsFactors = FALSE
   )
-  write_data(wb, "How to read", "Targeting scorecard", startRow = 1)
+  if (is_ranking(scorecard)) {
+    # a vulnerability ranking: no outcome, so no error, screening or ROC
+    guide <- data.frame(
+      Section = c("What this is", "Scorecard sheet", "How a score is built", "Registration column", "Design",
+                  "Validity", "Bands", "Reloading this file", "Measuring the errors"),
+      Explanation = c(
+        "A vulnerability ranking: household criteria and points that order households when no food-security outcome indicator was available. The threshold is a programmatic decision (caseload, budget).",
+        "One row per criterion with its points, from the ranking method (deprivation counting, PCA / MCA index or household profiles).",
+        "Add the points of every criterion the household meets in the vulnerable direction: an inclusion criterion it meets, or an exclusion criterion it does NOT meet.",
+        "Optional. The column in the REGISTRATION data that carries this criterion, when it is named differently there. Leave blank to use the criterion name.",
+        "The method, the anchor criterion, the threshold, and the validity figures that stand in for errors: stability of the selection, internal consistency, profile separation.",
+        "Inclusion and exclusion errors are not measured: there was no outcome. Report_tables holds the profiles and the share selected by area when available.",
+        "Quartiles and quintiles of the score among households that score above zero.",
+        "Load this file in Beneficiary Selection to rank a registration list. Only the Scorecard sheet is read; its column headers must not be renamed.",
+        "Apply it to a verification sample or PDM data with a food-security outcome (Monitoring, PDM) to measure the errors and recalibrate the threshold."),
+      stringsAsFactors = FALSE)
+  }
+  write_data(wb, "How to read", if (is_ranking(scorecard)) "Vulnerability ranking" else "Targeting scorecard", startRow = 1)
   openxlsx::addStyle(wb, "How to read", title, rows = 1, cols = 1)
   write_data(wb, "How to read", guide, startRow = 3, headerStyle = head_st)
   openxlsx::addStyle(wb, "How to read", lab_st, rows = 4:(3 + nrow(guide)), cols = 1, gridExpand = TRUE)
@@ -1330,4 +1401,26 @@ vulnerability_by_area <- function(area, y) {
   out <- out[order(-out$share, -out$households), , drop = FALSE]
   rownames(out) <- NULL
   out
+}
+
+#' Is this card a vulnerability ranking (built without an outcome indicator)?
+#' @noRd
+is_ranking <- function(sc) identical(sc$kind, "ranking") ||
+  (!is.null(sc$outcome) && isTRUE(grepl("^none", sc$outcome %||% "")))
+
+#' The word for a card: "ranking" or "scorecard"
+#' @noRd
+card_word <- function(sc) if (is_ranking(sc)) "vulnerability ranking" else "scorecard"
+
+#' A name or identification column (ids, keys, names, phone numbers, form
+#' metadata): never a criterion
+#' @noRd
+is_identification_col <- function(cl) {
+  n <- tolower(cl)
+  startsWith(n, "_") ||
+    grepl("(^|[_. ])(id|uuid|guid|key|instanceid|instance_id|record_id|hh_?id|household_?id|case_?id|unique_?id|ind_?id|nid|cin|national_?id|passport)($|[_. ])", n) ||
+    grepl("(^|[_. ])(name|names|nom|noms|prenom|surname|first_?name|last_?name|full_?name|respondent_?name|hhh_?name|head_?name)($|[_. ])", n) ||
+    grepl("(^|[_. ])(phone|telephone|tel|mobile|msisdn|gsm|contact_?number|phone_?number)($|[_. ])", n) ||
+    grepl("^(instanceid|deviceid|subscriberid|simserial|start|end|today|username|audit)$", n) ||
+    grepl("^(formhub|meta)([_./]|$)", n)
 }

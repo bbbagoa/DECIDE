@@ -42,8 +42,8 @@ read_import_file <- function(path, ext) {
   df <- tw_step(sprintf("read %.1f MB of .%s with %s", size / 1024^2, ext, reader), switch(ext,
     xlsx = as.data.frame(readxl::read_excel(path), stringsAsFactors = FALSE),
     xls  = as.data.frame(readxl::read_excel(path), stringsAsFactors = FALSE),
-    sav  = haven::as_factor(haven::read_sav(path)),
-    dta  = haven::as_factor(haven::read_dta(path)),
+    sav  = labelled_to_plain(haven::read_sav(path)),
+    dta  = labelled_to_plain(haven::read_dta(path)),
     # Read as bytes: a CSV saved by Excel on a French or Spanish Windows is
     # Windows-1252, not UTF-8; utf8_frame() below sorts out each value.
     csv  = data.table::fread(path, data.table = FALSE, encoding = "unknown",
@@ -57,6 +57,9 @@ read_import_file <- function(path, ext) {
   n <- ncol(df)
   df <- tw_step("split multiple-choice answers into Yes/No columns", split_multiselect(df))
   if (ncol(df) > n) waiter_log(sprintf("%s Yes/No columns added", format(ncol(df) - n, big.mark = ",")))
+  # Variable and value labels into the session's dictionary (a no-op in the
+  # background worker; the import's on_done registers them there).
+  register_labels(df)
   df
 }
 
@@ -127,7 +130,7 @@ mod_file_import_server <- function(id, display = FALSE){
       raw_df(NULL)
       bg_run(sprintf("Reading %s...", input$file_in$name), import_job,
              list(path = input$file_in$datapath, ext = ext),
-             on_done = function(df) raw_df(df),
+             on_done = function(df) { register_labels(df); raw_df(df) },
              on_error = function(msg) showNotification(paste("Could not read the file:", msg), type = "error", duration = 12))
     })
     raw_data <- reactive({

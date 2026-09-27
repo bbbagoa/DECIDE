@@ -45,7 +45,103 @@ scorecard_model_choices <- function() {
              "Support vector machine (machine learning)" = "svm")
   }
   if (requireNamespace("nnet", quietly = TRUE)) out <- c(out, "Neural network (machine learning)" = "nnet")
-  out
+  if (requireNamespace("rpart", quietly = TRUE)) out <- c(out, "Decision tree (machine learning)" = "tree")
+  # Composite indices: a weighted sum of the criteria from dimension reduction,
+  # not a prediction model. Base R, always available.
+  c(out, "Vulnerability index: principal component analysis (PCA)" = "pca",
+    "Vulnerability index: linear discriminant analysis (LDA)" = "lda")
+}
+
+#' A vulnerability index from dimension reduction
+#'
+#' PCA (unsupervised): the first principal component of the criteria's
+#' (survey-weighted) correlation matrix, the asset-index method of Filmer &
+#' Pritchett (2001). For yes/no criteria it gives the same first dimension as
+#' multiple correspondence analysis. The component has no sign of its own; it
+#' is turned so a higher index means more vulnerable (positive correlation
+#' with the outcome). LDA (supervised): Fisher's discriminant, the weights
+#' that best separate vulnerable from other households given how the criteria
+#' vary together.
+#'
+#' With `axes` > 1 the PCA index is the average of the first `axes`
+#' component scores, each turned towards vulnerability and weighted by the
+#' share of variation it explains (its eigenvalue).
+#'
+#' Either way the index is linear, sum_k w_k x_k plus a constant, so each
+#' criterion keeps one weight and the card stays additive. The weights are
+#' scaled so the largest is 10.
+#' @param X Model frame from fit_scorecard_advanced() (criteria, .y, .w).
+#' @param axes PCA: how many axes the index averages.
+#' @return list(coef = named weights, diag = diagnostics).
+#' @noRd
+index_effects <- function(X, criteria, method = c("pca", "lda"), axes = 1, min_var = NULL) {
+  method <- match.arg(method)
+  M <- as.matrix(X[criteria]); storage.mode(M) <- "double"
+  w <- X$.w / sum(X$.w)
+  y <- X$.y
+  p <- ncol(M)
+  scale10 <- function(v) { m <- max(abs(v)); if (!is.finite(m) || m == 0) v else 10 * v / m }
+  wcor <- function(a, b) { ma <- sum(w * a); mb <- sum(w * b)
+    sum(w * (a - ma) * (b - mb)) / sqrt(sum(w * (a - ma)^2) * sum(w * (b - mb)^2)) }
+  if (method == "pca") {
+    cw <- stats::cov.wt(M, wt = w, cor = TRUE)
+    R <- cw$cor
+    e <- eigen(R, symmetric = TRUE)
+    sdv <- sqrt(diag(cw$cov))
+    # Either a number of axes, or the fewest axes whose variation together
+    # reaches `min_var` (a share, 0-1).
+    cum <- cumsum(e$values) / sum(e$values)
+    k <- if (!is.null(min_var) && isTRUE(is.finite(min_var)))
+      max(1L, min(which(cum >= min_var - 1e-9)[1] %||% p, p))
+    else max(1L, min(as.integer(axes %||% 1L), p))
+    A <- e$vectors[, seq_len(k), drop = FALSE]
+    scores <- sweep(sweep(M, 2, cw$center), 2, sdv, "/") %*% A
+    # each axis turned so a higher coordinate means more vulnerable
+    sgn <- vapply(seq_len(k), function(j) { r <- wcor(scores[, j], y); if (is.finite(r) && r < 0) -1 else 1 }, numeric(1))
+    A <- sweep(A, 2, sgn, "*")
+    lam <- e$values[seq_len(k)]
+    axis_w <- lam / sum(lam)
+    a <- A[, 1]
+    coef <- stats::setNames(as.vector(A %*% axis_w) / sdv, criteria)
+    # Kaiser-Meyer-Olkin sampling adequacy and Bartlett's test of sphericity:
+    # do the criteria share enough variation to make one index of them?
+    Ri <- tryCatch(solve(R), error = function(e) NULL)
+    kmo <- NA_real_
+    if (!is.null(Ri)) {
+      P <- -Ri / sqrt(outer(diag(Ri), diag(Ri)))
+      off <- upper.tri(R)
+      kmo <- sum(R[off]^2) / (sum(R[off]^2) + sum(P[off]^2))
+    }
+    n <- nrow(M)
+    bart <- -(n - 1 - (2 * p + 5) / 6) * log(max(det(R), .Machine$double.xmin))
+    diag_out <- list(type = "pca", axes = k, share = sum(lam) / sum(e$values), min_var = min_var, cumulative = cum,
+                     axis_share = lam / sum(e$values), axis_weights = axis_w,
+                     kaiser = sum(e$values > 1), eigen = e$values, kmo = kmo,
+                     axis_loadings = matrix(sweep(A, 2, sqrt(lam), "*"), ncol = k, dimnames = list(criteria, paste("Axis", seq_len(k)))),
+                     # for the variable and household maps (first two axes, turned
+                     # towards vulnerability like the index)
+                     criteria = criteria, center = cw$center, sd = sdv,
+                     map_vectors = local({
+                       V <- e$vectors[, seq_len(min(2, p)), drop = FALSE]
+                       Sm <- sweep(sweep(M, 2, cw$center), 2, sdv, "/") %*% V
+                       sg <- vapply(seq_len(ncol(V)), function(j) { r <- wcor(Sm[, j], y); if (is.finite(r) && r < 0) -1 else 1 }, numeric(1))
+                       sweep(V, 2, sg, "*")
+                     }),
+                     bartlett_p = stats::pchisq(bart, p * (p - 1) / 2, lower.tail = FALSE),
+                     loadings = stats::setNames(a * sqrt(e$values[1]), criteria))
+  } else {
+    g1 <- y == 1
+    if (sum(g1) < 2 || sum(!g1) < 2) stop("LDA needs at least two households in each outcome group.", call. = FALSE)
+    wm <- function(rows) colSums(M[rows, , drop = FALSE] * w[rows]) / sum(w[rows])
+    wc <- function(rows) stats::cov.wt(M[rows, , drop = FALSE], wt = w[rows] / sum(w[rows]))$cov
+    m1 <- wm(g1); m0 <- wm(!g1)
+    S <- (sum(w[g1]) * wc(g1) + sum(w[!g1]) * wc(!g1)) / sum(w)
+    S <- S + diag(1e-6, p)                      # ridge: rare or overlapping criteria
+    b <- as.vector(solve(S, m1 - m0))
+    coef <- stats::setNames(b, criteria)
+    diag_out <- list(type = "lda", mahalanobis = as.numeric(t(m1 - m0) %*% b), criteria = criteria)
+  }
+  list(coef = scale10(coef), diag = diag_out)
 }
 
 #' What each model choice does, shown under the picker
@@ -87,62 +183,158 @@ woe_effects <- function(X, criteria) {
 #' turns any classifier into an additive card; how much of its accuracy the
 #' card keeps shows in the held-out AUC.
 #' @noRd
-ml_effects <- function(X, criteria, method, seed = 123, max_rows = 5000) {
+ml_effects <- function(X, criteria, method, seed = 123, max_rows = 5000, params = list()) {
   m <- as.data.frame(lapply(X[, criteria, drop = FALSE], as.numeric))
   y <- X$.y; w <- X$.w
   set.seed(seed)
   cap <- if (method == "svm") max_rows else 20000   # training sample cap, for large registries
   fit_rows <- if (nrow(m) > cap) sample.int(nrow(m), cap) else seq_len(nrow(m))
-  predict_p <- switch(method,
-    rf = {
-      fit <- ranger::ranger(x = m[fit_rows, , drop = FALSE], y = factor(y[fit_rows], levels = c(0, 1)),
-                            probability = TRUE, num.trees = 500, case.weights = w[fit_rows],
-                            seed = seed, num.threads = 1)
-      function(nd) stats::predict(fit, data = nd)$predictions[, "1"]
-    },
-    xgb = {
-      dm <- xgboost::xgb.DMatrix(as.matrix(m[fit_rows, , drop = FALSE]), label = y[fit_rows], weight = w[fit_rows])
-      fit <- xgboost::xgb.train(params = list(objective = "binary:logistic", max_depth = 3, eta = 0.1,
-                                              subsample = 0.8, nthread = 1),
-                                data = dm, nrounds = 200, verbose = 0)
-      function(nd) stats::predict(fit, xgboost::xgb.DMatrix(as.matrix(nd)))
-    },
-    svm = {
-      d <- m[fit_rows, , drop = FALSE]; d$.y <- factor(y[fit_rows], levels = c(0, 1))
-      fit <- e1071::svm(.y ~ ., data = d, kernel = "radial", probability = TRUE)
-      function(nd) attr(stats::predict(fit, nd, probability = TRUE), "probabilities")[, "1"]
-    },
-    nb = {
-      as_f <- function(dd) { dd[] <- lapply(dd, function(v) factor(v, levels = c(0, 1))); dd }
-      d <- as_f(m[fit_rows, , drop = FALSE]); d$.y <- factor(y[fit_rows], levels = c(0, 1))
-      fit <- e1071::naiveBayes(.y ~ ., data = d, laplace = 1)
-      function(nd) stats::predict(fit, as_f(nd), type = "raw")[, "1"]
-    },
-    nnet = {
-      d <- m[fit_rows, , drop = FALSE]; d$.y <- factor(y[fit_rows], levels = c(0, 1))
-      fit <- nnet::nnet(.y ~ ., data = d, weights = w[fit_rows], size = 5, decay = 0.01,
-                        maxit = 300, trace = FALSE)
-      function(nd) as.numeric(stats::predict(fit, nd, type = "raw"))
-    },
-    stop("Unknown model: ", method, call. = FALSE))
+  predict_p <- ml_fit_predict(method, m[fit_rows, , drop = FALSE], y[fit_rows], w[fit_rows], params, seed)
   # Marginal effects on (at most) max_rows households keeps big data fast.
   eval_rows <- if (nrow(m) > max_rows) sample.int(nrow(m), max_rows) else seq_len(nrow(m))
   base <- m[eval_rows, , drop = FALSE]
   lo <- function(p) stats::qlogis(pmin(pmax(p, 1e-4), 1 - 1e-4))
-  vapply(criteria, function(cl) {
+  out <- vapply(criteria, function(cl) {
     a <- base; a[[cl]] <- 1
     b <- base; b[[cl]] <- 0
     mean(lo(predict_p(a)) - lo(predict_p(b)))
   }, numeric(1))
+  attr(out, "model") <- attr(predict_p, "model")
+  out
 }
 
-stump_effects <- function(X, criteria, seed = 123) {
+#' Train one machine-learning model and return its prediction function
+#'
+#' Shared by the fit and by cross-validation. `params` overrides the
+#' defaults (the tuned values); the fitted model rides along as the "model"
+#' attribute (the decision tree's rules are read from it).
+#' @param m data.frame of 0/1 criteria; y 0/1; w case weights.
+#' @noRd
+ml_fit_predict <- function(method, m, y, w, params = list(), seed = 123) {
+  g <- function(k, def) params[[k]] %||% def
+  set.seed(seed)
+  pf <- switch(method,
+    rf = {
+      fit <- ranger::ranger(x = m, y = factor(y, levels = c(0, 1)), probability = TRUE,
+                            num.trees = g("num.trees", 500), mtry = min(ncol(m), g("mtry", max(1, floor(sqrt(ncol(m)))))),
+                            min.node.size = g("min.node.size", 10), case.weights = w, seed = seed, num.threads = 1)
+      function(nd) stats::predict(fit, data = nd)$predictions[, "1"]
+    },
+    xgb = , stumps = {
+      dm <- xgboost::xgb.DMatrix(as.matrix(m), label = y, weight = w)
+      fit <- xgboost::xgb.train(params = list(objective = "binary:logistic", nthread = 1,
+                                              max_depth = if (method == "stumps") 1 else g("max_depth", 3),
+                                              eta = g("eta", 0.1), subsample = if (method == "stumps") 1 else 0.8),
+                                data = dm, nrounds = g("nrounds", if (method == "stumps") 300 else 200), verbose = 0)
+      function(nd) stats::predict(fit, xgboost::xgb.DMatrix(as.matrix(nd)))
+    },
+    svm = {
+      d <- m; d$.y <- factor(y, levels = c(0, 1))
+      fit <- e1071::svm(.y ~ ., data = d, kernel = "radial", probability = TRUE,
+                        cost = g("cost", 1), gamma = g("gamma", 1 / ncol(m)))
+      function(nd) attr(stats::predict(fit, nd, probability = TRUE), "probabilities")[, "1"]
+    },
+    nb = {
+      as_f <- function(dd) { dd[] <- lapply(dd, function(v) factor(v, levels = c(0, 1))); dd }
+      d <- as_f(m); d$.y <- factor(y, levels = c(0, 1))
+      fit <- e1071::naiveBayes(.y ~ ., data = d, laplace = g("laplace", 1))
+      function(nd) stats::predict(fit, as_f(nd), type = "raw")[, "1"]
+    },
+    nnet = {
+      d <- m; d$.y <- factor(y, levels = c(0, 1))
+      fit <- nnet::nnet(.y ~ ., data = d, weights = w, size = g("size", 5), decay = g("decay", 0.01),
+                        maxit = 300, trace = FALSE)
+      function(nd) as.numeric(stats::predict(fit, nd, type = "raw"))
+    },
+    tree = {
+      d <- m; d$.y <- factor(y, levels = c(0, 1))
+      fit <- rpart::rpart(.y ~ ., data = d, weights = w, method = "class",
+                          control = rpart::rpart.control(cp = g("cp", 0.01), maxdepth = g("maxdepth", 4),
+                                                         minbucket = g("minbucket", max(5, round(nrow(m) / 100))), xval = 0))
+      structure(function(nd) stats::predict(fit, nd, type = "prob")[, "1"], model = fit)
+    },
+    stop("Unknown model: ", method, call. = FALSE))
+  pf
+}
+
+#' The grid tried when a model is tuned by cross-validation (NULL: nothing to tune)
+#' @noRd
+ml_grid <- function(method, p) {
+  switch(method,
+    tree = expand.grid(cp = c(0.001, 0.005, 0.01, 0.02), maxdepth = c(3, 4, 6)),
+    rf = expand.grid(mtry = unique(pmax(1, round(c(sqrt(p), p / 3, p / 2)))), min.node.size = c(5, 20, 50), num.trees = 200),
+    xgb = expand.grid(max_depth = c(2, 3, 4), eta = c(0.05, 0.1, 0.3), nrounds = c(100, 200)),
+    stumps = expand.grid(eta = c(0.05, 0.1, 0.3), nrounds = c(100, 300)),
+    svm = expand.grid(cost = c(0.5, 1, 4), gamma = c(0.5, 1, 2) / p),
+    nnet = expand.grid(size = c(2, 5, 8), decay = c(0.001, 0.01, 0.1)),
+    nb = expand.grid(laplace = c(0, 1, 2)),
+    NULL)
+}
+tunable_models <- function() c("tree", "rf", "xgb", "stumps", "svm", "nnet", "nb")
+
+#' Tune a model's hyperparameters by k-fold cross-validation
+#'
+#' Folds are stratified on the outcome and drawn from the training households
+#' only (at most `max_rows` of them); each setting of the grid is fitted on
+#' k-1 folds and scored on the one left out, and the setting with the best
+#' cross-validated AUC (pooled over the folds) is kept.
+#' @return list(best = named list of parameters, table = the grid with its
+#'   AUC, folds, n) or NULL when the model has nothing to tune.
+#' @noRd
+tune_ml <- function(X, criteria, method, folds = 5, seed = 123, max_rows = 5000) {
+  grid <- ml_grid(method, length(criteria)); if (is.null(grid)) return(NULL)
+  m <- as.data.frame(lapply(X[, criteria, drop = FALSE], as.numeric)); y <- X$.y; w <- X$.w
+  set.seed(seed)
+  if (nrow(m) > max_rows) { k <- sample.int(nrow(m), max_rows); m <- m[k, , drop = FALSE]; y <- y[k]; w <- w[k] }
+  folds <- max(2L, min(as.integer(folds), 10L))
+  fold <- integer(length(y))
+  for (lv in unique(y)) { i <- which(y == lv); fold[i] <- sample(rep_len(seq_len(folds), length(i))) }
+  auc <- vapply(seq_len(nrow(grid)), function(g) {
+    pr <- rep(NA_real_, length(y))
+    for (f in seq_len(folds)) {
+      tr <- fold != f
+      pf <- tryCatch(ml_fit_predict(method, m[tr, , drop = FALSE], y[tr], w[tr], as.list(grid[g, , drop = FALSE]), seed),
+                     error = function(e) NULL)
+      if (!is.null(pf)) pr[!tr] <- tryCatch(pf(m[!tr, , drop = FALSE]), error = function(e) NA_real_)
+    }
+    ok <- !is.na(pr); if (sum(ok) < 10) return(NA_real_)
+    roc_curve(pr[ok], y[ok])$auc
+  }, numeric(1))
+  tab <- cbind(grid, cv_auc = round(auc, 4))
+  best <- which.max(auc)
+  if (!length(best)) return(NULL)
+  list(best = as.list(grid[best, , drop = FALSE]), table = tab[order(-tab$cv_auc), , drop = FALSE], folds = folds, n = length(y),
+       best_auc = auc[best])
+}
+
+#' The decision tree's leaves as readable rules
+#' @return data.frame(rule, households, share_vulnerable), most vulnerable first
+#' @noRd
+tree_rules <- function(fit) {
+  fr <- fit$frame
+  leaves <- as.integer(rownames(fr)[fr$var == "<leaf>"])
+  if (!length(leaves)) return(NULL)
+  paths <- rpart::path.rpart(fit, nodes = leaves, print.it = FALSE)
+  words <- vapply(paths, function(pth) {
+    pth <- pth[-1]                                         # "root"
+    if (!length(pth)) return("All households")
+    pth <- sub("^(.*)>=0\\.5$", "\\1 = yes", pth)
+    pth <- sub("^(.*)< 0\\.5$", "\\1 = no", pth)
+    paste(pth, collapse = " and ")
+  }, character(1))
+  lf <- fr[fr$var == "<leaf>", , drop = FALSE]
+  prob <- lf$yval2[, ncol(lf$yval2) - 1]                  # probability of the second class (vulnerable)
+  out <- data.frame(rule = unname(words), households = lf$n, share_vulnerable = round(prob, 4), stringsAsFactors = FALSE)
+  out[order(-out$share_vulnerable), , drop = FALSE]
+}
+
+stump_effects <- function(X, criteria, seed = 123, params = list()) {
   m <- as.matrix(X[, criteria, drop = FALSE])
   set.seed(seed)
   dm <- xgboost::xgb.DMatrix(m, label = X$.y, weight = X$.w)
   fit <- xgboost::xgb.train(
-    params = list(objective = "binary:logistic", max_depth = 1, eta = 0.1, nthread = 1),
-    data = dm, nrounds = 300, verbose = 0)
+    params = list(objective = "binary:logistic", max_depth = 1, eta = params$eta %||% 0.1, nthread = 1),
+    data = dm, nrounds = params$nrounds %||% 300, verbose = 0)
   # One split per tree: the model is a sum of per-criterion functions, so the
   # contribution of a criterion depends on that criterion alone. Its effect is
   # the contribution when met minus when not met.
@@ -165,6 +357,34 @@ scorecard_scheme_choices <- function() {
 
 #' A one-line explanation of each weighting scheme, shown under the picker
 #' @noRd
+#' The weighting scheme as people read it; an index (PCA, LDA) has its own
+#' weights, whatever scheme was picked.
+#' @noRd
+#' The criteria of an index as the model saw them: yes/no, missing = no
+#' @noRd
+#' Variation explained by each PCA axis of these criteria (preview before fitting)
+#' @return numeric: each axis's share (0-1), largest first; NULL under 2 criteria.
+#' @noRd
+pca_variance <- function(df, criteria, weights = NULL) {
+  if (length(criteria) < 2) return(NULL)
+  M <- index_matrix(df, criteria)
+  keep <- apply(M, 2, stats::sd) > 0
+  if (sum(keep) < 2) return(NULL)
+  w <- if (is.null(weights)) rep(1, nrow(M)) else { w <- as.numeric(weights); w[!is.finite(w) | w < 0] <- 0; w }
+  ev <- eigen(stats::cov.wt(M[, keep, drop = FALSE], wt = w / sum(w), cor = TRUE)$cor, symmetric = TRUE, only.values = TRUE)$values
+  pmax(ev, 0) / sum(pmax(ev, 0))
+}
+
+index_matrix <- function(df, criteria) {
+  M <- vapply(criteria, function(cl) { v <- as_binary_criterion(df[[cl]]); v[is.na(v)] <- 0; as.numeric(v) }, numeric(nrow(df)))
+  matrix(M, nrow = nrow(df), dimnames = list(NULL, criteria))
+}
+
+scheme_label <- function(scheme, method = NULL) {
+  if (isTRUE(method %in% c("pca", "lda"))) return("Index weights (largest = 10)")
+  names(scorecard_scheme_choices())[scorecard_scheme_choices() == scheme][1]
+}
+
 scorecard_scheme_note <- function(scheme) {
   switch(scheme,
     odds_ratio = "Each criterion is worth its odds ratio. This is the APP-FA reference method; note that an exclusion criterion with OR 0.24 subtracts only 0.24 points.",
@@ -247,7 +467,8 @@ scorecard_weights <- function(coef, scheme = "odds_ratio") {
 #' @noRd
 fit_scorecard_advanced <- function(df, outcome, criteria, outcome_positive = NULL,
                                    method = "logit", scheme = "odds_ratio",
-                                   rows = NULL, weights = NULL, stepwise = "none", stepwise_dir = "backward") {
+                                   rows = NULL, weights = NULL, stepwise = "none", stepwise_dir = "backward",
+                                   pca_axes = 1, pca_min_var = NULL, tune = FALSE, folds = 5) {
   # "stepwise" was once a model; it is now logistic with AIC selection.
   if (identical(method, "stepwise")) { method <- "logit"; if (identical(stepwise, "none")) stepwise <- "aic" }
   y <- as_binary_outcome(df[[outcome]], outcome_positive)
@@ -302,11 +523,20 @@ fit_scorecard_advanced <- function(df, outcome, criteria, outcome_positive = NUL
     criteria <- sel
   }
 
-  if (method %in% c("woe", "stumps", "rf", "xgb", "svm", "nb", "nnet")) {
+  index <- NULL; tuning <- NULL; rules <- NULL
+  if (method %in% c("woe", "stumps", "rf", "xgb", "svm", "nb", "nnet", "tree", "pca", "lda")) {
+    # hyperparameters: tuned by cross-validation on the training households
+    if (isTRUE(tune) && method %in% tunable_models()) tuning <- tune_ml(X, criteria, method, folds = folds)
+    params <- tuning$best %||% list()
     coef <- switch(method,
                    woe = woe_effects(X, criteria),
-                   stumps = stump_effects(X, criteria),
-                   ml_effects(X, criteria, method))
+                   stumps = stump_effects(X, criteria, params = params),
+                   pca = , lda = { r <- index_effects(X, criteria, method, axes = pca_axes, min_var = pca_min_var); index <- r$diag; r$coef },
+                   ml_effects(X, criteria, method, params = params))
+    if (method == "tree" && !is.null(attr(coef, "model"))) rules <- tryCatch(tree_rules(attr(coef, "model")), error = function(e) NULL)
+    attr(coef, "model") <- NULL
+    # An index's weights are its own coefficients (odds ratios mean nothing here).
+    if (method %in% c("pca", "lda")) scheme <- "coefficient"
     kept <- names(coef)[abs(coef) > 1e-6]
     if (length(kept) == 0) stop("The model gave every criterion a zero effect.", call. = FALSE)
     out <- data.frame(criterion = kept, coefficient = unname(coef[kept]),
@@ -318,7 +548,8 @@ fit_scorecard_advanced <- function(df, outcome, criteria, outcome_positive = NUL
     out <- out[order(-abs(out$coefficient)), , drop = FALSE]
     rownames(out) <- NULL
     return(list(weights = round5(out), dropped = c(step_dropped, setdiff(criteria, kept)), model = NULL, filled = filled[filled > 0],
-                n = nrow(X), converged = TRUE, method = method, scheme = scheme, stepwise = stepwise, stepwise_dir = stepwise_dir))
+                n = nrow(X), converged = TRUE, method = method, scheme = scheme, stepwise = stepwise, stepwise_dir = stepwise_dir,
+                index = index, tuning = tuning, tree_rules = rules))
   }
 
   converged <- TRUE
@@ -469,9 +700,13 @@ model_effects <- function(df, outcome, criteria, outcome_positive = NULL,
   ch <- scorecard_model_choices()
   # Only the models asked for: each one is a full fit.
   if (!is.null(methods)) ch <- ch[ch %in% methods]
+  # Index weights (PCA, LDA) are not log-odds effects: comparing them here
+  # would mislead, so the indices show their weights in their own table only.
+  ch <- ch[!ch %in% c("pca", "lda")]
   short <- c(logit = "Logistic", woe = "Weight of evidence",
              stumps = "Boosted stumps", rf = "Random forest", xgb = "XGBoost", svm = "SVM",
-             nb = "Naive Bayes", nnet = "Neural network")
+             nb = "Naive Bayes", nnet = "Neural network", tree = "Decision tree")
+  fits <- list()   # kept for compare_models_auc(), dropped before leaving the worker
   out <- lapply(names(ch), function(full) {
     lab <- short[[ch[[full]]]]
     f <- tryCatch(fit_scorecard_advanced(df, outcome, criteria, outcome_positive,
@@ -479,12 +714,49 @@ model_effects <- function(df, outcome, criteria, outcome_positive = NULL,
                                          rows = rows, weights = weights),
                   error = function(e) NULL)
     w <- if (is.null(f)) NULL else f$weights
+    fits[[lab]] <<- f
     data.frame(criterion = criteria, model = lab,
                effect = if (is.null(w)) NA_real_ else w$coefficient[match(criteria, w$criterion)],
                p_value = if (is.null(w)) NA_real_ else w$p_value[match(criteria, w$criterion)],
                stringsAsFactors = FALSE)
   })
-  round5(do.call(rbind, out))
+  res <- round5(do.call(rbind, out))
+  attr(res, "fits") <- fits
+  res
+}
+
+#' Model comparison from the models compared per variable
+#'
+#' Each model's score is the sum of its per-criterion effects (every model
+#' here is additive), so its AUC on the training and held-out households
+#' says how well it ranks them; the scorecard as built is the first row.
+#' Same shape as `benchmark_models()`: list(table, roc, importance).
+#' @param fits Named list of `fit_scorecard_advanced()` results (labels as names).
+#' @noRd
+compare_models_auc <- function(df, outcome, outcome_positive = NULL, split, fits, scorecard_score = NULL) {
+  y <- as_binary_outcome(df[[outcome]], outcome_positive)
+  tr <- split$train[!is.na(y[split$train])]
+  te <- split$test[!is.na(y[split$test])]
+  eval_rows <- if (length(te)) te else tr
+  auc_of <- function(s, rows) if (length(rows)) roc_curve(s[rows], y[rows])$auc else NA_real_
+  rows <- list(); curves <- list()
+  add <- function(name, k, s) {
+    rows[[length(rows) + 1]] <<- data.frame(model = name, criteria = k, auc_train = auc_of(s, tr),
+                                            auc_test = auc_of(s, te), stringsAsFactors = FALSE)
+    curves[[name]] <<- roc_curve(s[eval_rows], y[eval_rows])$curve
+  }
+  if (!is.null(scorecard_score)) add("Scorecard (as adopted)", NA_integer_, as.numeric(scorecard_score))
+  for (nm in names(fits)) {
+    w <- fits[[nm]]$weights
+    if (is.null(w) || !nrow(w)) next
+    eff <- if (!is.null(w$coefficient)) w$coefficient else w$weight
+    ok <- !is.na(eff) & w$criterion %in% names(df)
+    if (!any(ok)) next
+    X <- vapply(w$criterion[ok], function(cl) { v <- as_binary_criterion(df[[cl]]); v[is.na(v)] <- 0L; as.numeric(v) },
+                numeric(nrow(df)))
+    add(nm, sum(ok), as.numeric(matrix(X, nrow = nrow(df)) %*% eff[ok]))
+  }
+  list(table = if (length(rows)) round5(do.call(rbind, rows)) else data.frame(), roc = curves, importance = NULL)
 }
 
 #' What the stepwise option does, shown under the model settings

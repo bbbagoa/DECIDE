@@ -52,6 +52,11 @@ mod_session_manager_server <- function(
     kinds <- names(session_kinds())
     session_names <- reactiveValues(design = NULL, selection = NULL, monitoring = NULL)
     any_named <- function() any(vapply(kinds, function(k) !is.null(isolate(session_names[[k]])), logical(1)))
+    periodic <- reactiveVal(NULL)   # list(name, kinds, due) while the timed autosave is on
+    periodic_minutes <- function() {
+      m <- suppressWarnings(as.numeric(tw_env("AUTOSAVE_EVERY_MIN", "20")))
+      if (is.na(m) || m < 1) 20 else m
+    }
     default_name <- function() {
       nm <- unlist(lapply(kinds, function(k) isolate(session_names[[k]])))
       if (length(nm)) nm[1] else format(Sys.time(), "session_%Y-%m-%d_%Hh%M")
@@ -74,7 +79,7 @@ mod_session_manager_server <- function(
       save_session(
         uploaded_df = st$uploaded_df, user_setup = st$user_setup, modification_log = st$modification_log,
         theme = isolate(theme()), moda_credentials = st$moda_credentials, name = name, user = who,
-        workspace = st$workspace, original_df = st$original_df, kind = kind,
+        workspace = st$workspace, original_df = st$original_df, kind = kind, labels = label_registry(session),
         ui = if (identical(workstream_of_page(page$main_nav), kind)) page
       )
       assign(kind, workstream_signature(st), envir = sigs)
@@ -134,9 +139,18 @@ mod_session_manager_server <- function(
       if (!is.null(saved$moda_credentials) && is.function(moda_credentials)) {
         moda_credentials(saved$moda_credentials)
       }
+      # Variable and value labels, back into the session's dictionary
+      if (length(saved$labels)) register_labels(session = session, add = saved$labels)
       # Targeting Design, selection, spot-check and PDM work
       workspace_restore(workspace, saved$workspace)
       label <- sub("\\.(design|selection|monitoring)$", "", name)
+      # A timed autosave belongs to the session it was set on: loading another
+      # one stops it, so it never writes this content under the other name.
+      p <- isolate(periodic())
+      if (!is.null(p) && !identical(p$name, label)) {
+        periodic(NULL)
+        showNotification("The timed autosave was turned off: another session was loaded.", type = "message")
+      }
       # An older session is saved back as three workstream sessions of the same name.
       for (k in if (kind == "all") kinds else kind) {
         session_names[[k]] <- label
@@ -361,6 +375,10 @@ mod_session_manager_server <- function(
         textInput(ns("save_session_name"), "Session name:", value = default_name(), width = "100%"),
         checkboxGroupInput(ns("save_kinds"), "Save", width = "100%",
                            choiceNames = lapply(have, kind_summary), choiceValues = have, selected = have),
+        # Keep saving the same session on a timer (also above the autosave
+        # size limit: this is a full save).
+        checkboxInput(ns("save_every"), sprintf("Autosave this session every %d minutes", periodic_minutes()),
+                      value = !is.null(isolate(periodic()))),
         tags$p(class = "small text-muted mb-0",
                "Each part is its own session file, so loading or saving one does not carry the others' data.",
                if (page_kind %in% have && length(have) > 1) " Untick the parts you do not want to save now.")
@@ -372,7 +390,7 @@ mod_session_manager_server <- function(
     # nothing to save or no name.
     # Save the chosen workstreams under `name`, one file each; FALSE (with a
     # notice) when there is nothing to save or no name.
-    save_as <- function(name, which = kinds) {
+    save_as <- function(name, which = kinds, quiet = FALSE) {
       if (!shiny::isTruthy(name) || trimws(name) == "") {
         showNotification("Name the session first.", type = "error")
         return(FALSE)
@@ -386,7 +404,7 @@ mod_session_manager_server <- function(
         return(FALSE)
       }
       waiter::waiter_show(
-        html = waiter_content("Encrypting and saving session..."),
+        html = waiter_content(if (quiet) "Autosaving the session..." else "Encrypting and saving session..."),
         color = "rgba(10, 30, 50, 0.65)"
       )
       on.exit(waiter::waiter_hide(), add = TRUE)
@@ -396,8 +414,12 @@ mod_session_manager_server <- function(
         session_names[[k]] <- name
       }
       what <- paste(vapply(names(sts), kind_label, character(1)), collapse = ", ")
-      audit_add(modification_log, "Session", "Session saved", sprintf("%s (%s)", name, what))
-      showNotification(sprintf("Saved as %s: %s.", name, what), type = "message")
+      if (quiet) {
+        showNotification(sprintf("Autosaved %s (%s).", name, format(Sys.time(), "%H:%M")), type = "message", duration = 4)
+      } else {
+        audit_add(modification_log, "Session", "Session saved", sprintf("%s (%s)", name, what))
+        showNotification(sprintf("Saved as %s: %s.", name, what), type = "message")
+      }
       mark_saved()
       TRUE
     }
@@ -405,7 +427,26 @@ mod_session_manager_server <- function(
     observeEvent(input$btn_confirm_save, {
       need_ok(length(input$save_kinds) > 0, "Tick at least one part to save.")
       removeModal()
-      save_as(input$save_session_name, input$save_kinds)
+      ok <- save_as(input$save_session_name, input$save_kinds)
+      if (isTRUE(ok) && isTRUE(input$save_every)) {
+        periodic(list(name = trimws(input$save_session_name), kinds = input$save_kinds,
+                      due = Sys.time() + 60 * periodic_minutes()))
+        showNotification(sprintf("This session will be saved every %d minutes.", periodic_minutes()), type = "message")
+      } else if (isTRUE(ok)) {
+        periodic(NULL)
+      }
+    })
+
+    # Autosave every N minutes, set from the save dialog: the same name and
+    # parts, saved in full. TARGETWISE_AUTOSAVE_EVERY_MIN changes the period.
+    observe({
+      p <- periodic(); req(p)
+      invalidateLater(60000)
+      if (Sys.time() < p$due) return()
+      isolate({
+        save_as(p$name, p$kinds, quiet = TRUE)
+        periodic(utils::modifyList(p, list(due = Sys.time() + 60 * periodic_minutes())))
+      })
     })
 
     # Save this session, then start an empty one. The page reloads, which
@@ -495,6 +536,7 @@ mod_session_manager_server <- function(
       removeModal()
       clear_session(who)
       for (k in kinds) session_names[[k]] <- NULL
+      periodic(NULL)
       showNotification("All saved sessions cleared.", type = "message")
     })
 
@@ -582,7 +624,7 @@ mod_session_manager_server <- function(
       if (!isTRUE(mins > 0)) return()
       invalidateLater(1000 * max(5, min(60, mins * 30)))
       has_work <- !is.null(isolate(uploaded_df())) || length(workspace_snapshot(workspace)) > 0
-      covered <- any_named() && !isolate(autosave_skip_notified())
+      covered <- (any_named() && !isolate(autosave_skip_notified())) || !is.null(isolate(periodic()))
       if (!has_work || covered || identical(state_sig(), isolate(saved_sig()))) { dirty_since(NULL); return() }
       if (is.null(isolate(dirty_since()))) dirty_since(Sys.time())
       last <- isolate(reminded_at())

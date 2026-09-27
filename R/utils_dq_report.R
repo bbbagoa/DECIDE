@@ -218,6 +218,7 @@ write_dq_report <- function(file, x, lang = "en") {
         "_The full history is in the Audit Trail._", "")
   }
 
+  if (length(x$variables_md)) add(x$variables_md)
   sec("Method")
   add("Empty means missing, blank text or \"NULL\". Outliers use Tukey's fences (quartiles +/- 1.5 x IQR) combined with an allowed range",
       "for household size (1-30), head's age (12-110) and children under 5 (0-10). Spelling variants are names within one edit of each other.",

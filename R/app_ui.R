@@ -5,7 +5,18 @@
 #' @import shiny
 #' @noRd
 app_ui <- function(request) {
-  # A translator per request, never shared: it holds the selected language as
+  # The page does not depend on the request (it always opens in English; the
+  # language switches in the browser), and building it takes seconds: it is
+  # built once per R process and reused for every page load.
+  if (is.null(.app_ui_cache$ui)) .app_ui_cache$ui <- app_ui_build()
+  .app_ui_cache$ui
+}
+.app_ui_cache <- new.env(parent = emptyenv())
+
+#' Build the application page (see `app_ui()`, which keeps it)
+#' @noRd
+app_ui_build <- function() {
+  # A translator per page, never shared: it holds the selected language as
   # mutable state, so one global instance would mean the last person to switch
   # language changed it for everyone else on the server.
   i18n <- app_i18n()

@@ -806,7 +806,8 @@ mod_spot_checking_server <- function(id, uploaded_df, user_setup, workspace = NU
                         n = nrow(sampled_data()), population = nrow(sample_pool()),
                         seed = applied$seed, filters = if (length(flt)) paste(flt, collapse = "; ") else "none"),
           source = verif_source(), n_verification = if (is.null(verification_df())) NA else nrow(verification_df()),
-          tolerance = input$verif_tolerance, comparison = comparison(), insights = verif_insights()),
+          tolerance = input$verif_tolerance, comparison = comparison(), insights = verif_insights(),
+          variables_md = if (!is.null(comparison())) variables_md(comparison()$cols, session)),
           lang = if (identical(lang, "fr")) "fr" else "en")
       }
     )

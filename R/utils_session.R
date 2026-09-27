@@ -409,7 +409,8 @@ decrypt_session <- function(cipher, passphrase = session_passphrase(), user = NU
 #' @noRd
 save_session <- function(uploaded_df, user_setup, modification_log, theme = "wfp",
                           moda_credentials = NULL, name = "default", user = NULL,
-                          workspace = NULL, ui = NULL, original_df = NULL, kind = NULL) {
+                          workspace = NULL, ui = NULL, original_df = NULL, kind = NULL,
+                          labels = NULL) {
   session_file <- get_session_file(name, user, kind)
 
   # Never persist the MODA API token in session files
@@ -430,7 +431,8 @@ save_session <- function(uploaded_df, user_setup, modification_log, theme = "wfp
     ui = ui,
     saved_at = Sys.time(),
     name = name,
-    kind = kind %||% "all"
+    kind = kind %||% "all",
+    labels = labels
   )
 
   packed <- tw_step("store the data as Parquet", pack_frames(state))

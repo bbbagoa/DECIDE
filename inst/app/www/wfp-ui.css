@@ -2584,10 +2584,42 @@ table.dataTable tr.dtrg-group td { background: var(--surface-3) !important; font
 .wfp-quota-table .wfp-quota-flag { white-space: nowrap; width: 1%; }
 .wfp-quota-table td.wfp-quota-fig { background: var(--accent-info-bg); }
 
-/* Criteria Screening: the tables show 25 rows before scrolling. */
-[id$="-screen_table"] .wfp-model-table-wrap, [id$="-qs_out"] .wfp-model-table-wrap,
-[id$="-selection_ui"] .wfp-model-table-wrap, [id$="-criteria_review"] .wfp-model-table-wrap { max-height: 1150px; }
-[id$="-screen_table"] .wfp-model-table-wrap, [id$="-criteria_review"] .wfp-model-table-wrap { max-height: 1450px; }
+/* Criteria: the table fits the page (names and labels wrap) and shows about
+   30 rows before scrolling. */
+[id$="-criteria_table"] .wfp-model-table-wrap { max-height: 1450px; }
+[id$="-details_ui"] .wfp-model-table-wrap { max-height: 1150px; }
+[id$="-criteria_table"] .form-group { margin: 0; }
+[id$="-criteria_table"] .shiny-input-container { width: auto; display: inline-block; }
+[id$="-criteria_table"] .checkbox { margin: 0; }
+[id$="-criteria_table"] table { width: 100%; table-layout: auto; }
+[id$="-criteria_table"] th:first-child, [id$="-criteria_table"] td:first-child { width: 1%; }
+[id$="-criteria_table"] td.tw-var { min-width: 150px; max-width: 280px; overflow-wrap: anywhere; }
+[id$="-criteria_table"] td:nth-child(7) { max-width: 200px; overflow-wrap: anywhere; }
+[id$="-criteria_table"] th { white-space: normal; }
+.wfp-binarise-table .form-group, [id$="-details_ui"] .form-group { margin: 0; }
+[id$="-details_ui"] .shiny-input-container { width: auto; display: inline-block; }
+[id$="-details_ui"] th:first-child, [id$="-details_ui"] td:first-child { width: 1%; }
+.wfp-crit-search { max-width: 240px; }
+/* Threshold step: the rationale box as tall as the parameters beside it */
+.wfp-thr-setup > :last-child { display: flex; flex-direction: column; }
+.wfp-thr-setup > :last-child .tw-rt { flex: 1 1 auto; display: flex; flex-direction: column; margin-bottom: 0; }
+.wfp-thr-setup > :last-child .tw-rt-frame { flex: 1 1 auto; display: flex; flex-direction: column; }
+.wfp-thr-setup > :last-child .tw-rich { flex: 1 1 auto; max-height: none; }
+/* Model step: one band, three panels side by side; Fit closes the third */
+.wfp-fit-band { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; align-items: stretch;
+  background: var(--bs-tertiary-bg); border-radius: var(--card-radius, 12px); padding: .5rem .25rem; }
+.wfp-fit-group { padding: .25rem 1rem; border-right: 1px solid var(--border); min-width: 0; display: flex; flex-direction: column; }
+.wfp-fit-group:last-child { border-right: 0; }
+.wfp-fit-group .form-group { margin-bottom: .5rem; }
+.wfp-fit-go { margin-top: auto; padding-bottom: .5rem; }
+.wfp-fit-pair { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; }
+.wfp-model-row { display: flex; align-items: flex-end; gap: .4rem; }
+.wfp-model-row .form-group { margin-bottom: .25rem; }
+.wfp-model-gear { padding-bottom: .3rem; }
+.wfp-params-line { margin: 0 0 .5rem; }
+.wfp-fit-label { font-size: .72rem; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--text-muted); margin: .15rem 0 .4rem; }
+@media (max-width: 900px) { .wfp-fit-band { grid-template-columns: 1fr; } .wfp-fit-group { border-right: 0; } }
+.wfp-binarise-table .shiny-input-container { width: auto; display: inline-block; }
 
 /* The cross on the waiter that stops a background task (bg_run()). */
 .wfp-wait { position: relative; }
@@ -2634,3 +2666,38 @@ table.dataTable tr.dtrg-group td { background: var(--surface-3) !important; font
   .wfp-co-btn .action-icon, .wfp-co-btn i, .wfp-co-btn svg { font-size: .85rem !important; margin: 0 !important; }
   .navbar .mini-theme-selector select { width: 70px !important; }
 }
+
+/* Dropdown options for labelled variables (www/labels.js): the name in bold,
+   the label below it, small, italic and blue; a hairline between items. */
+.tw-opt { display: flex; flex-direction: column; line-height: 1.25; min-width: 0; }
+.tw-opt-name { font-weight: 400; color: inherit; }
+.tw-opt-name.tw-strong { font-weight: 600; }
+.tw-opt-label { font-size: .74rem; font-style: italic; color: var(--wfp-blue, #0A6EB4); white-space: normal; }
+[data-bs-theme="dark"] .tw-opt-label { color: #7cc4f5; }
+.selectize-dropdown .option.tw-opt-row { padding-top: .4rem; padding-bottom: .4rem; }
+.selectize-dropdown .option, .bootstrap-select .dropdown-menu li > a { border-bottom: 1px solid var(--border); }
+.selectize-dropdown .option:last-child, .bootstrap-select .dropdown-menu li:last-child > a { border-bottom: 0; }
+.selectize-dropdown .option.active .tw-opt-label, .bootstrap-select .dropdown-menu li.active .tw-opt-label,
+.bootstrap-select .dropdown-menu li > a:hover .tw-opt-label { color: inherit; opacity: .85; }
+.bootstrap-select .dropdown-menu li > a { padding-top: .35rem; padding-bottom: .35rem; }
+/* A variable's label under its name in the first column of a table (labels.js). */
+.tw-cell-label { display: block; font-size: .72rem; font-style: italic; font-weight: 400; color: var(--wfp-blue, #0A6EB4); line-height: 1.2; margin-top: .1rem; }
+[data-bs-theme="dark"] .tw-cell-label { color: #7cc4f5; }
+td[data-tw], th[data-tw] { cursor: help; }
+
+/* Labels that follow a mode (conditionalPanel) stay inline inside buttons */
+.btn .shiny-panel-conditional.shiny-conditional--shown,
+.wfp-export-item .shiny-panel-conditional.shiny-conditional--shown { display: inline; }
+
+/* Design sidebar: adopt, then the exports as a list with what each is for */
+.wfp-adopt-btn { font-weight: 600; }
+.wfp-export-label { font-size: .7rem; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--text-muted); margin-bottom: .35rem; }
+.wfp-export-list { display: flex; flex-direction: column; gap: .4rem; }
+.wfp-export-item { display: flex !important; align-items: center; gap: .6rem; width: 100%; text-align: left; padding: .45rem .6rem;
+  border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--body-text) !important;
+  text-decoration: none; transition: border-color .15s, background .15s; }
+.wfp-export-item:hover { border-color: var(--wfp-blue); background: var(--accent-primary-bg); }
+.wfp-export-item > i, .wfp-export-item > .fa, .wfp-export-item > svg { font-size: 1.15rem; color: var(--wfp-blue); width: 1.2rem; flex: none; }
+.wfp-export-text { display: flex; flex-direction: column; line-height: 1.2; min-width: 0; }
+.wfp-export-title { font-size: .82rem; font-weight: 600; }
+.wfp-export-sub { font-size: .72rem; color: var(--text-muted); }

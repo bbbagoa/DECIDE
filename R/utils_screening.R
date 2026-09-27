@@ -129,12 +129,12 @@ screen_variables <- function(df, y, exclude = character(0), max_levels = 15L, mi
 
 #' The name of the yes/no variable built from a suggestion
 #' @noRd
-screen_new_name <- function(variable, rule, taken) {
+screen_new_name <- function(variable, rule, taken, suffix = "_Bin") {
   # "ge7", "ge_m1_51" for -1.51 (the minus sign kept as m)
-  suffix <- if (identical(rule$op, ">=")) paste0("ge", gsub("[^0-9A-Za-z]+", "_", sub("^-", "_m", rule$value))) else "grp"
-  # "Targ_" marks a targeting criterion built here (as the Targ_ variables of
-  # WFP assessment datasets), unless the source already carries it.
-  nm <- paste0(if (startsWith(variable, "Targ_")) "" else "Targ_", variable, "_", suffix)
+  suffix_rule <- if (identical(rule$op, ">=")) paste0("ge", gsub("[^0-9A-Za-z]+", "_", sub("^-", "_m", rule$value))) else "grp"
+  # "_Bin" marks a yes/no variable built here from another one. The name is
+  # made valid (spaces, slashes or a leading digit in the source name).
+  nm <- make.names(paste0(variable, "_", suffix_rule, suffix))
   base <- nm; k <- 2
   while (nm %in% taken) { nm <- paste0(base, "_", k); k <- k + 1 }
   nm

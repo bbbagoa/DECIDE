@@ -434,8 +434,55 @@ model_tip <- function() {
     list(name = "Boosted stumps.", text = "Gradient boosting with one split per tree: still one fixed number of points per criterion.",
          ref = "Friedman (2001), Greedy function approximation, Annals of Statistics 29(5); Chen & Guestrin (2016), XGBoost, KDD."),
     list(name = "Random forest, XGBoost, naive Bayes, neural network, SVM.", text = "Machine-learning models; each criterion's points are its average marginal effect on the model's log-odds, so the card stays additive. Compare their held-out AUC with the logistic card. SVM optimises a boundary rather than probabilities and can give weak points.",
-         ref = "Breiman (2001), Machine Learning 45; Chen & Guestrin (2016), KDD; Hastie, Tibshirani & Friedman (2009), Elements of Statistical Learning; Cortes & Vapnik (1995), Machine Learning 20; marginal effects: Molnar (2022), Interpretable Machine Learning.")
+         ref = "Breiman (2001), Machine Learning 45; Chen & Guestrin (2016), KDD; Hastie, Tibshirani & Friedman (2009), Elements of Statistical Learning; Cortes & Vapnik (1995), Machine Learning 20; marginal effects: Molnar (2022), Interpretable Machine Learning."),
+    list(name = "Vulnerability index: PCA.", text = "Not a prediction model: the first principal component of the criteria, the weights that summarise how they vary together (for yes/no criteria, the same first dimension as multiple correspondence analysis). Turned so a higher index means more vulnerable; its errors are then measured against the outcome like any card. Check that the criteria share enough variation (KMO, Bartlett).",
+         ref = "Filmer & Pritchett (2001), Demography 38(1); Vyas & Kumaranayake (2006), Health Policy and Planning 21(6); Kaiser (1974), Psychometrika 39."),
+    list(name = "Vulnerability index: LDA.", text = "Fisher's linear discriminant: the weighted sum of the criteria that best separates vulnerable from other households, given how the criteria vary together. Supervised like logistic regression, but assumes equal spread in both groups.",
+         ref = "Fisher (1936), Annals of Eugenics 7; Hastie, Tibshirani & Friedman (2009), Elements of Statistical Learning, ch. 4.")
   )))
+}
+
+#' What a PCA / LDA index says about itself, under the fitted model
+#' @noRd
+index_note <- function(ix) {
+  pct <- function(v) sprintf("%.0f%%", 100 * v)
+  if (identical(ix$type, "pca")) {
+    # judged on the value shown (0.4995 reads 0.50, and is then "poor")
+    ix$kmo <- round(ix$kmo, 2)
+    kmo_word <- if (is.na(ix$kmo)) "not computable" else if (ix$kmo >= .8) "good" else if (ix$kmo >= .7) "middling" else
+      if (ix$kmo >= .6) "mediocre" else if (ix$kmo >= .5) "poor" else "unacceptable"
+    weak <- is.na(ix$kmo) || ix$kmo < .5 || isTRUE(ix$bartlett_p >= .05)
+    tags$div(
+      class = paste("small mt-2", if (weak) "alert alert-warning mb-0" else "text-muted"),
+      bsicons::bs_icon("diagram-3"),
+      tags$strong(sprintf(" Total variation explained: %s", pct(ix$share))),
+      if (!is.null(ix$min_var)) sprintf(" (the fewest axes reaching the %s asked).", pct(ix$min_var)) else ".",
+      if ((ix$axes %||% 1) > 1)
+        sprintf(" PCA index on %d axes (%s). ", ix$axes,
+                paste(sprintf("axis %d: %s, weight %.2f", seq_along(ix$axis_share), pct(ix$axis_share), ix$axis_weights), collapse = "; "))
+      else " PCA index on the first component. ",
+      sprintf("Kaiser's rule (eigenvalue above 1) would keep %d %s. Sampling adequacy (KMO) %s (%s); Bartlett's test p %s.",
+              ix$kaiser %||% NA_integer_, if (isTRUE((ix$kaiser %||% 1) == 1)) "axis" else "axes",
+              if (is.na(ix$kmo)) "n/a" else sprintf("%.2f", ix$kmo), kmo_word,
+              if (ix$bartlett_p < .001) "< 0.001" else sprintf("= %.3f", ix$bartlett_p)),
+      if (weak) " The criteria share little variation: one index summarises them poorly; prefer a model, or fewer and more related criteria.",
+      " Weights are the index's own coefficients, scaled so the largest is 10; the points scheme does not apply.")
+  } else if (isTRUE(ix$type %in% c("count", "mca", "cluster"))) {
+    alpha <- if (is.na(ix$alpha %||% NA)) "n/a" else sprintf("%.2f", ix$alpha)
+    tags$div(class = "small text-muted mt-2", bsicons::bs_icon("diagram-3"),
+             switch(ix$type,
+               count = " Deprivation count: each criterion met adds its points (1 by default; edit them in the table). ",
+               mca = sprintf(" MCA index on %d axis(es): %s of the inertia explained in total, turned towards %s. ",
+                             ix$axes %||% 1, pct(ix$share), anchor_text(ix$anchor)),
+               cluster = sprintf(" %d household profiles (%s); targeted: profile %s, %s of the households. The points reproduce the targeted profiles. ",
+                                 ix$k, cluster_algorithm_label(ix$algorithm),
+                                 paste(ix$target, collapse = ", "), pct(sum(ix$size[ix$target])))),
+             sprintf("Internal consistency (Cronbach's alpha) %s. No outcome: the errors cannot be measured.", alpha))
+  } else {
+    tags$div(class = "small text-muted mt-2", bsicons::bs_icon("diagram-3"),
+             sprintf(" LDA index: separation between the two groups (Mahalanobis D\u00b2) %.2f.", ix$mahalanobis),
+             " Weights are the discriminant's own coefficients, scaled so the largest is 10; the points scheme does not apply.")
+  }
 }
 
 
@@ -662,7 +709,8 @@ cascade_pickers <- function(session, input, ids, cols, data, hint = NULL) {
       if (!length(cur) && !is.null(hint)) cur <- isolate(hint(k))
       sel <- intersect(cur %||% character(0), ch)
       if (!identical(ch, sent[[ids[k]]]) || !setequal(sel, input[[ids[k]]] %||% character(0))) {
-        shinyWidgets::updatePickerInput(session, ids[k], choices = ch, selected = sel)
+        # value labels shown as "code - label", like every value picker
+        shinyWidgets::updatePickerInput(session, ids[k], choices = value_choices(ch, col, session), selected = sel)
         sent[[ids[k]]] <<- ch
       }
       if (length(sel)) keep <- (if (is.null(keep)) TRUE else keep) & v %in% sel

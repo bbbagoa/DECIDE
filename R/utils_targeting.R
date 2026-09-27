@@ -430,7 +430,8 @@ pdm_scorecard_eligibility <- function(df, scorecard) {
     it
   })
   if (length(missing)) return(list(eligible = NULL, missing = missing))
-  list(eligible = apply_scorecard(df, scorecard)$eligible, missing = character(0))
+  a <- apply_scorecard(df, scorecard)
+  list(eligible = a$eligible, score = a$score, missing = character(0))
 }
 
 #' The distinct answers of a column (text, trimmed, blanks left out)
@@ -454,4 +455,22 @@ guess_positive_answer <- function(lv) {
   if (any(pos)) return(lv[which(pos)[1]])
   if (any(neg)) return(lv[which(!neg)[1]])
   lv[1]
+}
+
+#' Calibrate a vulnerability ranking on data that carry an outcome
+#'
+#' The ranking was built without an outcome, so its errors were unknown. On a
+#' verification sample or PDM data with a food-security outcome, its inclusion
+#' and exclusion errors at the adopted threshold, its AUC and the threshold
+#' that keeps both errors lowest become measurable.
+#' @param score The ranking's score on those households; `vulnerable` 0/1.
+#' @return list(n, auc, current = design errors at `threshold`, balanced =
+#'   `balanced_threshold()` result)
+#' @noRd
+ranking_calibration <- function(score, vulnerable, threshold) {
+  ok <- !is.na(score) & !is.na(vulnerable)
+  s <- score[ok]; y <- vulnerable[ok] %in% c(1, TRUE)
+  if (length(unique(y)) < 2) stop("The outcome has one level only on these households.", call. = FALSE)
+  list(n = length(s), auc = roc_curve(s, as.integer(y))$auc,
+       current = design_errors(s > threshold, y), balanced = balanced_threshold(s, y))
 }

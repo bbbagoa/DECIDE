@@ -212,3 +212,57 @@ create_profile_plot <- function(data, view_col, demo_col, weights = NULL, title 
     plotly::config(displayModeBar = FALSE)
 
 }
+
+#' Horizontal lollipops: a stem from 0 to the value and a dot, coloured by
+#' direction (inclusion / exclusion). Lighter than bars when there are many
+#' criteria, and every criterion stays on the chart.
+#' @param d data.frame(criterion (ordered factor), value, direction, hover)
+#' @noRd
+lollipop_plot <- function(d, xtitle) {
+  cols <- c(inclusion = "#0A6EB4", exclusion = "#c5192d")
+  # past 20 criteria every other name is written on the axis (hover gives all)
+  lv <- levels(d$criterion) %||% unique(as.character(d$criterion))
+  yax <- list(title = "", automargin = TRUE)
+  if (length(lv) > 20) yax <- c(yax, list(tickmode = "array", tickvals = lv,
+                                          ticktext = ifelse(seq_along(lv) %% 2 == 0, "", lv)))
+  plotly::plot_ly(d) |>
+    plotly::add_segments(x = 0, xend = ~value, y = ~criterion, yend = ~criterion, color = ~direction, colors = cols,
+                         line = list(width = 2.5), hoverinfo = "skip", showlegend = FALSE) |>
+    plotly::add_markers(x = ~value, y = ~criterion, color = ~direction, colors = cols,
+                        marker = list(size = 11, line = list(width = 1.5, color = "#ffffff")),
+                        text = ~hover, hovertemplate = "%{text}<extra></extra>") |>
+    plotly::layout(xaxis = list(title = xtitle, zeroline = TRUE, zerolinecolor = "rgba(128,128,128,0.5)"),
+                   yaxis = yax,
+                   legend = list(orientation = "h", x = 0, y = 1.12, xanchor = "left", yanchor = "bottom"))
+}
+
+#' Mirrored distribution of a score by outcome: vulnerable above the axis,
+#' not vulnerable below, each as a share of its own group on the same bins
+#' (`score_bins()`), so neither group hides the other. `threshold` draws the
+#' cut-off.
+#' @noRd
+mirrored_hist_plot <- function(score, vulnerable, threshold = NULL, xtitle = "Score") {
+  ok <- !is.na(score) & !is.na(vulnerable)
+  h <- score_bins(score[ok], vulnerable[ok] %in% c(TRUE, 1))
+  top <- max(c(h$vuln, h$not), 1)
+  ticks <- pretty(c(0, top), 4)
+  p <- plotly::plot_ly(h) |>
+    plotly::add_bars(x = ~mid, y = ~vuln, width = ~width * 0.92, name = "Vulnerable", marker = list(color = "#c5192d"),
+                     customdata = ~n_vuln, hovertemplate = "%{x}<br>Vulnerable: %{y:.1f}% (%{customdata} households)<extra></extra>") |>
+    plotly::add_bars(x = ~mid, y = ~-not, width = ~width * 0.92, name = "Not vulnerable", marker = list(color = "#3f7e44"),
+                     customdata = ~paste0(sprintf("%.1f", not), "% (", n_not, " households)"),
+                     hovertemplate = "%{x}<br>Not vulnerable: %{customdata}<extra></extra>")
+  lay <- list(barmode = "relative", bargap = 0,
+              legend = list(orientation = "h", x = 0, y = 1.12, xanchor = "left", yanchor = "bottom"),
+              xaxis = list(title = xtitle),
+              yaxis = list(title = "% of the group", tickvals = c(-rev(ticks), ticks[-1]),
+                           ticktext = paste0(c(rev(ticks), ticks[-1]), "%"), zeroline = TRUE,
+                           zerolinecolor = "rgba(128,128,128,0.6)"))
+  if (!is.null(threshold)) {
+    lay$shapes <- list(list(type = "line", x0 = threshold, x1 = threshold, y0 = 0, y1 = 1, yref = "paper",
+                            line = list(color = "#1f2a37", dash = "dash")))
+    lay$annotations <- list(list(x = threshold, y = 1, yref = "paper", text = sprintf(" threshold %s", fmt5(threshold)),
+                                 showarrow = FALSE, xanchor = "left", yanchor = "top", font = list(size = 11)))
+  }
+  do.call(plotly::layout, c(list(p), lay))
+}

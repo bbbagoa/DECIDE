@@ -100,7 +100,8 @@ mod_chart_builder_server <- function(id, data, source, dataset_name = reactive("
       df <- data()
       v <- if (!is.null(df) && nzchar(input$filter_col %||% "") && input$filter_col %in% names(df))
         utils::head(sort(unique(as.character(df[[input$filter_col]]))), 500) else character(0)
-      shinyWidgets::updatePickerInput(session, "filter_vals", choices = v, selected = isolate(pending_vals()) %||% character(0))
+      shinyWidgets::updatePickerInput(session, "filter_vals", choices = value_choices(v, input$filter_col),
+                                      selected = isolate(pending_vals()) %||% character(0))
       pending_vals(NULL)
     })
     pending_vals <- reactiveVal(NULL)
@@ -151,10 +152,19 @@ mod_chart_builder_server <- function(id, data, source, dataset_name = reactive("
       st <- chart_style(sp)
       if (st %in% c("pie", "donut")) {
         pd <- chart_pie_data(d)
-        return(plotly::plot_ly(pd, labels = ~category, values = ~n, type = "pie", sort = FALSE,
-                               hole = if (identical(st, "donut")) 0.55 else 0, textinfo = "percent",
-                               marker = list(colors = rep_len(rp_cols$models, nrow(pd)))) |>
-                 plotly::layout(legend = list(orientation = "h", x = 0, y = -0.05)))
+        donut <- identical(st, "donut")
+        top <- which.max(pd$n)
+        p <- plotly::plot_ly(pd, labels = ~category, values = ~n, type = "pie", sort = FALSE,
+                             hole = if (donut) 0.8 else 0, textinfo = if (donut) "none" else "percent",
+                             hoverinfo = "label+percent+value",
+                             marker = list(colors = rep_len(rp_cols$models, nrow(pd)))) |>
+          plotly::layout(legend = list(orientation = "h", x = 0, y = -0.05))
+        # a donut says its largest share in the middle
+        if (donut) p <- plotly::layout(p, annotations = list(list(
+          text = sprintf("<b style='font-size:22px'>%.0f%%</b><br><span style='font-size:11px'>%s</span>",
+                         100 * pd$n[top] / sum(pd$n), substr(as.character(pd$category[top]), 1, 22)),
+          showarrow = FALSE, x = 0.5, y = 0.5, xref = "paper", yref = "paper")))
+        return(p)
       }
       if (identical(st, "column")) {
         d$x <- factor(d$x, levels = unique(d$x))

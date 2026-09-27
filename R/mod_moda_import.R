@@ -141,13 +141,21 @@ build_odk_label_map <- function(odk_path) {
     return(NULL)
   }
 
+  # Question labels (variable labels), in the same language as the choices.
+  qlabs <- grep("^label", names(survey), value = TRUE)
+  q_label_col <- c(grep(want, qlabs, value = TRUE, ignore.case = TRUE), qlabs)[1]
+  questions <- if (is.na(q_label_col)) character(0) else {
+    ql <- stats::setNames(trimws(as.character(survey[[q_label_col]])), strip_prefix(as.character(survey[[name_col]])))
+    ql[!is.na(ql) & nzchar(ql) & !is.na(names(ql)) & nzchar(names(ql))]
+  }
+
   # Keep only select rows and parse the list_name
   select_rows <- survey[[type_col]] %in% c("select_one", "select_multiple") |
     grepl("^(select_one|select_multiple)\\s", survey[[type_col]])
   survey <- survey[select_rows, , drop = FALSE]
 
   if (nrow(survey) == 0) {
-    return(NULL)
+    return(if (length(questions)) structure(list(), questions = questions, multiple = character(0)) else NULL)
   }
 
   survey$list_name <- vapply(strsplit(as.character(survey[[type_col]]), "\\s+", perl = TRUE), function(y) {
@@ -176,6 +184,7 @@ build_odk_label_map <- function(odk_path) {
   }
 
   attr(label_map, "label_column") <- choice_label_col
+  attr(label_map, "questions") <- questions
   # Which questions are select_multiple: they are split into Yes/No columns.
   attr(label_map, "multiple") <- unique(survey$var_name[grepl("^select_multiple", as.character(survey[[type_col]]))])
   label_map
@@ -201,9 +210,9 @@ download_moda_xlsform <- function(form_id, token) {
 
 # Apply choice labels to a MODA dataframe using an ODK label map
 apply_odk_labels <- function(df, label_map) {
-  if (is.null(label_map) || length(label_map) == 0) {
-    return(df)
-  }
+  if (is.null(label_map)) return(df)
+  questions <- attr(label_map, "questions") %||% character(0)
+  if (length(label_map) == 0) return(odk_question_labels(df, questions, label_map))
 
   multiple <- attr(label_map, "multiple") %||% character(0)
   for (var in names(label_map)) {
@@ -232,8 +241,25 @@ apply_odk_labels <- function(df, label_map) {
     }
 
     df[[var]] <- new_vals
+    # The codes behind the labels, for the Variables sheet (label -> code).
+    attr(df[[var]], "tw_codes") <- stats::setNames(names(lookup), unname(lookup))
   }
 
+  odk_question_labels(df, questions, label_map)
+}
+
+#' The form's question labels on the columns; a split select_multiple
+#' column gets "Question: Choice".
+#' @noRd
+odk_question_labels <- function(df, questions, label_map = list()) {
+  for (var in intersect(names(questions), names(df))) attr(df[[var]], "label") <- questions[[var]]
+  for (var in intersect(names(label_map), names(questions))) {
+    lookup <- label_map[[var]]
+    for (ch in names(lookup)) {
+      col <- paste0(var, "_", ch)
+      if (col %in% names(df)) attr(df[[col]], "label") <- paste0(questions[[var]], ": ", lookup[[ch]])
+    }
+  }
   df
 }
 
@@ -320,7 +346,8 @@ moda_async_fetch <- function(form_id, token, existing_df = NULL, page_size = MOD
     step("Applying choice labels...")
     label_map <- log_step("read the choice labels", build_odk_label_map(odk_path))
     df <- log_step("apply the labels and split select_multiple questions", apply_odk_labels(df, label_map))
-    df <- log_step("split GPS points and other multiple-choice answers", split_multiselect(split_geopoints(df)))   # GPS -> coordinates; multi-selects the form did not name -> Yes/No columns
+    df <- log_step("split GPS points and other multiple-choice answers", split_multiselect(split_geopoints(df)))
+    if (!is.null(session)) register_labels(df, session)   # GPS -> coordinates; multi-selects the form did not name -> Yes/No columns
 
     step("Merging with the data already loaded...")
     if (!is.null(existing_df) && nrow(existing_df) > 0) {

@@ -112,6 +112,7 @@ write_verification_report <- function(file, x, lang = "en") {
     }
   }
 
+  if (length(x$variables_md)) add(x$variables_md)
   sec("Method")
   add("### Sampling", "",
       paste("**Simple random**: every household in scope has the same chance of being drawn.",

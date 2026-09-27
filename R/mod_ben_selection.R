@@ -186,7 +186,9 @@ mod_ben_selection_ui <- function(id) {
             full_screen = TRUE,
             bslib::card_header(bsicons::bs_icon("people"), " Who is selected, compared with who is not"),
             bslib::card_body(uiOutput(ns("ben_profile")))
-          )
+          ),
+          # an adopted vulnerability ranking: selection by its profiles and deprivations
+          uiOutput(ns("ranking_comp"))
         ),
         bslib::nav_panel(
           value = "list", title = tagList(bsicons::bs_icon("list-ul"), " Beneficiary list"),
@@ -540,7 +542,7 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
       col <- input$ben_comm_col
       ch <- if (!is.null(df) && nzchar(col) && col %in% names(df))
         utils::head(sort(unique(as.character(df[[col]]))), 500) else character(0)
-      shinyWidgets::updatePickerInput(session, "ben_comm_vals", choices = ch,
+      shinyWidgets::updatePickerInput(session, "ben_comm_vals", choices = value_choices(ch, col),
                                       selected = intersect(isolate(pending_comm_vals()) %||% character(0), ch))
       pending_comm_vals(NULL)
     })
@@ -732,7 +734,8 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
         tags$div(class = "text-muted small fst-italic pt-2", "no value needed")
       } else if (!is.null(vals)) {
         shinyWidgets::pickerInput(
-          id("value"), label = NULL, choices = vals,
+          id("value"), label = NULL,
+          choices = value_choices(vals, if (startsWith(key, "col:")) sub("^col:", "", key) else as.character(user_setup[[key]] %||% "")[1]),
           selected = intersect(rule$value %||% character(0), vals),
           multiple = TRUE, width = "100%",
           options = shinyWidgets::pickerOptions(container = "body", actionsBox = TRUE, liveSearch = TRUE,
@@ -1145,7 +1148,7 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
       }
       tagList(
         checkboxInput(ns("use_scorecard"),
-                      sprintf("Apply scorecard (%d criteria)", length(sc$items)),
+                      sprintf("Apply the %s (%d criteria)", card_word(sc), length(sc$items)),
                       value = isolate(input$use_scorecard) %||% TRUE),
         conditionalPanel(
           condition = sprintf("input['%s']", ns("use_scorecard")),
@@ -1179,7 +1182,8 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
         return(tagList(tags$div(
           class = "small text-success",
           bsicons::bs_icon("check-circle-fill"),
-          sprintf(" All %d criteria mapped. Outcome: %s.", r$n, sc$outcome %||% "not recorded")
+          if (is_ranking(sc)) sprintf(" All %d criteria mapped. A vulnerability ranking built without an outcome indicator: its errors are not measured; calibrate it in Monitoring (PDM).", r$n)
+          else sprintf(" All %d criteria mapped. Outcome: %s.", r$n, sc$outcome %||% "not recorded")
         ), stale))
       }
       # An unmapped criterion scores nobody, which would quietly shrink every
@@ -1349,6 +1353,48 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
       df <- uploaded_df()
       if (!is.na(cl) && nzchar(cl) && !is.null(df) && cl %in% names(df)) cl else NULL
     }
+
+    # What an adopted vulnerability ranking says about the selection.
+    output$ranking_comp <- renderUI({
+      sc <- user_setup$scorecard
+      if (!isTRUE(input$use_scorecard) || scorecard_is_empty(sc) || !is_ranking(sc)) return(NULL)
+      bslib::layout_columns(
+        col_widths = if (is.null(sc$ranking$profiles)) c(12) else c(6, 6),
+        bslib::card(full_screen = TRUE,
+                    bslib::card_header(bsicons::bs_icon("stack"), " Share selected by number of deprivations",
+                                       info_tip("Deprivations: the ranking's criteria a household meets in the vulnerable direction. The selection should rise with them.")),
+                    bslib::card_body(plotly::plotlyOutput(ns("rank_dep_plot"), height = "320px"))),
+        if (!is.null(sc$ranking$profiles))
+          bslib::card(full_screen = TRUE,
+                      bslib::card_header(bsicons::bs_icon("people"), " Selected households by ranking profile",
+                                         info_tip("Each registration household joins the ranking profile closest to its answers. The targeted profiles (marked) should be selected most.")),
+                      bslib::card_body(plotly::plotlyOutput(ns("rank_prof_plot"), height = "320px"))))
+    })
+    ranking_view <- reactive({
+      sc <- user_setup$scorecard; df <- uploaded_df(); s <- selection()
+      req(is_ranking(sc), df, length(s$prioritized) == nrow(df))
+      list(dep = ranking_deprivations(df, sc), prof = ranking_profile_assign(df, sc), served = s$prioritized, sc = sc)
+    })
+    output$rank_dep_plot <- render_wfp_plotly({
+      v <- ranking_view(); ok <- !is.na(v$dep); req(any(ok))
+      d <- stats::aggregate(list(p = v$served[ok]), list(k = v$dep[ok]), function(x) c(n = length(x), p = mean(x)))
+      d <- data.frame(k = d$k, n = d$p[, "n"], p = 100 * d$p[, "p"])
+      plotly::plot_ly(d, x = ~k, y = ~p, type = "bar", marker = list(color = "#0A6EB4"), customdata = ~n,
+                      hovertemplate = "%{x} deprivations<br>%{y:.0f}% selected (of %{customdata} households)<extra></extra>") |>
+        plotly::layout(xaxis = list(title = "Deprivations", dtick = 1), yaxis = list(title = "% selected", range = c(0, 100), ticksuffix = "%"))
+    })
+    output$rank_prof_plot <- render_wfp_plotly({
+      v <- ranking_view(); req(!is.null(v$prof))
+      k <- ncol(v$sc$ranking$profiles)
+      d <- data.frame(profile = seq_len(k))
+      d$n <- vapply(d$profile, function(j) sum(v$prof == j), numeric(1))
+      d$p <- vapply(d$profile, function(j) if (d$n[j] > 0) 100 * mean(v$served[v$prof == j]) else 0, numeric(1))
+      d$lab <- paste0("Profile ", d$profile, ifelse(d$profile %in% v$sc$ranking$target, " (targeted)", ""))
+      plotly::plot_ly(d, x = ~lab, y = ~p, type = "bar",
+                      marker = list(color = ifelse(d$profile %in% v$sc$ranking$target, "#c5192d", "#8a96a3")), customdata = ~n,
+                      hovertemplate = "%{x}<br>%{y:.0f}% selected (of %{customdata} households)<extra></extra>") |>
+        plotly::layout(xaxis = list(title = ""), yaxis = list(title = "% selected", range = c(0, 100), ticksuffix = "%"))
+    })
 
     output$comp_insights <- renderUI({
       s <- selection(); df <- uploaded_df(); req(s, df)
@@ -1571,6 +1617,12 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
             sprintf("%s in {%s}", applied$comm_col, paste(applied$comm_vals %||% "", collapse = ", ")) else "n/a"),
         "Scorecard" = if (sc_used) c(
           "Scorecard" = sprintf("%d criteria, eligible when score > %s", length(sc$items), fmt5(sc$threshold %||% 0)),
+          "Type" = if (is_ranking(sc)) "Vulnerability ranking (no outcome indicator; errors not measured)" else "Scorecard (predicts an outcome)",
+          "Ranking" = if (is_ranking(sc) && !is.null(sc$ranking))
+            sprintf("%s%s; oriented by %s; stability %s; calibrate it on PDM data with an outcome (Monitoring)",
+                    sc$ranking$method, if (nzchar(sc$ranking$label %||% "")) sprintf(" (%s)", sc$ranking$label) else "",
+                    sc$ranking$oriented_by, if (is.na(sc$ranking$stability %||% NA)) "not checked" else sprintf("%.0f%%", 100 * sc$ranking$stability))
+            else "n/a",
           "Status" = if (identical(sc$source, "design")) paste("adopted", sc$adopted_at %||% "") else "loaded from a workbook",
           "Designed on" = sc$created %||% "n/a",
           "Criteria" = paste(vapply(sc$items, function(it) sprintf("%s (%s%s)", it$criterion,
@@ -1598,7 +1650,9 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
         sel <- s$prioritized
         mp <- selection_map_points(df_all, user_setup, s)
         lang <- session$rootScope()$input$lang_selector
+        mapped <- unlist(lapply(reactiveValuesToList(user_setup), function(v) if (is.character(v) && length(v) == 1) v))
         write_selection_report(file, list(
+          variables_md = variables_md(intersect(mapped, names(df_all)), session),
           country_office = user_setup$country_office, sections = sections,
           areas = areas_covered_text(reactiveValuesToList(applied)),
           totals = c(households = nrow(df_all), eligible = sum(s$eligible), served = sum(sel),
@@ -1630,11 +1684,15 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
         with_score <- !isFALSE(input$export_score) && !all(is.na(s$score))
         sel <- sel[, keep_cols, drop = FALSE]
         if (with_score) sel$selection_score <- s$score[which(s$prioritized)]
+        # a vulnerability ranking adds what it knows of each household
+        rk <- ranking_columns(df_all, user_setup$scorecard, s$score)
+        if (!is.null(rk)) for (k in names(rk)) sel[[k]] <- rk[[k]][which(s$prioritized)]
         cut <- which(s$eligible & !s$prioritized)
         ex <- NULL
         if (length(cut)) {
           ex <- df_all[cut, intersect(keep_cols, names(df_all)), drop = FALSE]
           if (with_score) ex$selection_score <- s$score[cut]
+          if (!is.null(rk)) for (k in names(rk)) ex[[k]] <- rk[[k]][cut]
         }
         full <- selected_data()
         lg <- if (is.function(modification_log)) modification_log() else NULL
@@ -1805,4 +1863,17 @@ area_file_suffix <- function(areas) {
   x <- gsub("^_+|_+$", "", x)
   x[!nzchar(x)] <- "area"
   make.unique(x, sep = "_")
+}
+
+#' What a vulnerability ranking adds to each household of a selection export
+#' @return list of columns (priority_rank, deprivations, ranking_profile), or
+#'   NULL when the card in use is not a ranking
+#' @noRd
+ranking_columns <- function(df, sc, score) {
+  if (scorecard_is_empty(sc) || !is_ranking(sc) || is.null(df)) return(NULL)
+  out <- list(priority_rank = rank(-score, ties.method = "min", na.last = "keep"),
+              deprivations = ranking_deprivations(df, sc))
+  pr <- ranking_profile_assign(df, sc)
+  if (!is.null(pr)) out$ranking_profile <- paste0("Profile ", pr, ifelse(pr %in% sc$ranking$target, " (targeted)", ""))
+  out
 }

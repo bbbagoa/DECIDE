@@ -13,11 +13,23 @@ mod_var_calc_ui <- function(id, label = "Variable calculator",
   actionButton(ns("open"), label, icon = icon("calculator"), class = class)
 }
 
+#' The calculator opened on bulk binarise (best split for vulnerability when
+#' the server has an outcome)
+#' @noRd
+mod_var_calc_bulk_ui <- function(id, label = "Binarise variables",
+                                 class = "btn-outline-secondary btn-sm") {
+  ns <- NS(id)
+  actionButton(ns("open_bulk"), label, icon = icon("wand-magic-sparkles"), class = class)
+}
+
 #' @param get_data Reactive returning the data frame.
 #' @param set_data Function taking the updated data frame.
 #' @param log Optional reactiveVal holding the modification log.
+#' @param outcome Optional reactive returning list(y = 1/0 outcome, col = its
+#'   column), or NULL: bulk binarise can then find each column's best split
+#'   for vulnerability (`screen_variables()`).
 #' @noRd
-mod_var_calc_server <- function(id, get_data, set_data, log = NULL, phase = "Selection") {
+mod_var_calc_server <- function(id, get_data, set_data, log = NULL, phase = "Selection", outcome = NULL) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
     n_cond <- reactiveVal(1L)
@@ -30,21 +42,34 @@ mod_var_calc_server <- function(id, get_data, set_data, log = NULL, phase = "Sel
       if (is.null(df)) character(0) else names(df)
     })
 
-    observeEvent(input$open, {
+    get_outcome <- function() if (is.null(outcome)) NULL else tryCatch(outcome(), error = function(e) NULL)
+    # A binarised variable is labelled after its source: "<source label>: <rule>"
+    # (the source name when it has no label), so it reads in every picker.
+    label_new <- function(new, src, rule) {
+      lab <- var_label(src); lab <- ifelse(is.na(lab) | !nzchar(lab), src, lab)
+      register_labels(add = list(labels = stats::setNames(paste0(lab, ": ", rule), new), codes = list(), cols = new))
+    }
+    opt_res <- reactiveVal(NULL)   # the last best-split preview
+
+    open_modal <- function(type = "condition") {
       if (is.null(get_data())) {
         showNotification("Load the data first; the calculator adds columns to it.", type = "warning")
         return()
       }
-      n_cond(1L)
+      n_cond(1L); opt_res(NULL)
+      has_y <- !is.null(get_outcome())
+      bulk <- identical(type, "bulk")
       showModal(modalDialog(
-        title = tagList(bsicons::bs_icon("calculator"), " Variable calculator"),
-        size = "l", easyClose = FALSE,
+        title = if (bulk) tagList(bsicons::bs_icon("magic"), " Binarise variables")
+                else tagList(bsicons::bs_icon("calculator"), " Variable calculator"),
+        size = if (bulk) "xl" else "l", easyClose = FALSE,
         footer = tagList(
           modalButton("Close"),
           actionButton(ns("preview"), "Preview", icon = icon("eye"), class = "btn-outline-primary"),
-          actionButton(ns("create"), "Create variable", icon = icon("plus"), class = "btn-primary")
+          actionButton(ns("create"), if (bulk) "Create variables" else "Create variable", icon = icon("plus"), class = "btn-primary")
         ),
-        bslib::layout_columns(
+        # Opened as "Binarise variables", the calculator's other modes stay out of sight.
+        tags$div(style = if (bulk) "display: none;", bslib::layout_columns(
           col_widths = c(5, 4, 3), fill = FALSE,
           conditionalPanel(
             condition = sprintf("input['%s'] !== 'bulk'", ns("type")),
@@ -52,9 +77,9 @@ mod_var_calc_server <- function(id, get_data, set_data, log = NULL, phase = "Sel
           radioButtons(ns("type"), "Build from",
                        choices = c("Conditions (yes/no)" = "condition", "Formula" = "formula",
                                    "R code" = "code", "Bulk binarise" = "bulk"),
-                       inline = TRUE),
+                       selected = type, inline = TRUE),
           tags$div(class = "pt-4", checkboxInput(ns("replace"), "Replace if it exists", FALSE))
-        ),
+        )),
         conditionalPanel(
           condition = sprintf("input['%s'] === 'condition'", ns("type")),
           uiOutput(ns("cond_rows")),
@@ -107,9 +132,20 @@ mod_var_calc_server <- function(id, get_data, set_data, log = NULL, phase = "Sel
                    "No loops, no function definitions, no package calls: the code runs on the server, so anything that ",
                    "could reach files, the network or other code is refused.")
         ),
-        # Bulk: one rule applied to many similar columns, one 0/1 variable each.
+        # Bulk: many columns at once, one yes/no variable each: the best split
+        # for vulnerability (needs the outcome), or one rule for all.
         conditionalPanel(
           condition = sprintf("input['%s'] === 'bulk'", ns("type")),
+          if (has_y) shinyWidgets::radioGroupButtons(
+            ns("bulk_method"), NULL, status = "outline-primary", justified = TRUE,
+            choices = c("Best split for vulnerability" = "optimal", "Same rule for every column" = "rule"),
+            selected = "optimal"),
+          if (has_y) conditionalPanel(
+            condition = sprintf("input['%s'] === 'optimal'", ns("bulk_method")),
+            tags$div(class = "small text-muted mb-2",
+                     "For each column, the yes/no version that separates vulnerable households best: for a number, the cut-off with the largest gap in",
+                     " vulnerability (each side at least 5% of the households); for 3 to 15 answers, the answers where vulnerability is above average.",
+                     " Preview, untick what you do not want, and create: the new variables join the Criteria table.")),
           bslib::layout_columns(
             col_widths = c(8, 4), fill = FALSE,
             shinyWidgets::pickerInput(
@@ -124,21 +160,36 @@ mod_var_calc_server <- function(id, get_data, set_data, log = NULL, phase = "Sel
                        actionButton(ns("bulk_pick"), "Select matching", class = "btn-outline-secondary"))
             )
           ),
-          uiOutput(ns("bulk_hint"), class = "wfp-calc-hint"),
+          if (has_y) conditionalPanel(
+            condition = sprintf("input['%s'] === 'optimal'", ns("bulk_method")),
+            tags$div(
+              class = "d-flex flex-wrap align-items-center gap-2 mb-2",
+              actionButton(ns("bulk_screen_all"), "Screen the entire database", icon = icon("magnifying-glass-chart"),
+                           class = "btn-outline-primary btn-sm"),
+              tags$span(class = "small text-muted",
+                        "Every column that is not yes/no yet (outcome indicators and what cannot be observed at registration left out), with the best cut-off for each."))),
+          conditionalPanel(
+            condition = sprintf("input['%s'] !== 'optimal'", ns("bulk_method")),
+            uiOutput(ns("bulk_hint"), class = "wfp-calc-hint"),
+            bslib::layout_columns(
+              col_widths = c(3, 4, 5), fill = FALSE,
+              selectInput(ns("bulk_op"), "Rule", choices = calc_operators(), selected = "==",
+                          width = "100%", selectize = FALSE),
+              textInput(ns("bulk_val"), "Value", width = "100%"),
+              tags$div())),
           bslib::layout_columns(
-            col_widths = c(3, 4, 5), fill = FALSE,
-            selectInput(ns("bulk_op"), "Rule", choices = calc_operators(), selected = "==",
-                        width = "100%", selectize = FALSE),
-            textInput(ns("bulk_val"), "Value", width = "100%"),
-            textInput(ns("bulk_prefix"),
-                      tagList("New names start with", info_tip("Each new variable is named with this prefix followed by the source column name, e.g. Targ_asset_radio.")),
-                      value = "Targ_", width = "100%")
-          ),
-          radioButtons(ns("bulk_coding"), NULL, inline = TRUE,
-                       choices = c("Code as 1 / 0" = "10", "Code as Yes / No" = "yesno")),
-          tags$div(class = "small text-muted",
-                   "The same rule is applied to every selected column, e.g. 'equals Yes' on a block of asset questions, or 'at least 1' on counts. ",
-                   "A missing value gives a missing result.")
+            col_widths = c(5, 7), fill = FALSE,
+            textInput(ns("bulk_suffix"),
+                      tagList("New names end with", info_tip("Each new variable is named after its source column, followed by this ending, e.g. asset_radio_Bin (best split: hh_size_ge7_Bin).")),
+                      value = "_Bin", width = "100%"),
+            tags$div(class = "pt-4", radioButtons(ns("bulk_coding"), NULL, inline = TRUE,
+                         choices = c("Code as 1 / 0" = "10", "Code as Yes / No" = "yesno"),
+                         selected = if (has_y) "yesno" else "10"))),
+          conditionalPanel(
+            condition = sprintf("input['%s'] !== 'optimal'", ns("bulk_method")),
+            tags$div(class = "small text-muted",
+                     "The same rule is applied to every selected column, e.g. 'equals Yes' on a block of asset questions, or 'at least 1' on counts. ",
+                     "A missing value gives a missing result."))
         ),
         tags$hr(),
         uiOutput(ns("preview_ui")),
@@ -153,7 +204,77 @@ mod_var_calc_server <- function(id, get_data, set_data, log = NULL, phase = "Sel
              t.dispatchEvent(new Event('input', {bubbles: true})); t.dispatchEvent(new Event('change', {bubbles: true}));
            };"))
       ))
+    }
+    observeEvent(input$open, open_modal("condition"))
+    observeEvent(input$open_bulk, open_modal("bulk"))
+    optimal <- function() identical(input$type, "bulk") && identical(input$bulk_method, "optimal") && !is.null(get_outcome())
+
+    # Every column that could become a yes/no criterion.
+    non_binary <- function() {
+      df <- get_data(); o <- get_outcome()
+      cs <- setdiff(names(df), c(o$col, names(df)[startsWith(names(df), "_")]))
+      cs[vapply(cs, function(cl) is.null(as_binary_criterion(df[[cl]])) && length(unique(stats::na.omit(df[[cl]]))) >= 3, logical(1))]
+    }
+    # Screen the entire database: select those columns and preview their best
+    # splits in one go.
+    observeEvent(input$bulk_screen_all, {
+      cs <- non_binary()
+      if (!length(cs)) { showNotification("Every column is yes/no already.", type = "message"); return() }
+      shinyWidgets::updatePickerInput(session, "bulk_cols", selected = cs)
+      d <- tryCatch(opt_compute(cs), error = function(e) e)
+      if (inherits(d, "error")) {
+        opt_res(NULL)
+        output$preview_ui <- renderUI(tags$div(class = "alert alert-danger small mb-0", conditionMessage(d)))
+        return()
+      }
+      opt_res(d)
+      output$preview_ui <- renderUI(opt_table(d))
     })
+
+    # Best split per selected column, against the outcome.
+    opt_compute <- function(cs = input$bulk_cols) {
+      df <- get_data(); o <- get_outcome()
+      cs <- setdiff(intersect(cs %||% character(0), names(df)), o$col)
+      if (!length(cs)) stop("Select the columns to binarise.", call. = FALSE)
+      d <- screen_variables(df[, cs, drop = FALSE], o$y)
+      d <- if (is.null(d)) NULL else d[d$kind != "yes/no", , drop = FALSE]
+      if (is.null(d) || !nrow(d)) stop("None of the selected columns has a split that separates vulnerable households: they are yes/no already, constant, or not observable at registration.", call. = FALSE)
+      suffix <- input$bulk_suffix %||% "_Bin"
+      taken <- names(df)
+      d$new_name <- vapply(seq_len(nrow(d)), function(i) {
+        nm <- screen_new_name(d$variable[i], d$rule[[i]], taken, suffix = suffix); taken <<- c(taken, nm); nm
+      }, character(1))
+      attr(d, "skipped") <- setdiff(cs, d$variable)
+      d
+    }
+    opt_table <- function(d) {
+      pct <- function(v) sprintf("%.0f%%", 100 * v)
+      skipped <- attr(d, "skipped")
+      tagList(
+        tags$div(class = "small fw-bold text-uppercase mb-1", sprintf("Preview: %d suggested yes/no variables", nrow(d))),
+        tags$div(class = "wfp-model-table-wrap", tags$table(
+          class = "wfp-model-table wfp-binarise-table",
+          tags$thead(tags$tr(tags$th("Create"), tags$th("Yes/no version"), tags$th(class = "num", "Households yes"),
+                             tags$th(class = "num", "Vulnerable if yes"), tags$th(class = "num", "if no"),
+                             tags$th(class = "num", "Gap (pts)"), tags$th("Strength"))),
+          tags$tbody(lapply(seq_len(nrow(d)), function(i) tags$tr(
+            tags$td(class = "text-center", checkboxInput(ns(paste0("opt_use_", i)), NULL, value = d$strength[i] != "Not significant")),
+            tags$td(tags$strong(d$new_name[i]), tags$div(class = "small text-muted", d$suggestion[i]),
+                    if (nzchar(d$detail[i])) tags$div(class = "small text-muted", title = d$detail[i], "Answers: ", substr(d$detail[i], 1, 90),
+                                                      if (nchar(d$detail[i]) > 90) "...")),
+            tags$td(class = "num", pct(d$yes_share[i])),
+            tags$td(class = "num", pct(d$vuln_yes[i])),
+            tags$td(class = "num", pct(d$vuln_no[i])),
+            tags$td(class = "num", sprintf("%+.0f", 100 * d$gap[i])),
+            tags$td(class = paste("small fw-semibold", switch(d$strength[i], Strong = "text-success", Moderate = "text-primary",
+                                                               Weak = "text-warning", "text-muted")), d$strength[i])))))),
+        if (length(skipped)) tags$div(class = "small text-muted mt-1",
+                                      sprintf("No suggestion for %d column(s) (already yes/no, constant, not observable, or no clear split): %s.",
+                                              length(skipped), paste(utils::head(skipped, 15), collapse = ", ")),
+                                      if (length(skipped) > 15) " ..."),
+        tags$div(class = "small text-muted mt-1", "Ticked by default: the splits with a significant gap (chi-square p < 0.05).")
+      )
+    }
 
     observeEvent(input$add_cond, n_cond(min(n_cond() + 1L, 8L)))
 
@@ -210,14 +331,11 @@ mod_var_calc_server <- function(id, get_data, set_data, log = NULL, phase = "Sel
       df <- get_data()
       cs <- intersect(input$bulk_cols %||% character(0), names(df))
       if (!length(cs)) stop("Select the columns to binarise.", call. = FALSE)
-      prefix <- input$bulk_prefix %||% ""
-      nms <- paste0(prefix, cs)
-      bad <- nms[make.names(nms) != nms]
-      if (length(bad)) stop("These names are not valid column names: ", paste(bad, collapse = ", "),
-                            ". Change the prefix.", call. = FALSE)
+      # source name + ending, made valid (spaces, slashes, a leading digit)
+      nms <- make.names(paste0(cs, input$bulk_suffix %||% "_Bin"))
       clash <- intersect(nms, names(df))
       if (length(clash) && !isTRUE(input$replace)) {
-        stop("Already exist: ", paste(clash, collapse = ", "), ". Tick 'Replace if it exists' or change the prefix.",
+        stop("Already exist: ", paste(clash, collapse = ", "), ". Tick 'Replace if it exists' or change the ending.",
              call. = FALSE)
       }
       vals <- lapply(cs, function(cl) calc_condition(df, list(list(column = cl, op = input$bulk_op %||% "==",
@@ -225,7 +343,7 @@ mod_var_calc_server <- function(id, get_data, set_data, log = NULL, phase = "Sel
                                                      "all", input$bulk_coding %||% "10"))
       lab <- stats::setNames(names(calc_operators()), calc_operators())[[input$bulk_op %||% "=="]]
       rule <- if (input$bulk_op %in% c("is_missing", "not_missing")) lab else paste(lab, input$bulk_val)
-      list(names = nms, values = vals,
+      list(names = nms, values = vals, sources = cs, rule = rule,
            descriptions = sprintf("Bulk: %s %s", cs, rule))
     }
 
@@ -279,6 +397,17 @@ mod_var_calc_server <- function(id, get_data, set_data, log = NULL, phase = "Sel
 
     # Computed once per click, from the inputs as they are at that moment.
     observeEvent(input$preview, {
+      if (optimal()) {
+        d <- tryCatch(opt_compute(), error = function(e) e)
+        if (inherits(d, "error")) {
+          opt_res(NULL)
+          output$preview_ui <- renderUI(tags$div(class = "alert alert-danger small mb-0", conditionMessage(d)))
+          return()
+        }
+        opt_res(d)
+        output$preview_ui <- renderUI(opt_table(d))
+        return()
+      }
       if (identical(input$type, "bulk")) {
         r <- tryCatch(bulk_compute(), error = function(e) e)
         ui <- if (inherits(r, "error")) tags$div(class = "alert alert-danger small mb-0", conditionMessage(r)) else {
@@ -307,6 +436,48 @@ mod_var_calc_server <- function(id, get_data, set_data, log = NULL, phase = "Sel
 
     observeEvent(input$create, {
       df <- get_data()
+      if (optimal()) {
+        d <- opt_res()
+        if (is.null(d)) {
+          # show what will be created first
+          d <- tryCatch(opt_compute(), error = function(e) e)
+          if (inherits(d, "error")) {
+            output$preview_ui <- renderUI(tags$div(class = "alert alert-danger small mb-0", conditionMessage(d)))
+          } else {
+            opt_res(d); output$preview_ui <- renderUI(opt_table(d))
+          }
+          return()
+        }
+        use <- vapply(seq_len(nrow(d)), function(i) {
+          v <- input[[paste0("opt_use_", i)]]
+          if (is.null(v)) d$strength[i] != "Not significant" else isTRUE(v)
+        }, logical(1))
+        d <- d[use, , drop = FALSE]
+        if (!nrow(d)) { showNotification("Tick at least one variable to create.", type = "warning"); return() }
+        conds <- lapply(seq_len(nrow(d)), function(i) list(list(column = d$variable[i], op = d$rule[[i]]$op, value = d$rule[[i]]$value)))
+        desc <- vapply(conds, function(cn) paste("Best split:", calc_describe_condition(cn)), character(1))
+        for (i in seq_len(nrow(d))) df[[d$new_name[i]]] <- calc_condition(df, conds[[i]], "all", input$bulk_coding %||% "yesno")
+        set_data(df)
+        label_new(d$new_name, d$variable, vapply(seq_len(nrow(d)), function(i) {
+          r <- d$rule[[i]]; if (identical(r$op, ">=")) paste("at least", r$value) else paste(strsplit(r$value, ",")[[1]], collapse = " or ")
+        }, character(1)))
+        now <- format(Sys.time(), "%Y-%m-%d %H:%M")
+        created(rbind(created()[!created()$name %in% d$new_name, , drop = FALSE],
+                      data.frame(name = d$new_name, definition = desc, created = now, stringsAsFactors = FALSE)))
+        if (!is.null(log)) {
+          entry <- data.frame(
+            timestamp = format(Sys.time(), "%Y-%m-%d %H:%M:%S"), uid = "(all rows)",
+            column = d$new_name, old_value = "", new_value = desc,
+            action = paste0(phase, ": Variable created"), user = Sys.getenv("USERNAME", Sys.getenv("USER", "")),
+            reason = "Binarise: best split for vulnerability", stringsAsFactors = FALSE)
+          log(rbind(log(), entry[, names(log()), drop = FALSE]))
+        }
+        removeModal()
+        showNotification(sprintf("%d yes/no variable%s created (%s): they are in the Criteria table.", nrow(d),
+                                 if (nrow(d) == 1) "" else "s", paste(d$new_name, collapse = ", ")),
+                         type = "message", duration = 8)
+        return()
+      }
       if (identical(input$type, "bulk")) {
         r <- tryCatch(bulk_compute(), error = function(e) e)
         if (inherits(r, "error")) {
@@ -315,6 +486,7 @@ mod_var_calc_server <- function(id, get_data, set_data, log = NULL, phase = "Sel
         }
         for (i in seq_along(r$names)) df[[r$names[i]]] <- r$values[[i]]
         set_data(df)
+        label_new(r$names, r$sources, r$rule)
         now <- format(Sys.time(), "%Y-%m-%d %H:%M")
         created(rbind(created()[!created()$name %in% r$names, , drop = FALSE],
                       data.frame(name = r$names, definition = r$descriptions, created = now,

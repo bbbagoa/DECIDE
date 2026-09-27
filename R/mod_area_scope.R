@@ -16,7 +16,8 @@ mod_area_scope_ui <- function(id, title = "Areas covered") {
   ns <- NS(id)
   lvl <- function(k, label) tags$div(
     class = "wfp-scope-level",
-    selectInput(ns(paste0("col", k)), paste(label, "column"), choices = c("(none)" = ""), width = "100%", selectize = FALSE),
+    selectizeInput(ns(paste0("col", k)), paste(label, "column"), choices = c("(none)" = ""), width = "100%",
+                   options = list(allowEmptyOption = TRUE)),
     shinyWidgets::pickerInput(ns(paste0("val", k)), NULL, choices = character(0), multiple = TRUE, width = "100%",
                               options = shinyWidgets::pickerOptions(container = "body", actionsBox = TRUE, liveSearch = TRUE,
                                                                     noneSelectedText = "All areas",

@@ -297,7 +297,8 @@ correlation_html <- function(cm, cutoff = 0.8) {
 #'
 #' @param prof Output of `criteria_profile()`, plus `max_r`, `max_with` and
 #'   `suggest` (the partner it duplicates, or NA).
-#' @param drop List of tags (one per row), the page's Drop checkboxes.
+#' @param drop List of tags (one per row), the page's Drop checkboxes, or
+#'   NULL for no Drop column.
 #' @noRd
 profile_html <- function(prof, drop) {
   pct <- function(x) ifelse(is.na(x), "-", sprintf("%.1f%%", 100 * x))
@@ -315,7 +316,7 @@ profile_html <- function(prof, drop) {
       tags$td(class = "num", pct(r$prev_not)),
       tags$td(class = "num", tags$strong(sprintf("%+.1f pts", 100 * r$gap))),
       tags$td(class = "num", if (is.na(r$max_r)) "-" else tags$span(title = r$max_with, sprintf("%.2f", r$max_r))),
-      tags$td(drop[[i]])
+      if (!is.null(drop)) tags$td(drop[[i]])
     )
   })
   tags$div(
@@ -326,7 +327,7 @@ profile_html <- function(prof, drop) {
         tags$th("Criterion"), tags$th(class = "num", "Valid n"), tags$th(class = "num", "Missing"),
         tags$th(class = "num", "Prevalence"), tags$th(class = "num", "Vulnerable"),
         tags$th(class = "num", "Not vuln."), tags$th(class = "num", "Gap"),
-        tags$th(class = "num", "Max |r|"), tags$th("Drop")
+        tags$th(class = "num", "Max |r|"), if (!is.null(drop)) tags$th("Drop")
       )),
       tags$tbody(rows)
     )
@@ -438,8 +439,8 @@ design_guide_modal <- function() {
              "Binary recoding of any categorical or numeric column; missing outcomes are left out of every estimate. Likely outcome columns (CARI, FCS, rCSI, LCSI) are listed first.",
              "WFP (2021) CARI Technical Guidance; Targeting Advisory 1/2025.",
              "If the outcome has more than two levels, build the two-level version with the calculator and document the cut in its name."),
-        step(3, "Criteria Screening", "which variables of the data point to vulnerability, and which repeat each other",
-             "Right after the vulnerability framework, every yes/no variable of the data is compared with it, before any criterion is chosen. Read each variable's prevalence, its share among vulnerable and other households and the plain-language reading; optionally run Quick screening; tick the promising ones, click Select, review the correlation matrix and the statistics, drop the ones that repeat each other and continue. Variables with several answers or numbers get a suggested yes/no version at the top of the step: create the ones you want and they join the screening.",
+        step(3, "Criteria", "which variables point to vulnerability, which repeat each other, and which go to the model",
+             "One table lists every yes/no variable of the data with its share among vulnerable and other households, its odds ratio and adjusted p-value, the variable it overlaps with and its missing answers. The associated variables come ticked in Use, except the weaker of any pair that repeats each other. Adjust the ticks and continue: the ticked criteria go to the model. Binarise variables (the variable calculator's bulk mode) turns variables with several answers or numbers into yes/no with the split that separates vulnerable households best; the new variables join the table. Correlations opens the correlation matrix and statistics of the ticked variables.",
              tagList("Suggestions: for a variable with 3 to 15 answers, the answers where vulnerability is above average become 'yes'; for a number, every cut-off between the 10th and 90th percentiles is tried and the one with the largest gap in vulnerability is kept, each side holding at least 5% of the households (whole numbers keep a whole cut-off). They are built by the variable calculator and listed with the calculated variables. ",
                      "Quick screening tests each criterion alone against the outcome and reports its odds ratio, adjusted p-value and a verdict. ",
                      "The correlation matrix shows pairs of criteria that say the same thing; one of each pair above the cut-off is proposed for dropping."),
@@ -450,8 +451,8 @@ design_guide_modal <- function() {
                      "Overlap: phi coefficients on complete pairs; pairs at or above |r| = 0.8 flagged, dropping the member with the larger mean absolute correlation (as caret::findCorrelation)."),
              "Benjamini & Hochberg (1995) JRSS B 57(1); Holm (1979) Scand. J. Stat. 6(2); Agresti (2013) Categorical Data Analysis, 3rd ed.; Targeting OGN (2021) ch. 5.",
              "A suggested cut-off is a starting point: it must still make sense on the ground and be verifiable at registration. A criterion with no clear association on its own can still matter next to others: keep what field knowledge supports and let the model decide the net weights."),
-        step(4, "Criteria Selection", "what goes to the model",
-             "Confirm the criteria that go to the model: those kept at the screening come pre-selected; add or remove any. Only criteria a registration team can observe and verify belong here.",
+        step(4, "Criteria review", "what may go to the model",
+             "Only criteria a registration team can observe and verify belong in the model; blocked columns never reach the table. Validate the criteria with the community before implementation.",
              "Each criterion is turned into 0/1. Columns that are outcome indicators, identifiers, constants or not yes/no are blocked with the reason.",
              "Criteria that cannot be observed at registration, or that households can easily misreport, make a card that is gamed or unfair. Fewer, stronger criteria make a card communities can understand.",
              "Binarisation of text and numeric answers (yes/no, 1/0, true/false in several languages). Blocking rules are listed next to the picker.",

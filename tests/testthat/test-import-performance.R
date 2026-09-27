@@ -32,9 +32,9 @@ test_that("apply_odk_labels translates select_one and select_multiple values", {
     assets = c(tv = "Television", radio = "Radio", bike = "Bicycle")
   )
   out <- TargetWise:::apply_odk_labels(df, label_map)
-  expect_equal(out$sex, c("Male", "Female", NA, "x"))
+  expect_equal(as.character(out$sex), c("Male", "Female", NA, "x"))
   # Labels joined by "; " (they can contain spaces), and one Yes/No column per choice.
-  expect_equal(out$assets, c("Television; Radio", "Radio", NA, "Television; Bicycle; unknown"))
+  expect_equal(as.character(out$assets), c("Television; Radio", "Radio", NA, "Television; Bicycle; unknown"))
   expect_equal(out$assets_tv, c("Yes", "No", NA, "Yes"))
   expect_equal(out$assets_unknown, c("No", "No", NA, "Yes"))
 })
