@@ -2847,10 +2847,10 @@ td[data-tw], th[data-tw] { cursor: help; }
 }
 [data-bs-theme="dark"] .dropdown-item, [data-bs-theme="dark"] .selectize-dropdown .option,
 [data-bs-theme="dark"] .bootstrap-select .dropdown-menu li a { color: var(--body-text) !important; }
-[data-bs-theme="dark"] .dropdown-item:hover, [data-bs-theme="dark"] .dropdown-item.active, [data-bs-theme="dark"] .dropdown-item:focus,
+[data-bs-theme="dark"] .dropdown-item:hover, [data-bs-theme="dark"] .dropdown-item:focus,
 [data-bs-theme="dark"] .selectize-dropdown .option.active, [data-bs-theme="dark"] .selectize-dropdown .option:hover,
-[data-bs-theme="dark"] .bootstrap-select .dropdown-menu li a:hover, [data-bs-theme="dark"] .bootstrap-select .dropdown-menu li.selected a {
-  background-color: rgba(47, 159, 224, .18) !important; color: #fff !important;
+[data-bs-theme="dark"] .bootstrap-select .dropdown-menu li a:hover {
+  background-color: rgba(255, 255, 255, .07) !important; color: #fff !important;
 }
 [data-bs-theme="dark"] .selectize-dropdown .optgroup-header, [data-bs-theme="dark"] .dropdown-header {
   background-color: var(--surface) !important; color: var(--text-muted) !important;
@@ -2883,3 +2883,14 @@ td[data-tw], th[data-tw] { cursor: help; }
 [data-bs-theme="dark"] .tw-ct-table tr.tw-ct-total th { background: rgba(255, 255, 255, .05); }
 [data-bs-theme="dark"] .tw-ov-chip { background: rgba(255, 255, 255, .08); }
 [data-bs-theme="dark"] .tw-ov-chip.zoomed { background: rgba(47, 159, 224, .18); color: #8cc7f0; }
+
+/* Pickers: one row reads as selected (bold blue with a tick); hover is only a faint tint,
+   so the row under the mouse never looks like a second selection */
+.bootstrap-select .dropdown-menu li > a { position: relative; }
+.bootstrap-select .dropdown-menu li:not(.selected) > a.active, .bootstrap-select .dropdown-menu li:not(.selected).active > a { background: transparent !important; color: inherit !important; }
+.bootstrap-select .dropdown-menu li > a:hover { background: rgba(128, 128, 128, .12) !important; }
+.bootstrap-select .dropdown-menu li.selected > a, .bootstrap-select .dropdown-menu li.selected > a:hover {
+  font-weight: 600; color: var(--wfp-blue) !important; background: rgba(10, 110, 180, .08) !important; padding-right: 28px; }
+.bootstrap-select:not([multiple]) .dropdown-menu li.selected > a::after, .bootstrap-select .dropdown-menu:not(.show-tick) li.selected > a::after {
+  content: "\2713"; position: absolute; right: 10px; top: 50%; transform: translateY(-50%); font-weight: 700; }
+[data-bs-theme="dark"] .bootstrap-select .dropdown-menu li.selected > a { color: #8cc7f0 !important; background: rgba(47, 159, 224, .14) !important; }
