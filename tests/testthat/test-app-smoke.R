@@ -24,6 +24,12 @@ skip_if_no_app_driver <- function() {
   cm$default_timeout <- 120
 }
 
+# The value of an Overview figure (tiles carry their label as data-key)
+tile <- function(app, key) {
+  app$wait_for_js(sprintf("!!document.querySelector('#overview_1-col_tiles .tw-tile[data-key=\"%s\"]')", key), timeout = 60 * 1000)
+  app$get_js(sprintf("document.querySelector('#overview_1-col_tiles .tw-tile[data-key=\"%s\"] .tw-tile-value').textContent", key))
+}
+
 # The mapping the fixture needs. Keys are the setup inputs.
 fixture_mapping <- function() {
   list(
@@ -109,14 +115,16 @@ test_that("the app boots, imports, maps variables and reveals the analysis tabs"
   app$wait_for_idle(timeout = 30 * 1000)
   app$click("setup_1-save")
   app$wait_for_idle(timeout = 60 * 1000)
+  # The review (values, dates, checks, what the data allow) comes before the analysis.
+  expect_true(app$get_js("!!document.getElementById('setup_1-review_confirm')"))
+  app$click("setup_1-review_confirm")
+  app$wait_for_idle(timeout = 60 * 1000)
 
-  # Overview is reachable and counts what the fixture contains. Both headline
-  # KPIs are weighted, so the fixture's sampling weights are the expectation.
-  values <- app$get_values(output = c("overview_1-stat_hh", "overview_1-stat_indiv"))
-  expect_equal(values$output[["overview_1-stat_hh"]],
-               format(round(sum(expected$weight)), big.mark = ","))
-  expect_equal(values$output[["overview_1-stat_indiv"]],
-               format(round(sum(expected$weight * expected$HHSize)), big.mark = ","))
+  # Overview is reachable and counts what the fixture contains.
+  values <- list(output = list(`overview_1-stat_hh` = tile(app, "Households"), `overview_1-stat_indiv` = tile(app, "Individuals")))
+  # registration data: every household counts once, whatever weight is mapped
+  expect_equal(values$output[["overview_1-stat_hh"]], format(nrow(expected), big.mark = ","))
+  expect_equal(values$output[["overview_1-stat_indiv"]], format(sum(expected$HHSize), big.mark = ","))
 
   # Every analysis panel is now visible (they start hidden).
   expect_equal(
@@ -172,4 +180,114 @@ test_that("a saved setup profile reapplies to a fresh import of the same form", 
     expect_equal(got[[paste0("setup_1-", k)]], mapping[[k]],
                  info = paste("profile did not restore", k))
   }
+})
+
+
+# Open every analysis panel and every tab inside it, and return the errors
+# shown anywhere on the way.
+visible_errors_everywhere <- function(app) {
+  errs <- character(0)
+  grab <- function() unlist(jsonlite::fromJSON(app$get_js(
+    "JSON.stringify(Array.from(document.querySelectorAll('.shiny-output-error'))
+       .filter(function(d){return d.offsetParent !== null && !d.classList.contains('shiny-output-error-validation')})
+       .map(function(d){return (d.textContent||'').trim().slice(0,160)}))")))
+  for (panel in c("overview_panel", "dq_panel", "spot_panel", "ben_panel")) {
+    app$run_js(sprintf("document.querySelector('a[data-value=%s]').click()", panel))
+    app$wait_for_idle(timeout = 60 * 1000)
+    errs <- c(errs, grab())
+    n <- app$get_js(sprintf("document.querySelectorAll('.tab-pane[data-value=%s] .nav-link').length", panel))
+    for (i in seq_len(n) - 1) {
+      app$run_js(sprintf("document.querySelectorAll('.tab-pane[data-value=%s] .nav-link')[%d].click()", panel, i))
+      app$wait_for_idle(timeout = 60 * 1000)
+      errs <- c(errs, grab())
+    }
+  }
+  unique(errs)
+}
+
+start_app <- function(name) {
+  store <- withr::local_tempdir(.local_envir = parent.frame())
+  withr::local_envvar(c(TARGETWISE_SESSION_DIR = store, TARGETWISE_UPDATE_CHECK = "false"), .local_envir = parent.frame())
+  app <- shinytest2::AppDriver$new(
+    shiny::shinyApp(ui = app_ui, server = app_server),
+    name = name, height = 1200, width = 1600,
+    load_timeout = 240 * 1000, timeout = 30 * 1000
+  )
+  withr::defer(app$stop(), envir = parent.frame())
+  app
+}
+
+import_and_open_setup <- function(app, file) {
+  app$upload_file(`file_import_1-file_in` = file)
+  app$wait_for_js("!!document.getElementById('btn_import_to_setup')", timeout = 90 * 1000)
+  app$wait_for_idle(timeout = 60 * 1000)
+  app$click("btn_import_to_setup")
+  app$wait_for_idle(timeout = 30 * 1000)
+}
+
+test_that("with only the id and one area level mapped, every tab opens without an error", {
+  skip_if_no_app_driver()
+  skip_on_cran()
+  app <- start_app("targeting-minimal")
+  import_and_open_setup(app, testthat::test_path("fixtures", "mini_targeting.csv"))
+  keys <- TargetWise:::setup_keys()
+  minimal <- stats::setNames(as.list(rep("", length(keys))), keys)
+  minimal$unique_id <- "instanceID"; minimal$admin1 <- "Province"
+  app$set_inputs(!!!stats::setNames(minimal, paste0("setup_1-", names(minimal))))
+  app$wait_for_idle(timeout = 30 * 1000)
+  app$click("setup_1-save")
+  app$wait_for_idle(timeout = 60 * 1000)
+  app$click("setup_1-review_confirm")
+  app$wait_for_idle(timeout = 60 * 1000)
+
+  # the counts that need nothing else still come out; the others say why
+  expect_equal(tile(app, "Households"), "60")
+  expect_true(app$get_js("!!document.querySelector('.tw-ready-strip')"))
+  expect_equal(visible_errors_everywhere(app), character(0))
+})
+
+test_that("a French export is guessed, standardised and opens without an error", {
+  skip_if_no_app_driver()
+  skip_on_cran()
+  d <- utils::read.csv(testthat::test_path("fixtures", "mini_targeting.csv"), stringsAsFactors = FALSE)
+  fr <- data.frame(code_menage = d$instanceID, date_enquete = format(as.Date(d$SvyDate), "%d/%m/%Y"),
+                   enqueteur = d$enumerator, province = d$Province, territoire = d$Territoire,
+                   gps_latitude = d$lat, gps_longitude = d$lon,
+                   sexe_chef = ifelse(d$HHHSex == "Male", "Homme", "Femme"), taille_menage = d$HHSize,
+                   handicap = ifelse(d$disability == "Yes", "Oui", "Non"), stringsAsFactors = FALSE)
+  f <- withr::local_tempfile(fileext = ".csv"); utils::write.csv(fr, f, row.names = FALSE)
+  app <- start_app("targeting-french")
+  import_and_open_setup(app, f)
+  got <- app$get_values(input = c("setup_1-unique_id", "setup_1-date", "setup_1-hhh_sex", "setup_1-lat"))$input
+  expect_equal(unlist(got[c("setup_1-unique_id", "setup_1-date", "setup_1-hhh_sex", "setup_1-lat")]),
+               c(`setup_1-unique_id` = "code_menage", `setup_1-date` = "date_enquete", `setup_1-hhh_sex` = "sexe_chef", `setup_1-lat` = "gps_latitude"))
+  app$click("setup_1-save")
+  app$wait_for_idle(timeout = 60 * 1000)
+  # Homme / Femme are offered as Male / Female
+  rc <- app$get_values(input = c("setup_1-rc_hhh_sex_1", "setup_1-rc_hhh_sex_2"))$input
+  expect_setequal(unname(unlist(rc)), c("Male", "Female"))
+  app$click("setup_1-review_confirm")
+  app$wait_for_idle(timeout = 60 * 1000)
+  expect_equal(visible_errors_everywhere(app), character(0))
+})
+
+test_that("the country office's profile is offered on a fresh import", {
+  skip_if_no_app_driver()
+  skip_on_cran()
+  store <- withr::local_tempdir()
+  withr::local_envvar(c(TARGETWISE_SESSION_DIR = store, TARGETWISE_UPDATE_CHECK = "false"))
+  TargetWise:::app_setting_set("country_office", "Chad", NULL)
+  prof <- TargetWise:::profile_from_settings(
+    c(fixture_mapping()[c("unique_id", "admin1", "admin2", "hhh_sex")], list(recode_maps = list(hhh_sex = list(Female = "Female", Male = "Male")),
+                                                                              country_office = "Chad")), name = "chad-round-2")
+  save_profile(prof, user = NULL)
+  app <- shinytest2::AppDriver$new(
+    shiny::shinyApp(ui = app_ui, server = app_server),
+    name = "targeting-country", height = 1200, width = 1600,
+    load_timeout = 240 * 1000, timeout = 30 * 1000
+  )
+  withr::defer(app$stop())
+  import_and_open_setup(app, testthat::test_path("fixtures", "mini_targeting.csv"))
+  expect_match(app$get_js("(document.querySelector('.modal .alert-info')||{}).textContent || ''"), "Applied the Chad profile 'chad-round-2'")
+  expect_equal(app$get_js("document.querySelectorAll('.modal .tw-conf-profile').length"), 4)
 })

@@ -314,6 +314,7 @@ design_report_md <- function(x, figures = character(0)) {
         if (!is.null(si)) sprintf("- **Concentration:** the selected households have %.1f times as many deprivations as the others (%.1f against %.1f of %d criteria) and hold %s of all deprivations.",
                                   si$ratio, si$mean_sel, si$mean_not, si$n_criteria, md_pct(si$concentration)),
         "- **Inclusion and exclusion errors: not measured** (no outcome indicator). Measure them on a verification sample or the PDM (Monitoring) before scaling up.", "")
+    add(ranking_validity_reading(x))
     fig("rank_hist", "households_map")
     ca <- x$cov_area
     if (!is.null(ca) && nrow(ca)) {
@@ -364,6 +365,70 @@ design_report_md <- function(x, figures = character(0)) {
   paste(L, collapse = "\n")
 }
 
+#' How to read the validity checks of a ranking, with this design's values
+#'
+#' Without an outcome, accuracy (inclusion / exclusion error) cannot be
+#' measured: the checks say whether the ranking is coherent, reproducible and
+#' does what it claims. Each row gives the value, what it means here and what
+#' it cannot tell.
+#' @noRd
+ranking_validity_reading <- function(x) {
+  st <- x$stability; si <- x$insights; ix <- x$index %||% list()
+  meth <- x$model$method_code %||% ""; cl <- identical(ix$type, "cluster")
+  num <- function(v, d = 2) if (is.null(v) || !is.finite(v)) "n/a" else formatC(v, format = "f", digits = d)
+  band <- function(v, cuts, words) if (is.null(v) || !is.finite(v)) "Not computed." else words[findInterval(v, cuts) + 1]
+  rows <- list()
+  row <- function(check, value, reading, limit) rows[[length(rows) + 1]] <<- data.frame(
+    Check = check, Value = value, `What it means here` = reading, `What it cannot tell` = limit, check.names = FALSE)
+  a <- ix$alpha
+  row("Internal consistency (Cronbach's alpha)", num(a),
+      paste(band(a, c(.5, .7), c("The criteria barely go together (below 0.5).", "Weak consistency (0.5-0.7).", "The criteria form a consistent scale (0.7 and above).")),
+            if (identical(meth, "count")) "A deprivation count is multidimensional on purpose, so a low value is expected and not a flaw."
+            else if (meth %in% c("pca", "mca")) "An index assumes one dominant dimension: a low value weakens it; check the variation the first axis explains."
+            else ""),
+      "Alpha rises with the number of criteria, so many weak criteria can look consistent. Consistency is not accuracy.")
+  row("Stability of the selection (Jaccard)", if (is.null(st)) "not checked" else sprintf("%.0f%% (%.0f%%-%.0f%%)", 100 * st$jaccard, 100 * st$low, 100 * st$high),
+      if (is.null(st)) "Run the stability check before adopting: an unstable list depends on who happened to be surveyed."
+      else paste0(band(st$jaccard, c(.5, .7, .85), c("Very unstable (below 50%): ", "Unstable (50-70%): ", "Fairly stable (70-85%): ", "Stable (85% and above): ")),
+                  sprintf("of the households selected by the design or by a refit on resampled households, %.0f%% are selected by both (median of %d refits; 10th-90th percentile in brackets).",
+                          100 * st$jaccard, st$draws),
+                  if (st$jaccard < .7) " Rare criteria, weakly separated profiles or many correlated criteria usually cause it." else ""),
+      "A consistently wrong ranking is perfectly stable: stability measures dependence on the sample, not correctness. It depends on the share selected, so compare designs at the same threshold.")
+  if (!is.null(st$spearman) && is.finite(st$spearman))
+    row("Rank agreement (Spearman)", num(st$spearman),
+        "How far households keep their order across the refits, over the whole ranking and not only at the cut (1 = same order).",
+        "Households tied on the same score are ordered arbitrarily, which lowers it for coarse scores.")
+  if (cl) {
+    row("Separation of the profiles (silhouette)", num(ix$silhouette),
+        band(ix$silhouette, c(.25, .5), c("Hardly any structure (below 0.25): the profiles cut through a continuum.",
+                                          "Weak but real profiles (0.25-0.5).", "Clearly separated profiles (0.5 and above).")),
+        "Well separated profiles need not be the vulnerable ones: the team's choice of targeted profiles carries that.")
+    if (!is.null(ix$entropy) && is.finite(ix$entropy))
+      row("Classification certainty (entropy, latent classes)", num(ix$entropy),
+          band(ix$entropy, .8, c("Many households sit between classes (below 0.8).", "Households belong clearly to one class (0.8 and above).")),
+          "Says nothing about which class is vulnerable.")
+    if (!is.null(ix$fidelity))
+      row("Fidelity of the points (AUC)", num(ix$fidelity),
+          paste("The additive points applied at registration reproduce the targeted profiles",
+                band(ix$fidelity, c(.8, .9), c("only partly (below 0.8): some targeted households score low, because the profiles are not a straight cut through the criteria.",
+                                               "mostly (0.8-0.9).", "faithfully (0.9 and above)."))),
+          "Measured against the profiles, not against need.")
+  }
+  if (!is.null(si))
+    row("Concentration of deprivations", sprintf("%.1fx, %s", si$ratio, md_pct(si$concentration)),
+        sprintf("The selected households meet %.1f times as many criteria in the vulnerable direction as the others and hold %s of all deprivations.",
+                si$ratio, md_pct(si$concentration)),
+        "Partly circular: the selection is made on these criteria, so the selected always carry more of them. Use it to compare designs at the same threshold and to spot criteria or areas the ranking barely reaches.")
+  row("Inclusion and exclusion errors", "not measured",
+      "Without an outcome indicator there is nothing to compare the selection with.",
+      "Only an external reference measures accuracy: post-distribution monitoring (Monitoring, PDM, 'Calibrate the ranking'), community validation or an outcome collected on a sub-sample.")
+  tab <- do.call(rbind, rows)
+  c("### How to read these checks", "",
+    "Without an outcome indicator, accuracy in the usual sense cannot be measured. These checks say whether the ranking is **coherent** (the criteria or profiles form a real structure), **reproducible** (the list does not depend on who happened to be surveyed) and **does what it claims** (the points reproduce the chosen profiles; the selection concentrates the deprivations). They are necessary conditions for good targeting, not proof of it.", "",
+    md_table(tab), "",
+    "**Reading order.** 1) Is there a structure worth ranking on: alpha for an index, silhouette and entropy for profiles. 2) Is the selection at least fairly stable (70% or more) at the chosen threshold. 3) For profiles, do the points reproduce them. 4) Does the selection look sensible: concentration, share selected by area. 5) After distribution, calibrate the ranking on post-distribution monitoring data: that is its accuracy test.", "")
+}
+
 #' Methods appendix of a vulnerability ranking (no outcome indicator)
 #' @noRd
 ranking_report_methods <- function(x) {
@@ -397,16 +462,20 @@ ranking_report_methods <- function(x) {
   item("Stability of the selection",
        "The design is refitted on 20 bootstrap resamples of the households; each refit scores every household and selects the same share. ",
        "The Jaccard index (households selected by both / by either) compares each refit's selection with the design's; the median and the ",
-       "10th-90th percentiles are reported. Spearman's correlation compares the order of the households. Above 0.85 reads as stable, 0.7-0.85 fairly stable, 0.5-0.7 unstable.")
+       "10th-90th percentiles are reported. Spearman's correlation compares the order of the households. Above 0.85 reads as stable, 0.7-0.85 fairly stable, 0.5-0.7 unstable, below 0.5 very unstable. ",
+       "Each refit uses the same method and settings; a refit that fails (a criterion constant in the resample) is left out. The check measures ",
+       "sensitivity to the sample, not correctness, and depends on the share selected.")
   item("Internal consistency",
        "Cronbach's alpha of the 0/1 criteria: how far they measure one thing. Low values are expected when the criteria cover different ",
-       "dimensions of vulnerability on purpose; they then call for counting or profiles rather than a single index.")
+       "dimensions of vulnerability on purpose; they then call for counting or profiles rather than a single index. Computed on the survey weights ",
+       "when set (for 0/1 criteria it equals the Kuder-Richardson KR-20). 0.7 and above reads as consistent, 0.5-0.7 weak; alpha rises with the number of criteria.")
   if (identical(ix$type, "cluster")) item("Separation of the profiles",
        "Mean silhouette width (on up to 2,000 households): for each household, how much closer it is to its own profile than to the nearest other one, ",
        "from -1 to 1 (above 0.5 clear, 0.25-0.5 weak but real). For latent classes, the entropy of the class probabilities (above 0.8 clear) and the BIC (lower is better).")
   item("Concentration",
        "A household's deprivations are the criteria it meets in the vulnerable direction. The report compares their mean among the selected and the ",
-       "others, and the share of all deprivations the selected hold.")
+       "others, and the share of all deprivations the selected hold. Because the selection is made on the same criteria, the selected always carry ",
+       "more of them: the figures compare designs and show where the ranking reaches, they do not validate it.")
   item("Measuring the errors later",
        "Apply the adopted ranking to a verification sample or to post-distribution monitoring data that carry a food-security outcome ",
        "(Monitoring, PDM): the inclusion and exclusion errors, the AUC and a better threshold then become measurable, and the design can be recalibrated.")
@@ -702,7 +771,7 @@ report_write_page <- function(file, md, plots = list(), captions = character(0),
     '<footer class="wrap">', tr("Generated"), ' ', esc(format(Sys.time(), "%Y-%m-%d %H:%M")), '. ', tr(footer), '</footer>',
     # Long tables show their first 10 rows and a button for the rest (all
     # rows are printed).
-    '<script>(function(){document.querySelectorAll("main table").forEach(function(t){',
+    '<script>(function(){document.querySelectorAll("main table:not(.bt)").forEach(function(t){',
     'var rows=t.tBodies.length?Array.from(t.tBodies[0].rows):[];if(rows.length<=12)return;',
     'rows.slice(10).forEach(function(r){r.classList.add("tw-more-row");});',
     'var b=document.createElement("button");b.className="tw-more-btn";b.type="button";',
@@ -817,6 +886,35 @@ report_inline_deps <- function(deps) {
 design_report_css <- function() {
   "
   :root { --blue:#0A6EB4; --ink:#1f2a37; --muted:#5b6b7e; --line:#dfe6ee; --tint:#f3f6fa; }
+  .tw-figs { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; margin: 12px 0 22px; }
+  .tw-figs:not(.tw-figs-cards) { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .tw-glance { border-left: 4px solid var(--blue); background: var(--tint); border-radius: 0 10px 10px 0; padding: 12px 18px; margin: 8px 0 18px; }
+  .tw-glance ul { margin: 0; padding-left: 18px; } .tw-glance li { margin: 5px 0; line-height: 1.5; }
+  .tw-meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 0 24px; margin: 8px 0 18px; }
+  .tw-meta div { border-bottom: 1px solid var(--line); padding: 8px 0; }
+  .tw-meta dt { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 600; }
+  .tw-meta dd { margin: 2px 0 0; font-size: 14px; }
+  table.bt { width: 100%; border-collapse: collapse; margin: 8px 0 6px; font-size: 13px; }
+  table.bt th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 600; padding: 6px 8px; border-bottom: 2px solid var(--line); }
+  table.bt td { padding: 5px 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  table.bt .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  table.bt tr.bt-group th { background: var(--tint); color: var(--ink); text-transform: none; letter-spacing: 0; font-size: 12px; border-bottom: 1px solid var(--line); padding-top: 8px; }
+  table.bt .bt-label { width: 32%; }
+  table.bt .bt-cell { width: 50%; }
+  .bt-wrap { display: flex; align-items: center; gap: 10px; }
+  .bt-track { position: relative; flex: 1; height: 12px; background: #eef2f6; border-radius: 6px; }
+  .bt-bar { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 6px; }
+  .bt-mark { position: absolute; top: -3px; bottom: -3px; width: 0; border-left: 2px dashed var(--ink); opacity: .55; }
+  .bt-val { width: 44px; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .bt-note { font-size: 12px; color: var(--muted); margin-bottom: 18px; }
+  .bt-mark-key { display: inline-block; width: 0; height: 12px; border-left: 2px dashed var(--ink); opacity: .55; vertical-align: -2px; margin-right: 4px; }
+  .tw-donut { width: 104px; text-align: center; color: var(--ink); }
+  .tw-donut svg { display: block; margin: 0 auto; }
+  .tw-donut-label { font-size: 12px; line-height: 1.2; color: var(--muted); margin-top: 3px; }
+  .tw-figs .tw-tile { background: var(--tint); border-radius: 10px; padding: 8px 12px; min-width: 140px; }
+  .tw-figs .tw-tile-label { font-size: 12px; color: var(--muted); }
+  .tw-figs .tw-tile-value { font-size: 20px; font-weight: 700; }
+  .tw-figs .tw-tile-sub { font-size: 11px; color: var(--muted); }
   * { box-sizing: border-box; }
   body { margin:0; font-family: Commissioner, 'Segoe UI', system-ui, sans-serif; color: var(--ink);
          font-size: 15px; line-height: 1.6; background: #fff; }

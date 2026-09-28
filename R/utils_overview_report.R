@@ -1,113 +1,124 @@
-#' Data collection summary report (HTML)
+#' Overview report (HTML)
 #'
-#' What the Overview page shows, as a self-contained report: how much was
-#' collected, where, when and by whom, who was surveyed, how vulnerable they
-#' are, and a map. Covers the Overview's filters (areas and period), which it
-#' states. Same page writer and look as the other reports
+#' The Overview page as a self-contained report, from the same functions
+#' (`ov_collection()`, `ov_profile()`, `ov_vulnerability()`): the data
+#' collection, who is in the data, their vulnerability and how it differs
+#' across household profiles, where the data comes from, and the map. Covers
+#' the Overview's filters and, when the figures follow a zoomed map, that map
+#' view, which it states. Same page writer and look as the other reports
 #' (`report_write_page()`).
 #'
-#' @param df The data covered (the Overview's filtered data).
+#' @param df The data covered (the Overview's filtered data, or the map view).
 #' @param x List: `country_office`, `source`, `n_total` (records in the
-#'   data), `areas`, `period`.
+#'   data), `areas`, `period`, `view` (the map view, when zoomed).
 #' @noRd
 write_overview_report <- function(file, df, settings, x, lang = "en") {
-  col <- function(k) { v <- as.character(settings[[k]] %||% "")[1]; if (!is.na(v) && nzchar(v) && v %in% names(df)) v else NULL }
+  col <- function(k) ov_col(settings, df, k)
   num <- function(v) format(round(v), big.mark = ",")
   L <- character(0)
   add <- function(...) L <<- c(L, ...)
-  kv <- function(v) md_table(data.frame(Item = names(v), Value = unname(v), check.names = FALSE))
+  tiles_of <- function(t) lapply(t, function(z) list(z$label, z$value, z$sub %||% ""))
+  as_var <- function(ch) { d <- data.frame(category = ch$data$category, n = round(ch$data$n, 1), stringsAsFactors = FALSE); attr(d, "label") <- ch$title; d }
   n <- nrow(df)
-  hs <- col("hh_size"); people <- if (is.null(hs)) NA else sum(as_number(df[[hs]]), na.rm = TRUE)
+  plots <- list(); caps <- character(0); blocks <- list()
+  cl <- ov_collection(df, settings)
+  pr <- ov_profile(df, settings)
+  v <- ov_vulnerability(df, settings)
+  mp <- overview_map_points(df, settings)
+  notes <- character(0)
+
+  # At a glance: the key findings in sentences, then the headline figures
+  add("# Overview", "",
+      "What was collected, when and where, who the households are and how vulnerable they are.", "",
+      "## At a glance", "", "@@GLANCE@@", "", "@@KPI@@", "")
+  blocks[["@@GLANCE@@"]] <- paste0('<div class="tw-glance"><ul>',
+    paste(sprintf("<li>%s</li>", htmltools::htmlEscape(ov_key_findings(n, cl, pr, v, if (!is.null(mp)) attr(mp, "n_total")))), collapse = ""), '</ul></div>')
+
+  add("## 1. Data and coverage", "", "@@META@@", "")
+  blocks[["@@META@@"]] <- ov_meta_html(c(
+    "Source" = x$source %||% "not recorded", "Records in the data" = num(x$n_total), "Records in this report" = num(n),
+    "Areas covered" = x$areas %||% "All areas", "Period covered" = x$period %||% "All dates",
+    "Map view" = if (shiny::isTruthy(x$view)) paste0(x$view, " (the figures followed the map)") else ""))
+
+  sec <- 2
   en <- col("enumerator_id"); dt <- col("date")
-  day <- if (is.null(dt)) NULL else suppressWarnings(as.Date(df[[dt]]))
-  vill <- col("village") %||% col("admin4") %||% col("admin3")
-  wcol <- col("weight"); w <- if (is.null(wcol)) NULL else as_number(df[[wcol]])
-
-  totals <- list(
-    list("Households", num(n), sprintf("%s of the %s records in the data", if (x$n_total > 0) sprintf("%.0f%%", 100 * n / x$n_total) else "", num(x$n_total))),
-    if (!is.na(people)) list("Individuals", num(people), sprintf("%.1f per household", people / max(n, 1))),
-    if (!is.null(vill)) list("Communities", num(length(unique(stats::na.omit(df[[vill]])))), sprintf("distinct %s", vill)),
-    if (!is.null(en)) list("Enumerators", num(length(unique(stats::na.omit(df[[en]])))), sprintf("%.0f interviews each on average", n / max(1, length(unique(stats::na.omit(df[[en]])))))),
-    if (!is.null(day) && any(!is.na(day))) list("Days of collection", num(length(unique(stats::na.omit(day)))),
-                                                sprintf("%s to %s", format(min(day, na.rm = TRUE)), format(max(day, na.rm = TRUE)))),
-    if (!is.null(w)) list("Weighted households", num(sum(w, na.rm = TRUE)), sprintf("population estimate (weight: %s)", wcol)))
-  totals <- Filter(Negate(is.null), totals)
-
-  add("# Data collection summary", "",
-      "What was collected, where, when and by whom, and who the households are: the summary behind the Overview page.", "",
-      "## Key figures", "", "@@KPI@@", "")
-
-  add("## 1. Data and coverage", "",
-      kv(c("Source" = x$source %||% "not recorded", "Records in the data" = num(x$n_total), "Records covered by this report" = num(n),
-           "Areas covered" = x$areas %||% "All areas", "Period covered" = x$period %||% "All dates")), "")
-
-  ga <- overview_by_area(df, settings)
-  if (!is.null(ga)) add("## 2. Where the data comes from", "",
-                        "Each Admin 1 subtotal is followed by its Admin 2 units.", "", "@@AREAS@@", "")
-
-  plots <- list(); caps <- character(0)
-  sec <- 3
-  if (!is.null(day) && any(!is.na(day))) {
-    add(sprintf("## %d. Collection over time", sec), "", "@@FIG:days@@", "")
-    tb <- table(day)
-    d <- data.frame(day = names(tb), Interviews = as.integer(tb))
-    plots$days <- rp_base(280) |>
-      billboarder::bb_linechart(d, type = "area-spline") |>
-      billboarder::bb_x_axis(type = "category", tick = list(culling = list(max = 10), multiline = FALSE)) |>
-      rp_colors(c(Interviews = "#0A6EB4")) |>
-      billboarder::bb_legend(show = FALSE)
-    caps[["days"]] <- "Interviews per day"
+  if (!is.null(cl$daily)) {
+    add(sprintf("## %d. Data collection", sec), "", "@@FIG:days@@", "")
+    d <- cl$daily; d$day <- format(d$day, "%d %b")
+    ord <- unique(d$day[order(cl$daily$day)])
+    wide <- stats::reshape(stats::aggregate(n ~ day + area, d, sum), idvar = "day", timevar = "area", direction = "wide")
+    names(wide) <- sub("^n\\.", "", names(wide)); wide[is.na(wide)] <- 0
+    wide <- wide[match(ord, wide$day), , drop = FALSE]
+    for (k in names(wide)[-1]) wide[[k]] <- round(wide[[k]], 1)
+    areas <- names(wide)[-1]
+    plots$days <- rp_base(260) |>
+      billboarder::bb_barchart(wide, stacked = length(areas) > 1) |>
+      billboarder::bb_x_axis(type = "category", tick = list(culling = list(max = 12), multiline = FALSE)) |>
+      rp_colors(stats::setNames(rep_len(c("#0A6EB4", "#26bde2", "#f7b825", "#3f7e44", "#c5192d", "#8a96a3"), length(areas)), areas)) |>
+      billboarder::bb_legend(show = length(areas) > 1)
+    caps[["days"]] <- if (length(areas) > 1) sprintf("Households registered per day, by %s", cl$area_label %||% "area") else "Households registered per day"
     if (!is.null(en)) {
+      day <- suppressWarnings(as.Date(df[[dt]]))
       e <- data.frame(en = as.character(df[[en]]), day = day)
       e <- e[!is.na(e$en) & nzchar(e$en), , drop = FALSE]
       if (nrow(e)) {
         agg <- do.call(rbind, lapply(split(e, e$en), function(g) data.frame(
           Enumerator = g$en[1], Interviews = nrow(g), Days = length(unique(stats::na.omit(g$day))),
           `Per day` = round(nrow(g) / max(1, length(unique(stats::na.omit(g$day)))), 1),
-          First = format(suppressWarnings(min(g$day, na.rm = TRUE))), Last = format(suppressWarnings(max(g$day, na.rm = TRUE))),
+          First = format(suppressWarnings(min(g$day, na.rm = TRUE)), "%d %b"), Last = format(suppressWarnings(max(g$day, na.rm = TRUE)), "%d %b"),
           check.names = FALSE)))
         agg <- agg[order(-agg$Interviews), , drop = FALSE]
-        add("### By enumerator", "",
-            if (nrow(agg) > 30) "The 30 enumerators with the most interviews." else NULL, "",
+        add("### By enumerator", "", if (nrow(agg) > 30) "The 30 enumerators with the most interviews." else NULL, "",
             md_table(utils::head(agg, 30)), "")
       }
     }
     sec <- sec + 1
   }
 
-  bp <- beneficiary_profile(df, settings)
-  if (!is.null(bp) && (length(bp$tiles) || length(bp$vars))) {
-    sc <- rp_share_charts(bp$vars, lang = lang)
-    add(sprintf("## %d. Who was surveyed", sec), "", "@@PROFILE@@", "", sc$rows)
-    plots <- c(plots, sc$plots); caps <- c(caps, sc$captions)
+  if (!is.null(pr)) {
+    add(sprintf("## %d. Who is in the data", sec), "", "@@PROFILE@@", "")
+    blocks[["@@PROFILE@@"]] <- ov_tiles_html(pr$tiles)
+    if (length(pr$charts)) {
+      sc <- rp_share_charts(lapply(pr$charts, as_var), lang = lang)
+      add(sc$rows); plots <- c(plots, sc$plots); caps <- c(caps, sc$captions)
+    }
+    notes <- c(notes, "Shares of households are counted on the households that answered; \"with children under 5\", \"with pregnant or lactating women\" and similar mean at least one such member (a count above zero or a yes).")
     sec <- sec + 1
   }
 
-  vg <- col("v_groups"); el <- col("eligibility"); vs <- col("v_score")
-  if (!is.null(vg) || !is.null(el) || !is.null(vs)) {
-    add(sprintf("## %d. Vulnerability", sec), "")
-    vv <- list()
-    shares <- function(v, label) { tb <- sort(table(v), decreasing = TRUE)
-                                   out <- data.frame(category = names(tb), n = as.integer(tb), stringsAsFactors = FALSE); attr(out, "label") <- label; out }
-    if (!is.null(vg)) { v <- as.character(df[[vg]]); v[is.na(v) | !nzchar(v)] <- "Not answered"; vv$vgroups <- shares(v, "Vulnerability group") }
-    if (!is.null(el)) { f <- eligibility_flag(df[[el]]); vv$elig <- shares(ifelse(is.na(f), "Unknown", ifelse(f, "Eligible", "Not eligible")), "Eligibility") }
-    if (length(vv)) {
-      sv <- rp_share_charts(vv, lang = lang)
-      add(sv$rows); plots <- c(plots, sv$plots); caps <- c(caps, sv$captions)
+  if (!is.null(v)) {
+    add(sprintf("## %d. Vulnerability", sec), "", "@@VULN@@", "")
+    blocks[["@@VULN@@"]] <- ov_tiles_html(v$tiles)
+    if (!is.null(v$groups)) {
+      g <- v$groups
+      add("### Vulnerability groups", "", sprintf("From the least to the most vulnerable%s.", if (!is.null(col("v_score"))) " (ordered by their mean score)" else ""), "",
+          "@@GROUPS@@", "")
+      blocks[["@@GROUPS@@"]] <- ov_bar_table_html(
+        data.frame(label = g$group, n = g$households, value = g$households / sum(g$households),
+                   extra = if (all(is.na(g$people))) "" else num(g$people), stringsAsFactors = FALSE),
+        "Share of households", colours = vapply(seq_len(nrow(g)) / nrow(g), diagram_colour, ""),
+        extra_label = if (all(is.na(g$people))) "" else "People")
+      notes <- c(notes, sprintf("The most vulnerable groups are %s: the %s of the %d groups%s.", paste(v$top_groups, collapse = " and "),
+                                if (length(v$top_groups) > 1) "two highest" else "highest", nrow(g),
+                                if (!is.null(col("v_score"))) " by mean score" else " by the severity their names express"))
     }
-    if (!is.null(vs)) {
-      z <- as_number(df[[vs]]); z <- z[!is.na(z)]
-      if (length(z)) {
-        q <- stats::quantile(z, c(0, .25, .5, .75, 1), names = FALSE)
-        add(kv(c("Households with a score" = num(length(z)), "Mean" = sprintf("%.1f", mean(z)),
-                 "Median" = sprintf("%.1f", q[3]), "Quartiles (Q1 to Q3)" = sprintf("%.1f to %.1f", q[2], q[4]),
-                 "Range" = sprintf("%.1f to %.1f", q[1], q[5]))), "", "@@FIG:score@@", "")
-        br <- pretty(z, 12); cnt <- as.integer(table(cut(z, br, include.lowest = TRUE)))
-        d <- data.frame(score = sprintf("%s-%s", utils::head(br, -1), br[-1]), Households = cnt)
-        plots$score <- rp_base(260) |> billboarder::bb_barchart(d) |> rp_colors(c(Households = "#0A6EB4")) |>
-          billboarder::bb_legend(show = FALSE) |> billboarder::bb_x_axis(tick = list(multiline = FALSE))
-        caps[["score"]] <- "Distribution of the vulnerability score"
-      }
+    if (!is.null(v$score)) {
+      s <- data.frame(score = v$score$category, Households = round(v$score$n, 1))
+      plots$score <- rp_base(240) |> billboarder::bb_barchart(s) |> rp_colors(c(Households = "#0A6EB4")) |>
+        billboarder::bb_legend(show = FALSE) |> billboarder::bb_x_axis(tick = list(multiline = FALSE))
+      caps[["score"]] <- "Distribution of the vulnerability score"
+      add("@@FIG:score@@", "")
+    }
+    cr <- v$cross
+    if (!is.null(cr) && nrow(cr)) {
+      pct <- !identical(v$indicator, "score")
+      first <- cr$dimension == cr$dimension[1]
+      overall <- ov_wmean(cr$value[first], cr$households[first])
+      add("### Across household profiles", "",
+          sprintf("%s in each group of households; the line marks the overall figure. A group far from it is where vulnerability concentrates.", v$indicator_label), "",
+          "@@CROSS@@", "")
+      blocks[["@@CROSS@@"]] <- ov_bar_table_html(data.frame(group = cr$dimension, label = cr$category, n = cr$households, value = cr$value, stringsAsFactors = FALSE),
+                                                 v$indicator_label, pct = pct, overall = overall)
     }
     sec <- sec + 1
   } else {
@@ -126,23 +137,34 @@ write_overview_report <- function(file, df, settings, x, lang = "en") {
     }
   }
 
-  mp <- overview_map_points(df, settings)
+  ga <- overview_by_area(df, settings)
+  if (!is.null(ga)) {
+    add(sprintf("## %d. Where the data comes from", sec), "", "Each Admin 1 subtotal is followed by its Admin 2 units.", "", "@@AREAS@@", "")
+    sec <- sec + 1
+  }
+
   if (!is.null(mp)) {
     add(sprintf("## %d. Map", sec), "",
-        sprintf("%s households with coordinates%s. The background map (Esri) needs an internet connection; the points do not.",
-                num(attr(mp, "n_total")), if (attr(mp, "n_total") > nrow(mp)) sprintf(", %s drawn (an even sample)", num(nrow(mp))) else ""), "",
+        sprintf("%s households with coordinates%s.", num(attr(mp, "n_total")),
+                if (attr(mp, "n_total") > nrow(mp)) sprintf(", %s drawn (an even sample)", num(nrow(mp))) else ""), "",
         "@@FIG:map@@", "")
-    plots$map <- overview_map(mp); caps[["map"]] <- if (!is.null(vg)) "Households by vulnerability group" else "Households surveyed"
+    plots$map <- overview_map(mp); caps[["map"]] <- if (!is.null(col("v_groups"))) "Households by vulnerability group" else "Households registered"
+    notes <- c(notes, "The background map (Esri) needs an internet connection; the points and every other part of this report do not.")
+    sec <- sec + 1
   }
+
+  add("## Notes and definitions", "",
+      paste0("- ", c("Every household counts once: registration data lists the whole population, so no sampling weight is applied.",
+                     "Figures cover the areas, the period and, when stated, the map view listed under Data and coverage.",
+                     notes)), "")
 
   report_write_page(
     file, paste(L, collapse = "\n"), plots, captions = caps, lang = lang,
-    title = "Data collection summary", record = "Data collection record",
+    title = "Overview", record = "Data collection record",
     meta = c("Country office" = x$country_office %||% "", "Generated" = format(Sys.time(), "%Y-%m-%d %H:%M"),
              "Areas covered" = x$areas %||% "All areas", "Households" = num(n)),
     footer = "This record summarises the data collected, as shown on the Overview page.",
-    blocks = list("@@KPI@@" = overview_kpis(totals, lang), "@@PROFILE@@" = profile_tiles(bp$tiles, lang),
-                  "@@AREAS@@" = area_summary_html(ga)))
+    blocks = c(list("@@KPI@@" = overview_kpis(tiles_of(cl$tiles), lang), "@@AREAS@@" = area_summary_html(ga)), blocks))
 }
 
 #' Headline figures as quiet tiles (label, value, sub)

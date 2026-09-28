@@ -21,6 +21,7 @@ PROFILE_SCHEMA <- 1L
 PROFILE_KEYS <- c(
   "unique_id", "date", "admin1", "admin2", "admin3", "admin4", "village",
   "lon", "lat", "hhh_sex", "hhh_age", "hh_size", "residency", "childU5",
+  "plw", "elderly",
   "hhid_avail", "phone_avail", "disability", "v_score", "v_groups",
   "eligibility", "enumerator_id", "weight"
 )
@@ -70,6 +71,10 @@ profile_from_settings <- function(settings, name = "profile", rules = NULL) {
     app_version = as.character(utils::packageVersion("TargetWise")),
     mapping = mapping,
     force_numeric = as.character(force_numeric),
+    # how each country writes its answers (field -> value -> standard), and
+    # the country office, so the profile is offered to that office next time
+    recodes = settings[["recodes"]] %||% settings[["recode_maps"]],
+    country = { co <- settings[["country"]] %||% settings[["country_office"]]; if (is.null(co) || !nzchar(co[1])) NULL else as.character(co)[1] },
     rules = rules,
     scorecard = scorecard
   )
@@ -106,6 +111,8 @@ profile_from_json <- function(txt) {
   })
   if (is.null(p$force_numeric)) p$force_numeric <- character(0)
   p$force_numeric <- as.character(unlist(p$force_numeric, use.names = FALSE))
+  if (!is.null(p$recodes)) p$recodes <- lapply(p$recodes, function(m) as.list(vapply(m, function(v) as.character(v)[1], "")))
+  if (!is.null(p$country)) p$country <- as.character(p$country)[1]
   if (!is.null(p$rules)) p$rules <- normalise_ruleset(p$rules)
   if (!is.null(p$scorecard)) p$scorecard <- normalise_scorecard(p$scorecard)
   p

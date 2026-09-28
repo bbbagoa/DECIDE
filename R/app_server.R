@@ -292,8 +292,10 @@ app_server <- function(input, output, session) {
   observeEvent(input$go_monitor, bslib::nav_select("main_nav", "pdm_panel"))
 
   # 2. Watch for the 'Validation' signal from your setup module
-  observeEvent(setup_result$validated(), {
-    req(setup_result$validated() == TRUE)
+  # Every confirmed setup (not only the first) goes on the record, and the
+  # Reset baseline gets the same transformations so a reset does not undo them.
+  observeEvent(setup_result$saved(), {
+    req(setup_result$saved() > 0)
 
     # REVEAL the panels
     bslib::nav_show("main_nav", target = "overview_panel")
@@ -301,24 +303,38 @@ app_server <- function(input, output, session) {
     bslib::nav_show("main_nav", target = "spot_panel")
     bslib::nav_show("main_nav", target = "ben_panel")
 
-    # The mapping and any forced numeric columns go on the record, and the
-    # Reset baseline gets the same coercion so a reset does not undo it.
-    keys <- c("unique_id", "date", "admin1", "admin2", "admin3", "admin4", "village", "hh_size",
-              "hhh_sex", "hhh_age", "v_score", "v_groups", "eligibility", "weight")
+    keys <- setup_keys()
     mapped <- vapply(keys, function(k) as.character(user_setup[[k]] %||% "")[1], character(1))
     audit_add(modification_log, "Selection", "Variables mapped",
               paste(sprintf("%s = %s", keys[nzchar(mapped)], mapped[nzchar(mapped)]), collapse = "; "))
+    plan <- user_setup$setup_plan %||% list()
     fc <- user_setup$force_numeric
     if (length(fc)) {
       bl <- user_setup$coercion_blanked %||% integer(0)
       audit_add(modification_log, "Selection", "Columns forced to numeric",
                 paste(sprintf("%s (%s values not numeric, set blank)", fc, bl[fc] %||% 0), collapse = "; "))
-      o <- original_df()
-      if (!is.null(o)) {
-        for (cl in intersect(fc, names(o))) o[[cl]] <- as_number(o[[cl]])
-        original_df(o)
-      }
     }
+    if (length(plan$date$column))
+      audit_add(modification_log, "Selection", "Collection date read as dates", plan$date$column)
+    for (k in names(plan$recodes)) {
+      r <- plan$recodes[[k]]
+      ch <- unlist(r$map); ch <- ch[ch != STD_KEEP]
+      audit_add(modification_log, "Selection", "Values standardised",
+                sprintf("%s: %s -> %s_std (%s)", field_label(k), r$source, r$source,
+                        paste(sprintf("%s = %s", names(ch), ch), collapse = "; ")))
+    }
+    if (length(plan$age_from_dob$source))
+      audit_add(modification_log, "Selection", "Age computed from the date of birth",
+                sprintf("%s -> %s_age", plan$age_from_dob$source, plan$age_from_dob$source))
+    chk <- user_setup$checks
+    if (!is.null(chk) && any(chk$level == "warn"))
+      audit_add(modification_log, "Selection", "Import checks", paste(chk$message[chk$level == "warn"], collapse = " | "))
+    rd <- user_setup$readiness
+    if (!is.null(rd) && any(rd$status == "Not available"))
+      audit_add(modification_log, "Selection", "Not available with these data",
+                paste(sprintf("%s (%s)", rd$feature, tolower(rd$detail))[rd$status == "Not available"], collapse = "; "))
+    o <- original_df()
+    if (!is.null(o) && length(plan)) original_df(apply_setup_plan(o, user_setup$source_map %||% list(), plan)$df)
 
     # JUMP to the Overview automatically
     bslib::nav_select("main_nav", selected = "overview_panel")

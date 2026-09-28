@@ -93,7 +93,7 @@ dq_enumerator_server <- function(input, output, session, ns, core) {
   # ------------------------------------------------------------
 
   enum_metrics <- reactive({
-    req(dq_filtered_data(), user_setup$enumerator_id)
+    req(dq_filtered_data()); need_mapped(user_setup, "enumerator_id")
     enumerator_metrics(dq_filtered_data(), user_setup)
   })
 

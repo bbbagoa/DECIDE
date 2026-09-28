@@ -75,6 +75,28 @@ empty_state <- function(title, subtitle = NULL, icon = "clipboard-data") {
   )
 }
 
+#' One characteristic's weighted distribution: bars of the (top 12) answers,
+#' or a histogram of a number
+#' @noRd
+profile_distribution <- function(x, w, colour = "#0A6EB4") {
+  ok <- !is.na(x) & is.finite(w) & w > 0
+  x <- x[ok]; w <- w[ok]
+  if (is.numeric(x)) {
+    br <- pretty(range(x), n = min(20, max(5, length(unique(x)))))
+    bin <- cut(x, br, include.lowest = TRUE, right = FALSE)
+    tot <- tapply(w, bin, sum); tot[is.na(tot)] <- 0
+    mid <- (utils::head(br, -1) + utils::tail(br, -1)) / 2
+    plotly::plot_ly(x = mid, y = as.numeric(tot), type = "bar", marker = list(color = colour),
+                    hovertemplate = paste0("%{x}: %{y:,.0f} households<extra></extra>")) |>
+      plotly::layout(bargap = 0.05)
+  } else {
+    tot <- sort(tapply(w, as.character(x), sum), decreasing = TRUE)
+    tot <- utils::head(tot, 12)
+    plotly::plot_ly(x = substr(names(tot), 1, 14), y = as.numeric(tot), type = "bar", marker = list(color = colour),
+                    hovertemplate = paste0("%{x}: %{y:,.0f} households<extra></extra>"))
+  }
+}
+
 #' Create Adaptive Profile Plots
 #' @description Automatically switches between Bar and Heatmap based on data type.
 #'   Weight-aware: categorical bars and numeric boxplots both honour sampling
@@ -95,14 +117,16 @@ create_profile_plot <- function(data, view_col, demo_col, weights = NULL, title 
   if (is.null(weights)) weights <- rep(1, nrow(data))
   weights <- rep(weights, length.out = nrow(data))
 
-  # 1. Detect Types
-  is_view_numeric <- is.numeric(data[[view_col]])
+  # 1. Detect Types. Without a vulnerability variable to compare on, the
+  # characteristic's own (weighted) distribution is drawn.
+  no_view <- is.null(view_col) || !isTRUE(nzchar(view_col)) || !view_col %in% names(data)
+  is_view_numeric <- !no_view && is.numeric(data[[view_col]])
   is_demo_numeric <- is.numeric(data[[demo_col]])
 
   # (weighted_boxplot_summary is defined in R/utils_targeting.R)
 
   # Initialize the plot object
-  p <- if (is_view_numeric && is_demo_numeric) {
+  p <- if (no_view) profile_distribution(data[[demo_col]], weights, wfp_pal[1]) else if (is_view_numeric && is_demo_numeric) {
     # SCENARIO A: Score vs Age (density heatmap). Weighted via histnorm weight
     # by expanding each point into a small integer weight bucket is expensive at
     # scale; instead we let plotly weight the 2D bins with a per-point weight

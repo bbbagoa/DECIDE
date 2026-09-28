@@ -103,6 +103,13 @@ dq_location_server <- function(input, output, session, ns, core) {
   user_setup <- core$user_setup
   modification_log <- core$modification_log
 
+  # only the mapped levels, each with its column
+  observe({
+    ch <- mapped_level_choices(reactiveValuesToList(user_setup))
+    cur <- isolate(input$norm_col)
+    shinyWidgets::updatePickerInput(session, "norm_col", choices = ch, selected = if (isTRUE(cur %in% ch)) cur else unname(ch[1]))
+  })
+
   ## --------------- Administrative Spelling Corrections
   # ------------------------------------------------------------------------------------
 

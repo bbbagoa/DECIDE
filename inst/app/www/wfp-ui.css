@@ -2705,3 +2705,181 @@ td[data-tw], th[data-tw] { cursor: help; }
 /* Model diagrams (decision tree, forest plot): SVG on a light panel in both themes */
 .tw-diagram { overflow-x: auto; background: #ffffff; border: 1px solid var(--border); border-radius: var(--card-radius-sm); padding: 12px; margin-bottom: 14px; }
 .tw-diagram svg { display: block; margin: 0 auto; }
+
+/* Variable setup: how sure a suggested column is */
+.tw-conf { display: inline-block; margin-left: 6px; padding: 0 7px; border-radius: 999px; font-size: 0.7rem; font-weight: 600; line-height: 1.5; vertical-align: 1px; cursor: help; }
+.tw-conf-high { background: rgba(63, 126, 68, 0.14); color: #2f6b34; }
+.tw-conf-medium { background: rgba(10, 110, 180, 0.12); color: #0a5a93; }
+.tw-conf-low { background: rgba(224, 161, 0, 0.18); color: #8a6200; }
+.tw-conf-profile, .tw-conf-in-use { background: rgba(128, 128, 128, 0.15); color: var(--bs-body-color); }
+.tw-review-h { font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--bs-secondary-color); margin-bottom: 8px; }
+.tw-recode-table td, .tw-recode-table th { vertical-align: middle; }
+.tw-recode-table .form-group { margin-bottom: 0; }
+.tw-ready-table td { padding: 3px 6px; }
+/* Overview: what the data do not allow */
+.tw-ready-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px 12px; margin-bottom: 12px;
+  border: 1px solid var(--border); border-radius: var(--card-radius-sm); background: var(--surface); font-size: 0.85rem; }
+.tw-ready-chip { padding: 1px 9px; border-radius: 999px; font-size: 0.78rem; cursor: help; }
+.tw-ready-chip.off { background: rgba(197, 25, 45, 0.1); color: #a3182a; }
+.tw-ready-chip.part { background: rgba(224, 161, 0, 0.16); color: #8a6200; }
+[data-bs-theme="dark"] .tw-conf-high { color: #8fd694; }
+[data-bs-theme="dark"] .tw-conf-medium { color: #8cc7f0; }
+[data-bs-theme="dark"] .tw-conf-low, [data-bs-theme="dark"] .tw-ready-chip.part { color: #f0c35c; }
+[data-bs-theme="dark"] .tw-ready-chip.off { color: #f08c98; }
+
+/* A folded section says what it holds (www/stepsummary.js); open, it shows the inputs themselves */
+.accordion-button .tw-step-sum { margin-left: auto; margin-right: 10px; max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 0.72rem; font-weight: 500; text-transform: none; letter-spacing: 0; color: var(--bs-secondary-color);
+  background: rgba(10, 110, 180, 0.08); padding: 1px 8px; border-radius: 999px; }
+.accordion-button:not(.collapsed) .tw-step-sum { display: none; }
+
+/* ---- Overview: one screen. Map on the left half, insights on the right;
+   the data collection stays in view, the sections below fold and scroll. ---- */
+.tw-ov { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px;
+  height: calc(100vh - 92px); min-height: 560px; }
+.tw-ov-map { display: flex; flex-direction: column; margin: 0; min-height: 0; }
+.tw-ov-map-inner { display: flex; flex-direction: column; min-height: 0; }
+.tw-ov-map .wfp-map-note:has(> span:empty) { display: none; }
+.tw-ov-map-body { flex: 1 1 auto; min-height: 0; position: relative; }
+.tw-ov-map-body .leaflet-container, .tw-ov-map .leaflet-container { min-height: 0 !important; height: 100% !important; }
+.tw-ov-right { display: flex; flex-direction: column; gap: 8px; min-height: 0; }
+.tw-ov-fixed { flex: 0 0 auto; background: var(--surface); border: 1px solid var(--border); border-radius: var(--card-radius);
+  padding: 8px 12px 4px; box-shadow: var(--shadow-soft); }
+.tw-ov-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+.tw-ov-title { font-size: .78rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--text-muted); }
+.tw-ov-title .bi { color: var(--wfp-blue); }
+.tw-ov-chip { font-size: .74rem; padding: 1px 9px; border-radius: 999px; background: rgba(128, 128, 128, .12); color: var(--bs-body-color); }
+.tw-ov-chip.zoomed { background: rgba(10, 110, 180, .12); color: #0a5a93; }
+.tw-ov-follow { margin-left: auto; font-size: .76rem; }
+.tw-ov-follow .form-check { margin: 0; min-height: 0; }
+.tw-ov-follow .shiny-input-container { margin: 0; width: auto !important; }
+.tw-ov-daily-bar { display: flex; align-items: center; justify-content: space-between; margin-top: 4px; }
+.tw-ov-daily-bar .form-group { margin: 0; }
+.tw-ov-sub { font-size: .72rem; font-weight: 600; color: var(--text-muted); }
+.tw-ov-fixed .tw-ready-strip { padding: 3px 8px; margin: 0 0 6px; font-size: .74rem; gap: 4px; }
+.tw-ov-fixed .tw-ready-chip { font-size: .7rem; }
+/* tiles: compact figures */
+.tw-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(92px, 1fr)); gap: 6px; }
+.tw-tile { border: 0; border-radius: 10px; padding: 5px 9px; background: rgba(128, 128, 128, .06); min-width: 0; }
+.tw-tile-top { display: flex; align-items: center; gap: 5px; font-size: .68rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; }
+.tw-tile-top .bi { color: var(--wfp-blue); flex: 0 0 auto; }
+.tw-tile-label { overflow: hidden; text-overflow: ellipsis; }
+.tw-tile-value { font-size: 1.12rem; font-weight: 700; line-height: 1.25; }
+.tw-tile-sub { font-size: .66rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* the collection row: labels wrap, the detail is in the tooltip */
+.tw-tiles-col .tw-tile-top { white-space: normal; align-items: flex-start; line-height: 1.15; min-height: 1.6em; }
+.tw-tiles-col .tw-tile-label { overflow: visible; }
+.tw-tiles-col .tw-tile-sub { display: none; }
+.tw-tiles-small { grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); margin-bottom: 8px; }
+/* the sections: one open at a time, the open one scrolls inside */
+.tw-ov-acc { flex: 0 1 auto; min-height: 0; display: flex; flex-direction: column; overflow: hidden;
+  border: 1px solid var(--border); border-radius: var(--card-radius); background: var(--surface); }
+.tw-ov-acc > .accordion-item { display: flex; flex-direction: column; flex: 0 0 auto; min-height: 0; border-left: 0; border-right: 0; }
+.tw-ov-acc > .accordion-item:has(> .accordion-collapse.show) { flex: 0 1 auto; }
+.tw-ov-acc > .accordion-item > .accordion-collapse.show, .tw-ov-acc > .accordion-item > .accordion-collapse.collapsing { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+.tw-ov-acc .accordion-button { padding: 8px 12px; font-size: .82rem; }
+.tw-ov-acc .accordion-body { padding: 8px 12px; }
+.tw-mini-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.tw-mini { border: 0; border-radius: 10px; padding: 4px 6px 0; min-width: 0; background: rgba(128, 128, 128, .04); }
+.tw-mini-one { grid-template-columns: minmax(0, 1fr); }
+.tw-mini-wide { margin-top: 8px; }
+.tw-mini-title { font-size: .72rem; font-weight: 600; color: var(--text-muted); padding: 2px 4px; }
+.tw-mini-title .form-group { margin: 0; }
+.tw-mini-title select { font-size: .74rem; padding: 1px 24px 1px 6px; height: auto; }
+@media (max-width: 1100px) { .tw-ov { grid-template-columns: 1fr; height: auto; } .tw-ov-map { height: 60vh; } }
+/* shares as rings, the other figures as quiet cards, all on one row */
+.tw-figs { display: flex; flex-wrap: wrap; align-items: stretch; gap: 8px 14px; margin-bottom: 10px; }
+.tw-figs .tw-tile { flex: 0 1 150px; align-self: center; }
+.tw-figs .tw-tile-label { font-size: .68rem; color: var(--text-muted); }
+.tw-donut { width: 92px; text-align: center; color: var(--bs-body-color); }
+.tw-donut svg { display: block; margin: 0 auto; }
+.tw-donut-label { font-size: .68rem; line-height: 1.15; color: var(--text-muted); margin-top: 2px; }
+/* contingency table */
+.tw-ct-controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0 10px; align-items: end; }
+.tw-ct-controls .shiny-panel-conditional > div, .tw-ct-controls .form-group { margin-bottom: 8px; }
+.tw-ct-caption { font-size: .78rem; color: var(--text-muted); margin: 2px 0 6px; }
+.tw-ct-wrap { overflow: auto; max-height: 360px; }
+.tw-ct-table { border-collapse: separate; border-spacing: 0; font-size: .8rem; width: 100%; }
+.tw-ct-table th, .tw-ct-table td { padding: 4px 10px; white-space: nowrap; border-bottom: 1px solid rgba(128, 128, 128, .15); }
+.tw-ct-table thead th { position: sticky; top: 0; background: var(--surface); font-weight: 600; font-size: .74rem; color: var(--text-muted); z-index: 1; }
+.tw-ct-table thead tr:first-child th { top: 0; } .tw-ct-table thead tr + tr th { top: 24px; }
+.tw-ct-table tbody th { font-weight: 500; text-align: left; }
+.tw-ct-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+.tw-ct-colvar { text-align: center !important; color: var(--wfp-blue) !important; }
+.tw-ct-rowvar { color: var(--wfp-blue) !important; text-align: left; }
+.tw-ct-table .tw-ct-margin { font-weight: 600; background: rgba(128, 128, 128, .07); }
+.tw-ct-table tr.tw-ct-total th, .tw-ct-table tr.tw-ct-total td { font-weight: 700; border-top: 2px solid rgba(128, 128, 128, .35); background: rgba(128, 128, 128, .07); }
+.tw-ct-note { font-size: .72rem; color: var(--text-muted); margin-top: 6px; }
+/* map: zoom to a drawn rectangle */
+.tw-boxzoom a { display: flex !important; align-items: center; justify-content: center; color: #333; }
+.tw-boxzoom a.active { background: #0A6EB4; color: #fff; }
+.tw-tiles-col .tw-tile-top .bi { display: none; }
+.tw-figs-cards { margin-bottom: 6px; }
+.tw-figs-cards .tw-tile { flex: 1 1 130px; max-width: 200px; }
+/* the rings share the whole width, five on a row */
+.tw-figs:not(.tw-figs-cards) { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+.tw-figs:not(.tw-figs-cards) .tw-donut { width: auto; }
+.tw-figs:not(.tw-figs-cards) .tw-donut svg { width: min(84px, 100%); height: auto; }
+.tw-figs:not(.tw-figs-cards) .tw-donut-label { font-size: .72rem; }
+
+/* ==========================================================================
+   Dark mode: every control on the app's deep blue surfaces
+   ========================================================================== */
+[data-bs-theme="dark"] .form-control, [data-bs-theme="dark"] .form-select,
+[data-bs-theme="dark"] .selectize-input, [data-bs-theme="dark"] .selectize-input.full,
+[data-bs-theme="dark"] .selectize-control.single .selectize-input.input-active,
+[data-bs-theme="dark"] .bootstrap-select > .dropdown-toggle, [data-bs-theme="dark"] .bootstrap-select > .btn-light,
+[data-bs-theme="dark"] .bootstrap-select .bs-searchbox .form-control,
+[data-bs-theme="dark"] .input-group-text, [data-bs-theme="dark"] .form-control[readonly],
+[data-bs-theme="dark"] textarea, [data-bs-theme="dark"] input[type="number"], [data-bs-theme="dark"] input[type="text"] {
+  background-color: var(--surface-3) !important; color: var(--body-text) !important; border-color: var(--border-strong) !important;
+}
+[data-bs-theme="dark"] .selectize-input input { color: var(--body-text) !important; }
+[data-bs-theme="dark"] .selectize-input input::placeholder, [data-bs-theme="dark"] .form-control::placeholder,
+[data-bs-theme="dark"] .bootstrap-select .filter-option-inner-inner { color: var(--text-muted); }
+[data-bs-theme="dark"] .bootstrap-select > .dropdown-toggle .filter-option-inner-inner { color: var(--body-text); }
+[data-bs-theme="dark"] .form-control:focus, [data-bs-theme="dark"] .form-select:focus, [data-bs-theme="dark"] .selectize-input.focus,
+[data-bs-theme="dark"] .bootstrap-select > .dropdown-toggle:focus { border-color: var(--wfp-blue) !important; box-shadow: var(--ring) !important; }
+/* menus: dropdowns, pickers, selectize lists */
+[data-bs-theme="dark"] .dropdown-menu, [data-bs-theme="dark"] .selectize-dropdown, [data-bs-theme="dark"] .selectize-dropdown-content,
+[data-bs-theme="dark"] .bootstrap-select .dropdown-menu, [data-bs-theme="dark"] .bs-actionsbox, [data-bs-theme="dark"] .bs-searchbox {
+  background-color: var(--surface-3) !important; color: var(--body-text) !important; border-color: var(--border-strong) !important;
+}
+[data-bs-theme="dark"] .dropdown-item, [data-bs-theme="dark"] .selectize-dropdown .option,
+[data-bs-theme="dark"] .bootstrap-select .dropdown-menu li a { color: var(--body-text) !important; }
+[data-bs-theme="dark"] .dropdown-item:hover, [data-bs-theme="dark"] .dropdown-item.active, [data-bs-theme="dark"] .dropdown-item:focus,
+[data-bs-theme="dark"] .selectize-dropdown .option.active, [data-bs-theme="dark"] .selectize-dropdown .option:hover,
+[data-bs-theme="dark"] .bootstrap-select .dropdown-menu li a:hover, [data-bs-theme="dark"] .bootstrap-select .dropdown-menu li.selected a {
+  background-color: rgba(47, 159, 224, .18) !important; color: #fff !important;
+}
+[data-bs-theme="dark"] .selectize-dropdown .optgroup-header, [data-bs-theme="dark"] .dropdown-header {
+  background-color: var(--surface) !important; color: var(--text-muted) !important;
+}
+[data-bs-theme="dark"] .selectize-control.multi .selectize-input > div { background: rgba(47, 159, 224, .2); color: var(--body-text); }
+/* accordions: sidebars, sections, dialogs */
+[data-bs-theme="dark"] .accordion, [data-bs-theme="dark"] .accordion-item {
+  --bs-accordion-bg: var(--surface); --bs-accordion-color: var(--body-text); --bs-accordion-border-color: var(--border);
+  --bs-accordion-btn-bg: var(--surface); --bs-accordion-active-bg: var(--surface-3); --bs-accordion-btn-color: var(--body-text);
+  --bs-accordion-active-color: var(--body-text);
+  background-color: var(--surface) !important; color: var(--body-text); border-color: var(--border) !important;
+}
+[data-bs-theme="dark"] .accordion-button { background-color: var(--surface) !important; color: var(--body-text) !important; }
+[data-bs-theme="dark"] .accordion-button:not(.collapsed) { background-color: var(--surface-3) !important; }
+[data-bs-theme="dark"] .accordion-body { background-color: var(--surface) !important; }
+[data-bs-theme="dark"] .accordion-button::after { filter: invert(1) brightness(1.6); }
+/* date picker, file input, toggles, modals */
+[data-bs-theme="dark"] .air-datepicker { --adp-background-color: var(--surface-3); --adp-color: var(--body-text);
+  --adp-border-color: var(--border-strong); --adp-background-color-hover: rgba(47, 159, 224, .18); --adp-color-secondary: var(--text-muted); }
+[data-bs-theme="dark"] .btn-file, [data-bs-theme="dark"] .input-group .btn-default { background-color: var(--surface-3); color: var(--body-text); border-color: var(--border-strong); }
+[data-bs-theme="dark"] .btn-group-toggle .btn-outline-primary:not(.active), [data-bs-theme="dark"] .radiobtn.btn-outline-primary:not(.active) {
+  background-color: var(--surface-3); color: var(--body-text); border-color: var(--border-strong);
+}
+[data-bs-theme="dark"] .modal-content, [data-bs-theme="dark"] .modal-header, [data-bs-theme="dark"] .modal-footer {
+  background-color: var(--surface) !important; color: var(--body-text); border-color: var(--border) !important;
+}
+/* Overview pieces */
+[data-bs-theme="dark"] .tw-tile, [data-bs-theme="dark"] .tw-mini { background: rgba(255, 255, 255, .04); }
+[data-bs-theme="dark"] .tw-ct-table .tw-ct-margin, [data-bs-theme="dark"] .tw-ct-table tr.tw-ct-total td,
+[data-bs-theme="dark"] .tw-ct-table tr.tw-ct-total th { background: rgba(255, 255, 255, .05); }
+[data-bs-theme="dark"] .tw-ov-chip { background: rgba(255, 255, 255, .08); }
+[data-bs-theme="dark"] .tw-ov-chip.zoomed { background: rgba(47, 159, 224, .18); color: #8cc7f0; }

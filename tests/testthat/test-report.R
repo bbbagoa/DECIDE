@@ -65,7 +65,7 @@ test_that("the verification report writes the back-check with its cards, chart a
   expect_match(paste(readLines(f), collapse = "\n"), "No comparison has been run yet", fixed = TRUE)
 })
 
-test_that("the data collection summary report is written from the Overview data", {
+test_that("the Overview report is written from the Overview data", {
   df <- utils::read.csv(testthat::test_path("fixtures", "mini_targeting.csv"), stringsAsFactors = FALSE)
   st <- list(admin1 = "Province", admin2 = "Territoire", village = "Village", hh_size = "HHSize", hhh_sex = "HHHSex",
              enumerator_id = "enumerator", date = "SvyDate", v_score = "score", v_groups = "score_class",
@@ -76,7 +76,7 @@ test_that("the data collection summary report is written from the Overview data"
   f <- withr::local_tempfile(fileext = ".html")
   tm("write_overview_report")(f, df, st, list(n_total = nrow(df), areas = "All areas", period = "All dates", source = "test"))
   html <- paste(readLines(f, encoding = "UTF-8"), collapse = "\n")
-  expect_match(html, "Data collection summary", fixed = TRUE)
+  expect_match(html, "<title>Overview", fixed = TRUE)
   expect_match(html, 'class="area-sum"', fixed = TRUE)
   expect_match(html, "World_Topo_Map", fixed = TRUE)
   expect_false(grepl("@@", gsub("@@iterator", "", html), fixed = TRUE))

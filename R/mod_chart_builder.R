@@ -87,13 +87,15 @@ mod_chart_builder_server <- function(id, data, source, dataset_name = reactive("
       num <- quantitative_cols(df, min_share = 0.8)
       # Start on a column worth charting: a category, not an identifier.
       few <- cols[vapply(df, function(v) { k <- length(unique(v)); k >= 2 && k <= 30 }, logical(1))]
-      updateSelectInput(session, "x", choices = cols, selected = if (length(few)) few[1] else cols[1])
+      # no identifiers, names or free text to chart (the date list keeps every column)
+      an <- analysis_cols(df, cols); few <- intersect(few, an); num <- intersect(num, an)
+      updateSelectInput(session, "x", choices = an, selected = if (length(few)) few[1] else an[1])
       updateSelectInput(session, "date", choices = cols,
                         selected = grep("date|time|submission", cols, ignore.case = TRUE, value = TRUE)[1] %||% cols[1])
       updateSelectInput(session, "value", choices = c(none, num))
       updateSelectInput(session, "den", choices = c(none, num))
-      updateSelectInput(session, "group", choices = c(none, cols))
-      updateSelectInput(session, "filter_col", choices = c(none, cols))
+      updateSelectInput(session, "group", choices = c(none, an))
+      updateSelectInput(session, "filter_col", choices = c(none, an))
     })
 
     observeEvent(input$filter_col, {

@@ -696,7 +696,10 @@ cascade_pickers <- function(session, input, ids, cols, data, hint = NULL) {
     keep <- NULL
     for (k in seq_along(ids)) {
       col <- cl[k]
-      if (is.na(col) || !nzchar(col) || !col %in% names(df)) {
+      # a level that is not mapped is not offered at all
+      mapped <- !is.na(col) && nzchar(col) && col %in% names(df)
+      session$sendCustomMessage("tw-input-visible", list(id = session$ns(ids[k]), show = mapped))
+      if (!mapped) {
         if (length(sent[[ids[k]]])) {
           shinyWidgets::updatePickerInput(session, ids[k], choices = character(0), selected = character(0))
           sent[[ids[k]]] <<- character(0)
@@ -795,9 +798,17 @@ export_file_name <- function(stem, ext, time_format = "%Y-%m-%d_%Hh%M", country 
 #' `side_steps()`), then the page's actions in one block at the bottom
 #' (`side_actions()`, kept in view while the sections scroll). Give the
 #' sidebar `class = "wfp-side"`.
+#'
+#' One section is open at a time (opening one folds the others); a folded
+#' section says what it holds in its header (`www/stepsummary.js`), so
+#' folding hides no choice. `open = TRUE` opens the first section.
 #' @noRd
 side_steps <- function(..., id = NULL, open = TRUE) {
-  bslib::accordion(..., id = id, multiple = TRUE, open = open)
+  if (isTRUE(open)) {
+    first <- Filter(function(p) inherits(p, "shiny.tag"), list(...))[1]
+    open <- if (length(first)) htmltools::tagGetAttribute(first[[1]], "data-value") else NULL
+  }
+  bslib::accordion(..., id = id, multiple = FALSE, open = open)
 }
 
 #' @noRd

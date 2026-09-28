@@ -28,7 +28,7 @@ mod_monitoring_ui <- function(id) {
         sidebar = bslib::sidebar(
           width = 330, class = "wfp-mon-sidebar",
           bslib::accordion(
-            id = ns("pm_setup"), multiple = TRUE, open = c("data", "areas"),
+            id = ns("pm_setup"), multiple = FALSE, open = "data",
             bslib::accordion_panel(
               "Datasets", value = "data", icon = bsicons::bs_icon("cloud-upload"),
               tags$p(class = "small text-muted mb-2",

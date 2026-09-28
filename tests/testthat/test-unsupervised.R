@@ -175,6 +175,23 @@ test_that("a ranking says what it is in its card, workbook and report", {
   expect_match(md, "## 2. Purpose of the ranking", fixed = TRUE)
   expect_match(md, "### Why a ranking", fixed = TRUE)
   expect_false(grepl("Vulnerability Framework", md, fixed = TRUE))
+  expect_match(md, "### How to read these checks", fixed = TRUE)
+  expect_match(md, "not checked", fixed = TRUE)                       # stability not run: said so
+})
+
+test_that("the validity reading interprets this design's values", {
+  x <- list(no_outcome = TRUE, model = list(method_code = "kmeans"),
+            index = list(type = "cluster", alpha = 0.45, silhouette = 0.31, fidelity = 0.93),
+            stability = list(jaccard = 0.62, low = 0.5, high = 0.7, draws = 20, spearman = 0.9),
+            insights = list(ratio = 2.4, concentration = 0.55, mean_sel = 3, mean_not = 1.25, n_criteria = 8))
+  md <- paste(TargetWise:::ranking_validity_reading(x), collapse = "
+")
+  expect_match(md, "barely go together", fixed = TRUE)
+  expect_match(md, "Unstable (50-70%)", fixed = TRUE)
+  expect_match(md, "Weak but real profiles", fixed = TRUE)
+  expect_match(md, "faithfully", fixed = TRUE)
+  expect_match(md, "Partly circular", fixed = TRUE)
+  expect_match(md, "not measured", fixed = TRUE)
 })
 
 test_that("a ranking's errors can be measured once data carry an outcome", {

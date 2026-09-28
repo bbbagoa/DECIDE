@@ -33,7 +33,7 @@ mod_pdm_ui <- function(id, explore = NULL) {
     sidebar = bslib::sidebar(
       width = 330, class = "wfp-mon-sidebar",
       bslib::accordion(
-        id = ns("setup"), multiple = TRUE, open = c("data", "benef", "elig"),
+        id = ns("setup"), multiple = FALSE, open = "data",
         panel("data", "1. Monitoring data", "cloud-upload",
               # The same accuracy analysis runs on a post-distribution survey or
               # on a baseline taken before distribution; the choice names the

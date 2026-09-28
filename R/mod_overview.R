@@ -1,16 +1,19 @@
 #' Overview Module UI
 #'
+#' One screen: the map on the left half (full height), the insights on the
+#' right half. The data collection (metrics and daily submissions) stays in
+#' view at the top; who is in the data, their vulnerability and a free
+#' explorer are sections below it, one open at a time, each scrolling inside
+#' itself. The figures follow the map view (`ov_in_view()`).
+#'
 #' @param id module id
 #' @import shiny
 #' @noRd
 mod_overview_ui <- function(id) {
   ns <- NS(id)
   tagList(
-    # fillable = FALSE: the dashboard is taller than the viewport (KPIs, map,
-    # profiles, analytics), so it must scroll. In a fill container the map /
-    # summary row would be squeezed to zero height once the analytics render.
     bslib::layout_sidebar(
-      fillable = FALSE,
+      fillable = TRUE, class = "tw-ov-page",
       sidebar = bslib::sidebar(
         width = 300, class = "wfp-side",
         side_steps(
@@ -34,31 +37,17 @@ mod_overview_ui <- function(id) {
             actionButton(ns("btn_apply_filters"), "Apply", class = "btn-primary btn-sm flex-fill", icon = icon("filter")),
             actionButton(ns("btn_clear_filters"), label = NULL, icon = icon("xmark"), class = "btn-outline-secondary btn-sm",
                          title = "Clear the filters")),
-          # What this page shows, as a report: covers the filters above.
-          downloadButton(ns("overview_report"), "Data summary report (HTML)", class = "btn-outline-primary btn-sm w-100"))
+          # What this page shows, as a report: the filters and the map view.
+          downloadButton(ns("overview_report"), "Overview report (HTML)", class = "btn-outline-primary btn-sm w-100"))
       ),
 
-      bslib::layout_column_wrap(
-        width = 1 / 5, fill = FALSE,
-        # With a sampling weight the counts are estimates: say so, beside the
-        # number of records, so 94 here and 60 at import do not look like lost data.
-        bslib::value_box(title = "Households", value = textOutput(ns("stat_hh")), showcase = bsicons::bs_icon("house-door"), theme = "primary",
-                         tags$p(class = "small text-muted mb-0", textOutput(ns("stat_hh_note"), inline = TRUE))),
-        bslib::value_box(title = "Individuals", value = textOutput(ns("stat_indiv")), showcase = bsicons::bs_icon("people"), theme = "secondary",
-                         tags$p(class = "small text-muted mb-0", textOutput(ns("stat_indiv_note"), inline = TRUE))),
-        bslib::value_box(title = "Communities", value = textOutput(ns("stat_comm")), showcase = bsicons::bs_icon("geo-alt"), theme = "info"),
-        bslib::value_box(title = "Daily Sync Rate", value = textOutput(ns("stat_rate")), showcase = plotly::plotlyOutput(ns("stat_rate_plot")), full_screen = TRUE, theme = "danger"),
-        bslib::value_box(title = "Avg Survey Time", value = textOutput(ns("stat_duration")), showcase = bsicons::bs_icon("stopwatch"), theme = "dark")
-      ),
-
-      bslib::layout_columns(
-        # The map: a quiet header, one toolbar (colour + mode), and the map
-        # filling the rest of the card so it matches the summary next to it.
+      tags$div(
+        class = "tw-ov",
+        # Left half: the map, full height
         bslib::card(
-          full_screen = TRUE, class = "wfp-map-card",
-          bslib::card_header(bsicons::bs_icon("map"), " Map"),
+          full_screen = TRUE, class = "wfp-map-card tw-ov-map",
           bslib::card_body(
-            class = "p-0 gap-0", fillable = FALSE, fill = FALSE,
+          padding = 0, gap = 0, fillable = TRUE, class = "tw-ov-map-inner",
           tags$div(
             class = "wfp-map-toolbar",
             tags$div(class = "d-flex align-items-center gap-2",
@@ -67,57 +56,51 @@ mod_overview_ui <- function(id) {
             shinyWidgets::radioGroupButtons(
               inputId = ns("map_mode"), label = NULL,
               choices = c("Households" = "points", "By area" = "choropleth"),
-              selected = "points", size = "sm", status = "outline-primary"
-            )
-          ),
-          tags$div(class = "small text-muted wfp-map-note", textOutput(ns("map_note"), inline = TRUE))
-          ),
-          bslib::card_body(
-            class = "p-0", fillable = TRUE, min_height = "520px",
-            leafgl::leafglOutput(ns("map_plot"), height = "100%")
-          )
+              selected = "points", size = "sm", status = "outline-primary")),
+          tags$div(class = "small text-muted wfp-map-note", textOutput(ns("map_note"), inline = TRUE)),
+          tags$div(class = "tw-ov-map-body", leafgl::leafglOutput(ns("map_plot"), height = "100%")))
         ),
-
-        bslib::card(
-          full_screen = TRUE,
-          bslib::card_header(bsicons::bs_icon("clipboard-data"), " ", textOutput(ns("table_title"), inline = TRUE)),
-          bslib::card_body(
-            fillable = FALSE,
-            # Sized to their content: no stretched table leaving a gap below.
-            bslib::layout_columns(
-              fill = FALSE, class = "align-items-center",
-              DT::DTOutput(ns("vulnerability_table"), fill = FALSE),
-              plotly::plotlyOutput(ns("eligibility_donut"), height = "200px"),
-              col_widths = c(8, 4)
-            ),
+        # Right half: the collection stays in view, the sections below fold
+        tags$div(
+          class = "tw-ov-right",
+          tags$div(
+            class = "tw-ov-fixed",
             tags$div(
-              class = "wfp-profile-bar",
-              tags$span(class = "wfp-profile-title", "Profile by"),
-              shinyWidgets::radioGroupButtons(
-                inputId = ns("profile_view"), label = NULL,
-                choices = c("Vulnerability score" = "score", "Vulnerability group" = "vuln", "Eligibility" = "elig"),
-                selected = "score", status = "outline-primary", size = "sm"
-              )
-            ),
-            bslib::layout_column_wrap(
-              width = 1 / 3, fill = FALSE, gap = ".75rem",
-              plotly::plotlyOutput(ns("plot_sex"), height = "210px"),
-              plotly::plotlyOutput(ns("plot_age"), height = "210px"),
-              plotly::plotlyOutput(ns("plot_residence"), height = "210px"),
-              plotly::plotlyOutput(ns("plot_hh_size"), height = "210px"),
-              plotly::plotlyOutput(ns("plot_childU5"), height = "210px"),
-              plotly::plotlyOutput(ns("plot_chronic"), height = "210px")
-            )
-          )
-        ),
-        col_widths = c(5, 7)
-      ),
-
-      # --- Advanced analytics (activate when the relevant columns are mapped) ---
-      uiOutput(ns("analytics_block"))
+              class = "tw-ov-head",
+              tags$span(class = "tw-ov-title", bsicons::bs_icon("broadcast"), " Data collection"),
+              uiOutput(ns("view_chip"), inline = TRUE),
+              tags$div(class = "tw-ov-follow",
+                       bslib::input_switch(ns("follow_map"), "Follow the map", value = TRUE))),
+            uiOutput(ns("readiness_strip")),
+            uiOutput(ns("col_tiles")),
+            tags$div(
+              class = "tw-ov-daily",
+              tags$div(class = "tw-ov-daily-bar",
+                       tags$span(class = "tw-ov-sub", "Households per day"),
+                       shinyWidgets::radioGroupButtons(ns("daily_by"), NULL, choices = c("Total" = "total", "By area" = "area"),
+                                                       selected = "area", size = "xs", status = "outline-primary")),
+              plotly::plotlyOutput(ns("daily_plot"), height = "205px"))
+          ),
+          bslib::accordion(
+            id = ns("ov_sections"), multiple = FALSE, open = "who", class = "tw-ov-acc",
+            bslib::accordion_panel(
+              "Who is in the data", value = "who", icon = bsicons::bs_icon("people"),
+              uiOutput(ns("who_ui"))),
+            bslib::accordion_panel(
+              "Vulnerability", value = "vuln", icon = bsicons::bs_icon("shield-exclamation"),
+              uiOutput(ns("vuln_ui"))),
+            bslib::accordion_panel(
+              "Table builder", value = "explore", icon = bsicons::bs_icon("table"),
+              uiOutput(ns("table_ui"))),
+            bslib::accordion_panel(
+              "Chart builder", value = "charts", icon = bsicons::bs_icon("bar-chart-line"),
+              uiOutput(ns("chart_ui"))))
+        )
+      )
     )
   )
 }
+
 #' Overview Module Server
 #'
 #' @param id module id
@@ -128,6 +111,9 @@ mod_overview_ui <- function(id) {
 mod_overview_server <- function(id, uploaded_df, user_setup) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
+    # Registration data lists every household: the Overview counts each once,
+    # whatever sampling weight the setup maps (the mapping without it).
+    ov_setup <- reactive({ s <- reactiveValuesToList(user_setup); s$weight <- NULL; s })
 
   # Applied filter state (only refreshes outputs when Apply is clicked)
   applied_filters <- reactiveValues(
@@ -213,14 +199,14 @@ mod_overview_server <- function(id, uploaded_df, user_setup) {
 
   # --- Master Filtered Data (uses applied filters) ---
   output$overview_report <- download_handler(
-    filename = function() export_file_name("Data_collection_summary", "html", "%Y-%m-%d_%Hh%M"),
+    filename = function() export_file_name("Overview", "html", "%Y-%m-%d_%Hh%M"),
     content = function(file) {
-      df <- filtered_data()
+      df <- view_data()
       d <- applied_filters$date
       lang <- session$rootScope()$input$lang_selector
-      write_overview_report(file, df, user_setup, list(
+      write_overview_report(file, df, ov_setup(), list(
         country_office = user_setup$country_office, source = user_setup$data_source,
-        n_total = nrow(uploaded_df()),
+        n_total = nrow(uploaded_df()), view = if (!is.null(view_rows())) view_label(),
         areas = areas_covered_text(list(admin1 = applied_filters$admin1, admin2 = applied_filters$admin2, admin3 = applied_filters$admin3)),
         period = if (length(d) == 2 && all(!is.na(d))) sprintf("%s to %s", format(as.Date(d[1])), format(as.Date(d[2]))) else "All dates"),
         lang = if (identical(lang, "fr")) "fr" else "en")
@@ -294,7 +280,7 @@ mod_overview_server <- function(id, uploaded_df, user_setup) {
   # a single out-of-range point used to drag the map centre off the country.
   map_points <- reactive({
     req(filtered_data())
-    req(shiny::isTruthy(user_setup$lon), shiny::isTruthy(user_setup$lat))
+    need_mapped(user_setup, "lon", "lat")
     df <- filtered_data()
     req(user_setup$lon %in% names(df), user_setup$lat %in% names(df))
 
@@ -303,7 +289,7 @@ mod_overview_server <- function(id, uploaded_df, user_setup) {
     ok <- is.finite(lng) & is.finite(lat) &
       abs(lng) <= 180 & abs(lat) <= 90 & !(lng == 0 & lat == 0)
 
-    list(df = df[ok, , drop = FALSE], lng = lng[ok], lat = lat[ok],
+    list(df = df[ok, , drop = FALSE], lng = lng[ok], lat = lat[ok], idx = which(ok),
          dropped = sum(!ok), total = length(ok))
   })
 
@@ -353,11 +339,13 @@ mod_overview_server <- function(id, uploaded_df, user_setup) {
   # stays; the light/dark switch only moves between Light and Dark.
   dark_mode <- reactive(identical(session$rootScope()$input$dark_mode, "dark"))
   base_choice <- reactiveVal("Terrain")
+  light_base <- reactiveVal("Terrain")     # the base to go back to when leaving dark mode
   observeEvent(input$map_plot_groups, {
     g <- intersect(input$map_plot_groups, c("Terrain", "Satellite", "Light", "Dark"))
-    if (length(g)) base_choice(g[1])
+    if (length(g)) { base_choice(g[1]); if (g[1] != "Dark") light_base(g[1]) }
   })
-  base_group <- function() base_choice()
+  # dark mode draws the map on the dark basemap
+  base_group <- function() if (isTRUE(dark_mode())) "Dark" else base_choice()
 
   esri_attr <- ESRI_ATTRIBUTION
 
@@ -391,18 +379,43 @@ mod_overview_server <- function(id, uploaded_df, user_setup) {
   }
 
   observeEvent(dark_mode(), {
-    if (!isTRUE(base_choice() %in% c("Light", "Dark"))) return()
-    base_choice(if (isTRUE(dark_mode())) "Dark" else "Light")
+    target <- if (isTRUE(dark_mode())) "Dark" else light_base()
+    base_choice(target)
     leaflet::leafletProxy("map_plot", session) |>
-      leaflet::hideGroup(c("Light", "Dark")) |>
-      leaflet::showGroup(if (isTRUE(dark_mode())) "Dark" else "Light")
+      leaflet::hideGroup(c("Light", "Dark", "Terrain", "Satellite")) |>
+      leaflet::showGroup(target)
   }, ignoreInit = TRUE)
 
   # Points and choropleth are two branches of ONE render. The previous version
   # drove the toggle through leafletProxy and called clearGroup("points") on the
   # way into choropleth; nothing ever put the points back, so switching back to
   # Points left an empty map.
+  # A button on the map: draw a rectangle, the map zooms to it (Leaflet's own
+  # Shift + drag does the same, but nobody knows it).
+  box_zoom_js <- htmlwidgets::JS("function(el, x) {
+    var map = this; if (map._twBox) return; map._twBox = true;
+    var on = false, start = null, rect = null, link = null;
+    function toggle(v) { on = v; link.classList.toggle('active', on); map.getContainer().style.cursor = on ? 'crosshair' : '';
+      if (on) map.dragging.disable(); else map.dragging.enable(); }
+    var Box = L.Control.extend({ options: { position: 'topleft' }, onAdd: function() {
+      var d = L.DomUtil.create('div', 'leaflet-bar tw-boxzoom'); link = L.DomUtil.create('a', '', d);
+      link.href = '#'; link.title = 'Zoom to an area: click, then draw a rectangle on the map (or Shift + drag)';
+      link.innerHTML = '<svg viewBox=\"0 0 16 16\" width=\"15\" height=\"15\"><rect x=\"2\" y=\"2\" width=\"12\" height=\"12\" rx=\"1\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-dasharray=\"2.5 2\"/><path d=\"M8 5v6M5 8h6\" stroke=\"currentColor\" stroke-width=\"1.5\"/></svg>';
+      L.DomEvent.on(link, 'click', function(e) { L.DomEvent.stop(e); toggle(!on); });
+      L.DomEvent.disableClickPropagation(d); return d; } });
+    map.addControl(new Box());
+    map.on('mousedown', function(e) { if (!on) return; start = e.latlng;
+      rect = L.rectangle([start, start], { color: '#0A6EB4', weight: 1.5, dashArray: '4 3', fillOpacity: 0.08, interactive: false }).addTo(map); });
+    map.on('mousemove', function(e) { if (on && start && rect) rect.setBounds(L.latLngBounds(start, e.latlng)); });
+    map.on('mouseup', function(e) { if (!on || !start) return;
+      var b = L.latLngBounds(start, e.latlng); if (rect) map.removeLayer(rect); rect = null; start = null; toggle(false);
+      if (b.isValid() && !b.getNorthEast().equals(b.getSouthWest())) map.fitBounds(b); });
+  }")
+
   output$map_plot <- leaflet::renderLeaflet({
+    htmlwidgets::onRender(map_render(), box_zoom_js)
+  })
+  map_render <- function() {
     pts <- map_points()
     if (nrow(pts$df) == 0) return(base_map())
     xr <- fit_range(pts$lng); yr <- fit_range(pts$lat)
@@ -423,7 +436,7 @@ mod_overview_server <- function(id, uploaded_df, user_setup) {
         return(map)
       }
 
-      w <- get_weights(df, user_setup)
+      w <- rep(1, nrow(df))
       sc <- as_number(df[[score_col]])
       unit <- as.character(df[[unit_col]])
 
@@ -495,650 +508,416 @@ mod_overview_server <- function(id, uploaded_df, user_setup) {
                                 labels = p$legend_labels, title = col, opacity = 0.8)
     }
     map
-  })
-
-  ### ----------------- Computing various metrics of the Overview
-  # -----------------------------------------------------------------------------------
-
-  # Metric 1: Total Households (Filtered, weighted)
-  output$stat_hh <- renderText({
-    req(filtered_data())
-    format(round(weighted_count(filtered_data(), user_setup)), big.mark = ",")
-  })
-
-  weighted <- reactive({
-    w <- as.character(user_setup$weight %||% "")[1]
-    !is.na(w) && nzchar(w) && w %in% names(filtered_data())
-  })
-  output$stat_hh_note <- renderText({
-    req(filtered_data())
-    if (weighted()) sprintf("weighted estimate, %s records", format(nrow(filtered_data()), big.mark = ",")) else "records"
-  })
-  output$stat_indiv_note <- renderText({
-    req(filtered_data())
-    if (weighted()) "weighted estimate" else "in these households"
-  })
-
-  # Metric 2: Total Individuals (Weighted sum of HH Size)
-  output$stat_indiv <- renderText({
-    req(filtered_data(), user_setup$hh_size)
-    total <- weighted_sum(filtered_data(), user_setup$hh_size, user_setup)
-    format(round(total), big.mark = ",")
-  })
-
-  # Metric 3: Total Unique Communities (excluding zero-weight rows)
-  output$stat_comm <- renderText({
-    req(filtered_data(), user_setup$village)
-    df <- filtered_data()
-    w <- get_weights(df, user_setup)
-    n_comm <- length(unique(df[[user_setup$village]][w > 0]))
-    format(n_comm, big.mark = ",")
-  })
-
-  # Metric 4: Daily Submission Rate (Efficiency)
-  output$stat_rate <- renderText({
-    # Wait for data AND the date mapping from setup
-    req(filtered_data(), user_setup$date)
-
-    df <- filtered_data()
-    date_col <- user_setup$date
-
-    # Calculate unique days
-    # as.Date ensures we count calendar days, even if the data has timestamps
-    unique_days <- unique(as.Date(df[[date_col]]))
-    n_days <- length(unique_days)
-
-    if (n_days <= 0) {
-      return("0 / day")
-    }
-
-    rate <- round(weighted_count(df, user_setup) / n_days, 0)
-    paste0(format(rate, big.mark = ","), " / day")
-  })
-
-  # Metric 5: Average Survey Duration (weighted)
-  output$stat_duration <- renderText({
-    req(filtered_data())
-    df <- filtered_data()
-
-    # Check if columns exist; if not, fall back to starttime/endtime
-    if (all(c("start", "end") %in% names(df))) {
-      t_start <- lubridate::as_datetime(df[["start"]])
-      t_end <- lubridate::as_datetime(df[["end"]])
-    } else {
-      t_start <- lubridate::as_datetime(df[["starttime"]])
-      t_end <- lubridate::as_datetime(df[["endtime"]])
-    }
-
-    if (length(t_start) == 0 || length(t_end) == 0) {
-      return("No Data")
-    }
-
-    # Calculate difference in minutes
-    durations <- as.numeric(difftime(t_end, t_start, units = "mins"))
-    w <- get_weights(df, user_setup)
-
-    # Filter for realistic surveys (e.g., 5 min to 3 hours)
-    valid <- !is.na(durations) & durations > 5 & durations < 180 & !is.na(w) & w > 0
-
-    if (sum(valid) == 0) {
-      return("N/A")
-    }
-
-    avg <- sum(durations[valid] * w[valid]) / sum(w[valid])
-    paste0(round(avg, 1), " min")
-  })
-
-  ### ----------------- Daily Synchronisation graph in the box
-  # -----------------------------------------------------------------------------------
-
-  output$stat_rate_plot <- render_wfp_plotly({
-    req(filtered_data(), user_setup$date)
-
-    # 1. Aggregate weighted data by day
-    df <- filtered_data()
-    daily_data <- weighted_table(df, user_setup$date, user_setup) |>
-      dplyr::mutate(date = as.Date(.data$value)) |>
-      dplyr::arrange(.data$date)
-
-    # 2. Build the Sparkline
-    plotly::plot_ly(
-      daily_data,
-      x = ~date,
-      y = ~n,
-      color = I("#0A6EB4"),
-      span = I(1),
-      alpha = 0.2
-    ) |>
-      plotly::add_lines(
-        color = I("#0A6EB4"), # Brand accent reads on both light and dark surfaces
-        fill = "tozeroy", # Shades the area under the line
-        alpha = 0.2
-      ) |>
-      plotly::layout(
-        xaxis = list(visible = FALSE, showgrid = FALSE),
-        yaxis = list(visible = FALSE, showgrid = FALSE),
-        hovermode = "x",
-        margin = list(t = 0, r = 0, l = 0, b = 0),
-        paper_bgcolor = "transparent",
-        plot_bgcolor = "transparent"
-      ) |>
-      plotly::config(displayModeBar = FALSE)
-  })
-
-  ### ----------------- Dynamic filtered info
-  # -----------------------------------------------------------------------------------
-
-  # Create the dynamic title string
-  dynamic_title <- reactive({
-    # Start with the highest level selected
-    if (shiny::isTruthy(input$filter_admin3)) {
-      paste("Data for ", paste(input$filter_admin3, collapse = ", "))
-    } else if (shiny::isTruthy(input$filter_admin2)) {
-      paste("Data for ", paste(input$filter_admin2, collapse = ", "))
-    } else if (shiny::isTruthy(input$filter_admin1)) {
-      paste("Data for ", paste(input$filter_admin1, collapse = ", "))
-    } else {
-      "Summary for All Administrative Areas"
-    }
-  })
-
-  # Pass this to the UI
-  output$table_title <- renderText({
-    dynamic_title()
-  })
-
-
-  # Rows missing from the map are said, not left to be guessed at.
-  output$map_note <- renderText({
-    pts <- tryCatch(map_points(), error = function(e) NULL)
-    if (is.null(pts) || pts$dropped == 0) return("")
-    sprintf("%s of %s households have no usable coordinates and are not on the map.",
-            format(pts$dropped, big.mark = ","), format(pts$total, big.mark = ","))
-  })
-
-  ### ----------------- Vulnerability Table
-  # -----------------------------------------------------------------------------------
-
-  output$vulnerability_table <- DT::renderDT({
-    req(filtered_data(), user_setup$v_groups, user_setup$hh_size)
-
-    if (user_setup$v_groups == "") {
-      return("Vulnerability scales not available")
-    } # Handle the empty case gracefully
-
-    df <- filtered_data()
-    vuln_col <- user_setup$v_groups
-    size_col <- user_setup$hh_size
-    w <- get_weights(df, user_setup)
-    size_num <- as_number(df[[size_col]])
-
-    # 1. Aggregate and calculate weighted percentages
-    summary_df <- df |>
-      dplyr::transmute(
-        Vulnerability = as.character(.data[[vuln_col]]),
-        .w = w,
-        .size = tidyr::replace_na(size_num, 0)
-      ) |>
-      dplyr::filter(Vulnerability != "") |>
-      dplyr::group_by(Vulnerability) |>
-      dplyr::summarise(
-        Households = sum(.data$.w, na.rm = TRUE),
-        Individuals = sum(.data$.size * .data$.w, na.rm = TRUE),
-        .groups = "drop"
-      ) |>
-      dplyr::mutate(
-        `% HH` = Households / sum(Households),
-        `% Indiv` = Individuals / sum(Individuals)
-      ) |>
-      dplyr::arrange(Vulnerability)
-    # Short headers: the table shares its row with the donut.
-    names(summary_df) <- c("Group", "Households", "People", "% HH", "% people")
-
-    # 3. Create Table with Percentage Formatting
-    DT::datatable(
-      summary_df,
-      # A small table: no scroll frame (the app-wide default cut its last
-      # column), it sizes to the card.
-      options = list(dom = 't', paging = FALSE, ordering = FALSE, scrollX = FALSE, scrollY = NULL, autoWidth = FALSE),
-      rownames = FALSE, class = "compact", width = "100%"
-    ) |>
-      # Format big numbers with commas
-      DT::formatCurrency(
-        c('Households', 'People'),
-        currency = "",
-        interval = 3,
-        mark = ",",
-        digits = 0
-      ) |>
-      # Format the new columns as Percentages
-      DT::formatPercentage(c('% HH', '% people'), digits = 1)
-  })
-
-  ### ----------------- The Eligibility Donut Chart
-  # -----------------------------------------------------------------------------------
-
-  output$eligibility_donut <- render_wfp_plotly({
-    req(filtered_data(), user_setup$eligibility)
-
-    df <- filtered_data()
-    target_col <- user_setup$eligibility
-
-    # 1. Clean and Aggregate (weighted). Keep ALL categories so nothing is
-    #    silently dropped; bundle the tail beyond the top 2 into an "Other" slice.
-    counts <- weighted_table(df, target_col, user_setup) |>
-      dplyr::filter(.data$value != "", .data$value != "NA") |>
-      dplyr::arrange(dplyr::desc(.data$n))
-
-    if (nrow(counts) == 0 || sum(counts$n) == 0) {
-      return(plotly::plot_ly() |>
-        plotly::layout(
-          paper_bgcolor = 'rgba(0,0,0,0)',
-          plot_bgcolor = 'rgba(0,0,0,0)',
-          annotations = list(text = "No data", showarrow = FALSE, x = 0.5, y = 0.5)
-        ) |>
-        plotly::config(displayModeBar = FALSE))
-    }
-
-    # If there are more than 2 categories, fold the remainder into "Other"
-    # so the donut always represents 100% of the data (no silent loss).
-    if (nrow(counts) > 2) {
-      top2 <- counts[1:2, ]
-      other_n <- sum(counts$n[3:nrow(counts)])
-      if (other_n > 0) {
-        top2 <- dplyr::bind_rows(top2, data.frame(value = "Other", n = other_n, stringsAsFactors = FALSE))
-      }
-      counts <- top2
-    }
-
-    # Calculate % for both highlighted levels
-    total <- sum(counts$n)
-    p1_lab <- substr(counts$value[1], 1, 22)
-    p1_pct <- round((counts$n[1] / total) * 100, 1)
-
-    p2_lab <- if (nrow(counts) > 1) substr(counts$value[2], 1, 22) else "N/A"
-    p2_pct <- if (nrow(counts) > 1) {
-      round((counts$n[2] / total) * 100, 1)
-    } else {
-      0
-    }
-
-    # 2. Build the Donut
-    plotly::plot_ly(
-      labels = counts$value,
-      values = counts$n,
-      type = 'pie',
-      hole = 0.8,
-      marker = list(colors = c("#0A6EB4", "#f7b825", "#6c757d")), # WFP blue / amber / grey (Other)
-      textinfo = 'none',
-      hoverinfo = 'label+percent'
-    ) |>
-      plotly::layout(
-        margin = list(t = 0, b = 0, l = 0, r = 0),
-        showlegend = FALSE,
-        autosize = TRUE,
-        paper_bgcolor = 'rgba(0,0,0,0)',
-        plot_bgcolor = 'rgba(0,0,0,0)',
-        annotations = list(
-          list(
-            text = paste0(
-              "<span style='color:#0A6EB4; font-size:27px; font-weight:bold;'>",
-              p1_pct,
-              "%</span>",
-              "<br><span style='color:#0A6EB4; font-size:10px;'>",
-              p1_lab,
-              "</span><br>",
-              "<span style='color:#94a3b8; font-size:12px;'>----------</span><br>",
-              "<br><span style='color:#f7b825; font-size:27px; font-weight:bold;'>",
-              p2_pct,
-              "%</span>",
-              "<br><span style='color:#f7b825; font-size:10px;'>",
-              p2_lab,
-              "</span>"
-            ),
-            showarrow = FALSE,
-            x = 0.5,
-            y = 0.5
-          )
-        )
-      ) |>
-      plotly::config(displayModeBar = FALSE)
-  })
-
-  ### ----------------- The Eligibility Waffle Chart
-  # -----------------------------------------------------------------------------------
-
-  # output$eligibility_waffle <- render_wfp_plotly({
-  #   req(filtered_data(), user_setup$eligibility)
-  #
-  #   # 1. Aggregate and get top 2 levels
-  #   target_col <- user_setup$eligibility
-  #   counts <- as.data.frame(table(filtered_data()[[target_col]])) |>
-  #     dplyr::slice_max(Freq, n = 2) |>
-  #     dplyr::arrange(desc(Freq))
-  #
-  #   # 2. Calculate percentage for the primary group
-  #   p1_pct <- round((counts$Freq[1] / sum(counts$Freq)) * 100)
-  #
-  #   # 3. Build the 10x10 grid (Values 1 and 2)
-  #   # Filling a 100-length vector: p1_pct ones, then the rest twos
-  #   grid_vals <- c(rep(1, p1_pct), rep(2, 100 - p1_pct))
-  #   waffle_matrix <- matrix(grid_vals, nrow = 10, ncol = 10, byrow = TRUE)
-  #
-  #   # 4. Create the Plotly Heatmap as a Waffle
-  #   plotly::plot_ly(
-  #     z = waffle_matrix,
-  #     type = "heatmap",
-  #     # Fancy Solarized Palette: Cyan (#0A6EB4) and Muted Sage (#c9cba3)
-  #     colorscale = list(list(0, "#0A6EB4"), list(0.5, "#0A6EB4"),
-  #                       list(0.5, "#c9cba3"), list(1, "#c9cba3")),
-  #     showscale = FALSE,
-  #     # Add gaps to create the "squares" look
-  #     xgap = 3, ygap = 3,
-  #     # Hover text shows the label and percentage
-  #     hoverinfo = "text",
-  #     text = ifelse(waffle_matrix == 1,
-  #                   paste0(counts$Var1[1], ": ", p1_pct, "%"),
-  #                   paste0(counts$Var1[2], ": ", 100 - p1_pct, "%"))
-  #   ) |>
-  #     plotly::layout(
-  #       title = list(text = "Eligibility Comp. (1 block = 1%)",
-  #                    font = list(color = "#5b6b7e", size = 11)),
-  #       paper_bgcolor = 'rgba(0,0,0,0)',
-  #       plot_bgcolor = 'rgba(0,0,0,0)',
-  #       xaxis = list(visible = FALSE, fixedrange = TRUE),
-  #       yaxis = list(visible = FALSE, fixedrange = TRUE, autorange = "reversed"),
-  #       margin = list(t = 30, b = 10, l = 10, r = 10)
-  #     ) |>
-  #     plotly::config(displayModeBar = FALSE)
-  # })
-
-  # "Head of household sex": the mapped field in words, not the raw column name.
-  profile_title <- function(key) {
-    # The "Profile by" toggle above already names the view: the title is the
-    # field alone, short enough for a third of the card.
-    dq_field_labels()[[key]]
   }
 
-  ### ----------------- Vulnerability Profile
-  # -----------------------------------------------------------------------------------
+  ### ----------------- The figures follow the map view
+  # ---------------------------------------------------------------------------
 
-  # ------------------- Define each Vulnerability Plot
-
-  ## Sex of the HH Head
-
-  output$plot_sex <- render_wfp_plotly({
-    req(filtered_data(), user_setup$hhh_sex)
-    # Map internal choice to actual column name from setup
-    view_col <- switch(
-      input$profile_view,
-      "vuln" = user_setup$v_groups,
-      "elig" = user_setup$eligibility,
-      "score" = user_setup$v_score
-    )
-
-    create_profile_plot(
-      filtered_data(),
-      view_col,
-      user_setup$hhh_sex,
-      weights = get_weights(filtered_data(), user_setup),
-      title = profile_title("hhh_sex")
-    )
+  map_bounds <- shiny::debounce(reactive(input$map_plot_bounds), 600)
+  # The households the insights describe: those in the map view, or all of
+  # them when the whole located set is in view (the households without
+  # coordinates then count too) or when "Follow the map" is off.
+  view_rows <- reactive({
+    if (!isTRUE(input$follow_map)) return(NULL)
+    pts <- tryCatch(map_points(), error = function(e) NULL)
+    if (is.null(pts) || !length(pts$idx)) return(NULL)
+    ov_in_view(pts$lng, pts$lat, pts$idx, map_bounds())
+  })
+  view_data <- reactive({
+    df <- filtered_data(); r <- view_rows()
+    if (is.null(r)) df else df[r, , drop = FALSE]
+  })
+  view_label <- reactive({
+    n_all <- nrow(filtered_data())
+    if (is.null(view_rows())) sprintf("All %s households", ov_num(n_all))
+    else sprintf("Map view: %s of %s households", ov_num(length(view_rows())), ov_num(n_all))
   })
 
-  ## Disability / Chronic Illness
-
-  output$plot_chronic <- render_wfp_plotly({
-    req(filtered_data(), user_setup$disability)
-    # Map internal choice to actual column name from setup
-    view_col_name <- switch(
-      input$profile_view,
-      "vuln" = user_setup$v_groups,
-      "elig" = user_setup$eligibility,
-      "score" = user_setup$v_score
-    )
-
-    create_profile_plot(
-      data = filtered_data(),
-      view_col = view_col_name,
-      demo_col = user_setup$disability,
-      weights = get_weights(filtered_data(), user_setup),
-      title = profile_title("disability")
-    )
+  output$view_chip <- renderUI({
+    req(filtered_data())
+    zoomed <- !is.null(view_rows())
+    tags$span(class = paste("tw-ov-chip", if (zoomed) "zoomed"), bsicons::bs_icon(if (zoomed) "zoom-in" else "globe2"), " ", view_label(),
+              if (zoomed) actionLink(ns("view_all"), "show all", class = "ms-1"))
+  })
+  observeEvent(input$view_all, {
+    pts <- map_points(); xr <- fit_range(pts$lng); yr <- fit_range(pts$lat)
+    leaflet::leafletProxy("map_plot", session) |> leaflet::fitBounds(xr[1] - 1, yr[1] - 1, xr[2] + 1, yr[2] + 1)
   })
 
-  ## HH Size
+  ### ----------------- 1. Data collection (always in view)
+  # ---------------------------------------------------------------------------
 
-  output$plot_hh_size <- render_wfp_plotly({
-    req(filtered_data(), user_setup$hh_size)
+  collection <- reactive({ df <- view_data(); req(nrow(df) > 0); ov_collection(df, ov_setup()) })
+  ov_tiles <- function(tiles, cls = "") {
+    if (!length(tiles)) return(NULL)
+    if (any(vapply(tiles, function(t) !is.null(t$share), logical(1)))) return(HTML(ov_tiles_html(tiles)))
+    tags$div(class = paste("tw-tiles", cls), lapply(tiles, function(t) tags$div(
+      class = "tw-tile", title = t$sub, `data-key` = t$label,
+      tags$div(class = "tw-tile-top", bsicons::bs_icon(t$icon %||% "dot"), tags$span(class = "tw-tile-label", t$label)),
+      tags$div(class = "tw-tile-value", t$value),
+      tags$div(class = "tw-tile-sub", t$sub))))
+  }
+  output$col_tiles <- renderUI(ov_tiles(collection()$tiles, "tw-tiles-col"))
 
-    # Determine which column name to use based on radioButtons
-    view_col_name <- switch(
-      input$profile_view,
-      "vuln" = user_setup$v_groups,
-      "elig" = user_setup$eligibility,
-      "score" = user_setup$v_score
-    )
-
-    create_profile_plot(
-      data = filtered_data(),
-      view_col = view_col_name,
-      demo_col = user_setup$hh_size,
-      weights = get_weights(filtered_data(), user_setup),
-      title = profile_title("hh_size")
-    )
-  })
-
-  ## HHH Age
-
-  output$plot_age <- render_wfp_plotly({
-    req(filtered_data(), user_setup$hhh_age)
-
-    # Determine which column name to use based on radioButtons
-    view_col_name <- switch(
-      input$profile_view,
-      "vuln" = user_setup$v_groups,
-      "elig" = user_setup$eligibility,
-      "score" = user_setup$v_score
-    )
-
-    create_profile_plot(
-      data = filtered_data(),
-      view_col = view_col_name,
-      demo_col = user_setup$hhh_age,
-      weights = get_weights(filtered_data(), user_setup),
-      title = profile_title("hhh_age")
-    )
-  })
-
-  ## Residence Status
-
-  output$plot_residence <- render_wfp_plotly({
-    req(filtered_data(), user_setup$residency)
-
-    # Determine which column name to use based on radioButtons
-    view_col_name <- switch(
-      input$profile_view,
-      "vuln" = user_setup$v_groups,
-      "elig" = user_setup$eligibility,
-      "score" = user_setup$v_score
-    )
-
-    create_profile_plot(
-      data = filtered_data(),
-      view_col = view_col_name,
-      demo_col = user_setup$residency,
-      weights = get_weights(filtered_data(), user_setup),
-      title = profile_title("residency")
-    )
-  })
-
-  ## Presence of Children Under 5yo
-
-  output$plot_childU5 <- render_wfp_plotly({
-    req(filtered_data(), user_setup$childU5)
-
-    # Determine which column name to use based on radioButtons
-    view_col_name <- switch(
-      input$profile_view,
-      "vuln" = user_setup$v_groups,
-      "elig" = user_setup$eligibility,
-      "score" = user_setup$v_score
-    )
-
-    create_profile_plot(
-      data = filtered_data(),
-      view_col = view_col_name,
-      demo_col = user_setup$childU5,
-      weights = get_weights(filtered_data(), user_setup),
-      title = profile_title("childU5")
-    )
-  })
-
-  ## ---------------------- In case Vuln and groups are not available
-
-  observe({
-    req(user_setup) # Wait for setup module to initialize
-
-    # 1. Start with the 'Score' which we assume is the primary numeric metric
-    available_choices <- c("Vulnerability score" = "score")
-
-    # 2. Add others ONLY if they exist in the mapping
-    if (shiny::isTruthy(user_setup$v_groups) && user_setup$v_groups != "") {
-      available_choices <- c(available_choices, "Vulnerability group" = "vuln")
+  AREA_COLS <- c("#0A6EB4", "#26bde2", "#f7b825", "#3f7e44", "#c5192d", "#8a96a3")
+  output$daily_plot <- render_wfp_plotly({
+    cl <- collection()
+    shiny::validate(shiny::need(!is.null(cl$daily), "Not in these data: map the data collection date to see the daily submissions."))
+    d <- cl$daily
+    by_area <- identical(input$daily_by, "area") && !is.null(cl$area_label)
+    if (!by_area) d <- stats::aggregate(list(n = d$n), list(day = d$day), sum)
+    tot <- stats::aggregate(list(n = d$n), list(day = d$day), sum); tot$cum <- cumsum(tot$n)
+    p <- if (by_area) {
+      # one colour per area whatever the map view: set on all the filtered data
+      a1 <- ov_col(user_setup, filtered_data(), "admin1")
+      all_areas <- sort(unique(c(as.character(filtered_data()[[a1]]), "Other areas", "(no area)")))
+      pal <- stats::setNames(rep_len(AREA_COLS, length(all_areas)), all_areas)
+      plotly::plot_ly(d, x = ~day, y = ~n, color = ~area, colors = pal[unique(d$area)], type = "bar",
+                      hovertemplate = "%{x|%d %b}: %{y:,.0f} households<extra>%{fullData.name}</extra>")
+    } else {
+      plotly::plot_ly(d, x = ~day, y = ~n, type = "bar", marker = list(color = "#0A6EB4"), name = "Households",
+                      hovertemplate = "%{x|%d %b}: %{y:,.0f} households<extra></extra>")
     }
-
-    if (
-      shiny::isTruthy(user_setup$eligibility) && user_setup$eligibility != ""
-    ) {
-      available_choices <- c(available_choices, "Eligibility" = "elig")
-    }
-
-    # 3. Update the buttons. If 'vuln' isn't in available_choices, it disappears.
-    shinyWidgets::updateRadioGroupButtons(
-      session = session,
-      inputId = "profile_view",
-      choices = available_choices,
-      selected = input$profile_view %||% "score", # Keep current selection or default to score
-      status = "outline-primary",
-      checkIcon = list(
-        yes = NULL,
-        no = NULL
-      ),
-    )
+    p |>
+      plotly::add_lines(data = tot, x = ~day, y = ~cum, yaxis = "y2", inherit = FALSE, name = "Cumulative",
+                        line = list(color = "#5b6b7c", width = 1.5, dash = "dot"), hovertemplate = "%{x|%d %b}: %{y:,.0f} in all<extra></extra>") |>
+      plotly::layout(barmode = "stack", bargap = 0.15, showlegend = by_area,
+                     legend = list(orientation = "h", y = 1.02, yanchor = "bottom", x = 0, font = list(size = 9), itemwidth = 30),
+                     margin = list(l = 30, r = 36, t = if (by_area) 16 else 4, b = 20),
+                     xaxis = list(title = "", type = "date", tickformat = "%d %b", tickfont = list(size = 10)),
+                     yaxis = list(title = "", tickfont = list(size = 10)),
+                     yaxis2 = list(overlaying = "y", side = "right", showgrid = FALSE, title = "", tickfont = list(size = 9), rangemode = "tozero"))
   })
 
-    # -----------------------------------------------------------------------
-    # Advanced analytics: weighted cross-tabulation and weighted correlation
-    # matrix. Each block activates only when the relevant columns are mapped.
-    # -----------------------------------------------------------------------
-    output$analytics_block <- renderUI({
-      req(filtered_data())
-      ns <- session$ns
-      block_list <- list()
+  ### ----------------- Compact charts shared by the sections
+  # ---------------------------------------------------------------------------
 
-      # Cross-tab explorer + correlation matrix share a row of column pickers.
-      # Identifiers, dates, coordinates and weights make meaningless crosstabs,
-      # so they are excluded and the categorical profile variables come first.
-      setup_list <- reactiveValuesToList(user_setup)
-      skip_keys <- c("unique_id", "date", "lon", "lat", "weight", "enumerator_id", "force_numeric")
-      preferred_keys <- c("v_groups", "eligibility", "hhh_sex", "residency", "admin1", "admin2",
-                          "childU5", "disability", "hhid_avail", "phone_avail")
-      pick <- function(keys) {
-        vals <- unlist(setup_list[intersect(keys, names(setup_list))], use.names = FALSE)
-        vals <- as.character(vals)
-        vals[nzchar(vals) & vals %in% names(filtered_data())]
+  # shares as short horizontal bars (categories) or columns (bins)
+  share_plot <- function(ch) {
+    d <- ch$data; d$pct <- d$n / sum(d$n)
+    if (identical(ch$kind, "bins")) {
+      plotly::plot_ly(d, x = ~factor(category, levels = category), y = ~pct, type = "bar", marker = list(color = "#0A6EB4"),
+                      text = ~sprintf("%.0f%%", 100 * pct), textposition = "outside", cliponaxis = FALSE, textfont = list(size = 9),
+                      hovertemplate = "%{x}: %{y:.1%} (%{customdata:,.0f} households)<extra></extra>", customdata = ~n) |>
+        plotly::layout(margin = list(l = 8, r = 8, t = 6, b = 26), yaxis = list(visible = FALSE, range = c(0, max(d$pct) * 1.25)),
+                       xaxis = list(title = "", tickfont = list(size = 10)))
+    } else {
+      d <- d[rev(seq_len(nrow(d))), , drop = FALSE]
+      plotly::plot_ly(d, y = ~factor(category, levels = category), x = ~pct, type = "bar", orientation = "h", marker = list(color = "#0A6EB4"),
+                      text = ~sprintf("%.0f%%", 100 * pct), textposition = "outside", cliponaxis = FALSE, textfont = list(size = 9),
+                      hovertemplate = "%{y}: %{x:.1%} (%{customdata:,.0f} households)<extra></extra>", customdata = ~n) |>
+        plotly::layout(margin = list(l = 8, r = 30, t = 6, b = 6), xaxis = list(visible = FALSE, range = c(0, max(d$pct) * 1.3)),
+                       yaxis = list(title = "", tickfont = list(size = 10), automargin = TRUE))
+    }
+  }
+  mini_chart <- function(id, title, height = 170) tags$div(class = "tw-mini",
+    tags$div(class = "tw-mini-title", title), plotly::plotlyOutput(ns(id), height = paste0(height, "px")))
+
+  ### ----------------- 2. Who is in the data
+  # ---------------------------------------------------------------------------
+
+  profile <- reactive({ df <- view_data(); req(nrow(df) > 0); ov_profile(df, ov_setup()) })
+  PROFILE_CHARTS <- c("age", "size", "u5", "residency")   # sex: the female-headed ring says it
+  output$who_ui <- renderUI({
+    pr <- profile()
+    if (is.null(pr)) return(empty_state("No household characteristic is mapped",
+                                        "Map the head's sex and age, household size, children under 5, residence status... in Variable Definition & Setup.", "people"))
+    charts <- intersect(PROFILE_CHARTS, names(pr$charts))
+    tagList(ov_tiles(pr$tiles, "tw-tiles-small"),
+            if (length(charts)) tags$div(class = "tw-mini-grid", lapply(charts, function(k) mini_chart(paste0("who_", k), pr$charts[[k]]$title))))
+  })
+  for (k in PROFILE_CHARTS) local({
+    key <- k
+    output[[paste0("who_", key)]] <- render_wfp_plotly({
+      ch <- profile()$charts[[key]]; req(ch, nrow(ch$data) > 0)
+      share_plot(ch)
+    })
+  })
+
+  ### ----------------- 3. Vulnerability
+  # ---------------------------------------------------------------------------
+
+  vuln <- reactive({ df <- view_data(); req(nrow(df) > 0); ov_vulnerability(df, ov_setup(), input$vuln_indicator) })
+  output$vuln_ui <- renderUI({
+    v <- vuln()
+    if (is.null(v)) return(empty_state("No vulnerability variable is mapped",
+                                       "Map a vulnerability score, vulnerability groups or eligibility in Variable Definition & Setup, or build a scorecard in Targeting Design.", "shield"))
+    ind_choices <- c(eligible = "Share eligible", vulnerable = "Share in the most vulnerable groups", score = "Mean score")[v$available]
+    n_cross <- if (is.null(v$cross)) 0 else nrow(v$cross)
+    tagList(
+      tags$div(class = "tw-mini-grid",
+        if (!is.null(v$groups)) mini_chart("vuln_groups", "Households by vulnerability group", 200),
+        if (!is.null(v$score)) mini_chart("vuln_score", "Distribution of the vulnerability score", 200)),
+      if (n_cross) tags$div(class = "tw-mini tw-mini-wide",
+        tags$div(class = "tw-mini-title d-flex align-items-center justify-content-between gap-2",
+                 tags$span("Across household profiles"),
+                 selectInput(ns("vuln_indicator"), NULL, choices = stats::setNames(names(ind_choices), unname(ind_choices)),
+                             selected = v$indicator, width = "220px", selectize = FALSE)),
+        plotly::plotlyOutput(ns("vuln_cross"), height = paste0(max(160, 17 * n_cross + 40), "px"))))
+  })
+  output$vuln_groups <- render_wfp_plotly({
+    g <- vuln()$groups; req(g)
+    g$pct <- g$households / sum(g$households)
+    cols <- vapply(seq_len(nrow(g)) / nrow(g), diagram_colour, "")
+    g <- g[rev(seq_len(nrow(g))), , drop = FALSE]; cols <- rev(cols)
+    plotly::plot_ly(g, y = ~factor(group, levels = group), x = ~pct, type = "bar", orientation = "h", marker = list(color = cols),
+                    text = ~sprintf("%.0f%%", 100 * pct), textposition = "outside", cliponaxis = FALSE, textfont = list(size = 9),
+                    customdata = ~people,
+                    hovertemplate = "%{y}: %{x:.1%} of households<br>%{customdata:,.0f} people<extra></extra>") |>
+      plotly::layout(margin = list(l = 8, r = 30, t = 6, b = 6), xaxis = list(visible = FALSE, range = c(0, max(g$pct) * 1.3)),
+                     yaxis = list(title = "", tickfont = list(size = 10), automargin = TRUE))
+  })
+  output$vuln_score <- render_wfp_plotly({
+    s <- vuln()$score; req(s)
+    share_plot(list(kind = "bins", data = s)) |> plotly::layout(xaxis = list(tickfont = list(size = 8), tickangle = -45))
+  })
+  output$vuln_cross <- render_wfp_plotly({
+    v <- vuln(); d <- v$cross; req(d, nrow(d) > 0)
+    pct <- !identical(v$indicator, "score")
+    overall <- ov_wmean(d$value, d$households)
+    d$label <- paste0(d$category, " ")
+    d$lab <- factor(d$label, levels = rev(unique(d$label)))
+    dims <- unique(d$dimension)
+    plotly::plot_ly(d, y = ~lab, x = ~value, color = ~dimension, colors = stats::setNames(rep_len(AREA_COLS, length(dims)), dims),
+                    type = "bar", orientation = "h", customdata = ~households,
+                    text = ~if (pct) sprintf("%.0f%%", 100 * value) else sprintf("%.1f", value), textposition = "outside", cliponaxis = FALSE,
+                    textfont = list(size = 9),
+                    hovertemplate = paste0("%{y}<br>", v$indicator_label, ": ", if (pct) "%{x:.1%}" else "%{x:.1f}",
+                                           "<br>%{customdata:,.0f} households<extra>%{fullData.name}</extra>")) |>
+      plotly::layout(showlegend = TRUE, legend = list(orientation = "h", y = -0.02, yanchor = "top", font = list(size = 9)),
+                     margin = list(l = 8, r = 34, t = 4, b = 4),
+                     xaxis = list(title = "", tickformat = if (pct) ".0%" else NULL, tickfont = list(size = 9)),
+                     yaxis = list(title = "", tickfont = list(size = 10), automargin = TRUE),
+                     shapes = list(list(type = "line", x0 = overall, x1 = overall, yref = "paper", y0 = 0, y1 = 1,
+                                        line = list(color = "#5b6b7c", dash = "dot", width = 1))))
+  })
+
+  ### ----------------- Explore two variables
+  # ---------------------------------------------------------------------------
+
+  # Explore two variables: a contingency table (households, row / column /
+  # total percentages, or the mean or sum of a number) and the correlations.
+  col_label <- function(cl) { l <- var_label(cl); if (is.na(l) || !nzchar(l)) cl else l }
+  # The columns both builders offer: mapped fields first, then the others;
+  # never identifiers, names, phone numbers or free text (analysis_cols()).
+  explore_cols <- reactive({
+    df <- filtered_data(); req(df)
+    setup_list <- reactiveValuesToList(user_setup)
+    skip_keys <- c("unique_id", "date", "lon", "lat", "weight")
+    keys <- setdiff(intersect(setup_keys(), names(setup_list)), skip_keys)
+    mapped <- unique(unlist(lapply(keys, function(k) { v <- as.character(setup_list[[k]] %||% "")[1]; if (!is.na(v) && nzchar(v) && v %in% names(df)) v })))
+    mapped <- analysis_cols(df, mapped)
+    others <- analysis_cols(df, setdiff(names(df)[!grepl("^@?_", names(df))], c(mapped, unlist(setup_list[skip_keys]))))
+    ch <- col_choice_groups(`Mapped fields` = mapped, `Other columns` = others)
+    all <- unlist(ch, use.names = FALSE)
+    # numbers, including numbers stored as text (Excel, MODA exports)
+    nums <- all[vapply(df[all], function(x) { z <- if (is.numeric(x)) x else suppressWarnings(as.numeric(as.character(x)))
+      mean(!is.na(z[!is.na(x)])) > 0.95 && length(unique(stats::na.omit(z))) > 2 }, logical(1))]
+    list(ch = ch, all = all, nums = nums)
+  })
+  pick <- function(id, label, choices, selected) selectizeInput(ns(id), label, choices = choices, selected = selected, width = "100%", multiple = FALSE)
+
+  output$table_ui <- renderUI({
+    ec <- explore_cols(); ch <- ec$ch; all <- ec$all; nums <- ec$nums
+    if (length(all) < 1) return(empty_state("No column to tabulate", NULL, "table"))
+    tagList(
+      tags$div(class = "tw-ct-controls",
+        pick("ct_row", "Rows", ch, all[1]),
+        pick("ct_col", "Columns", c(`(none: one-way table)` = "", ch), if (length(all) > 1) all[2] else ""),
+        selectInput(ns("ct_stat"), "Cells", width = "100%", selectize = FALSE,
+                    choices = c("Households" = "n", "Row %" = "row", "Column %" = "col", "Total %" = "total",
+                                "Mean of a number" = "mean", "Sum of a number" = "sum")),
+        conditionalPanel(sprintf("['mean','sum'].indexOf(input['%s']) >= 0", ns("ct_stat")),
+                         pick("ct_value", "Number", if (length(nums)) nums else c("(no numeric column)" = ""), nums[1]))),
+      uiOutput(ns("ct_table")))
+  })
+
+  output$chart_ui <- renderUI({
+    ec <- explore_cols(); ch <- ec$ch; all <- ec$all
+    if (length(all) < 1) return(empty_state("No column to chart", NULL, "bar-chart-line"))
+    tagList(
+      tags$div(class = "tw-ct-controls",
+        pick("gb_x", "Variable", ch, all[1]),
+        pick("gb_y", "Against", c(`(none)` = "", ch), ""),
+        pick("gb_group", "Grouped by", c(`(none)` = "", ch), ""),
+        uiOutput(ns("gb_type_ui"))),
+      plotly::plotlyOutput(ns("gb_plot"), height = "360px"),
+      tags$div(class = "tw-ct-note", textOutput(ns("gb_note"), inline = TRUE)))
+  })
+
+  output$ct_table <- renderUI({
+    df <- view_data(); req(df, input$ct_row, input$ct_row %in% names(df))
+    stat <- input$ct_stat %||% "n"
+    col <- if (shiny::isTruthy(input$ct_col) && input$ct_col %in% names(df) && input$ct_col != input$ct_row) input$ct_col else NULL
+    if (stat %in% c("mean", "sum")) shiny::validate(shiny::need(shiny::isTruthy(input$ct_value) && input$ct_value %in% names(df), "Choose the number to average or sum."))
+    ct <- contingency(df, input$ct_row, col, NULL, stat, input$ct_value)
+    tab <- ct$table
+    shiny::validate(shiny::need(nrow(tab) > 1, "No household has an answer for these variables."))
+    fmt <- function(v) if (is.na(v)) "" else switch(stat, n = , sum = format(round(v), big.mark = ","), mean = format(signif(v, 3), big.mark = ","),
+                                                     sprintf("%.1f%%", v))
+    body <- tab[-nrow(tab), if (is.null(col)) 1 else -ncol(tab), drop = FALSE]
+    rng <- range(body, na.rm = TRUE); if (!all(is.finite(rng)) || diff(rng) == 0) rng <- c(0, max(1, rng[2], na.rm = TRUE))
+    shade <- function(v, margin) if (margin || is.na(v)) NULL else sprintf("background: rgba(10, 110, 180, %.3f)", 0.04 + 0.42 * (v - rng[1]) / diff(rng))
+    what <- switch(stat, n = "Households", row = "Share of each row (%)", col = "Share of each column (%)", total = "Share of all households (%)",
+                   mean = sprintf("Mean of %s", col_label(input$ct_value)), sum = sprintf("Sum of %s", col_label(input$ct_value)))
+    nr <- nrow(tab); nc <- ncol(tab)
+    tags$div(class = "tw-ct",
+      tags$div(class = "tw-ct-caption", tags$strong(what), sprintf(" \u00b7 %s households", format(ct$n, big.mark = ","))),
+      tags$div(class = "tw-ct-wrap", tags$table(class = "tw-ct-table",
+        tags$thead(
+          if (!is.null(col)) tags$tr(tags$th(class = "tw-ct-corner", ""), tags$th(colspan = nc, class = "tw-ct-colvar", col_label(col))),
+          tags$tr(tags$th(class = "tw-ct-rowvar", col_label(input$ct_row)),
+                  lapply(seq_len(nc), function(j) tags$th(class = if (colnames(tab)[j] == "Total") "tw-ct-margin num" else "num", colnames(tab)[j])))),
+        tags$tbody(lapply(seq_len(nr), function(i) tags$tr(class = if (i == nr) "tw-ct-total" else NULL,
+          tags$th(rownames(tab)[i]),
+          lapply(seq_len(nc), function(j) { m <- i == nr || colnames(tab)[j] == "Total"
+            tags$td(class = paste("num", if (m) "tw-ct-margin"), style = shade(tab[i, j], m), fmt(tab[i, j])) })))))),
+      if (is.finite(ct$chi)) tags$div(class = "tw-ct-note",
+        sprintf("Chi-square test of independence: p %s%s.",
+                if (ct$chi < 0.001) "< 0.001" else sprintf("= %.3f", ct$chi),
+                if (ct$chi < 0.05) " (the two variables are related)" else " (no evidence of a relation)")))
+  })
+
+  # Chart builder: one or two variables, optionally grouped by a third; the
+  # chart follows their types (numbers: scatter and correlation; a number and
+  # a category: box plots, means or violins; two categories: stacked bars).
+  GB_COLS <- c("#0A6EB4", "#f7b825", "#3f7e44", "#c5192d", "#26bde2", "#8a96a3", "#5b6b7c", "#e67e22")
+  gb_vars <- reactive({
+    df <- view_data(); x <- input$gb_x
+    req(df, shiny::isTruthy(x), x %in% names(df))
+    y <- if (shiny::isTruthy(input$gb_y) && input$gb_y %in% names(df) && input$gb_y != x) input$gb_y
+    g <- if (shiny::isTruthy(input$gb_group) && input$gb_group %in% names(df) && !input$gb_group %in% c(x, y)) input$gb_group
+    list(df = df, x = x, y = y, g = g, kx = ov_var_kind(df[[x]]), ky = if (is.null(y)) "none" else ov_var_kind(df[[y]]))
+  })
+  output$gb_type_ui <- renderUI({
+    v <- gb_vars(); ch <- ov_chart_types(v$kx, v$ky); cur <- isolate(input$gb_type)
+    selectInput(ns("gb_type"), "Chart", choices = ch, selected = if (isTRUE(cur %in% ch)) cur else unname(ch[1]), selectize = FALSE, width = "100%")
+  })
+  gb_note <- reactiveVal("")
+  output$gb_note <- renderText(gb_note())
+  output$gb_plot <- render_wfp_plotly({
+    v <- gb_vars(); df <- v$df; n <- nrow(df)
+    types <- ov_chart_types(v$kx, v$ky)
+    type <- if (isTRUE(input$gb_type %in% types)) input$gb_type else unname(types[1])
+    as_cat <- function(col, k = 12) { f <- ov_categories(df[[col]], rep(1, n), max_levels = k); f }
+    num <- function(col) as_number(df[[col]])
+    g <- if (is.null(v$g)) NULL else as_cat(v$g, 6)
+    lab <- function(col) col_label(col)
+    pal <- function(f) stats::setNames(rep_len(GB_COLS, nlevels(f)), levels(f))
+    base_layout <- function(p, xt, yt, legend = !is.null(g)) plotly::layout(p,
+      xaxis = list(title = list(text = xt, font = list(size = 11)), tickfont = list(size = 10), automargin = TRUE),
+      yaxis = list(title = list(text = yt, font = list(size = 11)), tickfont = list(size = 10), automargin = TRUE),
+      showlegend = legend, legend = list(orientation = "h", y = -0.22, font = list(size = 10), title = list(text = if (!is.null(v$g)) lab(v$g) else "")),
+      margin = list(l = 8, r = 8, t = 8, b = 8))
+    keep <- function(...) { ok <- Reduce(`&`, lapply(list(...), function(z) !is.na(z))); if (!is.null(g)) ok <- ok & !is.na(g); which(ok) }
+
+    # one variable
+    if (v$ky == "none" && v$kx == "num") {
+      x <- num(v$x); i <- keep(x)
+      gb_note(sprintf("%s households; mean %.1f, median %.1f", format(length(i), big.mark = ","), mean(x[i]), stats::median(x[i])))
+      p <- if (type == "hist") {
+        if (is.null(g)) plotly::plot_ly(x = x[i], type = "histogram", marker = list(color = GB_COLS[1]), nbinsx = 30)
+        else plotly::plot_ly(x = x[i], color = g[i], colors = pal(g), type = "histogram", alpha = 0.6, nbinsx = 30) |> plotly::layout(barmode = "overlay")
+      } else plotly::plot_ly(y = x[i], x = if (!is.null(g)) g[i], color = if (!is.null(g)) g[i] else I(GB_COLS[1]), colors = if (!is.null(g)) pal(g), type = "box")
+      return(base_layout(p, if (type == "hist") lab(v$x) else "", if (type == "hist") "Households" else lab(v$x)))
+    }
+    if (v$ky == "none") {
+      x <- as_cat(v$x); i <- keep(x)
+      d <- as.data.frame(table(x = x[i], g = if (is.null(g)) rep("All", length(i)) else g[i]), stringsAsFactors = FALSE)
+      d <- d[d$Freq > 0 | TRUE, , drop = FALSE]
+      if (type == "bars") d$val <- ave(d$Freq, d$g, FUN = function(z) 100 * z / sum(z)) else d$val <- d$Freq
+      gb_note(sprintf("%s households", format(length(i), big.mark = ",")))
+      p <- if (is.null(g)) plotly::plot_ly(d, x = ~x, y = ~val, type = "bar", marker = list(color = GB_COLS[1]),
+                                           text = ~if (type == "bars") sprintf("%.0f%%", val) else format(val, big.mark = ","), textposition = "outside", cliponaxis = FALSE)
+           else plotly::plot_ly(d, x = ~x, y = ~val, color = ~g, colors = pal(g), type = "bar") |> plotly::layout(barmode = "group")
+      return(base_layout(p, lab(v$x), if (type == "bars") "% of households" else "Households"))
+    }
+    # two numbers
+    if (v$kx == "num" && v$ky == "num") {
+      x <- num(v$x); y <- num(v$y); i <- keep(x, y)
+      grp <- if (is.null(g)) factor(rep("All", n)) else g
+      p <- plotly::plot_ly()
+      notes <- character(0)
+      for (lv in levels(droplevels(grp[i]))) {
+        j <- i[grp[i] == lv]; col <- if (is.null(g)) GB_COLS[1] else pal(g)[[lv]]
+        rtxt <- ov_cor_text(x[j], y[j]); notes <- c(notes, if (is.null(g)) rtxt else sprintf("%s: %s", lv, rtxt))
+        nm <- if (is.null(g)) "Households" else sprintf("%s (r = %s)", lv, sub("^r = ([-0-9.]+).*", "\\1", rtxt))
+        p <- plotly::add_markers(p, x = x[j], y = y[j], name = nm, legendgroup = lv, marker = list(color = col, opacity = 0.55, size = 6),
+                                 hovertemplate = paste0(lab(v$x), ": %{x}<br>", lab(v$y), ": %{y}<extra>", lv, "</extra>"))
+        if (type == "scatter_trend" && length(j) >= 3 && stats::var(x[j]) > 0) {
+          fit <- stats::lm(y[j] ~ x[j]); xs <- range(x[j])
+          p <- plotly::add_lines(p, x = xs, y = stats::coef(fit)[1] + stats::coef(fit)[2] * xs, name = paste(lv, "trend"), legendgroup = lv,
+                                 showlegend = FALSE, line = list(color = col, width = 2), hoverinfo = "skip")
+        }
       }
-      mapped_cols <- unique(c(pick(preferred_keys), pick(setdiff(names(setup_list), skip_keys))))
-      # Every other column is offered too, after the mapped ones.
-      xtab_choices <- col_choice_groups(`Mapped fields` = mapped_cols,
-                                        `Other columns` = setdiff(names(filtered_data()), mapped_cols))
-      xtab_all <- unlist(xtab_choices, use.names = FALSE)
-      if (length(xtab_all) >= 2) {
-        block_list <- c(block_list, list(
-          hr(),
-          bslib::layout_columns(
-            bslib::card(
-              full_screen = TRUE,
-              bslib::card_header(bsicons::bs_icon("table"), " Cross-Tabulation Explorer"),
-              bslib::card_body(
-                bslib::layout_columns(
-                  shinyWidgets::pickerInput(ns("xtab_row"), "Rows:", choices = xtab_choices, selected = xtab_all[1], width = "100%", options = shinyWidgets::pickerOptions(container = "body", liveSearch = TRUE)),
-                  shinyWidgets::pickerInput(ns("xtab_col"), "Columns:", choices = xtab_choices, selected = xtab_all[2], width = "100%", options = shinyWidgets::pickerOptions(container = "body", liveSearch = TRUE))
-                ),
-                DT::DTOutput(ns("xtab_table"), fill = FALSE),
-                tags$div(class = "text-muted small", textOutput(ns("xtab_chi")))
-              )
-            ),
-            bslib::card(
-              full_screen = TRUE,
-              bslib::card_header(bsicons::bs_icon("grid-3x3-gap"), " Weighted Correlation (numeric variables)"),
-              bslib::card_body(
-                plotly::plotlyOutput(ns("plot_cor_matrix"), height = "360px")
-              )
-            ),
-            col_widths = c(6, 6)
-          )
-        ))
+      gb_note(paste(notes, collapse = " \u00b7 "))
+      return(base_layout(p, lab(v$x), lab(v$y)))
+    }
+    # a category and a number
+    if (xor(v$kx == "num", v$ky == "num")) {
+      ccol <- if (v$kx == "cat") v$x else v$y; ncol <- if (v$kx == "num") v$x else v$y
+      cx <- as_cat(ccol); y <- num(ncol); i <- keep(cx, y)
+      gb_note(sprintf("%s households", format(length(i), big.mark = ",")))
+      if (type == "mean") {
+        grp <- if (is.null(g)) factor(rep("All", n)) else g
+        d <- do.call(rbind, lapply(split(i, list(cx[i], grp[i]), drop = TRUE), function(j) {
+          m <- mean(y[j]); se <- if (length(j) > 1) stats::sd(y[j]) / sqrt(length(j)) else NA
+          data.frame(c = as.character(cx[j[1]]), g = as.character(grp[j[1]]), m = m, ci = 1.96 * se, n = length(j))
+        }))
+        d$c <- factor(d$c, levels = levels(cx))
+        p <- plotly::plot_ly(d, x = ~c, y = ~m, color = if (is.null(g)) I(GB_COLS[1]) else ~g, colors = if (!is.null(g)) pal(g), type = "bar",
+                             error_y = ~list(array = ci, color = "#5b6b7c", thickness = 1.2, width = 4),
+                             hovertemplate = paste0("%{x}: mean %{y:.2f}<extra></extra>")) |> plotly::layout(barmode = "group")
+        return(base_layout(p, lab(ccol), paste("Mean of", lab(ncol), "(95% interval)")))
       }
+      p <- plotly::plot_ly(x = cx[i], y = y[i], color = if (is.null(g)) I(GB_COLS[1]) else g[i], colors = if (!is.null(g)) pal(g),
+                           type = type, box = if (type == "violin") list(visible = TRUE), meanline = if (type == "violin") list(visible = TRUE),
+                           boxmean = if (type == "box") TRUE)
+      p <- plotly::layout(p, boxmode = "group", violinmode = "group")
+      return(base_layout(p, lab(ccol), lab(ncol)))
+    }
+    # two categories: bars, one panel per group
+    x <- as_cat(v$x); y <- as_cat(v$y, 8); i <- keep(x, y)
+    gb_note(sprintf("%s households", format(length(i), big.mark = ",")))
+    ycols <- pal(y)
+    panel <- function(j, show) {
+      d <- as.data.frame(table(x = x[j], y = y[j]), stringsAsFactors = FALSE)
+      d$val <- if (type == "stack100") ave(d$Freq, d$x, FUN = function(z) if (sum(z)) 100 * z / sum(z) else 0) else d$Freq
+      pp <- plotly::plot_ly()
+      for (lv in levels(y)) {
+        s <- d[d$y == lv, , drop = FALSE]
+        pp <- plotly::add_bars(pp, x = s$x, y = s$val, name = lv, legendgroup = lv, showlegend = show, marker = list(color = ycols[[lv]]),
+                               hovertemplate = paste0("%{x}<br>", lv, ": ", if (type == "stack100") "%{y:.1f}%" else "%{y:,}", "<extra></extra>"))
+      }
+      plotly::layout(pp, barmode = if (type == "dodge") "group" else "stack")
+    }
+    ytitle <- if (type == "stack100") "% of households" else "Households"
+    if (is.null(g)) {
+      p <- panel(i, TRUE)
+      return(base_layout(p, lab(v$x), ytitle, legend = TRUE) |> plotly::layout(legend = list(title = list(text = lab(v$y)))))
+    }
+    lvs <- levels(droplevels(g[i]))
+    panels <- lapply(seq_along(lvs), function(k) panel(i[g[i] == lvs[k]], k == 1) |>
+                       plotly::layout(annotations = list(list(text = lvs[k], x = 0.5, y = 1.06, xref = "paper", yref = "paper", showarrow = FALSE, font = list(size = 11)))))
+    p <- plotly::subplot(panels, nrows = ceiling(length(lvs) / 3), shareY = TRUE, titleX = FALSE, margin = 0.04)
+    plotly::layout(p, showlegend = TRUE, legend = list(orientation = "h", y = -0.15, font = list(size = 10), title = list(text = lab(v$y))),
+                   margin = list(l = 8, r = 8, t = 24, b = 8), yaxis = list(title = list(text = ytitle, font = list(size = 11))))
+  })
 
-      do.call(tagList, block_list)
-    })
+  ## ---------------------- What these data do not allow (one quiet line)
 
-    # --- Cross-tab explorer ---
-    output$xtab_table <- DT::renderDT({
-      req(filtered_data(), input$xtab_row, input$xtab_col)
-      ct <- weighted_crosstab(filtered_data(), input$xtab_row, input$xtab_col, get_weights(filtered_data(), user_setup))
-      if (is.null(ct) || nrow(ct$counts) == 0) return(DT::datatable(data.frame()))
-      out <- ct$counts
-      out$n <- round(out$n, 1)
-      out$row_pct <- paste0(round(out$row_pct * 100, 1), "%")
-      out$col_pct <- paste0(round(out$col_pct * 100, 1), "%")
-      colnames(out) <- c("Row", "Col", "Weighted n", "% within row", "% within col")
-      DT::datatable(out, options = list(pageLength = 12, scrollX = TRUE), rownames = FALSE)
-    })
-
-    output$xtab_chi <- renderText({
-      req(filtered_data(), input$xtab_row, input$xtab_col)
-      ct <- weighted_crosstab(filtered_data(), input$xtab_row, input$xtab_col, get_weights(filtered_data(), user_setup))
-      if (is.null(ct) || !is.list(ct$chi_sq) || is.null(ct$chi_sq$p.value)) return("")
-      sprintf("Chi-square p-value: %.4f (n = %s)", ct$chi_sq$p.value, format(ct$n_valid, big.mark = ","))
-    })
-
-    # --- Weighted correlation matrix ---
-    output$plot_cor_matrix <- render_wfp_plotly({
-      req(filtered_data())
-      df <- filtered_data()
-      num_cols <- names(df)[vapply(df, is.numeric, logical(1))]
-      # A 100 x 100 heatmap is unreadable: drop ODK metadata / coordinates /
-      # ids / constant columns, put the mapped analytical variables first and
-      # cap the matrix at 25 variables.
-      setup_list <- reactiveValuesToList(user_setup)
-      meta <- c(setup_list$unique_id, setup_list$lon, setup_list$lat, setup_list$date)
-      num_cols <- num_cols[!grepl("^@?_", num_cols) & !num_cols %in% meta]
-      num_cols <- num_cols[vapply(df[num_cols], function(x) {
-        v <- suppressWarnings(stats::var(x, na.rm = TRUE)); is.finite(v) && v > 0
-      }, logical(1))]
-      mapped_num <- intersect(unique(as.character(unlist(setup_list, use.names = FALSE))), num_cols)
-      num_cols <- unique(c(mapped_num, num_cols))
-      max_vars <- 25
-      truncated <- length(num_cols) > max_vars
-      num_cols <- head(num_cols, max_vars)
-      if (length(num_cols) < 2) return(plotly::plot_ly() |> plotly::layout(annotations = list(text = "Need >= 2 numeric variables", showarrow = FALSE, x = 0.5, y = 0.5)))
-      mat <- weighted_cor_matrix(df, num_cols, get_weights(df, user_setup))
-      if (nrow(mat) < 2) return(plotly::plot_ly() |> plotly::layout(annotations = list(text = "Insufficient data", showarrow = FALSE, x = 0.5, y = 0.5)))
-      plotly::plot_ly(
-        x = colnames(mat), y = rownames(mat), z = mat,
-        type = "heatmap", colorscale = "RdBu", zmid = 0, zmin = -1, zmax = 1,
-        text = round(mat, 2), texttemplate = if (nrow(mat) <= 12) "%{text}" else "", hoverinfo = "x+y+z"
-      ) |>
-        plotly::layout(
-          title = if (truncated) list(text = sprintf("First %d of %d numeric variables", max_vars, length(mapped_num) + sum(!num_cols %in% mapped_num)), font = list(size = 11)) else NULL,
-          margin = list(l = 120, b = 110, t = if (truncated) 36 else 16),
-          xaxis = list(tickangle = -90, tickfont = list(size = 10)),
-          yaxis = list(tickfont = list(size = 10))
-        )
-    })
+  output$readiness_strip <- renderUI({
+    # from the mapping in use, not the copy saved at setup (older sessions
+    # carry features that no longer apply, such as weighted figures)
+    req(user_setup$unique_id)
+    rd <- data_readiness(ov_setup())
+    off <- rd[rd$status == "Not available" & rd$area %in% c("Overview", "Selection"), , drop = FALSE]
+    if (!nrow(off)) return(NULL)
+    tags$div(class = "tw-ready-strip",
+      bsicons::bs_icon("info-circle"),
+      tags$span(" Not available with these data:"),
+      lapply(seq_len(nrow(off)), function(i) tags$span(class = "tw-ready-chip off", title = off$detail[i], off$feature[i])))
+  })
 
   })
 }

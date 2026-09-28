@@ -71,6 +71,13 @@ dq_missing_server <- function(input, output, session, ns, core) {
   modification_log <- core$modification_log
   applied_missing <- core$applied_missing
 
+  # only the mapped levels, each with its column
+  observe({
+    ch <- mapped_level_choices(reactiveValuesToList(user_setup))
+    cur <- isolate(input$missing_geo_level)
+    shinyWidgets::updatePickerInput(session, "missing_geo_level", choices = ch, selected = if (isTRUE(cur %in% ch)) cur else unname(ch[1]))
+  })
+
   has_missing_analysis <- reactive(!is.null(applied_missing$vars) && length(applied_missing$vars) > 0)
 
   output$missing_hint <- renderUI({

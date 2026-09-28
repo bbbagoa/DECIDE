@@ -24,7 +24,7 @@ write_selection_report <- function(file, x, lang = "en") {
       "## Key results", "", "@@KPI@@", "")
 
   add("## 1. Data, areas covered and preparation", "")
-  for (nm in intersect(c("Data", "Areas covered", "Data preparation (before selection)"), names(sec))) add(paste("###", nm), "", kv(sec[[nm]]), "")
+  for (nm in intersect(c("Data", "Areas covered", "Data preparation (before selection)", "Data available"), names(sec))) add(paste("###", nm), "", kv(sec[[nm]]), "")
 
   add("## 2. Selection design", "")
   for (nm in intersect(c("Selection", "Rules", "Scorecard"), names(sec))) add(paste("###", nm), "", kv(sec[[nm]]), "")

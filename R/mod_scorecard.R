@@ -24,7 +24,7 @@ mod_scorecard_ui <- function(id) {
       sidebar = bslib::sidebar(
         id = ns("design_sidebar"), width = 320, class = "wfp-side",
         side_steps(
-          id = ns("side"), open = c("data", "adopt"),
+          id = ns("side"), open = "data",
           # The assessment data and its tools.
           side_step("1. Assessment data", "clipboard-data", value = "data",
             tags$p(class = "small text-muted mb-2",
@@ -50,12 +50,8 @@ mod_scorecard_ui <- function(id) {
             uiOutput(ns("data_status"))),
           side_step("2. Areas covered", "geo-alt", value = "areas",
             mod_area_scope_ui(ns("scope"), title = NULL)),
-          side_step("3. Use and export", "box-arrow-up-right", value = "adopt",
-            # Adopt: the one main action. Exports: a list, each with what it is for.
-            actionButton(ns("btn_use"), tagList(with_outcome("Use this scorecard"), without_outcome("Use this ranking")),
-                         icon = icon("circle-check"), class = "btn-primary btn-sm w-100 wfp-adopt-btn"),
-            tags$div(class = "small text-muted mt-1 mb-3", textOutput(ns("use_status"))),
-            tags$div(class = "wfp-export-label", "Exports"),
+          side_step("3. Exports", "box-arrow-up-right", value = "adopt",
+            # Exports: a list, each with what it is for.
             tags$div(
               class = "wfp-export-list",
               downloadButton(ns("download"), class = "wfp-export-item", icon = icon("file-excel"),
@@ -72,7 +68,12 @@ mod_scorecard_ui <- function(id) {
               downloadButton(ns("download_report"), class = "wfp-export-item", icon = icon("file-lines"),
                              label = tags$span(class = "wfp-export-text",
                                                tags$span(class = "wfp-export-title", with_outcome("Design report"), without_outcome("Ranking report"), " (HTML)"),
-                                               tags$span(class = "wfp-export-sub", "Every step and chart, to share and review"))))))
+                                               tags$span(class = "wfp-export-sub", "Every step and chart, to share and review")))))),
+        # Adopt: the one main action, always in view (one section is open at a time).
+        side_actions(
+          actionButton(ns("btn_use"), tagList(with_outcome("Use this scorecard"), without_outcome("Use this ranking")),
+                       icon = icon("circle-check"), class = "btn-primary btn-sm w-100 wfp-adopt-btn"),
+          tags$div(class = "small text-muted mt-1", textOutput(ns("use_status"))))
       ),
 
       # The whole design as one slim bar, data to adoption: done, current and

@@ -146,7 +146,7 @@ mod_ben_selection_ui <- function(id) {
                    conditionalPanel(
                      condition = sprintf("input['%s'] === 'per_unit'", ns("ben_prio_mode")),
                      selectInput(ns("ben_quota_unit"), "Per",
-                                 choices = c("Admin 1" = "admin1", "Admin 2" = "admin2", "Admin 3" = "admin3"),
+                                 choices = c("Admin 1" = "admin1", "Admin 2" = "admin2", "Admin 3" = "admin3", "Admin 4" = "admin4"),
                                  selected = "admin1", width = "100%"),
                      actionButton(ns("quota_open"), "Set the caseload per area...", icon = icon("table-list"),
                                   class = "btn-outline-primary btn-sm w-100 mb-2"),
@@ -276,7 +276,16 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
       attr(out, "ipc_phase_col") <- ipc$phase_col; attr(out, "ipc_pop_col") <- ipc$pop_col
       out
     })
-    quota_label <- function(lvl) c(admin1 = "Admin 1", admin2 = "Admin 2", admin3 = "Admin 3")[[lvl %||% "admin1"]]
+    quota_label <- function(lvl) c(admin1 = "Admin 1", admin2 = "Admin 2", admin3 = "Admin 3", admin4 = "Admin 4")[[lvl %||% "admin1"]]
+    # the caseload is set per a mapped level only, named with its column
+    observe({
+      lv <- c(admin1 = "Admin 1", admin2 = "Admin 2", admin3 = "Admin 3", admin4 = "Admin 4")
+      cols <- vapply(names(lv), function(k) as.character(user_setup[[k]] %||% "")[1], "")
+      ok <- !is.na(cols) & nzchar(cols)
+      ch <- if (any(ok)) stats::setNames(names(lv)[ok], sprintf("%s - %s", lv[ok], cols[ok])) else c("Admin 1" = "admin1")
+      cur <- isolate(input$ben_quota_unit)
+      updateSelectInput(session, "ben_quota_unit", choices = ch, selected = if (isTRUE(cur %in% ch)) cur else unname(ch[1]))
+    })
     # Ways to split a total caseload; the IPC ones only when the data has IPC figures.
     alloc_choices <- function(a) {
       c("In proportion to eligible households" = "eligible",
@@ -1060,12 +1069,13 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
         vapply(sc$items, function(i) i$criterion, character(1))
       )
 
+      # the same quiet badges as the variable setup
       badge <- function(method, sim) {
         cls <- switch(method,
-                      exact = "badge bg-success", case = "badge bg-success",
-                      normalised = "badge bg-info",
-                      approximate = "badge bg-warning text-dark",
-                      "badge bg-secondary")
+                      exact = "tw-conf tw-conf-high", case = "tw-conf tw-conf-high",
+                      normalised = "tw-conf tw-conf-medium",
+                      approximate = "tw-conf tw-conf-low",
+                      "tw-conf tw-conf-in-use")
         lab <- switch(method,
                       exact = "exact", case = "case", normalised = "shape",
                       approximate = sprintf("~%.0f%%", 100 * sim), "none")
@@ -1079,12 +1089,11 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
           tags$div(class = "pt-2", tags$strong(crit)),
           tags$div(class = "pt-2",
                    tags$span(class = if (identical(dirs[[crit]], "inclusion"))
-                     "badge bg-primary" else "badge bg-secondary", dirs[[crit]])),
+                     "tw-conf tw-conf-medium" else "tw-conf tw-conf-in-use", dirs[[crit]])),
           tags$div(class = "pt-2 small text-muted",
                    sprintf("%.2f pts  ", wts[[crit]]), badge(m$method[i], m$similarity[i])),
-          selectInput(ns(paste0("xw_", i)), label = NULL, choices = choices,
-                      selected = if (is.na(m$column[i])) "" else m$column[i],
-                      width = "100%", selectize = FALSE)
+          selectizeInput(ns(paste0("xw_", i)), label = NULL, choices = choices,
+                         selected = if (is.na(m$column[i])) "" else m$column[i], width = "100%")
         )
       })
 
@@ -1132,7 +1141,7 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
       loader <- tags$div(
         class = "wfp-inline-file mt-1",
         fileInput(ns("sc_file"), label = NULL, accept = c(".xlsx", ".json"),
-                  buttonLabel = "Load scorecard", placeholder = "scorecard.xlsx",
+                  buttonLabel = "Load a scorecard or ranking", placeholder = "exported from Targeting Design (.xlsx)",
                   width = "100%")
       )
       if (scorecard_is_empty(sc)) {
@@ -1140,8 +1149,8 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
           tags$div(
             class = "small text-muted",
             bsicons::bs_icon("card-checklist"),
-            " No scorecard in use. Build one under ", tags$strong("Targeting Design"),
-            ", or load one exported from there."
+            " No scorecard or vulnerability ranking in use. Build one under ", tags$strong("Targeting Design"),
+            " (with an outcome indicator, or without one for a ranking) and adopt it, or load one exported from there."
           ),
           loader
         ))
@@ -1301,7 +1310,7 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
     })
 
     output$ben_indiv <- renderText({
-      req(selected_data(), user_setup$hh_size)
+      req(selected_data()); need_mapped(user_setup, "hh_size", short = TRUE)
       sizes <- as_number(selected_data()[[user_setup$hh_size]])
       format(sum(sizes, na.rm = TRUE), big.mark = ",")
     })
@@ -1595,6 +1604,19 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
           "Calculated variables" = if (is.null(calc) || !nrow(calc)) "none" else
             paste(sprintf("%s = %s", calc$column, calc$new_value), collapse = "; "),
           "Full history" = if (isTRUE(with_audit)) "see the Audit_trail sheet" else "in the app's Audit Trail (not exported)"),
+        # what the registration data allowed (fields not mapped), and the
+        # standardisation applied at import
+        "Data available" = local({
+          rd <- if (shiny::isTruthy(user_setup$unique_id)) data_readiness(reactiveValuesToList(user_setup))
+          plan <- user_setup$setup_plan %||% list()
+          c(if (!is.null(rd)) {
+              off <- rd[rd$status != "Available", , drop = FALSE]
+              if (nrow(off)) stats::setNames(sprintf("%s: %s", tolower(off$status), tolower(off$detail)), off$feature)
+              else c("All features" = "available with the fields mapped")
+            } else c("Readiness" = "not recorded (mapping made before this version)"),
+            "Values standardised" = if (length(plan$recodes)) paste(vapply(names(plan$recodes), field_label, ""), collapse = ", ") else "none",
+            "Import checks" = { ch <- user_setup$checks; if (is.null(ch) || !any(ch$level == "warn")) "no problem found" else paste(ch$message[ch$level == "warn"], collapse = " | ") })
+        }),
         "Selection" = c(
           "Country office" = user_setup$country_office %||% "not set",
           "Exported" = format(Sys.time(), "%Y-%m-%d %H:%M"),
