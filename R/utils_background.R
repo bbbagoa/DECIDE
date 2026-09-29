@@ -68,7 +68,19 @@ bg_run <- function(label, job, args, on_done, on_error = function(msg) NULL,
     if (res$ok) on_done(res$value) else on_error(res$msg)
     return(invisible(NULL))
   }
-  call <- eval(parse(text = sprintf("function(a) TargetWise:::%s(a)", job_name)), envir = globalenv())
+  call <- eval(parse(text = sprintf("function(a, log) TargetWise:::bg_call(\"%s\", a, log)", job_name)), envir = globalenv())
+  log_file <- tempfile("tw-job-", fileext = ".log"); seen <- 0L
+  # the worker's steps and R messages, as they come
+  relay <- function() {
+    # the worker creates the log with its first line; until then, nothing to read
+    if (!file.exists(log_file)) return(invisible())
+    ln <- tryCatch(readLines(log_file, warn = FALSE, encoding = "UTF-8"), error = function(e) character(0))
+    if (length(ln) > seen) for (x in ln[(seen + 1):length(ln)]) {
+      p <- strsplit(x, "\t", fixed = TRUE)[[1]]
+      if (length(p) >= 3) waiter_log(paste(p[-(1:2)], collapse = " "), p[1], if (nzchar(p[2])) paste0("bg-", p[2]), session)
+    }
+    seen <<- length(ln)
+  }
   started <- FALSE
   t0 <- Sys.time()
   poll <- function() in_domain(function() {
@@ -85,7 +97,7 @@ bg_run <- function(label, job, args, on_done, on_error = function(msg) NULL,
       if (st == "starting") {
         if (identical(w$poll_process(0), "ready")) try(w$read(), silent = TRUE)
       } else if (st == "idle") {
-        w$call(call, list(args))
+        w$call(call, list(args, log_file))
         started <<- TRUE
         waiter_log("load the package and the data in the worker", "run", id = "bg-run", session = session)
       } else {
@@ -96,8 +108,10 @@ bg_run <- function(label, job, args, on_done, on_error = function(msg) NULL,
       later::later(poll, 0.2)
       return()
     }
+    relay()
     if (identical(w$poll_process(0), "ready")) {
       r <- tryCatch(w$read(), error = function(e) list(error = e))
+      relay(); unlink(log_file)
       waiter_log(sprintf("done (%.1f s)", as.numeric(difftime(Sys.time(), t0, units = "secs"))), "ok", id = "bg-run", session = session)
       waiter::waiter_hide()
       if (is.null(r$error)) {
@@ -116,12 +130,41 @@ bg_run <- function(label, job, args, on_done, on_error = function(msg) NULL,
   invisible(NULL)
 }
 
+#' Run a job in the worker with its log: the steps (tw_step(), waiter_log())
+#' and R's messages and warnings are written to `log`, which the waiter reads
+#' while the job runs
+#' @noRd
+bg_call <- function(job_name, a, log) {
+  old <- options(tw.log_file = log); on.exit(options(old), add = TRUE)
+  line <- function(state, text) cat(sprintf("%s\t\t%s\n", state, gsub("[\t\r\n]+", " ", trimws(text))), file = log, append = TRUE)
+  fn <- if (is.function(job_name)) job_name else get(job_name, envir = asNamespace("TargetWise"))
+  withCallingHandlers(fn(a),
+    message = function(m) { line("r", conditionMessage(m)); invokeRestart("muffleMessage") },
+    warning = function(w) line("rwarn", paste("Warning:", conditionMessage(w))))
+}
+
 #' Targeting Design fit, run in the worker: the model, every model per
 #' variable, and their comparison (AUC, ROC) from those same fits
 #' @param a list(df, outcome_col, keep, outcome_pos, method, stepwise,
 #'   stepwise_dir, scheme, sp, weights, compare, seed)
 #' @noRd
 design_fit_job <- function(a) {
+  # a proxy means test: welfare per person on the proxies
+  if (isTRUE(a$pmt)) {
+    fit1 <- function(m) fit_pmt(a$df, a$pc, a$keep, a$line, m, rows = a$sp$train, test = a$sp$test,
+                                weights = a$weights, stepwise = a$stepwise, stepwise_dir = a$stepwise_dir)
+    out <- fit1(a$method)
+    # the other PMT models on the same proxies and households
+    fits <- c(list(out), lapply(setdiff(a$compare, a$method), function(m) {
+      waiter_log(sprintf("Comparing: %s", model_label(m)))
+      tryCatch(fit1(m), error = function(e) NULL)
+    }))
+    fits <- Filter(Negate(is.null), fits)
+    bench <- list(pmt = TRUE, table = do.call(rbind, lapply(fits, pmt_compare_row)),
+                  curves = stats::setNames(lapply(fits, function(f) pmt_error_curve(f$pmt$eval, f$pmt$log_line)),
+                                           vapply(fits, function(f) model_label(f$method), character(1))))
+    return(list(out = out, effects = NULL, bench = bench))
+  }
   # without an outcome: a ranking, nothing to compare per variable
   if (isTRUE(a$unsupervised)) {
     # the number of profiles chosen by silhouette when asked
@@ -172,4 +215,9 @@ profile_quality_job <- function(a) profile_quality(a$df, a$criteria, a$method, w
 #' File import, run in the worker (reading, encoding, multiple-choice split)
 #' @param a list(path, ext)
 #' @noRd
-import_job <- function(a) read_import_file(a$path, a$ext)
+# Handed back as Parquet bytes (pack_frames(), labels kept): a text-heavy
+# table crosses between the processes several times faster than as R objects.
+import_job <- function(a) {
+  df <- read_import_file(a$path, a$ext)
+  tw_step("pack the table to hand it back (parquet)", pack_frames(df))
+}

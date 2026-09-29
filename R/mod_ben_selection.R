@@ -1639,7 +1639,9 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
             sprintf("%s in {%s}", applied$comm_col, paste(applied$comm_vals %||% "", collapse = ", ")) else "n/a"),
         "Scorecard" = if (sc_used) c(
           "Scorecard" = sprintf("%d criteria, eligible when score > %s", length(sc$items), fmt5(sc$threshold %||% 0)),
-          "Type" = if (is_ranking(sc)) "Vulnerability ranking (no outcome indicator; errors not measured)" else "Scorecard (predicts an outcome)",
+          "Type" = if (is_ranking(sc)) "Vulnerability ranking (no outcome indicator; errors not measured)"
+                   else if (is_pmt(sc)) "Proxy means test (predicts welfare per person against a poverty line)"
+                   else "Scorecard (predicts an outcome)",
           "Ranking" = if (is_ranking(sc) && !is.null(sc$ranking))
             sprintf("%s%s; oriented by %s; stability %s; calibrate it on PDM data with an outcome (Monitoring)",
                     sc$ranking$method, if (nzchar(sc$ranking$label %||% "")) sprintf(" (%s)", sc$ranking$label) else "",
@@ -1788,7 +1790,9 @@ ben_insight <- function(icon_name, label, value, sub = NULL) {
 #' Female head of household, from the usual codings
 #' @noRd
 is_female <- function(x) {
-  tolower(trimws(as.character(x))) %in% c("f", "female", "femme", "feminin", "woman", "women", "fille")
+  # decided once per distinct answer
+  u <- unique(as.character(x))
+  (tolower(trimws(u)) %in% c("f", "female", "femme", "feminin", "woman", "women", "fille"))[match(as.character(x), u)]
 }
 
 #' Selected vs not selected, indicator by indicator

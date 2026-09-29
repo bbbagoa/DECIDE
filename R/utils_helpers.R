@@ -250,7 +250,10 @@ filter_by_date_range <- function(df, date_col, range) {
     return(df)
   }
 
-  df[which(d >= lo & d <= hi), , drop = FALSE]
+  keep <- which(d >= lo & d <= hi)
+  # every row in range (the default, whole period): no copy of the table
+  if (length(keep) == nrow(df)) return(df)
+  df[keep, , drop = FALSE]
 }
 
 #' Build fuzzy-match groups from a character vector
@@ -654,6 +657,66 @@ esri_canvas <- function(layer) sprintf(
 #' @noRd
 ESRI_ATTRIBUTION <- "Tiles &copy; Esri &mdash; Esri, HERE, Garmin, &copy; OpenStreetMap contributors"
 
+#' The basemaps every map offers, in the layer menu's order
+#' @noRd
+BASE_GROUPS <- c("Light", "Dark", "Terrain", "Satellite", "Satellite (Clarity)")
+
+#' Add the keyless Esri basemaps to a leaflet map
+#'
+#' Satellite is Esri World Imagery; "Satellite (Clarity)" is Esri's less
+#' processed, often sharper version of it. Every layer zooms to level 21 and
+#' enlarges its own deepest real tiles beyond them (maxNativeZoom) instead of
+#' going grey, and asks for the sharper tiles of high-density screens
+#' (detectRetina).
+#' @param groups The basemaps to add (a subset of BASE_GROUPS).
+#' @noRd
+add_esri_bases <- function(m, groups = BASE_GROUPS) {
+  opt <- function(native) leaflet::tileOptions(maxZoom = 21, maxNativeZoom = native, detectRetina = TRUE)
+  # blankTile=false: where Esri has no imagery at a zoom it answers "not
+  # found" instead of a grey "no data" picture, so the fallback below can
+  # show the deepest imagery that exists there (level 19 in many towns, 17 in
+  # much of the countryside)
+  img <- "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}?blankTile=false"
+  clarity <- "https://clarity.maptiles.arcgis.com/arcgis/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}?blankTile=false"
+  topo <- "https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}"
+  img_attr <- "Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community"
+  if ("Light" %in% groups) m <- m |>
+    leaflet::addTiles(esri_canvas("Light_Gray_Base"), attribution = ESRI_ATTRIBUTION, group = "Light", options = opt(16)) |>
+    leaflet::addTiles(esri_canvas("Light_Gray_Reference"), group = "Light", options = opt(16))
+  if ("Dark" %in% groups) m <- m |>
+    leaflet::addTiles(esri_canvas("Dark_Gray_Base"), attribution = ESRI_ATTRIBUTION, group = "Dark", options = opt(16)) |>
+    leaflet::addTiles(esri_canvas("Dark_Gray_Reference"), group = "Dark", options = opt(16))
+  if ("Terrain" %in% groups) m <- leaflet::addTiles(m, topo, attribution = ESRI_ATTRIBUTION, group = "Terrain", options = opt(19))
+  if ("Satellite" %in% groups) m <- leaflet::addTiles(m, img, attribution = img_attr, group = "Satellite", options = opt(19))
+  if ("Satellite (Clarity)" %in% groups) m <- leaflet::addTiles(m, clarity, attribution = img_attr, group = "Satellite (Clarity)", options = opt(19))
+  htmlwidgets::onRender(m, ESRI_FALLBACK_JS)
+}
+
+# Where Esri has no satellite image at this zoom (a 404 with blankTile=false),
+# the layer's native depth drops to the level below and Leaflet enlarges those
+# tiles, so a village zoomed past its imagery shows the deepest real image
+# instead of grey. Zooming back out past that level restores the full depth.
+ESRI_FALLBACK_JS <- htmlwidgets::JS("function(el, x) {
+  var map = this;
+  function hook(layer) {
+    if (!(layer instanceof L.TileLayer) || layer._twFb || !/World_Imagery/.test(layer._url || '')) return;
+    layer._twFb = true;
+    var full = layer.options.maxNativeZoom;
+    layer.on('tileerror', function(e) {
+      var z = e.coords.z;
+      if (z < 1 || z > layer.options.maxNativeZoom) return;
+      layer.options.maxNativeZoom = z - 1;
+      clearTimeout(layer._twT);
+      layer._twT = setTimeout(function() { if (layer._map) layer._resetView(); }, 50);
+    });
+    map.on('zoomend', function() {
+      if (map.getZoom() <= layer.options.maxNativeZoom && layer.options.maxNativeZoom < full) layer.options.maxNativeZoom = full;
+    });
+  }
+  map.eachLayer(hook);
+  map.on('layeradd', function(e) { hook(e.layer); });
+}")
+
 #' The range a map opens on: the inner 99% of the points, padded
 #'
 #' One mis-keyed GPS fix would otherwise double the extent and shrink the real
@@ -739,7 +802,12 @@ waiter_progress <- function(session, message = NULL, percent = NULL, subtitle = 
 #' earlier one. Does nothing outside a Shiny session (tests, scripts).
 #' @noRd
 waiter_log <- function(text, state = "info", id = NULL, session = shiny::getDefaultReactiveDomain()) {
-  if (is.null(session)) return(invisible(NULL))
+  if (is.null(session)) {
+    # in the background worker: to the job's log file, which the waiter reads
+    lf <- getOption("tw.log_file", "")
+    if (nzchar(lf)) cat(sprintf("%s\t%s\t%s\n", state, id %||% "", gsub("[\t\r\n]+", " ", text)), file = lf, append = TRUE)
+    return(invisible(NULL))
+  }
   session$sendCustomMessage("tw-wait-log", list(text = text, state = state, id = id))
   invisible(NULL)
 }
@@ -753,13 +821,17 @@ tw_log_ids <- new.env(parent = emptyenv())
 #' go on).
 #' @noRd
 tw_step <- function(label, expr, session = shiny::getDefaultReactiveDomain()) {
-  if (is.null(session)) return(expr)
+  if (is.null(session) && !nzchar(getOption("tw.log_file", ""))) return(expr)
   n <- (tw_log_ids$n %||% 0) + 1
   tw_log_ids$n <- n
   id <- paste0("step", n)
   waiter_log(label, "run", id, session)
   t0 <- proc.time()[["elapsed"]]
-  out <- withCallingHandlers(expr, error = function(e) waiter_log(paste0(label, ": ", conditionMessage(e)), "err", id, session))
+  # R's own messages and warnings go to the console too (they still reach R)
+  out <- withCallingHandlers(expr,
+    error = function(e) waiter_log(paste0(label, ": ", conditionMessage(e)), "err", id, session),
+    message = function(m) waiter_log(trimws(conditionMessage(m)), "r", NULL, session),
+    warning = function(w) waiter_log(paste("Warning:", conditionMessage(w)), "rwarn", NULL, session))
   waiter_log(sprintf("%s (%.1f s)", label, proc.time()[["elapsed"]] - t0), "ok", id, session)
   out
 }

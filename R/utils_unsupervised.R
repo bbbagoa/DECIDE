@@ -42,7 +42,7 @@ anchor_text <- function(anchor) if (is.null(anchor) || is.na(anchor) || !nzchar(
 #' A model's name, from the supervised or the no-outcome list
 #' @noRd
 model_label <- function(method) {
-  ch <- c(scorecard_model_choices(), unsupervised_model_choices())
+  ch <- c(scorecard_model_choices(), unsupervised_model_choices(), pmt_model_choices())
   lab <- names(ch)[match(method, ch)]
   ifelse(is.na(lab), as.character(method), lab)
 }
@@ -377,8 +377,10 @@ selection_stability <- function(df, criteria, method, share, anchor = NULL, weig
   top <- function(s) { r <- rank(-s, ties.method = "first"); r <= max(1, round(share * length(s))) }
   base <- top(sc0)
   set.seed(seed)
-  j <- vapply(seq_len(B), function(b) {
-    idx <- sample(nrow(df), replace = TRUE)
+  # the resamples are drawn first, so the result is the same on one core or many
+  idxs <- lapply(seq_len(B), function(b) sample(nrow(df), replace = TRUE))
+  one <- function(b) {
+    idx <- idxs[[b]]
     f <- tryCatch(fit_unsupervised(df[idx, , drop = FALSE], criteria, method, anchor,
                                    if (is.null(weights)) NULL else weights[idx], k, pca_axes, pca_min_var, seed = seed + b),
                   error = function(e) NULL)
@@ -387,7 +389,9 @@ selection_stability <- function(df, criteria, method, share, anchor = NULL, weig
     sel <- top(sc)
     rho <- suppressWarnings(stats::cor(sc, sc0, method = "spearman"))
     c(sum(sel & base) / max(1, sum(sel | base)), rho)
-  }, numeric(2))
+  }
+  # each refit is independent: spread them over the cores on large data
+  j <- matrix(unlist(tw_lapply(seq_len(B), one, big = nrow(df) >= 5000)), nrow = 2)
   rho <- j[2, ]; j <- j[1, ]
   ok <- is.finite(j)
   if (!any(ok)) return(list(jaccard = NA_real_, low = NA_real_, high = NA_real_, draws = 0L, spearman = NA_real_))

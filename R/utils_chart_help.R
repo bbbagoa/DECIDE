@@ -5,6 +5,21 @@
 #' tip beside the chart's title.
 #' @noRd
 CHART_HELP <- list(
+  pmt_decile_plot = list(
+    shows = "For each tenth of households ranked by measured welfare per person (D1 the poorest), the share the PMT selects at the current cut-off. Blue deciles are those below the poverty line.",
+    read = "A good PMT selects most of the blue deciles and little of the grey ones. Selection that falls slowly across the deciles means the proxies separate the poor badly: under-coverage at the bottom and leakage at the top."),
+  pmt_curve_plot = list(
+    shows = "The two PMT errors for every cut-off from half to twice the poverty line: leakage (non-poor among those selected) and under-coverage (poor left out). The dashed line is the current cut-off.",
+    read = "Raising the cut-off above the line lowers under-coverage and raises leakage, and the reverse. Choose where the programme can accept the trade-off; in emergencies the OGN puts under-coverage first."),
+  pmt_resid_plot = list(
+    shows = "Measured minus predicted log welfare per person for each evaluation household, against the predicted value. The red dotted line is the poverty line.",
+    read = "The cloud should sit around zero everywhere. Points far above zero near the line are households predicted poor that are not; far below, poor households predicted better off. A downward slope means the model pulls everyone to the middle, the usual cause of under-coverage."),
+  pmt_compare_plot = list(
+    shows = "Each compared PMT model's leakage (across) against its under-coverage (up) as the cut-off moves from half to twice the poverty line.",
+    read = "The curve closest to the bottom-left corner gives the fewest errors of both kinds. Curves that cross mean one model is better at a strict cut-off and another at a generous one."),
+  pmt_fit_plot = list(
+    shows = "Each household's predicted welfare per person against its measured welfare (both in logs), on the evaluation households. The dashed lines are the poverty line on each axis.",
+    read = "Points near the diagonal are well predicted. Bottom-right: predicted poor but not poor (inclusion errors); top-left: poor but predicted not poor (exclusion errors). A cloud flatter than the diagonal is the usual PMT pattern: the poorest are predicted too well-off, the richest too poor."),
   vuln_area_plot = list(
     shows = "For each area, the share of households on the vulnerable side of the outcome (red) and the rest (green). The dotted line is the share over all areas.",
     read = "Columns well above the line are the areas where vulnerability concentrates; if they differ a lot, geographic targeting or area quotas may matter as much as household criteria."),

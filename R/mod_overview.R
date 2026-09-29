@@ -341,28 +341,22 @@ mod_overview_server <- function(id, uploaded_df, user_setup) {
   base_choice <- reactiveVal("Terrain")
   light_base <- reactiveVal("Terrain")     # the base to go back to when leaving dark mode
   observeEvent(input$map_plot_groups, {
-    g <- intersect(input$map_plot_groups, c("Terrain", "Satellite", "Light", "Dark"))
+    g <- intersect(input$map_plot_groups, BASE_GROUPS)
     if (length(g)) { base_choice(g[1]); if (g[1] != "Dark") light_base(g[1]) }
   })
   # dark mode draws the map on the dark basemap
   base_group <- function() if (isTRUE(dark_mode())) "Dark" else base_choice()
 
-  esri_attr <- ESRI_ATTRIBUTION
 
   base_map <- function(bounds = NULL) {
     keep <- isolate(base_group())
-    m <- leaflet::leaflet(options = leaflet::leafletOptions(zoomControl = TRUE, attributionControl = TRUE)) |>
-      # Esri canvas basemaps: keyless, a matched light/dark pair, with their
-      # place-name layers on top. (CARTO now asks for an API key.)
-      leaflet::addTiles(esri_canvas("Light_Gray_Base"), attribution = esri_attr, group = "Light") |>
-      leaflet::addTiles(esri_canvas("Light_Gray_Reference"), group = "Light") |>
-      leaflet::addTiles(esri_canvas("Dark_Gray_Base"), attribution = esri_attr, group = "Dark") |>
-      leaflet::addTiles(esri_canvas("Dark_Gray_Reference"), group = "Dark") |>
-      leaflet::addProviderTiles(leaflet::providers$Esri.WorldTopoMap, group = "Terrain") |>
-      leaflet::addProviderTiles(leaflet::providers$Esri.WorldImagery, group = "Satellite") |>
-      leaflet::hideGroup(setdiff(c("Light", "Dark", "Terrain", "Satellite"), keep)) |>
+    # Esri basemaps: keyless, a matched light/dark pair, terrain and two
+    # satellite views, zooming to level 21 (add_esri_bases()).
+    m <- leaflet::leaflet(options = leaflet::leafletOptions(zoomControl = TRUE, attributionControl = TRUE, maxZoom = 21)) |>
+      add_esri_bases() |>
+      leaflet::hideGroup(setdiff(BASE_GROUPS, keep)) |>
       leaflet::addLayersControl(
-        baseGroups = c("Light", "Dark", "Terrain", "Satellite"),
+        baseGroups = BASE_GROUPS,
         position = "topright",
         options = leaflet::layersControlOptions(collapsed = TRUE)
       ) |>
@@ -382,7 +376,7 @@ mod_overview_server <- function(id, uploaded_df, user_setup) {
     target <- if (isTRUE(dark_mode())) "Dark" else light_base()
     base_choice(target)
     leaflet::leafletProxy("map_plot", session) |>
-      leaflet::hideGroup(c("Light", "Dark", "Terrain", "Satellite")) |>
+      leaflet::hideGroup(BASE_GROUPS) |>
       leaflet::showGroup(target)
   }, ignoreInit = TRUE)
 
@@ -411,6 +405,27 @@ mod_overview_server <- function(id, uploaded_df, user_setup) {
       var b = L.latLngBounds(start, e.latlng); if (rect) map.removeLayer(rect); rect = null; start = null; toggle(false);
       if (b.isValid() && !b.getNorthEast().equals(b.getSouthWest())) map.fitBounds(b); });
   }")
+
+  MAP_POPUP_MAX <- 20000
+  # A household's popup: its id, where it is, and the value it is coloured by
+  map_popup <- function(df, i, col, values) {
+    fld <- function(k) { cl <- user_setup[[k]]; if (shiny::isTruthy(cl) && cl %in% names(df)) as.character(df[[cl]][i]) else rep("", length(i)) }
+    esc <- function(x) htmltools::htmlEscape(ifelse(is.na(x), "", x))
+    sprintf("<div class='wfp-map-pop'><b>%s</b><span>%s</span>%s</div>",
+            esc(fld("unique_id")), esc(paste(fld("admin2"), fld("village"), sep = " \u00b7 ")),
+            if (is.null(col)) "" else sprintf("<span>%s</span><strong>%s</strong>", esc(col), esc(as.character(values[i]))))
+  }
+  # large maps: the popup of the point clicked, built when it is clicked
+  observeEvent(input$map_plot_glify_click, {
+    ev <- input$map_plot_glify_click
+    pts <- tryCatch(map_points(), error = function(e) NULL)
+    if (is.null(pts) || nrow(pts$df) <= MAP_POPUP_MAX || !identical(input$map_mode %||% "points", "points")) return()
+    i <- suppressWarnings(as.integer(ev$id)); if (is.na(i) || i < 1 || i > nrow(pts$df)) return()
+    col <- if (shiny::isTruthy(input$map_var) && input$map_var %in% names(pts$df)) input$map_var else NULL
+    html <- map_popup(pts$df, i, col, if (is.null(col)) NULL else pts$df[[col]])
+    leaflet::leafletProxy("map_plot", session) |> leaflet::clearPopups() |>
+      leaflet::addPopups(lng = pts$lng[i], lat = pts$lat[i], popup = html)
+  })
 
   output$map_plot <- leaflet::renderLeaflet({
     htmlwidgets::onRender(map_render(), box_zoom_js)
@@ -481,20 +496,20 @@ mod_overview_server <- function(id, uploaded_df, user_setup) {
     p <- map_palette(values)
 
     # Popup: the household, where it is, and the value it is coloured by.
-    fld <- function(k) { cl <- user_setup[[k]]; if (shiny::isTruthy(cl) && cl %in% names(df)) as.character(df[[cl]]) else rep("", nrow(df)) }
-    esc <- function(x) htmltools::htmlEscape(ifelse(is.na(x), "", x))
-    pop <- sprintf("<div class='wfp-map-pop'><b>%s</b><span>%s</span>%s</div>",
-                   esc(fld("unique_id")), esc(paste(fld("admin2"), fld("village"), sep = " \u00b7 ")),
-                   if (is.null(col)) "" else sprintf("<span>%s</span><strong>%s</strong>", esc(col), esc(as.character(values))))
+    # Above MAP_POPUP_MAX points the popups are not sent with the map (they
+    # were three quarters of its weight: 47 of 61 MB for 300k households); a
+    # click asks the server for that household's popup instead.
+    inline <- nrow(df) <= MAP_POPUP_MAX
     sf_pts <- sf::st_as_sf(
-      data.frame(lng = pts$lng, lat = pts$lat, popup = pop, stringsAsFactors = FALSE),
+      data.frame(lng = round(pts$lng, 6), lat = round(pts$lat, 6),
+                 popup = if (inline) map_popup(df, seq_len(nrow(df)), col, values) else "", stringsAsFactors = FALSE),
       coords = c("lng", "lat"), crs = 4326
     )
 
     map <- map |>
       leafgl::addGlPoints(
-        data = sf_pts, fillColor = p$color, radius = 7, fillOpacity = 0.9,
-        group = "points", popup = "popup"
+        data = if (inline) sf_pts else sf_pts[, "geometry"], fillColor = p$color, radius = 7, fillOpacity = 0.9,
+        group = "points", popup = if (inline) "popup" else NULL
       ) |>
       # A fixed zoom of 8 centred on the mean coordinate showed a sliver of a
       # country-wide sample; fit to the data instead.
@@ -711,8 +726,12 @@ mod_overview_server <- function(id, uploaded_df, user_setup) {
     ch <- col_choice_groups(`Mapped fields` = mapped, `Other columns` = others)
     all <- unlist(ch, use.names = FALSE)
     # numbers, including numbers stored as text (Excel, MODA exports)
-    nums <- all[vapply(df[all], function(x) { z <- if (is.numeric(x)) x else suppressWarnings(as.numeric(as.character(x)))
-      mean(!is.na(z[!is.na(x)])) > 0.95 && length(unique(stats::na.omit(z))) > 2 }, logical(1))]
+    # (judged on the distinct values: converting every household's answer
+    # took seconds on large data)
+    nums <- all[vapply(df[all], function(x) {
+      u <- unique(x); u <- u[!is.na(u)]
+      z <- if (is.numeric(u)) u else suppressWarnings(as.numeric(as.character(u)))
+      length(u) > 2 && mean(!is.na(z)) > 0.95 }, logical(1))]
     list(ch = ch, all = all, nums = nums)
   })
   pick <- function(id, label, choices, selected) selectizeInput(ns(id), label, choices = choices, selected = selected, width = "100%", multiple = FALSE)
@@ -781,6 +800,29 @@ mod_overview_server <- function(id, uploaded_df, user_setup) {
   # Chart builder: one or two variables, optionally grouped by a third; the
   # chart follows their types (numbers: scatter and correlation; a number and
   # a category: box plots, means or violins; two categories: stacked bars).
+  GB_MAX_POINTS <- 20000
+  # Box plots from their five numbers, computed here: sending every household
+  # to the browser made them slow on large data
+  box_plot <- function(yv, cat, grp, pal) {
+    cat <- droplevels(as.factor(cat))
+    grp <- if (is.null(grp)) NULL else droplevels(as.factor(grp))
+    key <- if (is.null(grp)) list(cat) else list(cat, grp)
+    st <- do.call(rbind, lapply(split(seq_along(yv), key, drop = TRUE), function(k) {
+      q <- stats::quantile(yv[k], c(.25, .5, .75), names = FALSE); iqr <- q[3] - q[1]
+      inr <- yv[k][yv[k] >= q[1] - 1.5 * iqr & yv[k] <= q[3] + 1.5 * iqr]
+      data.frame(c = as.character(cat[k[1]]), g = if (is.null(grp)) "" else as.character(grp[k[1]]), q1 = q[1], med = q[2], q3 = q[3],
+                 lf = min(inr), uf = max(inr), mean = mean(yv[k]), n = length(k), stringsAsFactors = FALSE)
+    }))
+    p <- plotly::plot_ly()
+    for (lv in unique(st$g)) {
+      s <- st[st$g == lv, , drop = FALSE]
+      p <- plotly::add_trace(p, type = "box", x = factor(s$c, levels = levels(cat)), q1 = s$q1, median = s$med, q3 = s$q3,
+                             lowerfence = s$lf, upperfence = s$uf, mean = s$mean, name = if (nzchar(lv)) lv else "Households",
+                             marker = list(color = if (nzchar(lv)) pal(grp)[[lv]] else GB_COLS[1]),
+                             line = list(color = if (nzchar(lv)) pal(grp)[[lv]] else GB_COLS[1]))
+    }
+    plotly::layout(p, boxmode = "group")
+  }
   GB_COLS <- c("#0A6EB4", "#f7b825", "#3f7e44", "#c5192d", "#26bde2", "#8a96a3", "#5b6b7c", "#e67e22")
   gb_vars <- reactive({
     df <- view_data(); x <- input$gb_x
@@ -818,7 +860,7 @@ mod_overview_server <- function(id, uploaded_df, user_setup) {
       p <- if (type == "hist") {
         if (is.null(g)) plotly::plot_ly(x = x[i], type = "histogram", marker = list(color = GB_COLS[1]), nbinsx = 30)
         else plotly::plot_ly(x = x[i], color = g[i], colors = pal(g), type = "histogram", alpha = 0.6, nbinsx = 30) |> plotly::layout(barmode = "overlay")
-      } else plotly::plot_ly(y = x[i], x = if (!is.null(g)) g[i], color = if (!is.null(g)) g[i] else I(GB_COLS[1]), colors = if (!is.null(g)) pal(g), type = "box")
+      } else box_plot(x[i], if (!is.null(g)) g[i] else factor(rep(lab(v$x), length(i))), NULL, pal)
       return(base_layout(p, if (type == "hist") lab(v$x) else "", if (type == "hist") "Households" else lab(v$x)))
     }
     if (v$ky == "none") {
@@ -842,8 +884,11 @@ mod_overview_server <- function(id, uploaded_df, user_setup) {
         j <- i[grp[i] == lv]; col <- if (is.null(g)) GB_COLS[1] else pal(g)[[lv]]
         rtxt <- ov_cor_text(x[j], y[j]); notes <- c(notes, if (is.null(g)) rtxt else sprintf("%s: %s", lv, rtxt))
         nm <- if (is.null(g)) "Households" else sprintf("%s (r = %s)", lv, sub("^r = ([-0-9.]+).*", "\\1", rtxt))
-        p <- plotly::add_markers(p, x = x[j], y = y[j], name = nm, legendgroup = lv, marker = list(color = col, opacity = 0.55, size = 6),
-                                 hovertemplate = paste0(lab(v$x), ": %{x}<br>", lab(v$y), ": %{y}<extra>", lv, "</extra>"))
+        # at most GB_MAX_POINTS points drawn (WebGL); r and the trend use every household
+        jp <- if (length(j) > GB_MAX_POINTS / nlevels(grp)) sort(sample(j, ceiling(GB_MAX_POINTS / nlevels(grp)))) else j
+        p <- plotly::add_trace(p, x = x[jp], y = y[jp], type = "scattergl", mode = "markers", name = nm, legendgroup = lv,
+                               marker = list(color = col, opacity = 0.55, size = 6),
+                               hovertemplate = paste0(lab(v$x), ": %{x}<br>", lab(v$y), ": %{y}<extra>", lv, "</extra>"))
         if (type == "scatter_trend" && length(j) >= 3 && stats::var(x[j]) > 0) {
           fit <- stats::lm(y[j] ~ x[j]); xs <- range(x[j])
           p <- plotly::add_lines(p, x = xs, y = stats::coef(fit)[1] + stats::coef(fit)[2] * xs, name = paste(lv, "trend"), legendgroup = lv,
@@ -870,9 +915,11 @@ mod_overview_server <- function(id, uploaded_df, user_setup) {
                              hovertemplate = paste0("%{x}: mean %{y:.2f}<extra></extra>")) |> plotly::layout(barmode = "group")
         return(base_layout(p, lab(ccol), paste("Mean of", lab(ncol), "(95% interval)")))
       }
-      p <- plotly::plot_ly(x = cx[i], y = y[i], color = if (is.null(g)) I(GB_COLS[1]) else g[i], colors = if (!is.null(g)) pal(g),
-                           type = type, box = if (type == "violin") list(visible = TRUE), meanline = if (type == "violin") list(visible = TRUE),
-                           boxmean = if (type == "box") TRUE)
+      if (type == "box") return(base_layout(box_plot(y[i], cx[i], if (is.null(g)) NULL else g[i], pal), lab(ccol), lab(ncol)))
+      # a violin needs the values: drawn from a sample on large data
+      iv <- if (length(i) > GB_MAX_POINTS) sort(sample(i, GB_MAX_POINTS)) else i
+      p <- plotly::plot_ly(x = cx[iv], y = y[iv], color = if (is.null(g)) I(GB_COLS[1]) else g[iv], colors = if (!is.null(g)) pal(g),
+                           type = "violin", box = list(visible = TRUE), meanline = list(visible = TRUE))
       p <- plotly::layout(p, boxmode = "group", violinmode = "group")
       return(base_layout(p, lab(ccol), lab(ncol)))
     }

@@ -85,7 +85,8 @@ dir_badge <- function(d) {
 #'   page passes its editable inputs here so the estimates and the editable
 #'   card are one table.
 #' @noRd
-coefficients_html <- function(wts, model = NULL, points = NULL, review = NULL) {
+coefficients_html <- function(wts, model = NULL, points = NULL, review = NULL, pmt = FALSE) {
+  if (isTRUE(pmt)) return(pmt_coefficients_html(wts, points))
   rows <- lapply(seq_len(nrow(wts)), function(i) {
     r <- wts[i, ]
     tags$tr(
@@ -105,7 +106,7 @@ coefficients_html <- function(wts, model = NULL, points = NULL, review = NULL) {
     fit_line <- tags$div(
       class = "small text-muted mt-2",
       sprintf("n = %s  \u00b7  AIC %.1f  \u00b7  McFadden pseudo-R\u00b2 %.3f  \u00b7  intercept %+.3f",
-              format(length(model$y), big.mark = ","), stats::AIC(model), r2,
+              format(model$tw_n %||% length(model$y), big.mark = ","), stats::AIC(model), r2,
               stats::coef(model)[1])
     )
   }
@@ -418,6 +419,11 @@ design_guide_modal <- function() {
         tags$p("The design turns a needs assessment into a ", tags$strong("scorecard"), ": a short list of observable household ",
                "criteria, each worth some points, and a threshold above which a household is eligible. It is built on data where ",
                "vulnerability is measured, then applied to registration data where it is not."),
+        tags$p("Three frameworks: a ", tags$strong("food-security outcome"), " the card predicts (CARI, FCS classes); a ",
+               tags$strong("welfare measure"), " (consumption or expenditure per person) for a ", tags$strong("proxy means test"),
+               ", where the card predicts welfare and a household is eligible below a poverty line (World Bank: Grosh & Baker 1995; ",
+               "Grosh et al. 2008; accuracy: Brown, Ravallion & van de Walle 2018); or ", tags$strong("no outcome"),
+               ", where households are ranked on the criteria. The steps below are the same for all three."),
         tags$p(class = "mb-0", "Seven steps, each recorded in the design report so the card can be reviewed, reproduced and ",
                "challenged. Guidance: WFP Targeting and Prioritisation OGN (2021); Targeting Advisories 1/2025 (outcome indicators), ",
                "2/2025 (errors and tolerance) and 3/2025 (models and thresholds).")),

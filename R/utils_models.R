@@ -156,6 +156,8 @@ scorecard_model_note <- function(method) {
     svm = "Support vector machine (radial kernel, probability output). Points are average marginal effects on the log-odds scale. An SVM optimises a class boundary, not probabilities, so a criterion that never moves a household across the boundary gets close to zero points even when it matters: compare its held-out AUC before adopting it. Trained on at most 3,000 households, which already gives it its full accuracy on yes/no criteria.",
     nb = "Naive Bayes: each criterion's evidence combined as if independent given the outcome. Fast and stable on small samples; overlapping criteria are over-counted. Points are average marginal effects on the log-odds scale.",
     nnet = "Neural network (one hidden layer of 5 units, weight decay). Can capture interactions between criteria; points are average marginal effects on the log-odds scale.",
+    pmt_ols = "Weighted least squares of log welfare per person on the proxies, the World Bank's standard PMT. It fits the average household, so it predicts the middle of the distribution better than the poorest.",
+    pmt_qr = "Quantile regression of log welfare per person at the poverty rate (the share of households below the line): it fits the part of the distribution where the eligibility decision is made, which usually lowers exclusion errors (Brown, Ravallion & van de Walle 2018). No standard errors are shown.",
     "")
 }
 
@@ -227,13 +229,13 @@ ml_fit_predict <- function(method, m, y, w, params = list(), seed = 123) {
     rf = {
       fit <- ranger::ranger(x = m, y = factor(y, levels = c(0, 1)), probability = TRUE,
                             num.trees = g("num.trees", 500), mtry = min(ncol(m), g("mtry", max(1, floor(sqrt(ncol(m)))))),
-                            min.node.size = g("min.node.size", 10), case.weights = w, seed = seed, num.threads = 1,
+                            min.node.size = g("min.node.size", 10), case.weights = w, seed = seed, num.threads = tw_cores(),
                             importance = "impurity")
       structure(function(nd) stats::predict(fit, data = nd)$predictions[, "1"], model = fit)
     },
     xgb = , stumps = {
       dm <- xgboost::xgb.DMatrix(as.matrix(m), label = y, weight = w)
-      fit <- xgboost::xgb.train(params = list(objective = "binary:logistic", nthread = 1,
+      fit <- xgboost::xgb.train(params = list(objective = "binary:logistic", nthread = tw_cores(),
                                               max_depth = if (method == "stumps") 1 else g("max_depth", 3),
                                               eta = g("eta", 0.1), subsample = if (method == "stumps") 1 else 0.8),
                                 data = dm, nrounds = g("nrounds", if (method == "stumps") 300 else 200), verbose = 0)
@@ -306,7 +308,7 @@ tune_ml <- function(X, criteria, method, folds = 5, seed = 123, max_rows = 5000)
   folds <- max(2L, min(as.integer(folds), 10L))
   fold <- integer(length(y))
   for (lv in unique(y)) { i <- which(y == lv); fold[i] <- sample(rep_len(seq_len(folds), length(i))) }
-  auc <- vapply(seq_len(nrow(grid)), function(g) {
+  one <- function(g) {
     pr <- rep(NA_real_, length(y))
     for (f in seq_len(folds)) {
       tr <- fold != f
@@ -316,7 +318,9 @@ tune_ml <- function(X, criteria, method, folds = 5, seed = 123, max_rows = 5000)
     }
     ok <- !is.na(pr); if (sum(ok) < 10) return(NA_real_)
     roc_curve(pr[ok], y[ok])$auc
-  }, numeric(1))
+  }
+  # ranger and xgboost already use every core; the others run one grid point per core
+  auc <- unlist(tw_lapply(seq_len(nrow(grid)), one, big = !method %in% c("rf", "xgb", "stumps") && length(y) >= 1000))
   tab <- cbind(grid, cv_auc = round(auc, 4))
   best <- which.max(auc)
   if (!length(best)) return(NULL)
@@ -350,7 +354,7 @@ stump_effects <- function(X, criteria, seed = 123, params = list()) {
   set.seed(seed)
   dm <- xgboost::xgb.DMatrix(m, label = X$.y, weight = X$.w)
   fit <- xgboost::xgb.train(
-    params = list(objective = "binary:logistic", max_depth = 1, eta = params$eta %||% 0.1, nthread = 1),
+    params = list(objective = "binary:logistic", max_depth = 1, eta = params$eta %||% 0.1, nthread = tw_cores()),
     data = dm, nrounds = params$nrounds %||% 300, verbose = 0)
   # One split per tree: the model is a sum of per-criterion functions, so the
   # contribution of a criterion depends on that criterion alone. Its effect is
@@ -398,6 +402,7 @@ index_matrix <- function(df, criteria) {
 }
 
 scheme_label <- function(scheme, method = NULL) {
+  if (identical(scheme, "pmt")) return("PMT points (100 x coefficient on log welfare)")
   if (isTRUE(method %in% c("pca", "lda"))) return("Index weights (largest = 10)")
   names(scorecard_scheme_choices())[scorecard_scheme_choices() == scheme][1]
 }
@@ -517,6 +522,9 @@ fit_scorecard_advanced <- function(df, outcome, criteria, outcome_positive = NUL
   # scale of the sample size; raw expansion weights would make every criterion
   # look significant.
   X$.w <- X$.w / mean(X$.w)
+  # One row per answer pattern (with its count) when every household counts
+  # the same: the logistic fits below are identical and much faster.
+  Xg <- if (nrow(X) > 2000 && length(unique(X$.w)) == 1) collapse_rows(X, c(criteria, ".y")) else transform(X, .n = .w)
 
   # Stepwise selection, for any model: backward elimination on a logistic
   # fit, by AIC (k = 2) or BIC (k = log n, stricter, so a shorter card),
@@ -529,8 +537,8 @@ fit_scorecard_advanced <- function(df, outcome, criteria, outcome_positive = NUL
     dir <- if (stepwise_dir %in% c("forward", "both")) stepwise_dir else "backward"
     # Backward starts from every criterion and removes; forward starts from
     # none and adds; both starts from none and may also remove one added before.
-    start <- suppressWarnings(stats::glm(if (identical(dir, "backward")) full_f else .y ~ 1, data = X,
-                                         family = stats::binomial(), weights = .w))
+    start <- suppressWarnings(stats::glm(if (identical(dir, "backward")) full_f else .y ~ 1, data = Xg,
+                                         family = stats::binomial(), weights = .n))
     step_model <- withCallingHandlers(
       stats::step(start, scope = list(lower = ~ 1, upper = full_f), direction = dir, trace = 0, k = k),
       warning = function(w) invokeRestart("muffleWarning"))
@@ -573,7 +581,7 @@ fit_scorecard_advanced <- function(df, outcome, criteria, outcome_positive = NUL
   converged <- TRUE
   fit_once <- function(fml) {
     withCallingHandlers(
-      stats::glm(fml, data = X, family = stats::binomial(), weights = .w),
+      stats::glm(fml, data = Xg, family = stats::binomial(), weights = .n),
       warning = function(w) {
         msg <- conditionMessage(w)
         # Fractional weights make glm warn about non-integer successes; that is
@@ -585,6 +593,7 @@ fit_scorecard_advanced <- function(df, outcome, criteria, outcome_positive = NUL
   }
 
   model <- fit_once(stats::reformulate(criteria, response = ".y"))
+  model$tw_n <- nrow(X)   # households, when the fit ran on answer patterns
 
   cf <- summary(model)$coefficients
   kept <- setdiff(rownames(cf), "(Intercept)")
@@ -675,7 +684,7 @@ benchmark_models <- function(df, outcome, criteria, outcome_positive = NULL,
     rf <- tryCatch(
       ranger::ranger(x = X[tr, , drop = FALSE], y = factor(y[tr], levels = c(0, 1)),
                      probability = TRUE, num.trees = 300, importance = "impurity",
-                     seed = seed, num.threads = 1),
+                     seed = seed, num.threads = tw_cores()),
       error = function(e) NULL)
     if (!is.null(rf)) {
       p <- stats::predict(rf, data = X)$predictions[, "1"]
@@ -689,7 +698,7 @@ benchmark_models <- function(df, outcome, criteria, outcome_positive = NULL,
       dtr <- xgboost::xgb.DMatrix(as.matrix(X[tr, , drop = FALSE]), label = y[tr])
       xgboost::xgb.train(
         params = list(objective = "binary:logistic", max_depth = 3, eta = 0.1,
-                      subsample = 0.8, nthread = 1, seed = seed),
+                      subsample = 0.8, nthread = tw_cores(), seed = seed),
         data = dtr, nrounds = 150, verbose = 0)
     }, error = function(e) NULL)
     if (!is.null(xb)) {

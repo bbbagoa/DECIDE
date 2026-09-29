@@ -114,13 +114,18 @@ norm_name <- function(x) {
 SYN_WEAK <- c("id", "index", "key", "data", "start", "status", "size", "score", "class", "long", "tel", "sim", "agent",
               "username", "local", "site", "zone", "union", "sector", "groupe", "categorie", "categoria", "selection", "choix")
 
+# names and synonyms are normalised once (the guess scores every field
+# against every column: thousands of calls on a wide form)
+norm_memo <- new.env(parent = emptyenv())
+norm_once <- function(x) { v <- norm_memo[[x]]; if (is.null(v)) { v <- norm_name(x); assign(x, v, envir = norm_memo) }; v }
+
 name_score <- function(name, syn) {
-  n <- norm_name(name); if (!nzchar(n)) return(0)
+  n <- norm_once(name); if (!nzchar(n)) return(0)
   words <- strsplit(n, " ", fixed = TRUE)[[1]]
   squeezed <- gsub(" ", "", n, fixed = TRUE)
   best <- 0
   for (s in syn) {
-    sn <- norm_name(s); sq <- gsub(" ", "", sn, fixed = TRUE)
+    sn <- norm_once(s); sq <- gsub(" ", "", sn, fixed = TRUE)
     sc <- if (identical(n, sn) || identical(squeezed, sq)) 1
           else if (grepl(paste0("(^| )", sn, "( |$)"), n)) 0.85
           else if (nchar(sq) >= 4 && startsWith(squeezed, sq)) 0.7

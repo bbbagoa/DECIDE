@@ -82,6 +82,8 @@ design_report_md <- function(x, figures = character(0)) {
         "Households were therefore ranked on the criteria chosen below, not against an outcome: the criteria were not tested, and no inclusion",
         "or exclusion error can be measured. Internal consistency, the stability of the selection and what the selection concentrates stand in",
         "for them until a verification sample or a post-distribution monitoring survey with an outcome measures the errors (Monitoring, PDM).", "")
+  } else if (!is.null(x$pmt)) {
+    add(pmt_report_md(x$pmt, x$estimates, figures), "")
   } else {
   add("## 2. Vulnerability Framework", "")
   if (!shiny::isTruthy(x$outcome)) add("_No outcome chosen._", "") else add(
@@ -495,7 +497,8 @@ design_report_methods <- function(x) {
          "How each number in this report was produced.", "")
   item <- function(title, ...) L <<- c(L, sprintf("### %s", title), "", paste0(...), "")
 
-  item("Outcome",
+  if (!is.null(x$pmt)) item("Proxy means test", pmt_method_text(x$pmt))
+  else item("Outcome",
        sprintf("The outcome `%s` was recoded to two classes: households at level **%s** count as vulnerable (1), all others as not vulnerable (0). ",
                x$outcome %||% "", x$outcome_pos %||% ""),
        "Outcome indicators are what the scorecard predicts and are never used as criteria (Targeting Advisory 1/2025).")
@@ -602,7 +605,11 @@ design_report_captions <- function() {
     lda_structure = "Correlation of each criterion with the index",
     roc = "ROC curve with the chosen threshold", scores = "Score distribution by outcome",
     box = "Score by vulnerability", drivers = "What actually drives the score",
-    met = "Criteria met, eligible vs not", coverage = "Coverage by criterion")
+    met = "Criteria met, eligible vs not", coverage = "Coverage by criterion",
+    pmt_decile = "Selected by decile of measured welfare per person (D1 the poorest)",
+    pmt_curve = "Leakage and under-coverage as the cut-off moves",
+    pmt_fit = "Predicted against measured welfare per person (evaluation households)",
+    pmt_compare = "Under-coverage by PMT model as the cut-off moves")
 }
 
 #' Write the report as one self-contained HTML file
@@ -626,8 +633,8 @@ write_design_report <- function(file, x, plots = list(), lang = "en") {
   nof <- isTRUE(x$no_outcome)
   report_write_page(
     file, md, plots, captions = caps, lang = lang,
-    title = if (nof) "Vulnerability ranking report" else "Targeting design report",
-    record = if (nof) "Vulnerability ranking record" else "Targeting design record",
+    title = if (nof) "Vulnerability ranking report" else if (!is.null(x$pmt)) "Proxy means test (PMT) design report" else "Targeting design report",
+    record = if (nof) "Vulnerability ranking record" else if (!is.null(x$pmt)) "Proxy means test (PMT) design record" else "Targeting design record",
     meta = c("Country office" = x$country_office %||% "",
              "Generated" = x$generated %||% format(Sys.time(), "%Y-%m-%d %H:%M"),
              "Status" = if (isTRUE(x$adopted)) "Adopted" else "Draft, not adopted",

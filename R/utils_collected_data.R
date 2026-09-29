@@ -133,8 +133,13 @@ import_yes_no <- function() {
 #' @noRd
 looks_multiselect <- function(x) {
   if (!is.character(x)) return(FALSE)
-  a <- trimws(x[!is.na(x) & nzchar(trimws(x))])
-  v <- unique(a)
+  # Judged on the distinct answers, with how often each occurs, not on every
+  # household: a 300k-row column has a handful of distinct values.
+  u0 <- unique(x); u0 <- u0[!is.na(u0)]
+  if (length(u0) > 20000) return(FALSE)
+  times <- tabulate(match(x, u0), length(u0))
+  v0 <- trimws(u0); keep <- nzchar(v0)
+  v <- unique(v0[keep])
   # Quick rejections before splitting anything: identifiers and free text
   # have thousands of different answers; choice codes are lower-case words.
   if (length(v) < 2 || length(v) > 5000 || !any(grepl("\\s", v))) return(FALSE)
@@ -145,8 +150,10 @@ looks_multiselect <- function(x) {
   if (any(vapply(tk, anyDuplicated, integer(1)) > 0)) return(FALSE)
   u <- unique(all_t)
   if (length(u) < 2 || length(u) > 40) return(FALSE)
-  if (length(a) >= 20) {
-    used <- table(unlist(strsplit(a, "\\s+"), use.names = FALSE))
+  if (sum(times[keep]) >= 20) {
+    # how many households used each choice
+    per <- strsplit(v0[keep], "\\s+")
+    used <- tapply(rep(times[keep], lengths(per)), unlist(per, use.names = FALSE), sum)
     if (any(used < 2)) return(FALSE)
   }
   TRUE

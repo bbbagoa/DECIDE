@@ -130,7 +130,7 @@ mod_file_import_server <- function(id, display = FALSE){
       raw_df(NULL)
       bg_run(sprintf("Reading %s...", input$file_in$name), import_job,
              list(path = input$file_in$datapath, ext = ext),
-             on_done = function(df) { register_labels(df); raw_df(df) },
+             on_done = function(df) { df <- tw_step("unpack the table", unpack_frames(df)); register_labels(df); raw_df(df) },
              on_error = function(msg) showNotification(paste("Could not read the file:", msg), type = "error", duration = 12))
     })
     raw_data <- reactive({

@@ -30,7 +30,8 @@ i18n_dictionary <- local({
 
 #' Translate strings by exact (whitespace-normalised) match; others unchanged
 #' @noRd
-i18n_lookup <- function(text, lang = "en") {
+i18n_lookup <- function(text, lang = "en") tw_terms(i18n_lookup_lang(text, lang))
+i18n_lookup_lang <- function(text, lang = "en") {
   if (!identical(lang, "fr") || !length(text)) return(text)
   d <- i18n_dictionary()
   if (!nrow(d)) return(text)
@@ -85,7 +86,8 @@ i18n_one <- function(s) {
 
 #' Translate a block of Markdown line by line
 #' @noRd
-i18n_translate_block <- function(txt, lang = "en") {
+i18n_translate_block <- function(txt, lang = "en") tw_terms(i18n_translate_block_lang(txt, lang))
+i18n_translate_block_lang <- function(txt, lang = "en") {
   if (!identical(lang, "fr") || !nrow(i18n_dictionary())) return(txt)
   lines <- strsplit(txt, "\n", fixed = TRUE)[[1]]
   lines <- vapply(lines, function(l) {

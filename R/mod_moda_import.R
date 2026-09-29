@@ -114,80 +114,123 @@ harmonize_pages <- function(pages) {
 }
 
 # Read an optional ODK XLSForm and build a list of choice-label mappings per variable
-build_odk_label_map <- function(odk_path) {
+#
+# Choices come from the form's choices sheet, or from a CSV attached to the
+# form (select_one_from_file admin2.csv, or a search('admin2') appearance):
+# `media` maps attached file names to local copies (download_moda_media()).
+# Cascading lists (a choice_filter such as admin1=${admin1}) often reuse a
+# code under several parents (district "01" in every province): the lookup
+# is then keyed on the parent's code too, so each answer gets its own label.
+build_odk_label_map <- function(odk_path, media = NULL) {
   if (is.null(odk_path) || !file.exists(odk_path)) {
     return(NULL)
   }
 
   sheets <- readxl::excel_sheets(odk_path)
-  if (!all(c("survey", "choices") %in% sheets)) {
+  if (!"survey" %in% sheets) {
     return(NULL)
   }
+  # "list name" and "choice_filter" are also written with spaces in older forms
+  tidy <- function(d) {
+    n <- trimws(names(d)); fix <- tolower(n) %in% c("list name", "choice filter")
+    n[fix] <- sub(" ", "_", tolower(n[fix]), fixed = TRUE); names(d) <- n; d
+  }
+  survey <- tidy(readxl::read_excel(odk_path, sheet = "survey", col_types = "text"))
+  choices <- if ("choices" %in% sheets) tidy(readxl::read_excel(odk_path, sheet = "choices", col_types = "text")) else NULL
 
-  survey <- readxl::read_excel(odk_path, sheet = "survey")
-  choices <- readxl::read_excel(odk_path, sheet = "choices")
-
-  type_col <- "type"
-  name_col <- "name"
-  list_name_col <- "list_name"
-  choice_name_col <- "name"
   # The label column in the app's language when the form has one
   # (label::French, label::English (en)...), else the first.
-  labs <- grep("^label", names(choices), value = TRUE)
   want <- if (identical(import_yes_no()[1], "Oui")) "fran|french|[(]fr[)]" else "english|[(]en[)]"
-  choice_label_col <- c(grep(want, labs, value = TRUE, ignore.case = TRUE), labs)[1]
-
-  if (is.na(choice_label_col)) {
-    return(NULL)
-  }
+  pick_label <- function(nms) { labs <- grep("^label", nms, value = TRUE); c(grep(want, labs, value = TRUE, ignore.case = TRUE), labs)[1] }
+  choice_label_col <- if (!is.null(choices)) pick_label(names(choices)) else NA_character_
 
   # Question labels (variable labels), in the same language as the choices.
-  qlabs <- grep("^label", names(survey), value = TRUE)
-  q_label_col <- c(grep(want, qlabs, value = TRUE, ignore.case = TRUE), qlabs)[1]
+  q_label_col <- pick_label(names(survey))
   questions <- if (is.na(q_label_col)) character(0) else {
-    ql <- stats::setNames(trimws(as.character(survey[[q_label_col]])), strip_prefix(as.character(survey[[name_col]])))
+    ql <- stats::setNames(trimws(as.character(survey[[q_label_col]])), strip_prefix(as.character(survey[["name"]])))
     ql[!is.na(ql) & nzchar(ql) & !is.na(names(ql)) & nzchar(names(ql))]
   }
 
-  # Keep only select rows and parse the list_name
-  select_rows <- survey[[type_col]] %in% c("select_one", "select_multiple") |
-    grepl("^(select_one|select_multiple)\\s", survey[[type_col]])
-  survey <- survey[select_rows, , drop = FALSE]
-
-  if (nrow(survey) == 0) {
+  # select_one / select_multiple, with a list, from a file or external
+  type <- trimws(as.character(survey[["type"]]))
+  m <- regmatches(type, regexec("^(select_one|select_multiple)(_from_file|_external)?\\s+(\\S+)", type))
+  sel <- vapply(m, length, integer(1)) == 4
+  if (!any(sel)) {
     return(if (length(questions)) structure(list(), questions = questions, multiple = character(0)) else NULL)
   }
+  kind <- vapply(m[sel], `[`, "", 2); source <- vapply(m[sel], `[`, "", 3); list_name <- vapply(m[sel], `[`, "", 4)
+  s <- survey[sel, , drop = FALSE]
+  var_name <- strip_prefix(as.character(s[["name"]]))
+  appearance <- if ("appearance" %in% names(s)) as.character(s[["appearance"]]) else rep(NA_character_, nrow(s))
+  filter <- if ("choice_filter" %in% names(s)) as.character(s[["choice_filter"]]) else rep(NA_character_, nrow(s))
 
-  survey$list_name <- vapply(strsplit(as.character(survey[[type_col]]), "\\s+", perl = TRUE), function(y) {
-    if (length(y) >= 2) y[2] else NA_character_
-  }, character(1))
+  # the choices of one question: from an attached file, or the choices sheet
+  file_choices <- function(file) {
+    p <- media[[file]] %||% media[[basename(file)]]
+    if (is.null(p) || !file.exists(p) || !grepl("[.]csv$", p, ignore.case = TRUE)) return(NULL)
+    d <- tidy(utils::read.csv(p, colClasses = "character", check.names = FALSE, encoding = "UTF-8"))
+    lab <- pick_label(names(d)); if (is.na(lab) || !"name" %in% names(d)) return(NULL)
+    d$.label <- d[[lab]]; d
+  }
+  sheet_choices <- function(ln) {
+    if (is.null(choices) || is.na(choice_label_col) || !"list_name" %in% names(choices)) return(NULL)
+    d <- choices[choices[["list_name"]] %in% ln, , drop = FALSE]
+    if (!nrow(d)) return(NULL)
+    d$.label <- d[[choice_label_col]]; d
+  }
 
-  # Strip prefixes from survey variable names to match MODA columns
-  survey$var_name <- strip_prefix(as.character(survey[[name_col]]))
-
-  # Build a named list: var_name -> function(value) label
   label_map <- list()
-  for (var in unique(survey$var_name)) {
-    list_names <- unique(stats::na.omit(survey$list_name[survey$var_name == var]))
-    if (length(list_names) == 0) next
-
-    # Combine all choice lists mapped to this variable (rare, but possible)
-    list_choices <- choices[choices[[list_name_col]] %in% list_names, , drop = FALSE]
-    if (nrow(list_choices) == 0) next
-
-    lookup <- stats::setNames(
-      as.character(list_choices[[choice_label_col]]),
-      as.character(list_choices[[choice_name_col]])
-    )
-
+  for (i in seq_along(var_name)) {
+    var <- var_name[i]
+    if (!is.null(label_map[[var]])) next
+    srch <- regmatches(appearance[i] %||% "", regexec("search\\(\\s*'([^']+)'", appearance[i] %||% ""))[[1]]
+    d <- if (nzchar(source[i])) file_choices(list_name[i])
+         else if (length(srch) == 2) file_choices(paste0(srch[2], ".csv")) %||% sheet_choices(list_name[i])
+         else sheet_choices(list_name[i])
+    if (is.null(d)) next
+    nm <- as.character(d[["name"]]); lb <- as.character(d$.label)
+    ok <- !is.na(nm) & nzchar(nm)
+    nm <- nm[ok]; lb <- lb[ok]; d <- d[ok, , drop = FALSE]
+    lb[is.na(lb) | !nzchar(lb)] <- nm[is.na(lb) | !nzchar(lb)]
+    lookup <- stats::setNames(lb, nm)
+    # a code used under several parents: key it on the parent's code as well
+    f <- regmatches(filter[i] %||% "", regexec("([A-Za-z_][A-Za-z0-9_.-]*)\\s*=+\\s*\\$\\{([^}]+)\\}", filter[i] %||% ""))[[1]]
+    if (anyDuplicated(nm) && length(f) == 3 && f[2] %in% names(d)) {
+      keyed <- stats::setNames(lb, paste(as.character(d[[f[2]]]), nm, sep = "\r"))
+      attr(keyed, "parent") <- strip_prefix(f[3])
+      attr(keyed, "codes") <- lookup[!duplicated(nm)]
+      lookup <- keyed
+    }
     label_map[[var]] <- lookup
   }
 
   attr(label_map, "label_column") <- choice_label_col
   attr(label_map, "questions") <- questions
   # Which questions are select_multiple: they are split into Yes/No columns.
-  attr(label_map, "multiple") <- unique(survey$var_name[grepl("^select_multiple", as.character(survey[[type_col]]))])
+  attr(label_map, "multiple") <- unique(var_name[kind == "select_multiple"])
   label_map
+}
+
+# The files attached to a MODA / ONA form (the CSVs of select_one_from_file
+# and search() questions), downloaded; named by file name. Empty when the
+# form has none or the server does not list them.
+download_moda_media <- function(form_id, token, base = "https://api.moda.wfp.org/api/v1") {
+  res <- tryCatch(httr::GET(paste0(base, "/metadata?xform=", form_id), httr::add_headers(Authorization = paste("Token", token)),
+                            httr::timeout(60)), error = function(e) NULL)
+  if (is.null(res) || httr::status_code(res) != 200) return(list())
+  meta <- tryCatch(jsonlite::fromJSON(rawToChar(httr::content(res, as = "raw")), simplifyVector = FALSE), error = function(e) list())
+  out <- list()
+  for (m in meta) {
+    if (!identical(m$data_type, "media") || is.null(m$data_value) || !grepl("[.]csv$", m$data_value, ignore.case = TRUE)) next
+    url <- m$media_url %||% m$data_file
+    if (is.null(url)) next
+    tmp <- tempfile(fileext = ".csv")
+    ok <- tryCatch(httr::status_code(httr::GET(url, httr::add_headers(Authorization = paste("Token", token)),
+                                               httr::write_disk(tmp, overwrite = TRUE), httr::timeout(120))) == 200,
+                   error = function(e) FALSE)
+    if (isTRUE(ok)) out[[m$data_value]] <- tmp
+  }
+  out
 }
 
 # Try to download the ODK XLSForm definition from MODA using the same token
@@ -215,9 +258,15 @@ apply_odk_labels <- function(df, label_map) {
   if (length(label_map) == 0) return(odk_question_labels(df, questions, label_map))
 
   multiple <- attr(label_map, "multiple") %||% character(0)
+  # cascading lists are keyed on the parent's code: keep the parents' codes
+  # before any column is relabelled
+  parents <- intersect(unique(unlist(lapply(label_map, attr, "parent"))), names(df))
+  raw <- stats::setNames(lapply(parents, function(p) as.character(df[[p]])), parents)
   for (var in names(label_map)) {
     if (!var %in% names(df)) next
-    lookup <- label_map[[var]]
+    keyed <- label_map[[var]]
+    parent <- attr(keyed, "parent")
+    lookup <- attr(keyed, "codes") %||% keyed           # code -> label (first when repeated)
     old_vals <- as.character(df[[var]])
     is_multiple <- var %in% multiple || any(grepl("\\s", old_vals[!is.na(old_vals)]))
 
@@ -236,8 +285,11 @@ apply_odk_labels <- function(df, label_map) {
       }, character(1))
       new_vals <- translated[match(old_vals, uniq)]
     } else {
-      new_vals <- lookup[old_vals]
-      new_vals[is.na(new_vals) & !is.na(old_vals)] <- old_vals[is.na(new_vals) & !is.na(old_vals)]
+      new_vals <- if (!is.null(parent) && parent %in% names(raw)) unname(keyed[paste(raw[[parent]], old_vals, sep = "\r")]) else unname(lookup[old_vals])
+      miss <- is.na(new_vals) & !is.na(old_vals)
+      new_vals[miss] <- unname(lookup[old_vals[miss]])
+      miss <- is.na(new_vals) & !is.na(old_vals)
+      new_vals[miss] <- old_vals[miss]
     }
 
     df[[var]] <- new_vals
@@ -344,7 +396,8 @@ moda_async_fetch <- function(form_id, token, existing_df = NULL, page_size = MOD
     odk_path <- log_step("GET the form definition (XLSForm)", download_moda_xlsform(form_id, token))
 
     step("Applying choice labels...")
-    label_map <- log_step("read the choice labels", build_odk_label_map(odk_path))
+    media <- log_step("GET the files attached to the form (choice lists)", download_moda_media(form_id, token))
+    label_map <- log_step("read the choice labels", build_odk_label_map(odk_path, media))
     df <- log_step("apply the labels and split select_multiple questions", apply_odk_labels(df, label_map))
     df <- log_step("split GPS points and other multiple-choice answers", split_multiselect(split_geopoints(df)))
     if (!is.null(session)) register_labels(df, session)   # GPS -> coordinates; multi-selects the form did not name -> Yes/No columns
@@ -685,9 +738,10 @@ mod_moda_import_server <- function(id, summary = TRUE) {
         # Download the XLSForm definition from MODA and apply choice labels
         waiter_progress(session, message = paste("Downloading the form definition of", label))
         odk_path <- download_moda_xlsform(form_id, token)
+        media <- download_moda_media(form_id, token)   # CSV choice lists attached to the form
 
         waiter_progress(session, message = "Applying choice labels...")
-        label_map <- build_odk_label_map(odk_path)
+        label_map <- build_odk_label_map(odk_path, media)
         df <- apply_odk_labels(df, label_map)
         df <- split_multiselect(split_geopoints(df))   # GPS -> coordinates; multi-selects the form did not name -> Yes/No columns
 

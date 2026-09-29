@@ -18,6 +18,7 @@ gap is stated); **Gap** = not implemented.
 | MM | UNHCR-WFP Joint Hub, *Mixed methods for better targeting* | Joint Hub site |
 | RC | UNU-MERIT for the Joint Hub, *Targeting in refugee contexts: costs* | Joint Hub site |
 | IFRC | ICRC/IFRC Livelihoods Centre, *Targeting in urban and rural contexts* | livelihoodscentre.org |
+| WB | World Bank PMT guidance: Grosh & Baker (1995) LSMS WP 118; Grosh et al. (2008) *For Protection and Promotion* ch. 4; Del Ninno & Mills (2015) *Safety Nets in Africa*. Accuracy and safeguards: Brown, Ravallion & van de Walle (2018) *JDE* 134; Kidd, Gelders & Bailey-Athias (2017) ILO / Development Pathways | published literature |
 
 Could not be retrieved (access-controlled download pages): the UNHCR-WFP
 *Joint Guidance: Targeting of assistance to meet basic needs*, the UNHCR-WFP
@@ -42,6 +43,7 @@ them added to this map.
 | 11 | Protection / "critical" criteria that give access on their own | OGN p30, IFRC p7 | Done | Hybrid with *Either (criteria OR score)*, or OR-groups in Eligibility rules |
 | 12 | Qualitative validation recorded next to the quantitative one | OGN p31, CC p9, MM | Partial | *Community validated* flag per criterion; no notes or frequency of mention |
 | 13 | Date the weights; review every 2–3 years (annually in dynamic contexts) | OGN p31, p51, RC p22 | Done | Scorecard records *Designed on*; Beneficiary Selection warns after 24 months |
+| 15 | Proxy means test where welfare (consumption / expenditure) is measured: log welfare per person on observable proxies, validated out of sample, cut-off at a poverty line | WB, OGN p19 | Done | Targeting Design › *Welfare measure: proxy means test*: data-requirement checks, yes/no and numeric proxies, least squares, quantile regression, ridge, lasso, random forest or XGBoost (`fit_pmt()`), held-out R-squared, RMSE and the PMT accuracy measures (leakage, under-coverage, targeting differential, CGH), points = 100 x coefficient, formula in the report and workbook |
 | 14 | Threshold and tolerance rationale documented | ADV2, ADV3 | Done | Youden and caseload helpers; threshold rationale required in the export |
 
 ## Selection (phase 2, registration data)

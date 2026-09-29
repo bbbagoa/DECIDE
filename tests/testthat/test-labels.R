@@ -71,3 +71,32 @@ test_that("value dropdowns read 'Code - Label', values unchanged", {
   expect_equal(TargetWise:::value_choices(c("a", "b"), "nocodes", s), c("a", "b"))
   expect_true("sex" %in% TargetWise:::label_registry(s)$cols)
 })
+
+test_that("admin areas get their labels: cascading lists, attached CSVs, old headers", {
+  survey <- data.frame(type = c("select_one prov", "select_one dist", "select_one_from_file villages.csv", "select_one hh_status"),
+                       name = c("admin1", "admin2", "village", "status"),
+                       label = c("Province", "District", "Village", "Status"),
+                       choice_filter = c(NA, "prov=${admin1}", NA, NA), stringsAsFactors = FALSE)
+  # "list name" with a space, as older forms write it; district codes reused per province
+  choices <- data.frame(`list name` = c("prov", "prov", "dist", "dist", "dist", "hh_status"),
+                        name = c("P1", "P2", "01", "02", "01", "idp"),
+                        label = c("North", "South", "Alpha", "Beta", "Gamma", "Displaced"),
+                        prov = c(NA, NA, "P1", "P1", "P2", NA), check.names = FALSE, stringsAsFactors = FALSE)
+  f <- withr::local_tempfile(fileext = ".xlsx")
+  wb <- openxlsx::createWorkbook(); openxlsx::addWorksheet(wb, "survey"); openxlsx::addWorksheet(wb, "choices")
+  openxlsx::writeData(wb, "survey", survey); openxlsx::writeData(wb, "choices", choices); openxlsx::saveWorkbook(wb, f)
+  csv <- withr::local_tempfile(fileext = ".csv")
+  utils::write.csv(data.frame(name = c("v1", "v2"), label = c("Kasai village", "Lomami village")), csv, row.names = FALSE)
+
+  m <- TargetWise:::build_odk_label_map(f, media = list(villages.csv = csv))
+  expect_setequal(names(m), c("admin1", "admin2", "village", "status"))
+  d <- data.frame(admin1 = c("P1", "P1", "P2"), admin2 = c("01", "02", "01"), village = c("v1", "v2", "v1"),
+                  status = c("idp", "idp", "idp"), stringsAsFactors = FALSE)
+  out <- TargetWise:::apply_odk_labels(d, m)
+  expect_equal(as.vector(out$admin1), c("North", "North", "South"))
+  expect_equal(as.vector(out$admin2), c("Alpha", "Beta", "Gamma"))     # "01" is Alpha in P1, Gamma in P2
+  expect_equal(as.vector(out$village), c("Kasai village", "Lomami village", "Kasai village"))
+  expect_equal(as.vector(out$status), rep("Displaced", 3))
+  # without the attached file the codes stay, nothing breaks
+  expect_false("village" %in% names(TargetWise:::build_odk_label_map(f)))
+})

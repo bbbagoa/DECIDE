@@ -2894,3 +2894,8 @@ td[data-tw], th[data-tw] { cursor: help; }
 .bootstrap-select:not([multiple]) .dropdown-menu li.selected > a::after, .bootstrap-select .dropdown-menu:not(.show-tick) li.selected > a::after {
   content: "\2713"; position: absolute; right: 10px; top: 50%; transform: translateY(-50%); font-weight: 700; }
 [data-bs-theme="dark"] .bootstrap-select .dropdown-menu li.selected > a { color: #8cc7f0 !important; background: rgba(47, 159, 224, .14) !important; }
+/* the waiter console: R's own messages and warnings */
+.wfp-wait-log .r { color: #aab7c7; }
+.wfp-wait-log .r::before { content: "R"; color: #6f8aa8; font-weight: 700; }
+.wfp-wait-log .rwarn { color: #f7b825; }
+.wfp-wait-log .rwarn::before { content: "!"; color: #f7b825; font-weight: 700; }

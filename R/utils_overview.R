@@ -15,6 +15,12 @@ ov_col <- function(settings, df, key) {
   v <- as.character(settings[[key]] %||% "")[1]
   if (!is.na(v) && nzchar(v) && v %in% names(df)) v else NULL
 }
+# totals of `w` per value of `g` (named numeric), fast on large data
+sum_by <- function(w, g) {
+  r <- data.table::data.table(w = w, g = as.character(g))[, list(s = sum(w, na.rm = TRUE)), by = "g"]
+  r <- r[!is.na(r$g)]
+  stats::setNames(r$s, r$g)
+}
 ov_pct <- function(x) if (is.na(x)) "n/a" else sprintf("%.0f%%", 100 * x)
 ov_num <- function(x) format(round(x), big.mark = ",")
 ov_wmean <- function(x, w) { ok <- !is.na(x) & !is.na(w); if (!any(ok) || sum(w[ok]) <= 0) NA_real_ else sum(x[ok] * w[ok]) / sum(w[ok]) }
@@ -33,7 +39,7 @@ ov_has <- function(x) {
 #' @noRd
 ov_shares <- function(v, w, top = 6, order = NULL) {
   v <- as.character(v); v[is.na(v) | !nzchar(trimws(v))] <- "Not answered"
-  s <- tapply(w, v, sum); s <- s[!is.na(s)]
+  s <- sum_by(w, v)
   s <- if (!is.null(order)) s[c(intersect(order, names(s)), setdiff(names(sort(s, decreasing = TRUE)), order))] else sort(s, decreasing = TRUE)
   if (length(s) > top) s <- c(s[seq_len(top - 1)], Other = sum(s[-seq_len(top - 1)]))
   data.frame(category = names(s), n = as.numeric(s), stringsAsFactors = FALSE)
@@ -69,12 +75,13 @@ ov_collection <- function(df, settings, max_areas = 6) {
       a1 <- ov_col(settings, df, "admin1")
       area <- if (is.null(a1)) rep("All", n) else { v <- as.character(df[[a1]]); v[is.na(v) | !nzchar(v)] <- "(no area)"; v }
       if (!is.null(a1)) {
-        top <- names(sort(tapply(w, area, sum), decreasing = TRUE))
+        top <- names(sort(sum_by(w, area), decreasing = TRUE))
         if (length(top) > max_areas) area[!area %in% top[seq_len(max_areas - 1)]] <- "Other areas"
         area_label <- "Admin 1"
       }
       ok <- !is.na(day)
-      agg <- stats::aggregate(list(n = w[ok]), list(day = day[ok], area = area[ok]), sum)
+      agg <- data.table::data.table(n = w[ok], day = day[ok], area = area[ok])[, list(n = sum(n)), by = c("day", "area")]
+      agg <- as.data.frame(agg)
       daily <- agg[order(agg$day, agg$area), , drop = FALSE]
     }
   }
@@ -259,7 +266,7 @@ ov_cross <- function(df, settings, y, w, min_n = 5) {
   if (!length(dims)) return(NULL)
   out <- do.call(rbind, lapply(names(dims), function(d) {
     v <- dims[[d]]; v[!is.na(v) & !nzchar(v)] <- NA
-    lv <- names(sort(tapply(w, v, sum), decreasing = TRUE)); lv <- utils::head(lv, if (d == "Admin 1") 8 else 6)
+    lv <- names(sort(sum_by(w, v), decreasing = TRUE)); lv <- utils::head(lv, if (d == "Admin 1") 8 else 6)
     do.call(rbind, lapply(lv, function(l) { i <- which(v == l)
       data.frame(dimension = d, category = l, households = sum(w[i], na.rm = TRUE), value = ov_wmean(y[i], w[i]), stringsAsFactors = FALSE) }))
   }))
@@ -326,7 +333,7 @@ ov_categories <- function(x, w, max_levels = 20) {
     return(factor(as.character(f), levels = levels(f)))
   }
   v <- as.character(x); v[is.na(v) | !nzchar(trimws(v))] <- NA
-  tot <- sort(tapply(w, v, sum), decreasing = TRUE)
+  tot <- sort(sum_by(w, v), decreasing = TRUE)
   keep <- names(tot)[seq_len(min(length(tot), max_levels - 1))]
   if (length(tot) > max_levels) v[!is.na(v) & !v %in% keep] <- "Other"
   lv <- if (is.numeric(x)) as.character(sort(unique(as.numeric(keep)))) else keep

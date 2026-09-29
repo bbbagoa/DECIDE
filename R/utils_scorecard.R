@@ -331,11 +331,12 @@ screen_criteria <- function(df, outcome, criteria, alpha = 0.05, adjust = "BH",
       return(base)
     }
 
-    d <- data.frame(y = yy, x = xx)
-    m1 <- tryCatch(stats::glm(y ~ x, data = d, family = stats::binomial()),
+    # two yes/no columns: four answer patterns, whatever the number of households
+    d <- collapse_rows(data.frame(y = yy, x = xx), c("y", "x"))
+    m1 <- tryCatch(stats::glm(y ~ x, data = d, family = stats::binomial(), weights = .n),
                    error = function(e) NULL, warning = function(w) NULL)
     if (!is.null(m1)) {
-      m0 <- stats::glm(y ~ 1, data = d, family = stats::binomial())
+      m0 <- stats::glm(y ~ 1, data = d, family = stats::binomial(), weights = .n)
       a <- tryCatch(stats::anova(m0, m1, test = "Chisq"), error = function(e) NULL)
       cf <- summary(m1)$coefficients
       if (!is.null(a) && nrow(cf) >= 2 && is.finite(a$`Pr(>Chi)`[2])) {
@@ -497,8 +498,10 @@ fit_scorecard_model <- function(df, outcome, criteria, outcome_positive = NULL) 
 
   fml <- stats::reformulate(criteria, response = ".y")
   converged <- TRUE
+  # one row per answer pattern, with its count: the same fit, much faster on large data
+  Xg <- if (nrow(X) > 2000) collapse_rows(X, c(criteria, ".y")) else transform(X, .n = 1)
   model <- withCallingHandlers(
-    stats::glm(fml, data = X, family = stats::binomial()),
+    stats::glm(fml, data = Xg, family = stats::binomial(), weights = .n),
     warning = function(w) {
       # Separation shows up as "fitted probabilities numerically 0 or 1"; the
       # model still returns, but the caller should be told the weights on the
@@ -524,6 +527,7 @@ fit_scorecard_model <- function(df, outcome, criteria, outcome_positive = NULL) 
   weights <- weights[order(-abs(weights$coefficient)), , drop = FALSE]
   rownames(weights) <- NULL
 
+  model$tw_n <- nrow(X)
   list(weights = weights, model = model, n = nrow(X), filled = filled[filled > 0],
        converged = converged && isTRUE(model$converged))
 }
@@ -574,7 +578,7 @@ scorecard_fingerprint <- function(sc) {
 #'   programmatic decision to be made on the ROC curve.
 #' @noRd
 build_scorecard <- function(weights, outcome = NA_character_,
-                            outcome_positive = NA_character_, threshold = 0, kind = "scorecard") {
+                            outcome_positive = NA_character_, threshold = 0, kind = "scorecard", pmt = NULL) {
   items <- lapply(seq_len(nrow(weights)), function(i) {
     list(
       criterion = weights$criterion[i],
@@ -589,16 +593,21 @@ build_scorecard <- function(weights, outcome = NA_character_,
       # and validated through community consultation before use. Recorded per
       # criterion so the export shows which ones have not been.
       verifiable = isTRUE(weights$verifiable[i]),
-      validated = isTRUE(weights$validated[i])
+      validated = isTRUE(weights$validated[i]),
+      # A PMT's numeric proxies (household size, rooms): points per unit, and
+      # the value a missing answer takes (the training mean).
+      type = if (identical(weights$type[i], "numeric")) "numeric" else "binary",
+      mean = if (identical(weights$type[i], "numeric")) as.numeric(weights$mean[i]) else NA_real_
     )
   })
   # The OGN asks for scorecard weights to be revisited as new assessment
   # data arrives (every 2-3 years in stable contexts, annually in dynamic
   # ones), so the card records when it was designed.
-  # kind: "scorecard" (predicts an outcome) or "ranking" (no outcome indicator)
+  # kind: "scorecard" (predicts an outcome), "ranking" (no outcome indicator)
+  # or "pmt" (predicts welfare; `pmt` holds the intercept and the line)
   list(outcome = outcome, outcome_positive = outcome_positive,
        threshold = as.numeric(threshold), items = items,
-       created = format(Sys.Date()), kind = kind)
+       created = format(Sys.Date()), kind = kind, pmt = pmt)
 }
 
 #' Months since a scorecard was designed, or NA when not recorded
@@ -646,19 +655,27 @@ apply_scorecard <- function(df, scorecard) {
       missing <- c(missing, it$criterion)
       next
     }
-    x <- as_binary_criterion(df[[cl]])
-    if (is.null(x)) {
-      missing <- c(missing, it$criterion)
-      next
+    if (identical(it$type, "numeric")) {
+      # a PMT's numeric proxy: points per unit, a missing value at the mean
+      x <- as_number(df[[cl]])
+      x[is.na(x)] <- if (is.finite(it$mean %||% NA_real_)) it$mean else 0
+    } else {
+      x <- as_binary_criterion(df[[cl]])
+      if (is.null(x)) {
+        missing <- c(missing, it$criterion)
+        next
+      }
+      x[is.na(x)] <- 0L     # an unmet criterion is not a met criterion
     }
-    x[is.na(x)] <- 0L     # an unmet criterion is not a met criterion
     pts <- x * as.numeric(it$weight)
     if (identical(it$direction, "exclusion")) pts <- if (rk) (1 - x) * as.numeric(it$weight) else -pts
     detail[[cl]] <- pts
     score <- score + pts
   }
 
-  score <- round(pmax(score, 0), 5)
+  # A PMT score is predicted welfare turned around (100 x (intercept -
+  # predicted log welfare)): negative for the better-off, never floored.
+  score <- round(if (is_pmt(scorecard)) score else pmax(score, 0), 5)
   list(
     score = score,
     eligible = score > (scorecard$threshold %||% 0),
@@ -975,7 +992,9 @@ normalise_scorecard <- function(sc) {
       weight = num1(it$weight),
       column = chr1(it$column),
       verifiable = isTRUE(as.logical(it$verifiable)),
-      validated = isTRUE(as.logical(it$validated))
+      validated = isTRUE(as.logical(it$validated)),
+      type = if (identical(chr1(it$type), "numeric")) "numeric" else "binary",
+      mean = num1(it$mean)
     )
   })
   out <- Filter(function(it) !is.na(it$criterion) && !is.na(it$weight), out)
@@ -985,7 +1004,9 @@ normalise_scorecard <- function(sc) {
     outcome_positive = chr1(sc$outcome_positive),
     threshold = num1(sc$threshold, 0),
     items = out,
-    created = chr1(sc$created)
+    created = chr1(sc$created),
+    kind = chr1(sc$kind, "scorecard"),
+    pmt = sc$pmt
   )
 }
 
@@ -1129,7 +1150,7 @@ scorecard_readiness <- function(scorecard, df) {
 # so they are named once and used by both sides.
 SCORECARD_SHEET <- "Scorecard"
 SCORECARD_HEADER <- c("Criterion", "Label", "Direction", "Weight", "Registration column",
-                      "Verifiable", "Community validated")
+                      "Verifiable", "Community validated", "Type", "Value if missing")
 
 #' The scorecard as a data frame, in the workbook's own shape
 #' @noRd
@@ -1154,6 +1175,8 @@ scorecard_frame <- function(scorecard) {
     chr("column"),
     ifelse(vapply(items, function(it) isTRUE(it$verifiable), logical(1)), "Yes", "No"),
     ifelse(vapply(items, function(it) isTRUE(it$validated), logical(1)), "Yes", "No"),
+    ifelse(vapply(items, function(it) identical(it$type, "numeric"), logical(1)), "number", "yes/no"),
+    vapply(items, function(it) if (identical(it$type, "numeric")) as.numeric(it$mean %||% NA_real_) else NA_real_, numeric(1)),
     stringsAsFactors = FALSE
   )
   names(out) <- SCORECARD_HEADER
@@ -1227,7 +1250,27 @@ scorecard_workbook <- function(scorecard, meta = list(), screening = NULL,
         "Apply it to a verification sample or PDM data with a food-security outcome (Monitoring, PDM) to measure the errors and recalibrate the threshold."),
       stringsAsFactors = FALSE)
   }
-  write_data(wb, "How to read", if (is_ranking(scorecard)) "Vulnerability ranking" else "Targeting scorecard", startRow = 1)
+  if (is_pmt(scorecard)) {
+    guide <- data.frame(
+      Section = c("What this is", "Scorecard sheet", "How a score is built", "From score to welfare", "Registration column",
+                  "Design", "Accuracy", "Reloading this file", "Review"),
+      Explanation = c(
+        "A proxy means test (PMT): household characteristics a registration team can observe, weighted by a model of welfare (consumption or expenditure per person) estimated on a survey that measured it. A household is eligible when its predicted welfare is below the cut-off.",
+        "One row per proxy. Points are 100 x the proxy's coefficient on log welfare per person (one point is about 1% less predicted welfare). Type 'number' proxies score per unit; 'Value if missing' is used when the answer is missing.",
+        "Add the points of every inclusion proxy the household has (per unit for numbers), subtract those of every exclusion proxy. The score is not floored at zero.",
+        "Predicted welfare per person = exp(PMT intercept - score / 100). The Design sheet gives the intercept, the poverty line and the welfare the threshold stands for.",
+        "Optional. The column in the REGISTRATION data that carries this proxy, when it is named differently there. Leave blank to use the proxy name.",
+        "The welfare measure, the poverty line, the model, its R-squared in and out of sample, and the threshold.",
+        "Leakage (inclusion error: non-poor among the selected), under-coverage (exclusion error: poor not selected), coverage of the poor, targeting accuracy, the targeting differential and the CGH indicator, measured on held-out households. Report_tables holds the error curves by cut-off, selection by welfare decile and the model comparison.",
+        "Load this file in Beneficiary Selection to score a registration list. Only the Scorecard sheet and the Design fields Outcome, Eligibility threshold, PMT intercept and Poverty line are read; do not rename their headers.",
+        "Re-estimate the PMT when a new welfare survey is available (every 3 to 5 years, sooner after a shock or high inflation), and update the line with prices."),
+      stringsAsFactors = FALSE)
+    # PMT words in the descriptive fields; the fields read back keep their names
+    keep <- c("Outcome", "Vulnerable level", "Eligibility threshold", "Designed on", "PMT intercept", "Poverty line (per person)")
+    if (length(meta)) names(meta) <- ifelse(names(meta) %in% keep, names(meta), pmt_wording(names(meta)))
+    if (length(report_tables)) names(report_tables) <- pmt_wording(names(report_tables))
+  }
+  write_data(wb, "How to read", if (is_ranking(scorecard)) "Vulnerability ranking" else if (is_pmt(scorecard)) "Proxy means test (PMT)" else "Targeting scorecard", startRow = 1)
   openxlsx::addStyle(wb, "How to read", title, rows = 1, cols = 1)
   write_data(wb, "How to read", guide, startRow = 3, headerStyle = head_st)
   openxlsx::addStyle(wb, "How to read", lab_st, rows = 4:(3 + nrow(guide)), cols = 1, gridExpand = TRUE)
@@ -1353,7 +1396,9 @@ read_scorecard_workbook <- function(path) {
       weight = suppressWarnings(as.numeric(df$Weight[i])),
       column = as.character(get("Registration column")[i]),
       verifiable = identical(tolower(as.character(get("Verifiable")[i])), "yes"),
-      validated = identical(tolower(as.character(get("Community validated")[i])), "yes")
+      validated = identical(tolower(as.character(get("Community validated")[i])), "yes"),
+      type = if (identical(tolower(as.character(get("Type")[i])), "number")) "numeric" else "binary",
+      mean = suppressWarnings(as.numeric(get("Value if missing")[i]))
     )
   })
 
@@ -1372,6 +1417,13 @@ read_scorecard_workbook <- function(path) {
       thr <- suppressWarnings(as.numeric(gsub("[^0-9.-]", "", pick("Eligibility threshold"))))
       if (!is.na(thr)) sc$threshold <- thr
       sc$created <- pick("Designed on")
+      # a proxy means test: the intercept and the line turn a score back
+      # into predicted welfare
+      if (isTRUE(grepl("^PMT", sc$outcome %||% ""))) {
+        sc$kind <- "pmt"
+        sc$pmt <- list(intercept = suppressWarnings(as.numeric(pick("PMT intercept"))),
+                       line = suppressWarnings(as.numeric(pick("Poverty line (per person)"))))
+      }
     }
   }
 

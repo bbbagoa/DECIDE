@@ -265,17 +265,17 @@ lollipop_plot <- function(d, xtitle) {
 #' (`score_bins()`), so neither group hides the other. `threshold` draws the
 #' cut-off.
 #' @noRd
-mirrored_hist_plot <- function(score, vulnerable, threshold = NULL, xtitle = "Score") {
+mirrored_hist_plot <- function(score, vulnerable, threshold = NULL, xtitle = "Score", labels = c("Vulnerable", "Not vulnerable")) {
   ok <- !is.na(score) & !is.na(vulnerable)
   h <- score_bins(score[ok], vulnerable[ok] %in% c(TRUE, 1))
   top <- max(c(h$vuln, h$not), 1)
   ticks <- pretty(c(0, top), 4)
   p <- plotly::plot_ly(h) |>
-    plotly::add_bars(x = ~mid, y = ~vuln, width = ~width * 0.92, name = "Vulnerable", marker = list(color = "#c5192d"),
-                     customdata = ~n_vuln, hovertemplate = "%{x}<br>Vulnerable: %{y:.1f}% (%{customdata} households)<extra></extra>") |>
-    plotly::add_bars(x = ~mid, y = ~-not, width = ~width * 0.92, name = "Not vulnerable", marker = list(color = "#3f7e44"),
+    plotly::add_bars(x = ~mid, y = ~vuln, width = ~width * 0.92, name = labels[1], marker = list(color = "#c5192d"),
+                     customdata = ~n_vuln, hovertemplate = paste0("%{x}<br>", labels[1], ": %{y:.1f}% (%{customdata} households)<extra></extra>")) |>
+    plotly::add_bars(x = ~mid, y = ~-not, width = ~width * 0.92, name = labels[2], marker = list(color = "#3f7e44"),
                      customdata = ~paste0(sprintf("%.1f", not), "% (", n_not, " households)"),
-                     hovertemplate = "%{x}<br>Not vulnerable: %{customdata}<extra></extra>")
+                     hovertemplate = paste0("%{x}<br>", labels[2], ": %{customdata}<extra></extra>"))
   lay <- list(barmode = "relative", bargap = 0,
               legend = list(orientation = "h", x = 0, y = 1.12, xanchor = "left", yanchor = "bottom"),
               xaxis = list(title = xtitle),

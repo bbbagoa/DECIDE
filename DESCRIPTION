@@ -39,6 +39,7 @@ Imports:
     lubridate,
     nanoparquet,
     openxlsx,
+    parallel,
     plotly,
     readxl,
     rlang,

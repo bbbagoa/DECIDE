@@ -218,6 +218,8 @@ workstream_signature <- function(st) {
 #' 1,000 rows stay as they are.
 #' @noRd
 frame_to_parquet <- function(d) {
+  # fread reads ISO dates as IDate: a Date by another name
+  for (k in which(vapply(d, inherits, logical(1), "IDate"))) d[[k]] <- structure(as.Date(d[[k]]), label = attr(d[[k]], "label"))
   plain <- c("character", "numeric", "integer", "logical", "factor", "Date", "POSIXct", "POSIXt")
   ok <- nrow(d) >= 1000 && ncol(d) > 0 && !anyDuplicated(names(d)) && all(nzchar(names(d))) &&
     all(vapply(d, function(x) is.atomic(x) && is.null(dim(x)) && all(class(x) %in% plain), logical(1)))

@@ -244,13 +244,11 @@ overview_map <- function(d) {
 #' from a local file
 #' @noRd
 esri_basemap <- function(m) {
+  groups <- c("Terrain", "Light", "Satellite", "Satellite (Clarity)")
   m |>
-    leaflet::addProviderTiles(leaflet::providers$Esri.WorldTopoMap, group = "Terrain") |>
-    leaflet::addTiles(esri_canvas("Light_Gray_Base"), attribution = ESRI_ATTRIBUTION, group = "Light") |>
-    leaflet::addTiles(esri_canvas("Light_Gray_Reference"), group = "Light") |>
-    leaflet::addProviderTiles(leaflet::providers$Esri.WorldImagery, group = "Satellite") |>
-    leaflet::hideGroup(c("Light", "Satellite")) |>
-    leaflet::addLayersControl(baseGroups = c("Terrain", "Light", "Satellite"), position = "topright",
+    add_esri_bases(groups) |>
+    leaflet::hideGroup(setdiff(groups, "Terrain")) |>
+    leaflet::addLayersControl(baseGroups = groups, position = "topright",
                               options = leaflet::layersControlOptions(collapsed = TRUE)) |>
     leaflet::addScaleBar(position = "bottomleft", options = leaflet::scaleBarOptions(imperial = FALSE))
 }
