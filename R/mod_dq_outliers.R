@@ -55,10 +55,14 @@ dq_outliers_ui <- function(ns) {
                                   "Replace with Median" = "median", "Replace with Mean" = "mean",
                                   "K-Nearest Neighbors" = "knn", "Drop Row entirely" = "drop"))),
         tags$div(class = "pb-3",
+          actionButton(ns("ol_check"), "Check", icon = icon("magnifying-glass"), class = "btn-primary",
+                       title = "Look for outliers with this variable, method and allowed range")),
+        tags$div(class = "pb-3",
           actionButton(ns("btn_apply_outlier_correction"), "Correct all flagged",
                        class = "btn-primary", icon = icon("wand-magic-sparkles")))
       ),
-      uiOutput(ns("range_hint"))
+      uiOutput(ns("range_hint")),
+      uiOutput(ns("ol_stale"))
     ),
     bslib::layout_columns(
       col_widths = c(3, 3, 3, 3),
@@ -218,10 +222,11 @@ dq_outliers_server <- function(input, output, session, ns, core) {
     snapshot = function() {
       if (is.null(uploaded_df())) return(NULL)
       list(var = input$outlier_var, method = input$outlier_method, threshold = input$outlier_threshold,
-           correction = input$outlier_correction_method, ranges = ranges())
+           correction = input$outlier_correction_method, ranges = ranges(), applied = ol_applied())
     },
     restore = function(s) {
       ranges(s$ranges %||% list())
+      ol_applied(s$applied)
       after_flush(session, function() {
         updateSelectInput(session, "outlier_method", selected = s$method)
         updateSelectInput(session, "outlier_correction_method", selected = s$correction)
@@ -293,17 +298,36 @@ dq_outliers_server <- function(input, output, session, ns, core) {
     input$outlier_threshold
   })
 
+  # The check runs on Check: choosing the variable, the method, the
+  # sensitivity or the range computes nothing by itself.
+  ol_applied <- reactiveVal(NULL)
+  ol_now <- function() list(var = input$outlier_var %||% "", method = input$outlier_method %||% "IQR",
+                            threshold = if (identical(input$outlier_method, "none")) NA_real_ else (input$outlier_threshold %||% NA_real_),
+                            allowed = allowed())
+  observeEvent(input$ol_check, {
+    need_ok(shiny::isTruthy(input$outlier_var), "Choose the variable to check.")
+    ol_applied(ol_now())
+  })
+  output$ol_stale <- renderUI({
+    a <- ol_applied()
+    if (is.null(a)) return(tags$div(class = "small text-muted mt-1", bsicons::bs_icon("info-circle"),
+                                    " Choose the variable, the method and the allowed range, then click Check."))
+    if (!identical(a, ol_now())) return(tags$div(class = "small text-warning mt-1", bsicons::bs_icon("exclamation-circle"),
+                                                 " The settings changed: click Check to apply them."))
+    NULL
+  })
   outlier_info <- reactive({
     df <- dq_filtered_data()
-    var_col <- input$outlier_var
+    a <- ol_applied(); req(a)
+    var_col <- a$var
     req(df, shiny::isTruthy(var_col), var_col %in% names(df))
-    method <- input$outlier_method %||% "IQR"
+    method <- a$method %||% "IQR"
 
     # via as.character(): .sav/.dta imports arrive factorised, and as.numeric()
     # on a factor returns level codes (1,2,3...), not the recorded values.
     vals <- as_number(df[[var_col]])
-    bounds <- outlier_bounds(vals, method, threshold())
-    rg <- allowed()
+    bounds <- outlier_bounds(vals, method, a$threshold)
+    rg <- a$allowed
     reason <- outlier_reason(vals, bounds, rg)
 
     # Values the analyst checked and kept stay out of the flags.
@@ -569,7 +593,7 @@ dq_outliers_server <- function(input, output, session, ns, core) {
   })
 
   output$ol_download <- download_handler(
-    filename = function() export_file_name(paste0("Targeting_Outliers_", input$outlier_var), "xlsx"),
+    filename = function() export_file_name(paste0("Targeting_Outliers_", ol_applied()$var %||% ""), "xlsx"),
     content = function(file) {
       d <- flagged_df()
       write_xlsx_readonly(if (is.null(d)) data.frame(Message = "No flagged values") else d[, setdiff(names(d), ".idx")], file, "Outliers")
@@ -720,7 +744,7 @@ dq_outliers_server <- function(input, output, session, ns, core) {
     if (!length(rows)) { showNotification("Select the rows to set first.", type = "warning"); return() }
     showModal(modalDialog(
       title = tagList(bsicons::bs_icon("pencil"), " Set a value"),
-      tags$p(sprintf("New value of '%s' for the %d selected row(s):", input$outlier_var, length(rows))),
+      tags$p(sprintf("New value of '%s' for the %d selected row(s):", ol_applied()$var %||% "", length(rows))),
       numericInput(ns("ol_manual_value"), NULL, value = NA, width = "200px"),
       easyClose = TRUE,
       footer = tagList(modalButton("Cancel"), actionButton(ns("ol_manual_next"), "Preview", class = "btn-primary"))
@@ -776,7 +800,7 @@ dq_outliers_server <- function(input, output, session, ns, core) {
     if (!length(rows)) { showNotification("Select the values you checked first.", type = "warning"); return() }
     showModal(modalDialog(
       title = tagList(bsicons::bs_icon("check2-circle"), " Mark as verified"),
-      tags$p(sprintf("%d value(s) of '%s' will be kept as they are and no longer flagged.", length(rows), input$outlier_var)),
+      tags$p(sprintf("%d value(s) of '%s' will be kept as they are and no longer flagged.", length(rows), ol_applied()$var %||% "")),
       textInput(ns("ol_verify_reason"), "How was it verified?", width = "100%",
                 placeholder = "e.g. confirmed by phone with the household"),
       easyClose = TRUE,
@@ -834,6 +858,10 @@ dq_outliers_server <- function(input, output, session, ns, core) {
     i <- input$ol_scan_table_rows_selected
     req(s, length(i) == 1)
     shinyWidgets::updatePickerInput(session, "outlier_var", selected = s$variable[i])
+    rg <- ranges()[[s$variable[i]]] %||% suggested_range(mapped_keys()[s$variable[i]])
+    ol_applied(list(var = s$variable[i], method = input$outlier_method %||% "IQR",
+                    threshold = if (identical(input$outlier_method, "none")) NA_real_ else (input$outlier_threshold %||% NA_real_),
+                    allowed = if (length(rg) == 2) rg else c(NA_real_, NA_real_)))
     bslib::nav_select("outlier_tabs", "dist", session = session)
   })
 }

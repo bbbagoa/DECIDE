@@ -41,7 +41,7 @@ test_that("the settings dialog turns tuning and automatic profiles on", {
                     args = list(uploaded_df = shiny::reactiveVal(NULL), user_setup = shiny::reactiveValues(),
                                 workspace = TargetWise:::workspace_new()), {
     assessment_df(df)
-    session$setInputs(outcome_col = "FSI_CARI2_2class", outcome_pos = "Food insecure")
+    session$setInputs(outcome_col = "FSI_CARI2_2class", outcome_pos = "Food insecure", fw_validate = 1)
     id <- function(k, x) paste0("rv", k, "_", gsub("[^A-Za-z0-9]", "_", x))
     do.call(session$setInputs, stats::setNames(as.list(screened()$criterion %in% crit5t), id("use", screened()$criterion)))
     session$setInputs(nav_next_screening = 1)
@@ -52,7 +52,7 @@ test_that("the settings dialog turns tuning and automatic profiles on", {
     expect_equal(fitted()$tuning$folds, 3)
     expect_false(is.null(fitted()$tree_rules))
     # without an outcome: the number of profiles chosen by silhouette
-    session$setInputs(framework_mode = "none")
+    session$setInputs(framework_mode = "none", fw_validate_none = 1)
     do.call(session$setInputs, stats::setNames(as.list(screened()$criterion %in% crit5t), id("use", screened()$criterion)))
     session$setInputs(nav_next_screening = 2)
     session$setInputs(model_method = "kmeans")
@@ -70,7 +70,7 @@ test_that("changing the PCA settings runs nothing: only Fit fits", {
                     args = list(uploaded_df = shiny::reactiveVal(NULL), user_setup = shiny::reactiveValues(),
                                 workspace = TargetWise:::workspace_new()), {
     assessment_df(df)
-    session$setInputs(outcome_col = "FSI_CARI2_2class", outcome_pos = "Food insecure")
+    session$setInputs(outcome_col = "FSI_CARI2_2class", outcome_pos = "Food insecure", fw_validate = 1)
     id <- function(k, x) paste0("rv", k, "_", gsub("[^A-Za-z0-9]", "_", x))
     do.call(session$setInputs, stats::setNames(as.list(screened()$criterion %in% crit5t), id("use", screened()$criterion)))
     session$setInputs(nav_next_screening = 1, model_method = "pca", stepwise = "none", compare_models = "logit")

@@ -227,8 +227,12 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
       admin1 = NULL, admin2 = NULL, admin3 = NULL,
       score_min = 0, score_max = 100,
       approach = "hybrid", combine = "both", comm_col = NULL, comm_vals = NULL,
-      prio_mode = "none", prio_n = NA, prio_count = "people", quota_unit = "admin1", quota_plan = NULL
+      prio_mode = "none", prio_n = NA, prio_count = "people", quota_unit = "admin1", quota_plan = NULL,
+      # the card and its threshold count once applied, like every criterion
+      use_scorecard = TRUE, sc_threshold = NULL
     )
+    # A new card brings its own threshold.
+    observeEvent(scorecard_fingerprint(user_setup$scorecard), applied$sc_threshold <- NULL, ignoreInit = TRUE)
 
     # --- Caseload per area ------------------------------------------------------
     # list(unit, kind ("households" | "share"), total, values (named, as typed),
@@ -616,6 +620,9 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
       applied$prio_n <- input$ben_prio_n
       applied$quota_unit <- input$ben_quota_unit
       applied$prio_count <- count_unit()
+      applied$use_scorecard <- !isFALSE(input$use_scorecard)
+      applied$sc_threshold <- suppressWarnings(as.numeric(input$scorecard_threshold))
+      if (length(applied$sc_threshold) != 1 || !is.finite(applied$sc_threshold)) applied$sc_threshold <- NULL
       if (identical(applied$prio_mode, "caseload")) {
         if (!nzchar(trimws(input$ben_prio_rationale %||% ""))) {
           applied$prio_mode <- "none"
@@ -1219,8 +1226,8 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
     selection <- reactive({
       df <- uploaded_df(); req(df)
       sc <- user_setup$scorecard
-      if (isTRUE(input$use_scorecard) && !scorecard_is_empty(sc)) {
-        sc$threshold <- input$scorecard_threshold %||% sc$threshold %||% 0
+      if (isTRUE(applied$use_scorecard) && !scorecard_is_empty(sc)) {
+        sc$threshold <- applied$sc_threshold %||% sc$threshold %||% 0
       } else {
         sc <- NULL
       }
@@ -1366,7 +1373,7 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
     # What an adopted vulnerability ranking says about the selection.
     output$ranking_comp <- renderUI({
       sc <- user_setup$scorecard
-      if (!isTRUE(input$use_scorecard) || scorecard_is_empty(sc) || !is_ranking(sc)) return(NULL)
+      if (!isTRUE(applied$use_scorecard) || scorecard_is_empty(sc) || !is_ranking(sc)) return(NULL)
       bslib::layout_columns(
         col_widths = if (is.null(sc$ranking$profiles)) c(12) else c(6, 6),
         bslib::card(full_screen = TRUE,
@@ -1576,7 +1583,7 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
       n_ind <- if (shiny::isTruthy(user_setup$hh_size) && user_setup$hh_size %in% names(full))
         sum(as_number(full[[user_setup$hh_size]]), na.rm = TRUE) else NA
       sc <- user_setup$scorecard
-      sc_used <- isTRUE(input$use_scorecard) && !scorecard_is_empty(sc)
+      sc_used <- isTRUE(applied$use_scorecard) && !scorecard_is_empty(sc)
 
       # Everything done to the data before this list was drawn, from the
       # audit trail, so the list can be traced back to its source.

@@ -395,11 +395,7 @@ pmt_numeric_ui <- function(ns) {
     bslib::card_body(
       tags$p(class = "small text-muted mb-2",
              "A PMT also uses numbers as they are: household size (usually the strongest proxy), rooms, members by age, years of education.",
-             " Each gets points per unit; a missing value takes the average. The yes/no variables ticked above are used too."),
-      shinyWidgets::pickerInput(
-        ns("pmt_numeric"), NULL, choices = character(0), multiple = TRUE, width = "100%",
-        options = shinyWidgets::pickerOptions(container = "body", actionsBox = TRUE, liveSearch = TRUE,
-                                              noneSelectedText = "Choose numeric proxies", selectedTextFormat = "count > 4")),
+             " Each gets points per unit; a missing value takes the average. The yes/no variables ticked above are used too; tick the numbers to use here."),
       uiOutput(ns("pmt_numeric_table"))))
 }
 

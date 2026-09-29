@@ -136,10 +136,21 @@ mod_var_calc_server <- function(id, get_data, set_data, log = NULL, phase = "Sel
         # for vulnerability (needs the outcome), or one rule for all.
         conditionalPanel(
           condition = sprintf("input['%s'] === 'bulk'", ns("type")),
-          if (has_y) shinyWidgets::radioGroupButtons(
+          shinyWidgets::radioGroupButtons(
             ns("bulk_method"), NULL, status = "outline-primary", justified = TRUE,
-            choices = c("Best split for vulnerability" = "optimal", "Same rule for every column" = "rule"),
-            selected = "optimal"),
+            choices = c(if (has_y) c("Best split for vulnerability" = "optimal"),
+                        "One yes/no per answer" = "each", "Same rule for every column" = "rule"),
+            selected = if (has_y) "optimal" else "rule"),
+          conditionalPanel(
+            condition = sprintf("input['%s'] === 'each'", ns("bulk_method")),
+            tags$div(class = "small text-muted mb-2",
+                     "For each column, one yes/no variable per answer (roof_Metal, roof_Thatch...): the way a question with several answers",
+                     " enters a regression such as a proxy means test, or a scorecard. Columns with more than 30 answers are left out",
+                     " (numbers, names and free text are not categories)."),
+            checkboxInput(ns("bulk_ref"),
+                          tagList("Leave out the most common answer (reference)",
+                                  info_tip("A model with an intercept cannot estimate every answer of a question: one is left out and the others read against it. Keep this ticked for the proxy means test and the scorecard models; untick it to get every answer, e.g. for a ranking by deprivation counting.")),
+                          value = TRUE)),
           if (has_y) conditionalPanel(
             condition = sprintf("input['%s'] === 'optimal'", ns("bulk_method")),
             tags$div(class = "small text-muted mb-2",
@@ -169,7 +180,7 @@ mod_var_calc_server <- function(id, get_data, set_data, log = NULL, phase = "Sel
               tags$span(class = "small text-muted",
                         "Every column that is not yes/no yet (outcome indicators and what cannot be observed at registration left out), with the best cut-off for each."))),
           conditionalPanel(
-            condition = sprintf("input['%s'] !== 'optimal'", ns("bulk_method")),
+            condition = sprintf("input['%s'] === 'rule'", ns("bulk_method")),
             uiOutput(ns("bulk_hint"), class = "wfp-calc-hint"),
             bslib::layout_columns(
               col_widths = c(3, 4, 5), fill = FALSE,
@@ -179,14 +190,16 @@ mod_var_calc_server <- function(id, get_data, set_data, log = NULL, phase = "Sel
               tags$div())),
           bslib::layout_columns(
             col_widths = c(5, 7), fill = FALSE,
-            textInput(ns("bulk_suffix"),
-                      tagList("New names end with", info_tip("Each new variable is named after its source column, followed by this ending, e.g. asset_radio_Bin (best split: hh_size_ge7_Bin).")),
-                      value = "_Bin", width = "100%"),
+            conditionalPanel(
+              condition = sprintf("input['%s'] !== 'each'", ns("bulk_method")),
+              textInput(ns("bulk_suffix"),
+                        tagList("New names end with", info_tip("Each new variable is named after its source column, followed by this ending, e.g. asset_radio_Bin (best split: hh_size_ge7_Bin). One yes/no per answer names them column_answer.")),
+                        value = "_Bin", width = "100%")),
             tags$div(class = "pt-4", radioButtons(ns("bulk_coding"), NULL, inline = TRUE,
                          choices = c("Code as 1 / 0" = "10", "Code as Yes / No" = "yesno"),
                          selected = if (has_y) "yesno" else "10"))),
           conditionalPanel(
-            condition = sprintf("input['%s'] !== 'optimal'", ns("bulk_method")),
+            condition = sprintf("input['%s'] === 'rule'", ns("bulk_method")),
             tags$div(class = "small text-muted",
                      "The same rule is applied to every selected column, e.g. 'equals Yes' on a block of asset questions, or 'at least 1' on counts. ",
                      "A missing value gives a missing result."))
@@ -318,9 +331,14 @@ mod_var_calc_server <- function(id, get_data, set_data, log = NULL, phase = "Sel
 
     # What the selected columns hold together: their shared values (click to
     # use) or, when all numeric, their combined range.
+    # counted on request: picking columns computes nothing
+    hint_for <- reactiveVal(character(0))
+    observeEvent(input$bulk_hint_go, hint_for(input$bulk_cols %||% character(0)))
     output$bulk_hint <- renderUI({
       df <- get_data(); cs <- intersect(input$bulk_cols %||% character(0), names(df))
       if (!length(cs)) return(NULL)
+      if (!setequal(cs, intersect(hint_for(), names(df))))
+        return(tags$div(class = "small", actionLink(ns("bulk_hint_go"), tagList(bsicons::bs_icon("tags"), " Show the values of these columns"))))
       if (all(vapply(df[cs], is.numeric, logical(1)))) {
         return(column_hint(unlist(df[cs], use.names = FALSE), ns("bulk_val"), ns("bulk_op")))
       }
@@ -331,6 +349,16 @@ mod_var_calc_server <- function(id, get_data, set_data, log = NULL, phase = "Sel
       df <- get_data()
       cs <- intersect(input$bulk_cols %||% character(0), names(df))
       if (!length(cs)) stop("Select the columns to binarise.", call. = FALSE)
+      if (identical(input$bulk_method, "each")) {
+        r <- calc_dummies(df, cs, reference = !isFALSE(input$bulk_ref), coding = input$bulk_coding %||% "10")
+        if (!length(r$names)) stop("None of these columns has 2 to 30 answers.", call. = FALSE)
+        clash <- intersect(r$names, names(df))
+        if (length(clash) && !isTRUE(input$replace))
+          stop("Already exist: ", paste(clash, collapse = ", "), ". Tick 'Replace if it exists'.", call. = FALSE)
+        r$rule <- paste("=", r$answers)
+        r$note <- if (length(r$skipped)) sprintf("Left out (fewer than 2 or more than 30 answers): %s.", paste(r$skipped, collapse = ", "))
+        return(r)
+      }
       # source name + ending, made valid (spaces, slashes, a leading digit)
       nms <- make.names(paste0(cs, input$bulk_suffix %||% "_Bin"))
       clash <- intersect(nms, names(df))
@@ -414,6 +442,7 @@ mod_var_calc_server <- function(id, get_data, set_data, log = NULL, phase = "Sel
           yes <- function(v) mean(v %in% c(1, "Yes"), na.rm = TRUE)
           tagList(
             tags$div(class = "small fw-bold text-uppercase mb-1", sprintf("Preview: %d new variables", length(r$names))),
+            if (!is.null(r$note)) tags$div(class = "small text-warning mb-1", r$note),
             tags$div(class = "wfp-model-table-wrap", tags$table(
               class = "wfp-model-table",
               tags$thead(tags$tr(tags$th("New variable"), tags$th("Rule"), tags$th(class = "num", "Meets it"),

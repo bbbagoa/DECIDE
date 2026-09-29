@@ -53,10 +53,13 @@ mod_overview_ui <- function(id) {
             tags$div(class = "d-flex align-items-center gap-2",
                      tags$span(class = "wfp-map-toolbar-label", "Colour by"),
                      uiOutput(ns("map_var_ui"), class = "wfp-map-var")),
-            shinyWidgets::radioGroupButtons(
-              inputId = ns("map_mode"), label = NULL,
-              choices = c("Households" = "points", "By area" = "choropleth"),
-              selected = "points", size = "sm", status = "outline-primary")),
+            tags$div(class = "d-flex align-items-center gap-2",
+              shinyWidgets::radioGroupButtons(
+                inputId = ns("map_mode"), label = NULL,
+                choices = c("Households" = "points", "By area" = "choropleth"),
+                selected = "points", size = "sm", status = "outline-primary"),
+              actionButton(ns("map_apply"), "Apply", icon = icon("check"), class = "btn-primary btn-sm",
+                           title = "Redraw the map with this colour and mode"))),
           tags$div(class = "small text-muted wfp-map-note", textOutput(ns("map_note"), inline = TRUE)),
           tags$div(class = "tw-ov-map-body", leafgl::leafglOutput(ns("map_plot"), height = "100%")))
         ),
@@ -70,7 +73,9 @@ mod_overview_ui <- function(id) {
               tags$span(class = "tw-ov-title", bsicons::bs_icon("broadcast"), " Data collection"),
               uiOutput(ns("view_chip"), inline = TRUE),
               tags$div(class = "tw-ov-follow",
-                       bslib::input_switch(ns("follow_map"), "Follow the map", value = TRUE))),
+                       actionButton(ns("view_use"), "Figures for the map view", icon = icon("crosshairs"),
+                                    class = "btn-outline-secondary btn-sm",
+                                    title = "Recompute the figures on the households in the map view; 'show all' goes back to every household"))),
             uiOutput(ns("readiness_strip")),
             uiOutput(ns("col_tiles")),
             tags$div(
@@ -416,12 +421,16 @@ mod_overview_server <- function(id, uploaded_df, user_setup) {
             if (is.null(col)) "" else sprintf("<span>%s</span><strong>%s</strong>", esc(col), esc(as.character(values[i]))))
   }
   # large maps: the popup of the point clicked, built when it is clicked
+  # the map's colour and mode, as last applied
+  map_set <- reactiveVal(list(mode = "points", var = NULL))
+  observeEvent(input$map_apply, map_set(list(mode = input$map_mode %||% "points", var = input$map_var)))
   observeEvent(input$map_plot_glify_click, {
     ev <- input$map_plot_glify_click
     pts <- tryCatch(map_points(), error = function(e) NULL)
-    if (is.null(pts) || nrow(pts$df) <= MAP_POPUP_MAX || !identical(input$map_mode %||% "points", "points")) return()
+    if (is.null(pts) || nrow(pts$df) <= MAP_POPUP_MAX || !identical(map_set()$mode %||% "points", "points")) return()
     i <- suppressWarnings(as.integer(ev$id)); if (is.na(i) || i < 1 || i > nrow(pts$df)) return()
-    col <- if (shiny::isTruthy(input$map_var) && input$map_var %in% names(pts$df)) input$map_var else NULL
+    mv <- map_set()$var
+    col <- if (shiny::isTruthy(mv) && mv %in% names(pts$df)) mv else NULL
     html <- map_popup(pts$df, i, col, if (is.null(col)) NULL else pts$df[[col]])
     leaflet::leafletProxy("map_plot", session) |> leaflet::clearPopups() |>
       leaflet::addPopups(lng = pts$lng[i], lat = pts$lat[i], popup = html)
@@ -437,8 +446,8 @@ mod_overview_server <- function(id, uploaded_df, user_setup) {
     map <- base_map(c(xr[1], yr[1], xr[2], yr[2]))
 
     df <- pts$df
-    choropleth <- identical(input$map_mode, "choropleth")
-    col <- if (shiny::isTruthy(input$map_var)) input$map_var else user_setup$v_groups
+    choropleth <- identical(map_set()$mode, "choropleth")
+    col <- if (shiny::isTruthy(map_set()$var)) map_set()$var else user_setup$v_groups
     if (!shiny::isTruthy(col) || !col %in% names(df)) col <- NULL
 
     if (choropleth) {
@@ -528,15 +537,19 @@ mod_overview_server <- function(id, uploaded_df, user_setup) {
   ### ----------------- The figures follow the map view
   # ---------------------------------------------------------------------------
 
-  map_bounds <- shiny::debounce(reactive(input$map_plot_bounds), 600)
-  # The households the insights describe: those in the map view, or all of
-  # them when the whole located set is in view (the households without
-  # coordinates then count too) or when "Follow the map" is off.
+  # The households the insights describe: all of them, or those in the map
+  # view once "Figures for the map view" is clicked (panning and zooming
+  # recompute nothing by themselves).
+  view_bounds <- reactiveVal(NULL)
+  observeEvent(input$view_use, {
+    need_ok(!is.null(input$map_plot_bounds), "Move or zoom the map first.")
+    view_bounds(input$map_plot_bounds)
+  })
   view_rows <- reactive({
-    if (!isTRUE(input$follow_map)) return(NULL)
+    b <- view_bounds(); if (is.null(b)) return(NULL)
     pts <- tryCatch(map_points(), error = function(e) NULL)
     if (is.null(pts) || !length(pts$idx)) return(NULL)
-    ov_in_view(pts$lng, pts$lat, pts$idx, map_bounds())
+    ov_in_view(pts$lng, pts$lat, pts$idx, b)
   })
   view_data <- reactive({
     df <- filtered_data(); r <- view_rows()
@@ -555,6 +568,7 @@ mod_overview_server <- function(id, uploaded_df, user_setup) {
               if (zoomed) actionLink(ns("view_all"), "show all", class = "ms-1"))
   })
   observeEvent(input$view_all, {
+    view_bounds(NULL)
     pts <- map_points(); xr <- fit_range(pts$lng); yr <- fit_range(pts$lat)
     leaflet::leafletProxy("map_plot", session) |> leaflet::fitBounds(xr[1] - 1, yr[1] - 1, xr[2] + 1, yr[2] + 1)
   })
@@ -652,7 +666,19 @@ mod_overview_server <- function(id, uploaded_df, user_setup) {
   ### ----------------- 3. Vulnerability
   # ---------------------------------------------------------------------------
 
-  vuln <- reactive({ df <- view_data(); req(nrow(df) > 0); ov_vulnerability(df, ov_setup(), input$vuln_indicator) })
+  # every indicator's cross computed together: the picker only switches views
+  vuln_all <- reactive({
+    df <- view_data(); req(nrow(df) > 0)
+    v <- ov_vulnerability(df, ov_setup(), NULL)
+    if (is.null(v)) return(NULL)
+    by <- stats::setNames(lapply(v$available, function(ind) if (identical(ind, v$indicator)) v else ov_vulnerability(df, ov_setup(), ind)), v$available)
+    list(base = v, by = by)
+  })
+  vuln <- reactive({
+    a <- vuln_all(); if (is.null(a)) return(NULL)
+    ind <- input$vuln_indicator
+    if (isTRUE(ind %in% names(a$by))) a$by[[ind]] else a$base
+  })
   output$vuln_ui <- renderUI({
     v <- vuln()
     if (is.null(v)) return(empty_state("No vulnerability variable is mapped",
@@ -747,7 +773,8 @@ mod_overview_server <- function(id, uploaded_df, user_setup) {
                     choices = c("Households" = "n", "Row %" = "row", "Column %" = "col", "Total %" = "total",
                                 "Mean of a number" = "mean", "Sum of a number" = "sum")),
         conditionalPanel(sprintf("['mean','sum'].indexOf(input['%s']) >= 0", ns("ct_stat")),
-                         pick("ct_value", "Number", if (length(nums)) nums else c("(no numeric column)" = ""), nums[1]))),
+                         pick("ct_value", "Number", if (length(nums)) nums else c("(no numeric column)" = ""), nums[1])),
+        tags$div(class = "tw-ct-go", actionButton(ns("ct_show"), "Show table", icon = icon("table"), class = "btn-primary btn-sm"))),
       uiOutput(ns("ct_table")))
   })
 
@@ -759,17 +786,23 @@ mod_overview_server <- function(id, uploaded_df, user_setup) {
         pick("gb_x", "Variable", ch, all[1]),
         pick("gb_y", "Against", c(`(none)` = "", ch), ""),
         pick("gb_group", "Grouped by", c(`(none)` = "", ch), ""),
-        uiOutput(ns("gb_type_ui"))),
+        uiOutput(ns("gb_type_ui")),
+        tags$div(class = "tw-ct-go", actionButton(ns("gb_draw"), "Draw chart", icon = icon("chart-column"), class = "btn-primary btn-sm"))),
       plotly::plotlyOutput(ns("gb_plot"), height = "360px"),
       tags$div(class = "tw-ct-note", textOutput(ns("gb_note"), inline = TRUE)))
   })
 
+  # the table's settings, as last shown
+  ct_params <- reactiveVal(NULL)
+  observeEvent(input$ct_show, ct_params(list(row = input$ct_row, col = input$ct_col, stat = input$ct_stat, value = input$ct_value)))
   output$ct_table <- renderUI({
-    df <- view_data(); req(df, input$ct_row, input$ct_row %in% names(df))
-    stat <- input$ct_stat %||% "n"
-    col <- if (shiny::isTruthy(input$ct_col) && input$ct_col %in% names(df) && input$ct_col != input$ct_row) input$ct_col else NULL
-    if (stat %in% c("mean", "sum")) shiny::validate(shiny::need(shiny::isTruthy(input$ct_value) && input$ct_value %in% names(df), "Choose the number to average or sum."))
-    ct <- contingency(df, input$ct_row, col, NULL, stat, input$ct_value)
+    p <- ct_params()
+    if (is.null(p)) return(tags$div(class = "small text-muted mt-2", "Choose the rows, the columns and the cells, then click Show table."))
+    df <- view_data(); req(df, p$row, p$row %in% names(df))
+    stat <- p$stat %||% "n"
+    col <- if (shiny::isTruthy(p$col) && p$col %in% names(df) && p$col != p$row) p$col else NULL
+    if (stat %in% c("mean", "sum")) shiny::validate(shiny::need(shiny::isTruthy(p$value) && p$value %in% names(df), "Choose the number to average or sum."))
+    ct <- contingency(df, p$row, col, NULL, stat, p$value)
     tab <- ct$table
     shiny::validate(shiny::need(nrow(tab) > 1, "No household has an answer for these variables."))
     fmt <- function(v) if (is.na(v)) "" else switch(stat, n = , sum = format(round(v), big.mark = ","), mean = format(signif(v, 3), big.mark = ","),
@@ -778,14 +811,14 @@ mod_overview_server <- function(id, uploaded_df, user_setup) {
     rng <- range(body, na.rm = TRUE); if (!all(is.finite(rng)) || diff(rng) == 0) rng <- c(0, max(1, rng[2], na.rm = TRUE))
     shade <- function(v, margin) if (margin || is.na(v)) NULL else sprintf("background: rgba(10, 110, 180, %.3f)", 0.04 + 0.42 * (v - rng[1]) / diff(rng))
     what <- switch(stat, n = "Households", row = "Share of each row (%)", col = "Share of each column (%)", total = "Share of all households (%)",
-                   mean = sprintf("Mean of %s", col_label(input$ct_value)), sum = sprintf("Sum of %s", col_label(input$ct_value)))
+                   mean = sprintf("Mean of %s", col_label(p$value)), sum = sprintf("Sum of %s", col_label(p$value)))
     nr <- nrow(tab); nc <- ncol(tab)
     tags$div(class = "tw-ct",
       tags$div(class = "tw-ct-caption", tags$strong(what), sprintf(" \u00b7 %s households", format(ct$n, big.mark = ","))),
       tags$div(class = "tw-ct-wrap", tags$table(class = "tw-ct-table",
         tags$thead(
           if (!is.null(col)) tags$tr(tags$th(class = "tw-ct-corner", ""), tags$th(colspan = nc, class = "tw-ct-colvar", col_label(col))),
-          tags$tr(tags$th(class = "tw-ct-rowvar", col_label(input$ct_row)),
+          tags$tr(tags$th(class = "tw-ct-rowvar", col_label(p$row)),
                   lapply(seq_len(nc), function(j) tags$th(class = if (colnames(tab)[j] == "Total") "tw-ct-margin num" else "num", colnames(tab)[j])))),
         tags$tbody(lapply(seq_len(nr), function(i) tags$tr(class = if (i == nr) "tw-ct-total" else NULL,
           tags$th(rownames(tab)[i]),
@@ -824,15 +857,22 @@ mod_overview_server <- function(id, uploaded_df, user_setup) {
     plotly::layout(p, boxmode = "group")
   }
   GB_COLS <- c("#0A6EB4", "#f7b825", "#3f7e44", "#c5192d", "#26bde2", "#8a96a3", "#5b6b7c", "#e67e22")
+  # the chart's settings, as last drawn
+  gb_params <- reactiveVal(NULL)
+  observeEvent(input$gb_draw, gb_params(list(x = input$gb_x, y = input$gb_y, g = input$gb_group, type = input$gb_type)))
   gb_vars <- reactive({
-    df <- view_data(); x <- input$gb_x
+    p <- gb_params(); req(p)
+    df <- view_data(); x <- p$x
     req(df, shiny::isTruthy(x), x %in% names(df))
-    y <- if (shiny::isTruthy(input$gb_y) && input$gb_y %in% names(df) && input$gb_y != x) input$gb_y
-    g <- if (shiny::isTruthy(input$gb_group) && input$gb_group %in% names(df) && !input$gb_group %in% c(x, y)) input$gb_group
+    y <- if (shiny::isTruthy(p$y) && p$y %in% names(df) && p$y != x) p$y
+    g <- if (shiny::isTruthy(p$g) && p$g %in% names(df) && !p$g %in% c(x, y)) p$g
     list(df = df, x = x, y = y, g = g, kx = ov_var_kind(df[[x]]), ky = if (is.null(y)) "none" else ov_var_kind(df[[y]]))
   })
+  # the chart types the chosen variables allow (one column each is looked at)
   output$gb_type_ui <- renderUI({
-    v <- gb_vars(); ch <- ov_chart_types(v$kx, v$ky); cur <- isolate(input$gb_type)
+    df <- filtered_data(); x <- input$gb_x; req(df, shiny::isTruthy(x), x %in% names(df))
+    y <- if (shiny::isTruthy(input$gb_y) && input$gb_y %in% names(df) && input$gb_y != x) input$gb_y
+    ch <- ov_chart_types(ov_var_kind(df[[x]]), if (is.null(y)) "none" else ov_var_kind(df[[y]])); cur <- isolate(input$gb_type)
     selectInput(ns("gb_type"), "Chart", choices = ch, selected = if (isTRUE(cur %in% ch)) cur else unname(ch[1]), selectize = FALSE, width = "100%")
   })
   gb_note <- reactiveVal("")
@@ -840,7 +880,7 @@ mod_overview_server <- function(id, uploaded_df, user_setup) {
   output$gb_plot <- render_wfp_plotly({
     v <- gb_vars(); df <- v$df; n <- nrow(df)
     types <- ov_chart_types(v$kx, v$ky)
-    type <- if (isTRUE(input$gb_type %in% types)) input$gb_type else unname(types[1])
+    type <- if (isTRUE(gb_params()$type %in% types)) gb_params()$type else unname(types[1])
     as_cat <- function(col, k = 12) { f <- ov_categories(df[[col]], rep(1, n), max_levels = k); f }
     num <- function(col) as_number(df[[col]])
     g <- if (is.null(v$g)) NULL else as_cat(v$g, 6)

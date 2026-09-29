@@ -40,6 +40,7 @@ dq_location_ui <- function(ns) {
                     )
                   )
                 ),
+                tags$div(class = "pb-3", actionButton(ns("norm_show"), "Show names", icon = icon("list-ul"), class = "btn-primary")),
                 tags$div(
                   style = "flex: 1 1 240px; max-width: 340px;",
                   tags$label(class = "control-label", `for` = ns("correct_name"), "Correct spelling:"),
@@ -118,13 +119,19 @@ dq_location_server <- function(input, output, session, ns, core) {
   # user never mapped come back NULL from `user_setup`; dropping them here keeps
   # `all_of()` from erroring into the UI when someone picks e.g. Village on a
   # dataset that only maps Admin 1-2.
+  # The level is summarised on Show names: picking it computes nothing.
+  norm_level <- reactiveVal(NULL)
+  observeEvent(input$norm_show, {
+    need_ok(shiny::isTruthy(input$norm_col), "Choose the level to review.")
+    norm_level(input$norm_col)
+  })
   norm_cols <- reactive({
-    req(input$norm_col)
+    req(norm_level())
     df <- dq_filtered_data()
     if (is.null(df)) return(character(0))
 
     all_levels <- c("admin1", "admin2", "admin3", "admin4", "village")
-    selected_label <- tolower(gsub(" ", "", input$norm_col))
+    selected_label <- tolower(gsub(" ", "", norm_level()))
     current_idx <- which(all_levels == selected_label)
     if (length(current_idx) == 0) return(character(0))
 
@@ -145,11 +152,12 @@ dq_location_server <- function(input, output, session, ns, core) {
   })
 
   output$location_hint <- renderUI({
+    if (is.null(norm_level())) return(empty_state("Choose a level", "Pick the level to review, then click Show names.", icon = "signpost-split"))
     if (length(norm_cols()) == 0) {
       empty_state(
         "This level is not mapped",
         paste0(
-          "No column is mapped to ", input$norm_col %||% "this level",
+          "No column is mapped to ", norm_level() %||% "this level",
           ". Map it in Setup, or pick a level your dataset provides."
         ),
         icon = "signpost-split"

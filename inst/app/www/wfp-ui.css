@@ -2899,3 +2899,25 @@ td[data-tw], th[data-tw] { cursor: help; }
 .wfp-wait-log .r::before { content: "R"; color: #6f8aa8; font-weight: 700; }
 .wfp-wait-log .rwarn { color: #f7b825; }
 .wfp-wait-log .rwarn::before { content: "!"; color: #f7b825; font-weight: 700; }
+
+/* Household profiles (Targeting Design, no outcome): one card per profile */
+.wfp-prof-bar { height: 6px; border-radius: 3px; background: rgba(128,128,128,.18); overflow: hidden; }
+.wfp-prof-bar > span { display: block; height: 100%; border-radius: 3px; }
+.wfp-prof-head .form-group, .wfp-prof-head .shiny-input-container { margin: 0; width: auto !important; }
+.wfp-prof-head .form-check { display: inline-flex; justify-content: flex-end; gap: .35rem; margin: 0; min-height: 0; }
+.wfp-prof-head .form-check label { font-weight: 700; }
+.wfp-prof-table td.num { font-variant-numeric: tabular-nums; }
+.tw-ct-go { margin-bottom: 8px; align-self: end; }
+.tw-ov-follow .btn { padding: .15rem .5rem; font-size: .74rem; }
+.wfp-prof-table td.wfp-prof-var { min-width: 220px; max-width: 460px; white-space: normal; overflow-wrap: anywhere; }
+.wfp-prof-table td.wfp-prof-var .tw-cell-label { white-space: normal; }
+.wfp-model-table-wrap.wfp-prof-wrap { max-height: none; }   /* ten rows: shown whole, no inner scroll */
+
+/* Connection lost (www/busy.js): replaces Shiny's grey page */
+#shiny-disconnected-overlay { display: none !important; }
+#tw-lost { position: fixed; inset: 0; z-index: 100000; background: rgba(10, 30, 50, .55);
+           display: flex; align-items: center; justify-content: center; padding: 16px; }
+#tw-lost .tw-lost-card { max-width: 520px; background: var(--surface, #fff); color: var(--text, #1f2a37);
+           border-radius: 14px; padding: 1.4rem 1.6rem; box-shadow: 0 12px 40px rgba(0,0,0,.25); }
+#tw-lost .tw-lost-title { font-weight: 700; font-size: 1.1rem; margin-bottom: .6rem; color: #c5192d; }
+#tw-lost p { font-size: .9rem; margin-bottom: .7rem; }

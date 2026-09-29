@@ -267,7 +267,8 @@ mod_pdm_server <- function(id, workspace = NULL, country_office = reactive(NULL)
         sc <- if (is.null(user_setup)) NULL else user_setup$scorecard
         if (scorecard_is_empty(sc)) return(tags$div(class = "alert alert-warning small", "No scorecard is adopted yet (Targeting Design)."))
         df <- pdm_df()
-        miss <- if (is.null(df)) character(0) else pdm_scorecard_eligibility(df, sc)$missing
+        # the columns alone say what is missing: nothing is scored here
+        miss <- if (is.null(df)) character(0) else pdm_scorecard_eligibility(df[0, , drop = FALSE], sc)$missing
         return(tags$div(class = if (length(miss)) "alert alert-warning small" else "small text-muted mb-2",
                         if (length(miss)) paste0("The PDM data lacks: ", paste(miss, collapse = ", "), ".")
                         else sprintf("%d criteria, eligible when score > %s.", length(sc$items), fmt5(sc$threshold %||% 0))))

@@ -28,13 +28,14 @@ test_that("restoring a Targeting Design keeps the fitted model through the input
   snap <- NULL
   shiny::testServer(TargetWise:::mod_scorecard_server, args = args(ws1), {
     assessment_df(df)
-    session$setInputs(outcome_col = "FSI_CARI2_2class", outcome_pos = "Food insecure")
+    session$setInputs(outcome_col = "FSI_CARI2_2class", outcome_pos = "Food insecure", fw_validate = 1)
     # Criteria go to the model once ticked and community-validated.
     send_criteria(session, screened()$criterion, crit)
     session$setInputs(holdout_pct = 0, split_seed = 1, params_apply = 1)   # the settings dialog
     session$setInputs(model_method = "logit", model_scheme = "odds_ratio", 
                       run_benchmarks = FALSE, fit_criteria = crit, run_fit = 1)
     session$setInputs(w_1 = 9, ver_2 = TRUE, threshold = 1.5)
+    session$setInputs(apply_points = 1, thr_apply = 1)
     snap <<- TargetWise:::workspace_snapshot(ws1)$scorecard
   })
   expect_false(is.null(snap$fitted))
@@ -93,7 +94,7 @@ test_that("only the ticked criteria go on to the model", {
                     args = list(uploaded_df = shiny::reactiveVal(NULL), user_setup = shiny::reactiveValues(),
                                 workspace = TargetWise:::workspace_new()), {
     assessment_df(df)
-    session$setInputs(outcome_col = "FSI_CARI2_2class", outcome_pos = "Food insecure")
+    session$setInputs(outcome_col = "FSI_CARI2_2class", outcome_pos = "Food insecure", fw_validate = 1)
     expect_equal(ready_criteria(), character(0))              # nothing sent yet
     expect_true(any(screened()$retained))                      # the screening pre-ticked Use
     send_criteria(session, screened()$criterion, crit[1:2])
@@ -115,7 +116,7 @@ test_that("the stepwise dropdown and its criterion reach the fit", {
                     args = list(uploaded_df = shiny::reactiveVal(NULL), user_setup = shiny::reactiveValues(),
                                 workspace = TargetWise:::workspace_new()), {
     assessment_df(df)
-    session$setInputs(outcome_col = "FSI_CARI2_2class", outcome_pos = "Food insecure")
+    session$setInputs(outcome_col = "FSI_CARI2_2class", outcome_pos = "Food insecure", fw_validate = 1)
     send_criteria(session, screened()$criterion, crit)
     session$setInputs(holdout_pct = 0, split_seed = 1, params_apply = 1)   # the settings dialog
     session$setInputs(model_method = "logit", model_scheme = "odds_ratio", 
@@ -135,7 +136,7 @@ test_that("a variable whose gap cannot be computed does not break the criteria t
                     args = list(uploaded_df = shiny::reactiveVal(NULL), user_setup = shiny::reactiveValues(),
                                 workspace = TargetWise:::workspace_new()), {
     assessment_df(df)
-    session$setInputs(outcome_col = "FSI_CARI2_2class", outcome_pos = "Food insecure")
+    session$setInputs(outcome_col = "FSI_CARI2_2class", outcome_pos = "Food insecure", fw_validate = 1)
     expect_true("odd_Bin" %in% screened()$criterion)
     expect_false(anyNA(screened()$retained))
     ov <- overlap()                                          # the table's overlap column
@@ -151,7 +152,7 @@ test_that("the model comparison comes from the models chosen to compare", {
                     args = list(uploaded_df = shiny::reactiveVal(NULL), user_setup = shiny::reactiveValues(),
                                 workspace = TargetWise:::workspace_new()), {
     assessment_df(df)
-    session$setInputs(outcome_col = "FSI_CARI2_2class", outcome_pos = "Food insecure")
+    session$setInputs(outcome_col = "FSI_CARI2_2class", outcome_pos = "Food insecure", fw_validate = 1)
     send_criteria(session, screened()$criterion, crit)
     session$setInputs(holdout_pct = 20, split_seed = 1, params_apply = 1)   # the settings dialog
     session$setInputs(model_method = "logit", model_scheme = "odds_ratio", 
@@ -171,7 +172,7 @@ test_that("the tests wait for Run when a setting changes", {
                     args = list(uploaded_df = shiny::reactiveVal(NULL), user_setup = shiny::reactiveValues(),
                                 workspace = TargetWise:::workspace_new()), {
     assessment_df(df)
-    session$setInputs(outcome_col = "FSI_CARI2_2class", outcome_pos = "Food insecure", qs_alpha = 0.05, qs_adjust = "BH")
+    session$setInputs(outcome_col = "FSI_CARI2_2class", outcome_pos = "Food insecure", qs_alpha = 0.05, qs_adjust = "BH", fw_validate = 1)
     first <- qs_result()
     expect_false(is.null(first))                                     # ran once, on the new variables
     session$setInputs(qs_alpha = 0.5, qs_adjust = "none")
@@ -189,12 +190,12 @@ test_that("a changed tolerance needs a rationale, errors beyond it need an expla
                     args = list(uploaded_df = shiny::reactiveVal(NULL), user_setup = setup,
                                 workspace = TargetWise:::workspace_new()), {
     assessment_df(df)
-    session$setInputs(outcome_col = "FSI_CARI2_2class", outcome_pos = "Food insecure")
+    session$setInputs(outcome_col = "FSI_CARI2_2class", outcome_pos = "Food insecure", fw_validate = 1)
     send_criteria(session, screened()$criterion, crit)
     session$setInputs(holdout_pct = 0, split_seed = 1, params_apply = 1)   # the settings dialog
     session$setInputs(model_method = "logit", model_scheme = "odds_ratio", 
                       stepwise = "none", compare_models = "logit", run_fit = 1)
-    session$setInputs(threshold = 1.5, tol_lower = 1, tol_upper = 2)
+    session$setInputs(threshold = 1.5, tol_lower = 1, tol_upper = 2, thr_apply = 1)
     expect_true(any(grepl("differs from the default", missing_steps())))
     session$setInputs(tol_rationale = "<p>Very strict band agreed with the programme team.</p>")
     expect_false(any(grepl("differs from the default", missing_steps())))
@@ -214,7 +215,7 @@ test_that("the design report carries each model's results: PCA, LDA and the othe
                     args = list(uploaded_df = shiny::reactiveVal(NULL), user_setup = shiny::reactiveValues(),
                                 workspace = TargetWise:::workspace_new()), {
     assessment_df(df)
-    session$setInputs(outcome_col = "FSI_CARI2_2class", outcome_pos = "Food insecure")
+    session$setInputs(outcome_col = "FSI_CARI2_2class", outcome_pos = "Food insecure", fw_validate = 1)
     send_criteria(session, screened()$criterion, crit)
     report <- function() paste(readLines(output$download_report, warn = FALSE, encoding = "UTF-8"), collapse = "\n")
     session$setInputs(model_method = "pca")

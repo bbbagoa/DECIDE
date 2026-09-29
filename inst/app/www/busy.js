@@ -236,6 +236,35 @@
       Shiny.setInputValue("tw_keepalive", Date.now());
   }, 30000);
 
+  // A lock held for the life of the page: Chromium browsers (Edge, Chrome)
+  // do not freeze or put to sleep a background tab holding one, which would
+  // close the connection to R.
+  if (navigator.locks && navigator.locks.request) {
+    try { navigator.locks.request("targetwise-keep-awake", function () { return new Promise(function () {}); }); } catch (e) {}
+  }
+
+  // Connection lost: say what happened and how to get the work back,
+  // instead of a page that no longer answers. Locally a lost connection
+  // ends the R session; the last autosave is restored after a reload.
+  var savedAt = null;
+  if (window.Shiny) Shiny.addCustomMessageHandler("tw-saved-at", function (m) { savedAt = m && m.at; });
+  $(document).on("shiny:disconnected", function () {
+    if (document.getElementById("tw-lost")) return;
+    var d = document.createElement("div");
+    d.id = "tw-lost";
+    d.innerHTML =
+      '<div class="tw-lost-card">' +
+      '<div class="tw-lost-title">The connection to TargetWise was lost</div>' +
+      '<p>This happens when the computer goes to sleep, the network drops, or the browser puts an inactive tab to sleep.' +
+      ' The page no longer reaches R, so nothing on it will respond.</p>' +
+      '<p>' + (savedAt ? 'Your work was saved automatically at <strong>' + savedAt + '</strong>.' :
+                         'Changed work is saved automatically every 30 seconds (below 200 MB of data).') +
+      ' Reload the page and choose <strong>Restore</strong> to continue where you were.</p>' +
+      '<button type="button" class="btn btn-primary" onclick="window.location.reload()">Reload</button>' +
+      '</div>';
+    document.body.appendChild(d);
+  });
+
   $(document).on("shiny:connected", function () {
     if (/[?&]fresh=1/.test(window.location.search))
       setTimeout(function () { history.replaceState(null, "", window.location.pathname); }, 1500);

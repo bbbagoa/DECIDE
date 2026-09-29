@@ -218,3 +218,36 @@ calc_code <- function(df, code) {
   if (length(out) != nrow(df)) stop("The last line must give one value per row.", call. = FALSE)
   round5(out)
 }
+
+#' One yes/no column per answer of each column (dummy variables)
+#'
+#' A question with several answers (roof material, water source, occupation)
+#' enters a regression or a scorecard as one yes/no per answer. With
+#' `reference = TRUE` the most common answer is left out: a model with an
+#' intercept cannot estimate all of them, and the others read against it.
+#' A missing answer gives a missing result.
+#' @param max_answers Columns with more answers are refused (numbers, names,
+#'   free text are not categories).
+#' @return list(names, values, sources, answers, descriptions, skipped).
+#' @noRd
+calc_dummies <- function(df, cols, reference = TRUE, coding = "10", max_answers = 30) {
+  out <- list(names = character(0), values = list(), sources = character(0), answers = character(0),
+              descriptions = character(0), skipped = character(0))
+  for (cl in cols) {
+    v <- trimws(as.character(df[[cl]])); v[!is.na(v) & !nzchar(v)] <- NA
+    tb <- sort(table(v), decreasing = TRUE)
+    if (length(tb) < 2 || length(tb) > max_answers) { out$skipped <- c(out$skipped, cl); next }
+    ans <- names(tb)
+    if (reference) ans <- ans[-1]
+    for (a in ans) {
+      x <- v == a
+      out$values[[length(out$values) + 1]] <- if (identical(coding, "yesno")) ifelse(x, "Yes", "No") else as.integer(x)
+      out$names <- c(out$names, make.names(paste0(cl, "_", a)))
+      out$sources <- c(out$sources, cl); out$answers <- c(out$answers, a)
+      out$descriptions <- c(out$descriptions, sprintf("One per answer: %s = %s%s", cl, a,
+                                                      if (reference) sprintf(" (reference: %s)", names(tb)[1]) else ""))
+    }
+  }
+  out$names <- make.unique(out$names, sep = "_")
+  out
+}

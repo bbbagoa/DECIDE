@@ -83,6 +83,8 @@ mod_session_manager_server <- function(
         ui = if (identical(workstream_of_page(page$main_nav), kind)) page
       )
       assign(kind, workstream_signature(st), envir = sigs)
+      # the page shows it if the connection is lost ("work saved at ...")
+      try(session$sendCustomMessage("tw-saved-at", list(at = format(Sys.time(), "%H:%M"))), silent = TRUE)
     }
     sigs <- new.env(parent = emptyenv())   # last saved fingerprint per workstream
     kind_label <- function(kind) session_kinds()[[kind]]
@@ -587,6 +589,12 @@ mod_session_manager_server <- function(
     }
 
     observeEvent(auto_save_trigger_d(), autosave(), ignoreInit = TRUE)
+
+    # A closed connection ends the session when the app runs locally (only
+    # Shiny Server and Connect reconnect): the laptop slept, or the browser
+    # put the inactive tab to sleep. Save what changed before it goes; the
+    # page offers to reload and restore it (www/busy.js).
+    session$onSessionEnded(function() try(isolate(autosave()), silent = TRUE))
 
     # Work in the modules that writes no audit entry (moving the threshold,
     # editing a comment...) is checked every 30 seconds and saved when it changed.

@@ -62,6 +62,7 @@ mod_chart_builder_ui <- function(id, presets = names(chart_presets())) {
           textInput(ns("title"), "Title in the report", width = "100%"),
           rich_text_input(ns("comment"), "Your comment (what it shows, why it matters)", rows = 3,
                           placeholder = "e.g. Women made up 38% of participants in Beni, below the 50% target; sessions were held on market days."),
+          actionButton(ns("preview_go"), "Preview", icon = icon("eye"), class = "btn-outline-primary"),
           actionButton(ns("add"), "Add to report", icon = icon("plus"), class = "btn-primary")
         )
       )
@@ -126,10 +127,15 @@ mod_chart_builder_server <- function(id, data, source, dataset_name = reactive("
       if (length(missing)) showNotification(paste("Pick", paste(missing, collapse = " and "), "for this chart."), type = "warning")
     }, ignoreInit = TRUE)
 
-    spec <- reactive(list(type = input$type, x = input$x, group = input$group, value = input$value, den = input$den,
-                          date = input$date, period = input$period, filter_col = input$filter_col,
-                          filter_vals = input$filter_vals, pct = input$pct, style = input$style %||% "auto"))
-    agg <- reactive(tryCatch(chart_aggregate(data(), spec()), error = function(e) NULL))
+    # The chart is computed on Preview (or Add to report): changing a field,
+    # or picking a ready-made chart, computes nothing by itself.
+    spec_now <- function() list(type = input$type, x = input$x, group = input$group, value = input$value, den = input$den,
+                                date = input$date, period = input$period, filter_col = input$filter_col,
+                                filter_vals = input$filter_vals, pct = input$pct, style = input$style %||% "auto")
+    spec_applied <- reactiveVal(NULL)
+    observeEvent(input$preview_go, spec_applied(spec_now()))
+    spec <- reactive({ s <- spec_applied(); req(s); s })
+    agg <- reactive({ s <- spec_applied(); if (is.null(s)) return(NULL); tryCatch(chart_aggregate(data(), s), error = function(e) NULL) })
 
     output$stat_note <- renderUI({
       sp <- spec()
@@ -144,7 +150,10 @@ mod_chart_builder_server <- function(id, data, source, dataset_name = reactive("
     output$preview_title <- renderText(if (nzchar(input$title %||% "")) input$title else "Preview")
     output$preview_empty <- renderUI({
       if (is.null(data())) return(empty_state("No data yet", "Load a dataset above to build charts.", icon = "cloud-upload"))
-      if (is.null(agg())) return(tags$div(class = "small text-muted mb-2", "Choose the columns on the left to see the chart."))
+      if (is.null(spec_applied())) return(tags$div(class = "small text-muted mb-2", "Choose the columns on the left, then click Preview."))
+      if (!identical(spec_applied(), spec_now())) return(tags$div(class = "small text-warning mb-2", bsicons::bs_icon("exclamation-circle"),
+                                                                  " The fields changed: click Preview to update the chart."))
+      if (is.null(agg())) return(tags$div(class = "small text-muted mb-2", "Nothing to chart with these columns: check the fields on the left."))
       NULL
     })
     output$preview <- render_wfp_plotly({
@@ -199,7 +208,8 @@ mod_chart_builder_server <- function(id, data, source, dataset_name = reactive("
     })
 
     observeEvent(input$add, {
-      d <- agg()
+      spec_applied(spec_now())   # Add to report takes the fields as they are
+      d <- isolate(agg())
       if (is.null(d) || !nrow(d)) {
         showNotification("Nothing to add yet: choose the columns first.", type = "warning")
         return()

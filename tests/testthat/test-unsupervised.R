@@ -95,7 +95,7 @@ test_that("Targeting Design runs end to end without an outcome indicator", {
                     args = list(uploaded_df = shiny::reactiveVal(NULL), user_setup = setup,
                                 workspace = TargetWise:::workspace_new()), {
     assessment_df(df)
-    session$setInputs(framework_mode = "none", rank_label = "Vulnerability after the floods")
+    session$setInputs(framework_mode = "none", rank_label = "Vulnerability after the floods", fw_validate_none = 1)
     expect_true(no_outcome())
     res <- screened()
     expect_false(is.null(res))
@@ -118,7 +118,7 @@ test_that("Targeting Design runs end to end without an outcome indicator", {
     do.call(session$setInputs, stats::setNames(as.list(seq_len(3) %in% tg), paste0("tgt_", seq_len(3))))
     session$setInputs(cluster_apply = 1)
     expect_setequal(fitted()$index$target, tg)
-    session$setInputs(threshold = unsupervised_start_threshold(fitted(), scored()$score))
+    session$setInputs(threshold = unsupervised_start_threshold(fitted(), scored()$score), thr_apply = 1)
     expect_true(any(grepl("rationale for the ranking", missing_steps())))
     session$setInputs(tol_rationale = "<p>Profiles agreed with the cluster; verification sample planned.</p>")
     expect_length(missing_steps(), 0)
@@ -289,7 +289,7 @@ test_that("without an outcome only names and identifiers are blocked", {
                     args = list(uploaded_df = shiny::reactiveVal(NULL), user_setup = shiny::reactiveValues(),
                                 workspace = TargetWise:::workspace_new()), {
     assessment_df(demo())
-    session$setInputs(framework_mode = "none")
+    session$setInputs(framework_mode = "none", fw_validate_none = 1)
     expect_true("FSI_CARI2_2class" %in% screened()$criterion)     # an outcome indicator may rank
     session$setInputs(framework_mode = "outcome")
     expect_false("FSI_CARI2_2class" %in% eligible_criteria())
@@ -303,7 +303,7 @@ test_that("the analyst can allow a blocked column back, and it is recorded", {
                     args = list(uploaded_df = shiny::reactiveVal(NULL), user_setup = shiny::reactiveValues(),
                                 workspace = TargetWise:::workspace_new(), modification_log = log), {
     assessment_df(demo())
-    session$setInputs(outcome_col = "FSI_CARI2_2class", outcome_pos = "Food insecure")
+    session$setInputs(outcome_col = "FSI_CARI2_2class", outcome_pos = "Food insecure", fw_validate = 1)
     blocked <- overridable()
     expect_true(length(blocked) > 0)
     col <- setdiff(blocked, "FSI_CARI2_2class")[1]

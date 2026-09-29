@@ -107,19 +107,24 @@ mod_scorecard_ui <- function(id) {
                          " be measured: the design reports internal consistency and the stability of the selection instead."),
                   tags$p(class = "small text-muted mb-2",
                          "Plan a small verification sample (a light food-security module) or use the PDM to measure the errors later."),
-                  tags$div(style = "max-width: 520px;",
-                           textInput(ns("rank_label"), "What the ranking stands for",
-                                     placeholder = "e.g. Economic vulnerability after the floods", width = "100%"))))),
+                  tags$div(
+                    class = "d-flex flex-wrap align-items-end gap-2",
+                    tags$div(style = "flex: 0 1 520px;",
+                             textInput(ns("rank_label"), "What the ranking stands for",
+                                       placeholder = "e.g. Economic vulnerability after the floods", width = "100%")),
+                    tags$div(class = "mb-3", actionButton(ns("fw_validate_none"), "Validate", icon = icon("check"), class = "btn-primary"))),
+                  uiOutput(ns("fw_note_none"))))),
             with_outcome(
             binary_only(
             tags$p(class = "text-muted",
                    "Pick the food-security outcome the scorecard should predict, and",
                    " which of its two levels means a vulnerable household."),
-            bslib::layout_columns(
-              col_widths = c(6, 6), fill = FALSE,
-              selectInput(ns("outcome_col"), "Outcome variable", choices = NULL, width = "100%"),
-              selectInput(ns("outcome_pos"), "Level meaning 'vulnerable'", choices = NULL, width = "100%")
-            ),
+            tags$div(
+              class = "d-flex flex-wrap align-items-end gap-2",
+              tags$div(style = "flex: 1 1 260px;", selectInput(ns("outcome_col"), "Outcome variable", choices = NULL, width = "100%")),
+              tags$div(style = "flex: 1 1 260px;", selectInput(ns("outcome_pos"), "Level meaning 'vulnerable'", choices = NULL, width = "100%")),
+              tags$div(class = "mb-3", actionButton(ns("fw_validate"), "Validate", icon = icon("check"), class = "btn-primary"))),
+            uiOutput(ns("fw_note")),
             uiOutput(ns("outcome_summary"))),
             pmt_only(pmt_framework_ui(ns)),
             # Where the vulnerable households are: the share by first-level area.
@@ -327,7 +332,8 @@ mod_scorecard_ui <- function(id) {
             ),
             tags$div(class = "small text-muted mb-3",
                      textOutput(ns("model_note"), inline = TRUE), " ",
-                     textOutput(ns("scheme_note"), inline = TRUE)),
+                     textOutput(ns("scheme_note"), inline = TRUE), " ",
+                     uiOutput(ns("scheme_apply_ui"), inline = TRUE)),
             uiOutput(ns("fit_note")),
             uiOutput(ns("runs_ui")),
             hr(),
@@ -396,6 +402,9 @@ mod_scorecard_ui <- function(id) {
                     actionButton(ns("thr_caseload"), "Fit to caseload",
                                  icon = icon("people-group"), class = "btn-outline-primary btn-sm"),
                     "Sets the threshold so no more than the caseload share of households is eligible.")),
+                tags$div(class = "d-flex flex-wrap align-items-center gap-2 mb-2",
+                         actionButton(ns("thr_apply"), "Apply", icon = icon("check"), class = "btn-primary btn-sm"),
+                         uiOutput(ns("thr_stale"), inline = TRUE)),
                 tags$div(class = "small text-muted pb-2", textOutput(ns("thr_note"))),
                 pmt_only(tags$div(class = "small pb-2", uiOutput(ns("pmt_thr_note"))))
               ),
@@ -662,7 +671,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
                    "stepwise", "stepwise_ic",
                    "corr_cutoff", "tol_lower", "tol_upper", "tol_rationale", "caseload_pct", "vuln_area",
                    "framework_mode", "rank_label", "anchor", "cov_area",
-                   "pmt_welfare", "pmt_unit", "pmt_size", "pmt_line_mode", "pmt_line", "pmt_share", "pmt_numeric")
+                   "pmt_welfare", "pmt_unit", "pmt_size", "pmt_line_mode", "pmt_line", "pmt_share")
 
     workspace_register(workspace, "scorecard",
       snapshot = function() {
@@ -674,10 +683,11 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
              criteria = criteria_sel(), corr_suggest = corr_suggest(), selection_applied = selection_applied(),
              fitted = fitted(), split = split_state(), bench = bench(), effects = effects(),
              runs = runs(), current_run = current_run(), points = pts,
-             threshold = input$threshold, step = input$steps, quick_screen = qs_result(), review = review(),
+             threshold = thr_applied(), step = input$steps, quick_screen = qs_result(), review = review(),
              exceed_note = exceed_note(), stability = stability(),
              model_params = shiny::reactiveValuesToList(model_params),
-             allowed_blocked = allowed_blocked(), allowed_reason = allowed_reason(), pmt_applied = pmt_applied())
+             allowed_blocked = allowed_blocked(), allowed_reason = allowed_reason(), pmt_applied = pmt_applied(),
+             fw_applied = fw_applied(), pmt_numeric = pmt_numeric_sel(), tol_applied = tol_applied())
       },
       restore = function(s) {
         restoring(s)
@@ -688,6 +698,11 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
         stability(s$stability)
         allowed_blocked(s$allowed_blocked %||% character(0))
         pmt_applied(s$pmt_applied)
+        # sessions from before validation: what was on screen counted
+        fw_applied(s$fw_applied %||% (if (!is.null(s$inputs)) list(mode = s$inputs$framework_mode %||% "outcome",
+                                                                    outcome_col = s$inputs$outcome_col %||% "",
+                                                                    outcome_pos = s$inputs$outcome_pos %||% "")))
+        tol_applied(s$tol_applied %||% c(as.numeric(s$inputs$tol_lower %||% TOL_DEFAULT[1]), as.numeric(s$inputs$tol_upper %||% TOL_DEFAULT[2])))
         # older sessions kept one note for all
         ar <- s$allowed_reason %||% character(0)
         if (length(ar) == 1 && is.null(names(ar))) ar <- stats::setNames(rep(ar, length(allowed_blocked())), allowed_blocked())
@@ -733,7 +748,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
           updateSelectInput(session, "pmt_size", choices = c("(none)" = "", cols), selected = i$pmt_size %||% "")
           for (k in c("pmt_unit", "pmt_line_mode")) if (!is.null(i[[k]])) updateSelectInput(session, k, selected = i[[k]])
           for (k in c("pmt_line", "pmt_share")) if (length(i[[k]]) == 1) updateNumericInput(session, k, value = i[[k]])
-          shinyWidgets::updatePickerInput(session, "pmt_numeric", choices = cols, selected = i$pmt_numeric)
+          pmt_num_default(s$pmt_numeric %||% i$pmt_numeric)
         }
         for (k in c("corr_cutoff", "qs_alpha", "tol_lower", "tol_upper", "caseload_pct")) {
           if (length(i[[k]]) == 1 && is.finite(suppressWarnings(as.numeric(i[[k]])))) updateNumericInput(session, k, value = i[[k]])
@@ -858,7 +873,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
     output$nav_screening <- renderUI({
       res <- screened()
       use <- if (is.null(res)) character(0) else res$criterion[use_now()]
-      if (pmt()) use <- c(use, setdiff(input$pmt_numeric, use))
+      if (pmt()) use <- c(use, setdiff(pmt_numeric_sel(), use))
       sent <- isTRUE(selection_applied()) && setequal(use, ready_criteria())
       step_nav("nav_back_screening", "Back to Vulnerability Framework", length(use) > 0,
                paste0(sprintf("%d criteria ticked", length(use)), if (sent) ": sent to the model." else "."),
@@ -973,7 +988,8 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
     pmt_now <- function() list(welfare = input$pmt_welfare %||% "", unit = input$pmt_unit %||% "hh",
                                size = input$pmt_size %||% "", mode = input$pmt_line_mode %||% "value",
                                line = suppressWarnings(as.numeric(input$pmt_line %||% NA)),
-                               share = suppressWarnings(as.numeric(input$pmt_share %||% NA)))
+                               share = suppressWarnings(as.numeric(input$pmt_share %||% NA)),
+                               weights = input$model_weights %||% "")
     observeEvent(input$pmt_validate, {
       df <- assessment_df(); need_ok(!is.null(df), "Load the assessment data first.")
       st <- pmt_now()
@@ -984,6 +1000,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
                                                "Enter the share of households below the line (between 0 and 100).")
       else need_ok(isTRUE(is.finite(st$line) && st$line > 0), "Enter the poverty line per person (above zero).")
       pmt_applied(st)
+      fw_applied(list(mode = "pmt", outcome_col = "", outcome_pos = ""))
       audit_add(modification_log, "Design", "PMT setup validated",
                 sprintf("Welfare %s (%s), poverty line %s", st$welfare, if (identical(st$unit, "pc")) "per person" else paste("per household /", st$size),
                         if (identical(st$mode, "share")) sprintf("at the poorest %s%%", st$share) else fmt5(st$line)))
@@ -992,7 +1009,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
       a <- pmt_applied()
       if (is.null(a)) return(tags$div(class = "small text-muted mb-2", bsicons::bs_icon("info-circle"),
                                       " Set the welfare variable and the poverty line, then Validate: the analysis starts from there."))
-      if (!identical(a, pmt_now())) return(tags$div(class = "small text-warning mb-2", bsicons::bs_icon("exclamation-circle"),
+      if (!identical(a[setdiff(names(a), "weights")], pmt_now()[setdiff(names(a), "weights")])) return(tags$div(class = "small text-warning mb-2", bsicons::bs_icon("exclamation-circle"),
                                                     " The setup changed since it was validated: Validate again to apply it."))
       NULL
     })
@@ -1011,29 +1028,63 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
       a <- pmt_applied(); req(a)
       if (identical(a$mode, "share")) {
         req(isTRUE(is.finite(a$share) && a$share > 0 && a$share < 100))
-        pmt_line_from_share(pmt_pc(), a$share / 100, model_weight_vec(assessment_df()))
+        df <- assessment_df()
+        pmt_line_from_share(pmt_pc(), a$share / 100, if (nzchar(a$weights %||% "") && a$weights %in% names(df)) df[[a$weights]])
       } else {
         req(isTRUE(is.finite(a$line) && a$line > 0)); a$line
       }
     })
+    # The framework counts once validated: choosing the outcome, the level,
+    # the mode or the welfare setup computes nothing until Validate.
+    fw_applied <- reactiveVal(NULL)
+    fw_now <- function() list(mode = input$framework_mode %||% "outcome", outcome_col = input$outcome_col %||% "",
+                              outcome_pos = input$outcome_pos %||% "")
+    fw_is <- function(mode) { a <- fw_applied(); !is.null(a) && identical(a$mode, mode) && identical(input$framework_mode %||% "outcome", mode) }
+    validate_framework <- function() {
+      df <- assessment_df(); need_ok(!is.null(df), "Load the assessment data first.")
+      st <- fw_now()
+      if (identical(st$mode, "outcome")) {
+        need_ok(nzchar(st$outcome_col) && st$outcome_col %in% names(df), "Choose the outcome variable.")
+        need_ok(nzchar(st$outcome_pos), "Choose the level that means vulnerable.")
+      }
+      fw_applied(st)
+      audit_add(modification_log, "Design", "Vulnerability framework validated",
+                switch(st$mode, none = "No outcome indicator: vulnerability ranking",
+                       pmt = "Welfare measure: proxy means test",
+                       sprintf("Outcome %s, vulnerable = %s", st$outcome_col, st$outcome_pos)))
+    }
+    observeEvent(input$fw_validate, validate_framework())
+    observeEvent(input$fw_validate_none, validate_framework())
+    fw_stale_note <- function() {
+      a <- fw_applied()
+      if (is.null(a) || !identical(a$mode, input$framework_mode %||% "outcome"))
+        return(tags$div(class = "small text-muted mb-2", bsicons::bs_icon("info-circle"), " Click Validate: the design starts from there."))
+      if (identical(a$mode, "outcome") && !identical(a, fw_now()))
+        return(tags$div(class = "small text-warning mb-2", bsicons::bs_icon("exclamation-circle"),
+                        " The outcome changed since it was validated: Validate again to apply it."))
+      NULL
+    }
+    output$fw_note <- renderUI(fw_stale_note())
+    output$fw_note_none <- renderUI(fw_stale_note())
     outcome_binary <- reactive({
       df <- assessment_df()
-      if (pmt()) return(pmt_poor(pmt_pc(), pmt_line_value()))
-      req(!no_outcome(), df, shiny::isTruthy(input$outcome_col), input$outcome_col %in% names(df))
-      as_binary_outcome(df[[input$outcome_col]], input$outcome_pos)
+      if (pmt()) { req(fw_is("pmt")); return(pmt_poor(pmt_pc(), pmt_line_value())) }
+      a <- fw_applied()
+      req(!no_outcome(), df, fw_is("outcome"), a$outcome_col %in% names(df))
+      as_binary_outcome(df[[a$outcome_col]], a$outcome_pos)
     })
     # The column the outcome comes from, and its "vulnerable" level, whatever the framework.
-    oc <- function() if (pmt()) pmt_applied()$welfare %||% "" else input$outcome_col %||% ""
+    oc <- function() if (pmt()) pmt_applied()$welfare %||% "" else fw_applied()$outcome_col %||% ""
     # PMT words for the generic ones on the page (poor, leakage, under-coverage)
     W <- function(x) if (isTRUE(pmt())) pmt_wording(x) else x
     grp_of <- function(y) ifelse(y == 1, W("Vulnerable"), W("Not vulnerable"))
     vn_cols <- function() stats::setNames(c("#c5192d", "#3f7e44"), W(c("Vulnerable", "Not vulnerable")))
-    opos <- function() if (pmt()) "at or below the poverty line" else input$outcome_pos %||% ""
+    opos <- function() if (pmt()) "at or below the poverty line" else fw_applied()$outcome_pos %||% ""
     framework_ready <- reactive({
       if (is.null(assessment_df())) return(FALSE)
-      if (no_outcome()) return(TRUE)
-      if (pmt()) return(!is.null(tryCatch(outcome_binary(), error = function(e) NULL)))
-      shiny::isTruthy(input$outcome_col)
+      if (no_outcome()) return(fw_is("none"))
+      if (pmt()) return(fw_is("pmt") && !is.null(tryCatch(outcome_binary(), error = function(e) NULL)))
+      fw_is("outcome")
     })
     card_kind <- function() if (no_outcome()) "ranking" else if (pmt()) "pmt" else "scorecard"
     # What a PMT card carries besides its points: turning a score back into
@@ -1095,25 +1146,36 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
             tags$td(class = "small", rq$detail[i])))))))
     })
     # Numeric proxies: every observable number, household size first.
-    observeEvent(list(assessment_df(), input$pmt_welfare, input$pmt_size, input$framework_mode), {
-      df <- assessment_df(); req(df, pmt())
-      cand <- pmt_numeric_candidates(df, exclude = c(input$pmt_welfare, input$model_weights))
-      sz <- input$pmt_size
-      if (shiny::isTruthy(sz) && sz %in% names(df)) cand <- unique(c(sz, cand))
-      cur <- rs_in("pmt_numeric") %||% isolate(input$pmt_numeric)
-      sel <- if (length(cur)) intersect(cur, cand) else intersect(sz, cand)
-      shinyWidgets::updatePickerInput(session, "pmt_numeric", choices = cand, selected = sel)
+    # Numeric proxies: every observable number, profiled once when the setup
+    # is validated; ticking one computes nothing.
+    pmt_num_prof <- reactiveVal(NULL)
+    pmt_num_default <- reactiveVal(NULL)     # ticks from a saved session
+    pnum_id <- function(cl) paste0("pnum_", gsub("[^A-Za-z0-9]", "_", cl))
+    observeEvent(list(pmt_applied(), assessment_df()), {
+      df <- assessment_df(); a <- pmt_applied()
+      if (is.null(df) || is.null(a)) { pmt_num_prof(NULL); return() }
+      cand <- pmt_numeric_candidates(df, exclude = c(a$welfare, a$weights))
+      if (nzchar(a$size %||% "") && a$size %in% names(df)) cand <- unique(c(a$size, cand))
+      pc <- tryCatch(pmt_pc(), error = function(e) NULL)
+      if (!length(cand) || is.null(pc)) { pmt_num_prof(NULL); return() }
+      d <- pmt_numeric_profile(df, cand, pc)
+      keep <- pmt_num_default() %||% isolate(pmt_numeric_sel())
+      d$use <- if (length(keep)) d$proxy %in% keep else d$proxy %in% a$size
+      pmt_num_prof(d)
+    })
+    pmt_numeric_sel <- reactive({
+      d <- pmt_num_prof(); if (is.null(d)) return(character(0))
+      d$proxy[vapply(seq_len(nrow(d)), function(i) { v <- input[[pnum_id(d$proxy[i])]]; if (is.null(v)) isTRUE(d$use[i]) else isTRUE(v) }, logical(1))]
     })
     output$pmt_numeric_table <- renderUI({
-      cols <- input$pmt_numeric
-      if (!length(cols)) return(NULL)
-      pc <- tryCatch(pmt_pc(), error = function(e) NULL); req(pc)
-      d <- pmt_numeric_profile(assessment_df(), cols, pc)
+      d <- pmt_num_prof()
+      if (is.null(d)) return(tags$div(class = "small text-muted", "Validate the welfare setup (Vulnerability Framework) to list the numeric proxies."))
       tags$div(class = "wfp-model-table-wrap mt-2", tags$table(
         class = "wfp-model-table",
-        tags$thead(tags$tr(tags$th("Proxy"), tags$th(class = "num", "Average"), tags$th(class = "num", "Missing"),
+        tags$thead(tags$tr(tags$th(class = "text-center", "Use"), tags$th("Proxy"), tags$th(class = "num", "Average"), tags$th(class = "num", "Missing"),
                            tags$th(class = "num", tagList("Correlation with log welfare", info_tip("Negative: households with more of it are poorer (an inclusion proxy, as household size usually is)."))))),
         tags$tbody(lapply(seq_len(nrow(d)), function(i) tags$tr(
+          tags$td(class = "text-center", checkboxInput(ns(pnum_id(d$proxy[i])), NULL, value = isTRUE(d$use[i]))),
           tags$td(class = "tw-var", tags$strong(d$proxy[i])),
           tags$td(class = "num", sprintf("%.2f", d$mean[i])),
           tags$td(class = "num", sprintf("%.0f%%", 100 * d$missing[i])),
@@ -1328,11 +1390,11 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
     # left out), rebuilt when the outcome or the data change -- including when
     # a suggested yes/no version is created. Those with a gap of 5 points or
     # more start ticked.
-    observeEvent(list(input$outcome_col, input$outcome_pos, assessment_df(), input$framework_mode, allowed_blocked(),
-                      tryCatch(outcome_binary(), error = function(e) NULL)), {
+    observeEvent(list(fw_applied(), pmt_applied(), assessment_df(), input$framework_mode, allowed_blocked()), {
       if (!is.null(isolate(restoring()))) return()
       df <- assessment_df()
       nof <- no_outcome()
+      if (!framework_ready()) { screened(NULL); fitted(NULL); return() }
       crit <- tryCatch(if (nof) eligible_criteria() else setdiff(eligible_criteria(), oc()), error = function(e) character(0))
       y <- tryCatch(outcome_binary(), error = function(e) NULL)
       collinear(character(0)); analyst_dropped(character(0)); corr_suggest(NULL)
@@ -1608,7 +1670,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
     observeEvent(input$nav_next_screening, {
       res <- screened(); need_ok(!is.null(res), "Set the vulnerability framework first.")
       use <- use_now()
-      keep <- c(res$criterion[use], if (pmt()) setdiff(input$pmt_numeric, res$criterion))
+      keep <- c(res$criterion[use], if (pmt()) setdiff(pmt_numeric_sel(), res$criterion))
       need_ok(length(keep) > 0, if (pmt()) "Tick at least one variable in the Use column or choose a numeric proxy." else "Tick at least one variable in the Use column.")
       sug <- corr_suggest() %||% character(0)
       auto <- intersect(setdiff(res$criterion, keep), names(sug))
@@ -2023,7 +2085,13 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
 
     # Changing the scheme after fitting re-derives the points from the same
     # coefficients; no refit needed.
-    observeEvent(input$model_scheme, {
+    output$scheme_apply_ui <- renderUI({
+      f <- fitted()
+      if (is.null(f) || identical(f$scheme, input$model_scheme) || isTRUE(f$method %in% c("pca", "lda")) ||
+          identical(f$scheme, "pmt") || isTRUE(f$unsupervised)) return(NULL)
+      actionLink(ns("scheme_apply"), "Apply this scheme to the fitted model")
+    })
+    observeEvent(input$scheme_apply, {
       if (!is.null(isolate(restoring()))) return()
       f <- fitted()
       req(f)
@@ -2105,7 +2173,9 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
       tagList(
         tags$div(class = "d-flex justify-content-between align-items-center mb-2 gap-2",
                  tags$span(class = "small fw-bold text-uppercase", bsicons::bs_icon("table"), " Model estimates"),
-                 tags$div(class = "d-flex gap-2",
+                 tags$div(class = "d-flex gap-2 align-items-center",
+                          uiOutput(ns("points_stale"), inline = TRUE),
+                          actionButton(ns("apply_points"), "Apply points", icon = icon("check"), class = "btn-primary btn-sm"),
                           actionButton(ns("reset_weights"), "Reset to model values",
                                        icon = icon("rotate-left"), class = "btn-outline-secondary btn-sm"),
                           downloadButton(ns("dl_model_tables2"), "Export (Excel)",
@@ -2120,6 +2190,27 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
       )
     })
 
+    observeEvent(input$apply_points, {
+      f <- fitted(); need_ok(!is.null(f), "Fit the model first.")
+      old <- current_weights()$weight
+      v <- vapply(seq_len(nrow(f$weights)), function(i) {
+        x <- input[[paste0("w_", i)]]
+        if (is.null(x)) return(old[i])                      # a box not on the page keeps its value
+        x <- suppressWarnings(as.numeric(x)); if (length(x) == 1 && is.finite(x)) x else NA_real_ }, numeric(1))
+      need_ok(!anyNA(v) && all(v >= 0), "Every point must be a number of zero or more.")
+      saved_points(data.frame(weight = v, verifiable = TRUE, validated = FALSE))
+      ch <- which(abs(v - old) > 1e-9)
+      if (length(ch)) audit_add(modification_log, "Design", "Points edited",
+                                paste(sprintf("%s: %s -> %s", f$weights$criterion[ch], fmt5(old[ch]), fmt5(v[ch])), collapse = "; "))
+      showNotification("Edited points applied.", type = "message")
+    })
+    output$points_stale <- renderUI({
+      f <- fitted(); req(f)
+      w <- current_weights()$weight
+      v <- vapply(seq_along(w), function(i) { x <- input[[paste0("w_", i)]]; if (is.null(x) || is.na(x)) w[i] else as.numeric(x) }, numeric(1))
+      if (all(abs(v - w) < 1e-9)) return(NULL)
+      tags$span(class = "small text-warning", bsicons::bs_icon("exclamation-circle"), " Points edited: click Apply points.")
+    })
     observeEvent(input$reset_weights, {
       saved_points(NULL); weight_bump(weight_bump() + 1)
       showNotification("Weights reset to the fitted model values.", type = "message")
@@ -2134,10 +2225,8 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
       # Model step was not opened yet) the saved points stand in for it.
       sp <- saved_points()
       if (!is.null(sp) && nrow(sp) != nrow(wts)) sp <- NULL
-      wts$weight <- vapply(seq_len(nrow(wts)), function(i) {
-        v <- input[[paste0("w_", i)]]
-        if (!is.null(v) && !is.na(v)) as.numeric(v) else if (!is.null(sp)) sp$weight[i] else wts$weight[i]
-      }, numeric(1))
+      # the points count once applied (Apply points), not as they are typed
+      if (!is.null(sp)) wts$weight <- as.numeric(sp$weight)
       rv <- review()
       wts$verifiable <- vapply(wts$criterion, function(c) rv_value(rv, c, "obs"), logical(1))
       wts$validated <- vapply(wts$criterion, function(c) rv_value(rv, c, "cval"), logical(1))
@@ -2376,42 +2465,94 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
       d <- as.data.frame(table(round(s$score, 2)))
       names(d) <- c("score", "n")
       d$score <- as.numeric(as.character(d$score)); d$pct <- 100 * d$n / sum(d$n)
-      t <- input$threshold %||% 0
+      t <- thr_applied() %||% 0
       plotly::plot_ly(d, x = ~score, y = ~pct, type = "bar", marker = list(color = ifelse(d$score > t, "#0A6EB4", "#b8c4d0")),
                       customdata = ~n, hovertemplate = "%{x} weighted deprivations<br>%{y:.1f}% of households (%{customdata})<extra></extra>") |>
         plotly::layout(xaxis = list(title = "Weighted deprivations"), yaxis = list(title = "% of households", ticksuffix = "%"),
                        shapes = list(list(type = "line", x0 = t, x1 = t, y0 = 0, y1 = 1, yref = "paper", line = list(color = "#1f2a37", dash = "dash"))))
     })
-    # Profiles of the cluster methods: the table to choose the targeted ones.
+    # Profiles of the cluster methods: one table, one column per profile
+    # (most vulnerable first) with its Target tick, size and rank, and the
+    # ten criteria that separate the profiles most. Ticking computes nothing:
+    # the points are refitted when "Target the ticked profiles" is clicked.
+    profile_view <- reactive({
+      f <- fitted(); ix <- f$index; req(identical(ix$type, "cluster"))
+      pc <- profile_contrasts(ix$profiles, ix$size, f$n)
+      list(ix = ix, pc = pc, top = utils::head(order(-pc$v), 10))
+    })
     output$cluster_ui <- renderUI({
-      ix <- fitted()$index; req(identical(ix$type, "cluster"))
-      k <- ix$k; pr <- ix$profiles
-      ord <- ix$rank
-      top <- utils::head(order(-apply(pr, 1, stats::var)), 6)   # the criteria that differ most between profiles
+      pv <- profile_view(); ix <- pv$ix; pc <- pv$pc
+      k <- ix$k; pr <- ix$profiles; ord <- ix$rank; top <- pv$top
+      pct <- function(v) sprintf("%.0f%%", 100 * v)
+      tint <- function(d) {
+        a <- min(abs(d) / 0.4, 1) * 0.55
+        if (d >= 0) sprintf("background: rgba(10,110,180,%.2f)", a) else sprintf("background: rgba(247,184,37,%.2f)", a)
+      }
+      vmax <- max(pc$v[top], 1e-9)
+      rank_word <- function(r) if (r == 1) "most vulnerable" else if (r == k) "least vulnerable" else sprintf("rank %d of %d", r, k)
+      # which answer a criterion's percentage counts ("Yes", "1 - Oui", TRUE...)
+      df <- assessment_df()
+      counted <- function(cl) {
+        x <- df[[cl]]; if (is.null(x)) return(NA_character_)
+        if (is.logical(x)) return("TRUE")
+        if (is.numeric(x)) return("1")
+        v <- as.character(x); u <- sort(unique(v[!is.na(v) & nzchar(trimws(v))]))
+        if (length(u) != 2) return(NA_character_)
+        lv <- guess_positive_level(u)
+        unname(names(value_choices(lv, cl))[1] %||% lv)
+      }
+      head_of <- function(j) tags$th(
+        class = "num wfp-prof-head",
+        checkboxInput(ns(paste0("tgt_", j)), sprintf("Profile %d", j), value = j %in% ix$target),
+        tags$div(class = "small fw-normal", sprintf("%s of households", pct(ix$size[j]))),
+        tags$div(class = paste("small fw-normal", if (match(j, ord) == 1) "text-danger" else "text-muted"), rank_word(match(j, ord))))
       bslib::card(
         bslib::card_header(bsicons::bs_icon("people"), sprintf(" %d household profiles", k),
-                           info_tip("Profiles are listed from the most to the least vulnerable, judged on the anchor-oriented first component. Tick the ones to target and apply: the points are refitted to reproduce them.")),
+                           info_tip("Profiles are ordered from the most to the least vulnerable, judged on the anchor-oriented first component. Rows: the ten criteria that separate the profiles most. Each cell is the share of the profile's households giving the answer named under the criterion, tinted blue above the average household and amber below. Tick the profiles to target, then click Target the ticked profiles: the points are refitted to reproduce them.")),
         bslib::card_body(
-          tags$div(class = "wfp-model-table-wrap", tags$table(
-            class = "wfp-model-table",
-            tags$thead(tags$tr(tags$th(class = "text-center", "Target"), tags$th("Profile"), tags$th(class = "num", "Households"),
-                               lapply(rownames(pr)[top], function(cr) tags$th(class = "num", cr)))),
-            tags$tbody(lapply(ord, function(j) tags$tr(
-              tags$td(class = "text-center", checkboxInput(ns(paste0("tgt_", j)), NULL, value = j %in% ix$target)),
-              tags$td(tags$strong(sprintf("Profile %d", j)), if (j == ord[1]) tags$span(class = "badge text-bg-danger ms-1", "most vulnerable")),
-              tags$td(class = "num", sprintf("%.0f%%", 100 * ix$size[j])),
-              lapply(top, function(i) tags$td(class = "num", sprintf("%.0f%%", 100 * pr[i, j])))))))),
+          tags$div(class = "wfp-model-table-wrap wfp-prof-wrap", tags$table(
+            class = "wfp-model-table wfp-prof-table",
+            tags$thead(tags$tr(
+              tags$th("Criterion"),
+              tags$th("Separates", info_tip(paste(
+                "How strongly the criterion tells the profiles apart: Cramer's V of the criterion against profile membership,",
+                "from 0 (every profile has the same share) to 1 (the criterion alone says which profile a household is in).",
+                "Above about 0.3 the criterion is one of the things that define the profiles; below 0.1 it hardly differs between them."))),
+              lapply(ord, head_of),
+              tags$th(class = "num", "All", info_tip("The share among all households, for comparison.")))),
+            tags$tbody(lapply(top, function(i) tags$tr(
+              # the label is written here in full, so the browser's labeller skips the cell (data-tw)
+              tags$td(class = "tw-var wfp-prof-var", `data-tw` = "1",
+                      tags$strong(rownames(pr)[i]),
+                      local({ l <- var_label(rownames(pr)[i]); if (!is.na(l) && nzchar(l)) tags$div(class = "tw-cell-label", l) }),
+                      local({ a <- counted(rownames(pr)[i]); if (!is.na(a)) tags$div(class = "small text-muted", sprintf("%% of households answering \u201c%s\u201d", a)) })),
+              tags$td(style = "min-width: 120px;", tags$div(class = "d-flex align-items-center gap-2",
+                      tags$div(class = "wfp-prof-bar flex-grow-1", tags$span(style = sprintf("width:%.0f%%;background:#0A6EB4", 100 * pc$v[i] / vmax))),
+                      tags$span(class = "small", sprintf("%.2f", pc$v[i])))),
+              lapply(ord, function(j) tags$td(class = "num", style = tint(pc$diff[i, j]), pct(pr[i, j]))),
+              tags$td(class = "num text-muted", pct(pc$overall[i]))))))),
+          tags$div(class = "d-flex justify-content-between align-items-center flex-wrap gap-2 mt-2",
+                   uiOutput(ns("profile_pick_note"), inline = TRUE),
+                   actionButton(ns("cluster_apply"), "Target the ticked profiles", icon = icon("check"), class = "btn-primary btn-sm")),
           tags$div(class = "small mt-2",
                    sprintf("Separation of the profiles (silhouette): %s", if (is.na(ix$silhouette %||% NA)) "n/a" else sprintf("%.2f", ix$silhouette)),
                    if (!is.null(ix$entropy)) sprintf(" \u00b7 classification certainty (entropy): %.2f", ix$entropy),
                    if (!is.null(ix$bic)) sprintf(" \u00b7 BIC: %s", format(round(ix$bic), big.mark = ",")),
                    " ", actionLink(ns("profile_quality"), "Compare 2 to 8 profiles")),
-          tags$div(class = "d-flex justify-content-between align-items-center flex-wrap gap-2 mt-2",
-                   tags$div(class = "small text-muted", "Columns: the criteria that differ most between profiles (share of households meeting each). All criteria are in the chart below.",
-                            if (!is.null(ix$fidelity)) tags$div(class = if (ix$fidelity < 0.8) "text-warning" else NULL,
-                              sprintf("The points reproduce the targeted profiles with an AUC of %.2f%s", ix$fidelity,
-                                      if (ix$fidelity < 0.8) ": the profiles are not a straight cut through the criteria; try another number of profiles or method." else "."))),
-                   actionButton(ns("cluster_apply"), "Target the ticked profiles", icon = icon("check"), class = "btn-outline-primary btn-sm"))))
+          if (!is.null(ix$fidelity)) tags$div(class = paste("small", if (ix$fidelity < 0.8) "text-warning" else "text-muted"),
+            sprintf("The points reproduce the targeted profiles with an AUC of %.2f%s", ix$fidelity,
+                    if (ix$fidelity < 0.8) ": the profiles are not a straight cut through the criteria; try another number of profiles or method." else "."))))
+    })
+    # What the ticks would target (counting only; nothing is refitted)
+    output$profile_pick_note <- renderUI({
+      pv <- profile_view(); ix <- pv$ix
+      pick <- which(vapply(seq_len(ix$k), function(j) isTRUE(input[[paste0("tgt_", j)]] %||% (j %in% ix$target)), logical(1)))
+      same <- setequal(pick, ix$target)
+      tags$span(class = "small",
+                if (!length(pick)) "No profile ticked." else
+                  sprintf("Ticked: profile%s %s, %.0f%% of households.", if (length(pick) > 1) "s" else "", paste(pick, collapse = ", "),
+                          100 * sum(ix$size[pick])),
+                if (!same && length(pick)) tags$span(class = "text-warning", " Click Target the ticked profiles to apply."))
     })
     # Households on the first two principal components of the criteria
     # (turned towards the anchor), coloured by profile or by selection.
@@ -2496,6 +2637,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
     output$cluster_plot <- render_wfp_plotly({
       ix <- fitted()$index; req(identical(ix$type, "cluster"))
       pr <- ix$profiles[, ix$rank, drop = FALSE]
+      pr <- pr[order(profile_contrasts(ix$profiles, ix$size, fitted()$n)$v), , drop = FALSE]   # strongest separators on top
       plotly::plot_ly(x = colnames(pr), y = rownames(pr), z = 100 * pr, type = "heatmap",
                       colors = grDevices::colorRamp(c("#f4f7fa", "#0A6EB4")), zmin = 0, zmax = 100,
                       hovertemplate = "%{y}<br>%{x}: %{z:.0f}% meet it<extra></extra>") |>
@@ -2609,7 +2751,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
       e
     }
     # the cut-off in predicted log welfare for the current threshold
-    pmt_cut <- function(f) f$intercept - (if (is.numeric(input$threshold)) input$threshold else f$threshold_line) / 100
+    pmt_cut <- function(f) f$intercept - (if (is.numeric(thr_applied())) thr_applied() else f$threshold_line) / 100
     # A PMT: predicted against measured log welfare per person on the
     # evaluation households, the line on both axes (the four quadrants are
     # the right calls and the two errors).
@@ -2896,8 +3038,8 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
         s <- safe(scored())
         rc <- safe(roc())
         wts <- if (is.null(f)) NULL else safe(current_weights())
-        lower <- (input$tol_lower %||% 5) / 100
-        upper <- (input$tol_upper %||% 20) / 100
+        lower <- (tol_applied()[1] %||% 5) / 100
+        upper <- (tol_applied()[2] %||% 20) / 100
         rl <- runs()
         runs_df <- if (length(rl)) data.frame(
           Run = vapply(rl, function(x) paste0("#", x$id, if (isTRUE(x$id == current_run()))
@@ -2924,11 +3066,11 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
                  median = stats::median(pc, na.rm = TRUE), n = sum(!is.na(pc)),
                  requirements = pmt_requirements(pc, pmt_poor(pc, line), per_person = identical(ap$unit, "pc"),
                                                  size_given = nzchar(ap$size %||% ""), n_proxies = length(criteria_sel())),
-                 numeric = intersect(input$pmt_numeric, criteria_sel()),
+                 numeric = intersect(pmt_numeric_sel(), criteria_sel()),
                  fit = if (!is.null(f$pmt)) f$pmt[setdiff(names(f$pmt), c("sample", "eval"))],
                  accuracy = safe(pmt_acc_now()),
                  comparison = if (isTRUE(bench()$pmt)) bench()$table,
-                 cutoff = if (!is.null(f$pmt) && is.numeric(input$threshold)) pmt_predicted_welfare(input$threshold, f$pmt$intercept))
+                 cutoff = if (!is.null(f$pmt) && is.numeric(thr_applied())) pmt_predicted_welfare(thr_applied(), f$pmt$intercept))
           }),
           n_outcome = sum(!is.na(y)), n_vuln = sum(y == 1, na.rm = TRUE),
           prevalence = if (is.null(y)) NA else mean(y == 1, na.rm = TRUE),
@@ -2966,7 +3108,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
           }),
           effects = if (!isTRUE(f$method %in% c("pca", "lda"))) safe(effects()),
           comparison = if (!pmt()) safe(live_bench()$table),
-          threshold = input$threshold, threshold_note = thr_msg(),
+          threshold = thr_applied(), threshold_note = thr_msg(),
           tolerance = c(lower, upper), rationale = input$tol_rationale,
           no_outcome = no_outcome(), rank_label = input$rank_label, stability = stability(),
           insights = if (no_outcome()) safe(sel_insights()), cov_area = if (no_outcome()) safe(cov_area_tab()), cov_area_col = input$cov_area,
@@ -2990,7 +3132,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
         plots <- design_report_plots(lang = report_lang(),
           weights = wts, roc = rc$curve, roc_point = pt,
           score = if (!is.null(s) && !is.null(r)) s$score[r], vulnerable = if (!is.null(y) && !is.null(r)) y[r] == 1,
-          threshold = input$threshold)
+          threshold = thr_applied())
         # Every chart of the design page, as static figures.
         kept <- if (is.null(screened())) character(0) else screened()$criterion[screened()$retained]
         b <- safe(live_bench())
@@ -2999,11 +3141,11 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
           df = df, criteria = kept, vulnerable = if (is.null(y)) NULL else y == 1,
           model_rocs = if (is.null(b)) NULL else b$roc,
           score = if (!is.null(s) && !is.null(r)) s$score[r],
-          threshold = input$threshold,
+          threshold = thr_applied(),
           detail = if (is.null(s)) NULL else s$detail,
           eligible = if (is.null(s)) NULL else s$eligible,
           directions = dirs, lang = report_lang()),
-          if (no_outcome() && !is.null(s)) ranking_report_plots(s$score, input$threshold, map = safe({
+          if (no_outcome() && !is.null(s)) ranking_report_plots(s$score, thr_applied(), map = safe({
             m <- map_data(); k <- seq_along(m$x); if (length(k) > 1500) k <- sort(sample(k, 1500))
             data.frame(x = m$x[k], y = m$y[k], group = m$group[k], xlab = m$xlab_short, ylab = m$ylab) }),
             cov_area = safe(cov_area_tab()), lang = report_lang()),
@@ -3013,7 +3155,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
         if (!is.null(s) && !is.null(r)) {
           # the boxplot compares groups on the evaluation households
           plots$box <- design_report_extra_plots(score = s$score[r], vulnerable = y[r] == 1,
-                                                 threshold = input$threshold, lang = report_lang())$box
+                                                 threshold = thr_applied(), lang = report_lang())$box
         }
         va <- x$vuln_area
         if (!is.null(va) && nrow(va)) {
@@ -3033,7 +3175,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
       wts <- current_weights()
       build_scorecard(wts, outcome = if (no_outcome()) NULL else if (pmt()) sprintf("PMT: log welfare per person (%s)", oc()) else input$outcome_col,
                       outcome_positive = if (no_outcome()) NULL else opos(),
-                      threshold = input$threshold %||% thr_pending() %||% 0,
+                      threshold = thr_applied() %||% thr_pending() %||% 0,
                       kind = card_kind(), pmt = pmt_card())
     })
 
@@ -3066,7 +3208,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
     })
     output$threshold_ui <- renderUI({
       mx <- score_max(); mn <- score_min()
-      v <- isolate(thr_pending() %||% input$threshold) %||% 0
+      v <- isolate(thr_pending() %||% thr_applied()) %||% 0
       sliderInput(ns("threshold"),
                   tagList("Eligible when score is above", info_tip("Households scoring strictly above this value are eligible. Moving it trades inclusion error against exclusion error.")),
                   min = mn, max = mx, value = min(max(mn, v), mx),
@@ -3079,12 +3221,33 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
       if (length(t) != 1 || !is.finite(t)) return(invisible(FALSE))
       t <- round(min(max(isolate(score_min()), t), isolate(score_max())), 5)
       updateSliderInput(session, "threshold", value = t)
+      thr_applied(t)
       invisible(TRUE)
     }
 
     # A new fit starts from the threshold that keeps both errors lowest,
     # rather than from 0 (everyone with any point eligible).
     thr_pending <- reactiveVal(NULL)
+    # The threshold and the tolerance band count once applied; the helper
+    # buttons (minimise errors, Youden, caseload, poverty line) apply theirs.
+    thr_applied <- reactiveVal(NULL)
+    tol_applied <- reactiveVal(as.numeric(TOL_DEFAULT))
+    observeEvent(input$thr_apply, {
+      t <- suppressWarnings(as.numeric(input$threshold))
+      lo <- suppressWarnings(as.numeric(input$tol_lower %||% tol_applied()[1])); up <- suppressWarnings(as.numeric(input$tol_upper %||% tol_applied()[2]))
+      need_ok(length(t) == 1 && is.finite(t), "Set the threshold first.")
+      need_ok(isTRUE(is.finite(lo) && is.finite(up) && lo >= 0 && up > lo && up < 50),
+              "The tolerance band needs a lower bound below the upper one, and an upper bound below 50%.")
+      thr_applied(t); tol_applied(c(lo, up))
+    })
+    output$thr_stale <- renderUI({
+      t <- suppressWarnings(as.numeric(input$threshold)); a <- thr_applied()
+      tol_now <- c(suppressWarnings(as.numeric(input$tol_lower %||% tol_applied()[1])), suppressWarnings(as.numeric(input$tol_upper %||% tol_applied()[2])))
+      same_t <- length(t) == 1 && !is.null(a) && isTRUE(all.equal(t, a))
+      if (same_t && isTRUE(all.equal(tol_now, tol_applied()))) return(NULL)
+      tags$span(class = "small text-warning", bsicons::bs_icon("exclamation-circle"),
+                " Threshold or tolerance changed: click Apply to update the errors and charts.")
+    })
     apply_balanced <- function(announce = TRUE) {
       s <- scored(); y <- outcome_binary(); r <- eval_rows()
       req(length(s$score) == length(y))
@@ -3202,7 +3365,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
 
     output$rank_plot <- render_wfp_plotly({
       s <- scored(); req(length(s$score))
-      t <- input$threshold %||% 0
+      t <- thr_applied() %||% 0
       d <- data.frame(score = s$score[!is.na(s$score)])
       plotly::plot_ly(d, x = ~score, type = "histogram", nbinsx = 30, marker = list(color = "#0A6EB4", line = list(color = "#ffffff", width = 0.5)),
                       hovertemplate = "Score %{x}<br>%{y} households<extra></extra>") |>
@@ -3246,7 +3409,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
     }
     observeEvent(input$thr_line, apply_line())
     output$pmt_thr_note <- renderUI({
-      f <- fitted()$pmt; t <- input$threshold
+      f <- fitted()$pmt; t <- thr_applied()
       req(f, is.numeric(t))
       w <- pmt_predicted_welfare(t, f$intercept)
       tagList(bsicons::bs_icon("cash-coin"), sprintf(" Eligible when predicted welfare per person is below %s (%.0f%% of the poverty line).",
@@ -3261,7 +3424,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
       y <- outcome_binary()
       req(length(s$score) == length(y))
       r <- eval_rows()
-      design_errors(s$score[r] > (input$threshold %||% 0), y[r] == 1)
+      design_errors(s$score[r] > (thr_applied() %||% 0), y[r] == 1)
     })
 
     # Threshold helpers (Advisory 3/2025). Both only move the slider.
@@ -3308,8 +3471,8 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
     })
     error_gauge <- function(which) {
       e <- errors(); req(e$n > 0)
-      lower <- (input$tol_lower %||% 5) / 100
-      upper <- (input$tol_upper %||% 20) / 100
+      lower <- (tol_applied()[1] %||% 5) / 100
+      upper <- (tol_applied()[2] %||% 20) / 100
       num <- function(x) format(round(x), big.mark = ",")
       # Error rate on a 0-50% track with the tolerance band drawn in: green
       # up to the lower bound, amber to the upper, red beyond.
@@ -3373,8 +3536,8 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
       n_novuln <- e$included_not_in_need + e$correctly_excluded
       num <- function(x) format(round(x), big.mark = ",")
       pct <- function(x, d) if (is.na(d) || d == 0) "-" else sprintf("%.1f%%", 100 * x / d)
-      lower <- (input$tol_lower %||% 5) / 100
-      upper <- (input$tol_upper %||% 20) / 100
+      lower <- (tol_applied()[1] %||% 5) / 100
+      upper <- (tol_applied()[2] %||% 20) / 100
 
       cell <- function(count, row_total, label, kind, icon_name) {
         tags$td(
@@ -3411,7 +3574,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
               tags$tr(
                 tags$th(class = "wfp-cm-rowgroup", rowspan = 2, tags$span(W("Scorecard"))),
                 tags$th(class = "wfp-cm-row", W("Eligible"),
-                        tags$div(class = "wfp-cm-sub", sprintf("score > %s", fmt5(input$threshold %||% 0)))),
+                        tags$div(class = "wfp-cm-sub", sprintf("score > %s", fmt5(thr_applied() %||% 0)))),
                 cell(e$correctly_included, n_elig, "Correctly included", "ok", "check-circle-fill"),
                 cell(e$included_not_in_need, n_elig, W("Inclusion error"), "err-incl", "x-circle-fill"),
                 tags$td(class = "wfp-cm-tot", num(n_elig), tags$div(class = "wfp-cm-sub", pct(n_elig, e$n)))
@@ -3442,8 +3605,8 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
 
     output$verdict <- renderUI({
       e <- errors()
-      lower <- (input$tol_lower %||% 5) / 100
-      upper <- (input$tol_upper %||% 20) / 100
+      lower <- (tol_applied()[1] %||% 5) / 100
+      upper <- (tol_applied()[2] %||% 20) / 100
       v <- tryCatch(error_verdict(e$inclusion_error, e$exclusion_error, lower, upper),
                     error = function(err) list(level = "invalid",
                                                interpretation = conditionMessage(err),
@@ -3466,7 +3629,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
       r <- roc()
       req(nrow(r$curve) > 0)
       cur <- r$curve
-      t_now <- input$threshold %||% 0
+      t_now <- thr_applied() %||% 0
       here <- cur[which.min(abs(cur$threshold - t_now)), , drop = FALSE]
 
       plotly::plot_ly() |>
@@ -3501,7 +3664,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
       d <- d[!is.na(d$group) & !is.na(d$score), , drop = FALSE]
       # Mirrored: vulnerable above the axis, not vulnerable below, each as a
       # share of its own group, so neither hides the other.
-      mirrored_hist_plot(d$score, y[!is.na(y) & !is.na(s$score)] == 1, input$threshold %||% 0, W("Scorecard score"), labels = W(c("Vulnerable", "Not vulnerable")))
+      mirrored_hist_plot(d$score, y[!is.na(y) & !is.na(s$score)] == 1, thr_applied() %||% 0, W("Scorecard score"), labels = W(c("Vulnerable", "Not vulnerable")))
     })
 
     # Weight times prevalence: the points a criterion actually contributes
@@ -3538,7 +3701,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
       req(length(s$score) == length(y))
       d <- data.frame(score = s$score, group = grp_of(y))
       d <- d[!is.na(d$group), , drop = FALSE]
-      t <- input$threshold %||% 0
+      t <- thr_applied() %||% 0
       plotly::plot_ly(d, y = ~score, x = ~group, color = ~group, type = "box",
                       colors = vn_cols(),
                       boxmean = TRUE, showlegend = FALSE) |>
@@ -3635,7 +3798,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
         list(key = "weights", label = panels[["weights"]], done = !is.null(fitted()),
              panel = "weights", todo = "Fit the model; iterate until satisfied."),
         list(key = "threshold", label = panels[["threshold"]],
-             done = !is.null(fitted()) && !is.null(input$threshold %||% thr_pending()),
+             done = !is.null(fitted()) && !is.null(thr_applied() %||% thr_pending()),
              panel = "threshold", todo = "Set the threshold and check the design errors."),
         list(key = "adopt", label = "Adopted", icon = "patch-check", done = adopted_current(),
              panel = "threshold", todo = "Record the rationale, then adopt the scorecard.")
@@ -3716,13 +3879,13 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
         if (!no_outcome() && !framework_ready()) if (pmt()) "choose the welfare variable and the poverty line" else "choose the outcome",
         if (!isTRUE(selection_applied()) || !length(ready_criteria())) "choose the criteria and send them to the model",
         if (is.null(fitted())) "fit the model",
-        if (is.null(input$threshold %||% thr_pending())) "set the threshold",
+        if (is.null(thr_applied() %||% thr_pending())) "set the threshold",
         if (no_outcome() && !nzchar(trimws(rich_text(input$tol_rationale %||% ""))))
           "record the rationale for the ranking and the threshold (no outcome: errors cannot be measured)",
         if (!no_outcome() && tol_changed() && !nzchar(trimws(rich_text(input$tol_rationale %||% ""))))
           sprintf("explain in the rationale why the tolerance band differs from the default (%s%% - %s%%)", TOL_DEFAULT[1], TOL_DEFAULT[2]))
     }
-    tol_changed <- function() !isTRUE(all.equal(c(as.numeric(input$tol_lower %||% TOL_DEFAULT[1]), as.numeric(input$tol_upper %||% TOL_DEFAULT[2])),
+    tol_changed <- function() !isTRUE(all.equal(c(as.numeric(tol_applied()[1] %||% TOL_DEFAULT[1]), as.numeric(tol_applied()[2] %||% TOL_DEFAULT[2])),
                                                 as.numeric(TOL_DEFAULT)))
 
     # Errors beyond the upper tolerance can still be adopted, with a short
@@ -3731,7 +3894,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
     exceed_note <- reactiveVal("")
     beyond_tolerance <- function() {
       e <- tryCatch(errors(), error = function(err) NULL)
-      up <- (input$tol_upper %||% TOL_DEFAULT[2]) / 100
+      up <- (tol_applied()[2] %||% TOL_DEFAULT[2]) / 100
       if (is.null(e)) return(character(0))
       c(if (isTRUE(e$inclusion_error > up)) sprintf("inclusion error %.1f%%", 100 * e$inclusion_error),
         if (isTRUE(e$exclusion_error > up)) sprintf("exclusion error %.1f%%", 100 * e$exclusion_error))
@@ -3750,7 +3913,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
           footer = tagList(modalButton("Cancel"),
                            actionButton(ns("adopt_confirm"), "Adopt with this explanation", icon = icon("check"), class = "btn-primary")),
           tags$p(sprintf("The %s %s above the upper tolerance of %s%%.", paste(over, collapse = " and "),
-                         if (length(over) > 1) "are" else "is", input$tol_upper %||% TOL_DEFAULT[2])),
+                         if (length(over) > 1) "are" else "is", tol_applied()[2] %||% TOL_DEFAULT[2])),
           textAreaInput(ns("exceed_text"), "Why adopt this design anyway? (shown in the design report and the scorecard workbook)",
                         value = exceed_note(), rows = 4, width = "100%",
                         placeholder = "e.g. No better design with the criteria available at registration; the programme will verify exclusion through community validation and the complaint mechanism.")))
@@ -3905,8 +4068,8 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
                            coverage = mean(s$eligible, na.rm = TRUE), inclusion_error = NA_real_, exclusion_error = NA_real_)
              else errors()
         r <- if (nof) list(auc = NA_real_, curve = NULL) else roc()
-        lower <- (input$tol_lower %||% 5) / 100
-        upper <- (input$tol_upper %||% 20) / 100
+        lower <- (tol_applied()[1] %||% 5) / 100
+        upper <- (tol_applied()[2] %||% 20) / 100
         v <- tryCatch(error_verdict(e$inclusion_error, e$exclusion_error, lower, upper),
                       error = function(err) list(interpretation = "n/a", action = "n/a"))
         pct <- function(x) if (is.na(x)) "n/a" else sprintf("%.1f%%", 100 * x)

@@ -445,3 +445,28 @@ ranking_profile_assign <- function(df, scorecard) {
   d <- vapply(seq_len(ncol(P)), function(j) rowSums(sweep(M, 2, P[, j])^2), numeric(nrow(M)))
   max.col(-matrix(d, nrow = nrow(M)), ties.method = "first")
 }
+
+#' What sets household profiles apart
+#'
+#' From the profiles' shares (criteria x profiles), their sizes and the
+#' number of households: the overall share of each criterion, how strongly
+#' it separates the profiles (Cramer's V of the criterion against profile
+#' membership; for a yes/no variable the chi-square is
+#' sum_j n_j (p_j - p)^2 / (p (1 - p))), and each profile against the rest
+#' of the households (difference in shares and a z statistic). Works on any
+#' saved fit, since it needs nothing else.
+#' @return list(overall, v, diff, z) with rows named by criterion.
+#' @noRd
+profile_contrasts <- function(profiles, size, n) {
+  p <- as.vector(profiles %*% size); names(p) <- rownames(profiles)
+  pv <- pmin(pmax(p, 1e-9), 1 - 1e-9)
+  nj <- n * size
+  chi <- rowSums(sweep((profiles - p)^2, 2, nj, "*")) / (pv * (1 - pv))
+  z <- vapply(seq_along(size), function(j) {
+    rest <- if (size[j] < 1) (p - profiles[, j] * size[j]) / (1 - size[j]) else p
+    se <- sqrt(pv * (1 - pv) * (1 / max(nj[j], 1) + 1 / max(n - nj[j], 1)))
+    (profiles[, j] - rest) / se
+  }, numeric(nrow(profiles)))
+  list(overall = p, v = sqrt(chi / n), diff = profiles - p,
+       z = matrix(z, nrow = nrow(profiles), dimnames = dimnames(profiles)))
+}

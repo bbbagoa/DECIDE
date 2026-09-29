@@ -36,6 +36,7 @@ dq_spelling_ui <- function(ns) {
             )
           )
         ),
+        tags$div(class = "pb-3", actionButton(ns("dq_names_check"), "Check names", icon = icon("magnifying-glass"), class = "btn-primary")),
         tags$div(
           class = "pb-2",
           tags$div(class = "small text-muted text-uppercase", style = "letter-spacing: .05em;", "Invalid records"),
@@ -77,11 +78,17 @@ dq_spelling_server <- function(input, output, session, ns, core) {
   ## -----------------------------------------------------------------------------------
 
   # 1. Define the reactive filter for 1GB data
+  # The columns are checked on Check names: picking them computes nothing.
+  name_cols <- reactiveVal(character(0))
+  observeEvent(input$dq_names_check, {
+    need_ok(length(input$dq_name_cols) > 0, "Choose the name columns to audit first.")
+    name_cols(input$dq_name_cols)
+  })
   bad_data_reactive <- reactive({
-    req(dq_filtered_data(), input$dq_name_cols, user_setup$unique_id)
+    req(dq_filtered_data(), length(name_cols()) > 0, user_setup$unique_id)
 
     # Perform the high-performance scan
-    find_bad_names(dq_filtered_data(), input$dq_name_cols)
+    find_bad_names(dq_filtered_data(), name_cols())
   })
 
   # 1. Update choices based on uploaded data
@@ -106,9 +113,9 @@ dq_spelling_server <- function(input, output, session, ns, core) {
   # Before a column is picked (or when every name is fine): say so, instead of
   # a blank tab. The actions wait for something to act on.
   output$dq_names_empty <- renderUI({
-    if (!length(input$dq_name_cols)) {
+    if (!length(name_cols())) {
       return(empty_state("Pick the name columns to audit",
-                         "Choose the columns holding names (head of household, alternates) above: records with missing or suspicious names are listed here.",
+                         "Choose the columns holding names (head of household, alternates) above, then click Check names: records with missing or suspicious names are listed here.",
                          icon = "spellcheck"))
     }
     bad <- tryCatch(bad_data_reactive(), error = function(e) NULL)
@@ -118,7 +125,7 @@ dq_spelling_server <- function(input, output, session, ns, core) {
     NULL
   })
   observe({
-    picked <- length(input$dq_name_cols) > 0
+    picked <- length(name_cols()) > 0
     bad <- if (picked) tryCatch(bad_data_reactive(), error = function(e) NULL)
     has_rows <- is.data.frame(bad) && nrow(bad) > 0
     gate_button("btn_open_edit", picked && length(input$dq_names_redflags_rows_selected) > 0,
@@ -130,14 +137,14 @@ dq_spelling_server <- function(input, output, session, ns, core) {
   # 2. Reactive table for "Bad Names"
   output$dq_names_redflags <- DT::renderDT(
     {
-      req(bad_data_reactive(), input$dq_name_cols)
+      req(bad_data_reactive(), name_cols())
 
-      cols <- isolate(input$dq_name_cols)
+      cols <- isolate(name_cols())
 
-      df <- isolate(find_bad_names(dq_filtered_data(), cols))
+      df <- bad_data_reactive()
       req(nrow(df) > 0)
 
-      # cols <- isolate(input$dq_name_cols)
+      # cols <- isolate(name_cols())
       # df <- isolate(bad_data_reactive())
       # req(df)
 
@@ -184,7 +191,7 @@ dq_spelling_server <- function(input, output, session, ns, core) {
   ## ------ Metric for % of bad names
 
   output$dq_names_metric <- renderUI({
-    req(dq_filtered_data(), input$dq_name_cols)
+    req(dq_filtered_data(), name_cols())
 
     # Use the same logic we used for the table filter
     total_records <- nrow(dq_filtered_data())
@@ -342,7 +349,7 @@ dq_spelling_server <- function(input, output, session, ns, core) {
           bslib::card(
             bslib::card_header("Edit values"),
             # Automatically generate inputs for all columns currently being audited
-            lapply(input$dq_name_cols, function(col) {
+            lapply(name_cols(), function(col) {
               textInput(
                 # MUST be namespaced: without ns() the input is created outside
                 # the module, input[["edit_<col>"]] below reads NULL, and the
@@ -468,7 +475,7 @@ dq_spelling_server <- function(input, output, session, ns, core) {
     # 1. Get current state
     df <- isolate(uploaded_df())
     filtered_df <- isolate(dq_filtered_data())
-    target_cols <- isolate(input$dq_name_cols)
+    target_cols <- isolate(name_cols())
     id_col <- user_setup$unique_id
 
     req(df, target_cols, id_col)
@@ -597,7 +604,7 @@ dq_spelling_server <- function(input, output, session, ns, core) {
     edit_reason <- if (shiny::isTruthy(edit_reason)) trimws(as.character(edit_reason)) else ""
 
     # 3. Process each audited column
-    for (col in input$dq_name_cols) {
+    for (col in name_cols()) {
       # Get values and ensure they are at least length 1 strings
       new_val <- as.character(input[[paste0("edit_", col)]] %||% "")
       old_val <- as.character(df[[col]][match_idx[1]] %||% "")
