@@ -1,5 +1,6 @@
 # TargetWise 1.0.0
 
+* After an update, no old version is served: `run_app()` stops with a clear message when the R session still holds the previous installation (restart R), and the app's styles and scripts are served under the installation time, so the browser fetches the new ones.
 * Welcome page: "Where to start" and "Methodological basis" sit side by side; the "What the app will not let you do" box is gone.
 * Monitoring report templates: "Save this report as a template" sits under the report button; saving can keep your comments and the context, findings and recommendations, which come back as the starting text when the template drafts the next round (the finding from the new numbers stays offered beside each comment). Templates can be exported to a file and imported, to share a standard report with colleagues or another office (charts and earlier rounds' figures, never the data; `template_json()`, `read_template_json()`).
 * The monitoring report's executive summary is a quiet strip of figures with hairline dividers and a small status dot, without boxes or thick borders.

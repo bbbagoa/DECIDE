@@ -114,7 +114,7 @@ source("install.R")
 - **By email.** On the repository page, click **Watch → Custom → Releases** (needs a free GitHub account).
 - **Offline users** receive the new offline installer from the maintainer.
 
-**How to update.** Close the app, restart R, and run `pak::pak("bbbagoa/TargetWise")` again (route A; the token saved in step 1 is reused), or `source("install.R")` from the new offline bundle (route B).
+**How to update.** Close the app, restart R, and run `pak::pak("bbbagoa/TargetWise")` again (route A; the token saved in step 1 is reused), or `source("install.R")` from the new offline bundle (route B). **Then restart R once more** before `TargetWise::run_app()`: an R session that had the old version loaded keeps running it. The app checks this itself: started from a session that loaded an older installation, it stops with *"TargetWise was updated after this R session loaded it. Restart R…"*. The browser cannot keep the old version either: the app's styles and scripts get new addresses with every installation.
 
 ### For the maintainer: the access token
 
