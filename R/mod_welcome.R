@@ -86,46 +86,29 @@ mod_welcome_ui <- function(tr = function(x) x) {
         )
       ),
 
-      # --- Where to start --------------------------------------------------
-      bslib::card(
-        class = "mb-4",
-        bslib::card_header(bsicons::bs_icon("signpost-split"), " ", tr("Where to start")),
-        bslib::card_body(
-          tags$ol(
-            class = "mb-0",
-            tags$li(tr("Designing a new targeting approach? Start with Targeting Design and load your assessment extract there.")),
-            tags$li(tr("Already have a design and need the beneficiary list? Go to Beneficiary Selection and load the registration data.")),
-            tags$li(tr("Checking a completed distribution? Go to Targeting Monitoring and load the PDM extract.")),
-            tags$li(tr("Each phase loads its own dataset. Nothing you load in one phase overwrites another."))
-          ),
-          tags$div(
-            class = "d-flex flex-wrap gap-2 mt-3",
-            actionButton("go_design", tr("Start a targeting design"),
-                         icon = icon("scale-balanced"), class = "btn-primary"),
-            actionButton("go_import", tr("Load registration data"),
-                         icon = icon("upload"), class = "btn-outline-primary"),
-            actionButton("go_monitor", tr("Open monitoring"),
-                         icon = icon("bullseye"), class = "btn-outline-secondary")
-          )
-        )
-      ),
-
-      # --- Method note + references ---------------------------------------
+      # --- Where to start, beside the methodological basis ------------------
       bslib::layout_columns(
         col_widths = c(7, 5), fill = FALSE, class = "mb-4",
 
         bslib::card(
           class = "wfp-lift",
-          bslib::card_header(bsicons::bs_icon("shield-check"), " ",
-                             tr("What the app will not let you do")),
+          bslib::card_header(bsicons::bs_icon("signpost-split"), " ", tr("Where to start")),
           bslib::card_body(
-            tags$p(
-              class = "small",
-              tr("Food-security outcome indicators (FCS, rCSI, LCSI, CARI, HHS and the like) measure the symptom of food insecurity, not a household's intrinsic vulnerability. They move with the season and with assistance itself, and if they are used to select households they can no longer be used to validate that selection.")
+            tags$ol(
+              class = "mb-0",
+              tags$li(tr("Designing a new targeting approach? Start with Targeting Design and load your assessment extract there.")),
+              tags$li(tr("Already have a design and need the beneficiary list? Go to Beneficiary Selection and load the registration data.")),
+              tags$li(tr("Checking a completed distribution? Go to Targeting Monitoring and load the PDM extract.")),
+              tags$li(tr("Each phase loads its own dataset. Nothing you load in one phase overwrites another."))
             ),
-            tags$p(
-              class = "small mb-0",
-              tr("They are therefore refused as eligibility criteria, in line with WFP Targeting Advisory 1/2025. Use them as the outcome your scorecard predicts.")
+            tags$div(
+              class = "d-flex flex-wrap gap-2 mt-3",
+              actionButton("go_design", tr("Start a targeting design"),
+                           icon = icon("scale-balanced"), class = "btn-primary"),
+              actionButton("go_import", tr("Load registration data"),
+                           icon = icon("upload"), class = "btn-outline-primary"),
+              actionButton("go_monitor", tr("Open monitoring"),
+                           icon = icon("bullseye"), class = "btn-outline-secondary")
             )
           )
         ),

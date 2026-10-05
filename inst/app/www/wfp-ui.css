@@ -2941,5 +2941,12 @@ td[data-tw], th[data-tw] { cursor: help; }
 .tw-pill-review { background: rgba(197, 25, 45, .12); color: #b0182a; }
 [data-bs-theme="dark"] .tw-pill-ok { background: rgba(92, 184, 100, .18); color: #8fd497; }
 [data-bs-theme="dark"] .tw-pill-review { background: rgba(240, 80, 95, .18); color: #ff9aa5; }
-.bootstrap-select .dropdown-menu li.selected > a { box-shadow: inset 3px 0 0 var(--wfp-blue, #0A6EB4); }
+/* Pickers: the chosen row is marked by the tick on its right only: no tint, no edge, no bold */
+.bootstrap-select .dropdown-menu li.selected > a,
+[data-bs-theme="dark"] .bootstrap-select .dropdown-menu li.selected > a {
+  background: transparent !important; box-shadow: none !important; color: inherit !important; font-weight: inherit; }
+.bootstrap-select .dropdown-menu li.selected > a:hover { background: rgba(128, 128, 128, .05) !important; }
+[data-bs-theme="dark"] .bootstrap-select .dropdown-menu li.selected > a:hover { background: rgba(255, 255, 255, .07) !important; }
+.bootstrap-select .dropdown-menu li.selected > a::after { color: var(--wfp-blue, #0A6EB4); }
+[data-bs-theme="dark"] .bootstrap-select .dropdown-menu li.selected > a::after { color: #8cc7f0; }
 table.dataTable td.tw-wide-cell, table.dataTable th.tw-wide-cell { min-width: 320px; white-space: normal; }
