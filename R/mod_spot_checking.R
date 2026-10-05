@@ -470,11 +470,11 @@ mod_spot_checking_server <- function(id, uploaded_df, user_setup, workspace = NU
 
         wb <- openxlsx::createWorkbook()
         xl_summary_sheet(wb, "Summary", "Spot-check sample",
-                         paste(c(user_setup$country_office, format(Sys.Date())), collapse = " \u00b7 "),
+                         paste(c(user_setup$country_office, fmt_date()), collapse = " \u00b7 "),
                          list(
                            "Sample" = c(
                              "Country office" = user_setup$country_office %||% "not set",
-                             "Exported" = format(Sys.time(), "%Y-%m-%d %H:%M"),
+                             "Exported" = fmt_datetime(),
                              "Exported by" = Sys.getenv("USERNAME", Sys.getenv("USER", "")),
                              sample_description(),
                              "Households in scope" = format(nrow(pool), big.mark = ","),
@@ -757,7 +757,7 @@ mod_spot_checking_server <- function(id, uploaded_df, user_setup, workspace = NU
         check.names = FALSE,
         stringsAsFactors = FALSE
       )
-      DT::datatable(out, rownames = FALSE,
+      tw_datatable(out, rownames = FALSE,
                     options = list(pageLength = 10, scrollX = TRUE, order = list()))
     })
 
@@ -765,14 +765,14 @@ mod_spot_checking_server <- function(id, uploaded_df, user_setup, workspace = NU
       r <- comparison(); req(r)
       d <- r$discordances
       if (nrow(d) == 0) {
-        return(DT::datatable(
+        return(tw_datatable(
           data.frame(Message = "No discordances found on the compared fields."),
           rownames = FALSE, options = list(dom = "t")
         ))
       }
       out <- d
       colnames(out) <- c(r$key_col, "Field", "Original round", "Verification round")
-      DT::datatable(out, rownames = FALSE, options = list(pageLength = 15, scrollX = TRUE))
+      tw_datatable(out, rownames = FALSE, options = list(pageLength = 15, scrollX = TRUE))
     })
 
     # Where the discordances sit (enumerator, areas) and what changes: for the
@@ -819,7 +819,7 @@ mod_spot_checking_server <- function(id, uploaded_df, user_setup, workspace = NU
         wb <- openxlsx::createWorkbook()
         pct <- function(v) if (is.null(v) || is.na(v)) "n/a" else sprintf("%.1f%%", 100 * v)
         sections <- list("Sample" = c("Country office" = user_setup$country_office %||% "not set",
-                                      "Exported" = format(Sys.time(), "%Y-%m-%d %H:%M"),
+                                      "Exported" = fmt_datetime(),
                                       sample_description(),
                                       "Households sampled" = format(nrow(sampled_data()), big.mark = ",")))
         if (is.null(r)) {
@@ -841,7 +841,7 @@ mod_spot_checking_server <- function(id, uploaded_df, user_setup, workspace = NU
                                                    "Below 90%" = "follow up with the enumerators")
         }
         xl_summary_sheet(wb, "Summary", "Spot-check back-check",
-                         paste(c(user_setup$country_office, format(Sys.Date())), collapse = " \u00b7 "), sections)
+                         paste(c(user_setup$country_office, fmt_date()), collapse = " \u00b7 "), sections)
         if (!is.null(r)) {
           fs <- r$field_summary
           by_field <- data.frame(Field = fs$variable, Compared = fs$compared, Agree = fs$agree, Disagree = fs$disagree,

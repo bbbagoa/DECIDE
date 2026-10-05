@@ -513,7 +513,11 @@ round5 <- function(x) {
 
 #' openxlsx::writeData with numbers rounded to 5 decimals
 #' @noRd
-write_data <- function(wb, sheet, x, ...) openxlsx::writeData(wb, sheet, export_text(round5(x)), ...)
+write_data <- function(wb, sheet, x, ...) {
+  # ISO date text becomes real dates, shown day / month / year (zzz.R)
+  if (is.data.frame(x)) x <- dates_from_text(x)
+  openxlsx::writeData(wb, sheet, export_text(round5(x)), ...)
+}
 
 #' A number with up to 5 decimals, no trailing zeros (2.93274, 4)
 #' @noRd
@@ -891,4 +895,82 @@ side_step <- function(title, icon_name, ..., value = NULL) {
 #' @noRd
 side_actions <- function(..., sticky = TRUE) {
   tags$div(class = paste("wfp-sb-actions", if (!sticky) "wfp-sb-actions-end"), ...)
+}
+
+# ---------------------------------------------------------------------------
+# Dates as the app shows them: day / month / year
+# ---------------------------------------------------------------------------
+# Dates are stored as ISO (2026-10-01), which sorts and parses safely; they are
+# SHOWN day first everywhere: pages, tables, reports, workbooks.
+DATE_FMT <- "%d/%m/%Y"
+DATETIME_FMT <- "%d/%m/%Y %H:%M"
+
+#' A date from a Date, a date-time, or text in ISO or day/month/year form
+#' @noRd
+as_date_any <- function(x) {
+  if (inherits(x, "Date")) return(as.Date(x))
+  if (inherits(x, "POSIXt")) return(as.Date(x, tz = attr(x, "tzone") %||% ""))
+  s <- trimws(as.character(x))
+  d <- suppressWarnings(as.Date(substr(s, 1, 10), format = "%Y-%m-%d"))
+  dmy <- is.na(d) & !is.na(s)
+  if (any(dmy)) d[dmy] <- suppressWarnings(as.Date(substr(s[dmy], 1, 10), format = "%d/%m/%Y"))
+  d
+}
+
+#' "01/10/2026" (empty for a missing date)
+#' @noRd
+fmt_date <- function(x = Sys.Date()) {
+  d <- as_date_any(x)
+  out <- format(d, DATE_FMT); out[is.na(d)] <- ""
+  out
+}
+
+#' "01/10/2026 14:05" from a date-time or ISO text ("2026-10-01 14:05:09")
+#' @noRd
+fmt_datetime <- function(x = Sys.time()) {
+  if (!inherits(x, "POSIXt")) {
+    s <- trimws(as.character(x))
+    x <- suppressWarnings(as.POSIXct(substr(s, 1, 19), tz = "", tryFormats = c("%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M")))
+  }
+  out <- format(x, DATETIME_FMT); out[is.na(x)] <- ""
+  out
+}
+
+#' Text columns that hold ISO dates or date-times, as Date / date-time
+#'
+#' Judged on up to 200 distinct values; anything else is left as it is.
+#' @noRd
+dates_from_text <- function(df) {
+  for (k in seq_along(df)) {
+    x <- df[[k]]
+    if (!is.character(x)) next
+    u <- utils::head(unique(x[!is.na(x) & nzchar(x)]), 200)
+    if (!length(u)) next
+    if (all(grepl("^[0-9]{4}-[0-9]{2}-[0-9]{2}$", u))) {
+      d <- suppressWarnings(as.Date(x, format = "%Y-%m-%d")); if (!anyNA(d[!is.na(x) & nzchar(x)])) df[[k]] <- d
+    } else if (all(grepl("^[0-9]{4}-[0-9]{2}-[0-9]{2}[ T][0-9]{2}:[0-9]{2}(:[0-9]{2})?", u))) {
+      d <- suppressWarnings(as.POSIXct(substr(x, 1, 19), tz = "", tryFormats = c("%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M")))
+      if (!anyNA(d[!is.na(x) & nzchar(x)])) df[[k]] <- d
+    }
+  }
+  df
+}
+
+#' DT::datatable() with dates shown day / month / year
+#'
+#' Date and date-time columns (and text columns holding ISO dates) are shown
+#' as 01/10/2026 and 01/10/2026, 14:05 by the browser, while the table still
+#' sorts them by date. Use it instead of DT::datatable() everywhere.
+#' @noRd
+tw_datatable <- function(data, ...) {
+  if (!is.data.frame(data)) return(DT::datatable(data, ...))
+  data <- dates_from_text(data)
+  w <- DT::datatable(data, ...)
+  is_d <- which(vapply(data, function(x) inherits(x, "Date"), logical(1)))
+  is_t <- which(vapply(data, function(x) inherits(x, "POSIXt"), logical(1)))
+  if (length(is_d)) w <- DT::formatDate(w, is_d, method = "toLocaleDateString", params = list("en-GB"))
+  if (length(is_t)) w <- DT::formatDate(w, is_t, method = "toLocaleString",
+                                        params = list("en-GB", list(year = "numeric", month = "2-digit", day = "2-digit",
+                                                                    hour = "2-digit", minute = "2-digit")))
+  w
 }

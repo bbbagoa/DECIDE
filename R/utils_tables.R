@@ -106,7 +106,7 @@ record_table <- function(df, settings, ns, view_id, extra_cols = character(0),
   }
   out[["Details"]] <- record_detail_buttons(keys, ns(view_id))
 
-  DT::datatable(
+  tw_datatable(
     out,
     rownames = FALSE,
     escape = FALSE,       # the Details column is markup

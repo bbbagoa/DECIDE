@@ -237,7 +237,7 @@ write_dq_report <- function(file, x, lang = "en") {
     captions = c(missing = if (nrow(f) > 15) "Empty answers by mapped field (the 15 highest)" else "Empty answers by mapped field"),
     lang = lang, title = "Data quality report", record = "Data quality record",
     meta = c("Country office" = x$country_office %||% "",
-             "Generated" = format(Sys.time(), "%Y-%m-%d %H:%M"),
+             "Generated" = fmt_datetime(),
              "Records" = num(x$n)),
     footer = "This record documents the quality of the registration data before selection.",
     blocks = list("@@TILES@@" = profile_tiles(dq_tiles(x), lang)))

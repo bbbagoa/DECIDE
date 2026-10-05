@@ -238,7 +238,7 @@ dq_missing_server <- function(input, output, session, ns, core) {
       ) |>
       dplyr::arrange(dplyr::desc(Missing_Count))
 
-    DT::datatable(
+    tw_datatable(
       health,
       colnames = c("Variable", "Empty Cells", "Completeness (%)", "Status"),
       options = list(pageLength = 20, dom = 'tip'),

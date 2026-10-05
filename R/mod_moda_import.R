@@ -655,7 +655,7 @@ mod_moda_import_server <- function(id, summary = TRUE) {
         show_moda_status("danger", info$message)
         return()
       }
-      when <- if (isTRUE(info$ok) && nzchar(info$last)) format(as.POSIXct(substr(info$last, 1, 19), format = "%Y-%m-%dT%H:%M:%S", tz = "UTC"), "%d %b %Y %H:%M") else NA
+      when <- if (isTRUE(info$ok) && nzchar(info$last)) format(as.POSIXct(substr(info$last, 1, 19), format = "%Y-%m-%dT%H:%M:%S", tz = "UTC"), DATETIME_FMT) else NA
       output$sync_status <- renderUI(tags$div(
         class = "wfp-moda-confirm mt-3",
         if (isTRUE(info$ok)) tagList(

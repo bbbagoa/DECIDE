@@ -172,7 +172,7 @@ mod_setup_server <- function(id, r_data, parent_session, trigger_open = reactive
       choices <- if (nrow(saved) == 0) {
         c("No saved profiles yet" = "")
       } else {
-        stats::setNames(saved$name, paste0(saved$name, "  (", format(saved$saved_at, "%Y-%m-%d %H:%M"), ")"))
+        stats::setNames(saved$name, paste0(saved$name, "  (", fmt_datetime(saved$saved_at), ")"))
       }
 
       bslib::card(

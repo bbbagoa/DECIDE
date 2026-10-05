@@ -130,3 +130,11 @@ test_that("level pickers list only the mapped levels, with their columns", {
   expect_equal(unname(ch), c("Admin 1", "Village"))
   expect_match(names(ch)[1], "Province")
 })
+
+test_that("too_many_options: a message above MAX_OPTIONS answers, NULL below", {
+  expect_null(too_many_options(c("a", "b", NA, ""), "x"))
+  many <- paste0("v", seq_len(MAX_OPTIONS + 5))
+  msg <- too_many_options(many, "Village")
+  expect_match(msg, "Too many options for Village (35 different answers)", fixed = TRUE)
+  expect_equal(n_options(factor(c("a", "a", NA))), 1)
+})

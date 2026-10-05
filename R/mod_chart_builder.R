@@ -23,7 +23,8 @@ mod_chart_builder_ui <- function(id, presets = names(chart_presets())) {
                                         selected = "chart", size = "sm", status = "outline-primary", justified = TRUE),
         selectInput(ns("type"), "Show", choices = chart_types(), width = "100%"),
         conditionalPanel(sprintf("input['%s'] !== 'table'", ns("display")),
-                         selectInput(ns("style"), "Chart style", choices = chart_styles(), width = "100%")),
+                         selectInput(ns("style"), "Chart style", choices = chart_styles(), width = "100%"),
+                         tags$div(class = "mb-2", axis_button(ns("axes")))),
         conditionalPanel(sprintf("input['%s'] !== 'trend'", ns("type")),
                          selectInput(ns("x"), "By", choices = character(0), width = "100%")),
         conditionalPanel(sprintf("input['%s'] === 'trend'", ns("type")),
@@ -62,7 +63,6 @@ mod_chart_builder_ui <- function(id, presets = names(chart_presets())) {
           textInput(ns("title"), "Title in the report", width = "100%"),
           rich_text_input(ns("comment"), "Your comment (what it shows, why it matters)", rows = 3,
                           placeholder = "e.g. Women made up 38% of participants in Beni, below the 50% target; sessions were held on market days."),
-          actionButton(ns("preview_go"), "Preview", icon = icon("eye"), class = "btn-outline-primary"),
           actionButton(ns("add"), "Add to report", icon = icon("plus"), class = "btn-primary")
         )
       )
@@ -127,15 +127,42 @@ mod_chart_builder_server <- function(id, data, source, dataset_name = reactive("
       if (length(missing)) showNotification(paste("Pick", paste(missing, collapse = " and "), "for this chart."), type = "warning")
     }, ignoreInit = TRUE)
 
-    # The chart is computed on Preview (or Add to report): changing a field,
-    # or picking a ready-made chart, computes nothing by itself.
-    spec_now <- function() list(type = input$type, x = input$x, group = input$group, value = input$value, den = input$den,
-                                date = input$date, period = input$period, filter_col = input$filter_col,
-                                filter_vals = input$filter_vals, pct = input$pct, style = input$style %||% "auto")
-    spec_applied <- reactiveVal(NULL)
-    observeEvent(input$preview_go, spec_applied(spec_now()))
-    spec <- reactive({ s <- spec_applied(); req(s); s })
-    agg <- reactive({ s <- spec_applied(); if (is.null(s)) return(NULL); tryCatch(chart_aggregate(data(), s), error = function(e) NULL) })
+    # The chart follows the fields as they change (the one exception to
+    # "settings wait for their button": a chart is cheap and seeing it is the
+    # point of choosing).
+    # the value axis, set in the Axes dialog (NA = automatic)
+    axes <- reactiveVal(list(ymin = NA_real_, ymax = NA_real_))
+    spec <- reactive(list(type = input$type, x = input$x, group = input$group, value = input$value, den = input$den,
+                          date = input$date, period = input$period, filter_col = input$filter_col,
+                          filter_vals = input$filter_vals, pct = input$pct, style = input$style %||% "auto",
+                          axis_min = axes()$ymin, axis_max = axes()$ymax))
+    # the axis bounds do not change the numbers: the aggregation ignores them
+    spec_data <- reactive(spec()[setdiff(names(spec()), c("axis_min", "axis_max"))])
+    # By and the split are drawn as categories: refuse one with too many options
+    too_many <- reactive({
+      df <- data(); sp <- spec_data(); if (is.null(df)) return(NULL)
+      keys <- c(if (!identical(sp$type, "trend")) sp$x, sp$group)
+      for (k in keys) if (shiny::isTruthy(k) && k %in% names(df)) {
+        lb <- var_label(k); msg <- too_many_options(df[[k]], if (is.na(lb) || !nzchar(lb)) k else lb)
+        if (!is.null(msg)) return(msg)
+      }
+      NULL
+    })
+    agg <- reactive({
+      if (!is.null(too_many())) return(NULL)
+      tryCatch(chart_aggregate(data(), spec_data()), error = function(e) NULL)
+    })
+    observeEvent(input$axes, {
+      d <- agg()
+      hint <- if (!is.null(d) && nrow(d)) {
+        a <- chart_auto_range(d, spec())
+        sprintf("Automatic now: %s to %s.", fmt5(signif(a[1], 3)), fmt5(signif(a[2], 3)))
+      }
+      showModal(axis_dialog(ns, "ax_", axes(), hint))
+    })
+    observeEvent(input$ax_apply, { axes(axis_read(input, "ax_")[c("ymin", "ymax")]); removeModal() })
+    observeEvent(input$ax_reset, { axes(list(ymin = NA_real_, ymax = NA_real_)); removeModal() })
+    observe(updateActionButton(session, "axes", label = if (any(is.finite(unlist(axes())))) "Axes (set)" else "Axes"))
 
     output$stat_note <- renderUI({
       sp <- spec()
@@ -150,10 +177,8 @@ mod_chart_builder_server <- function(id, data, source, dataset_name = reactive("
     output$preview_title <- renderText(if (nzchar(input$title %||% "")) input$title else "Preview")
     output$preview_empty <- renderUI({
       if (is.null(data())) return(empty_state("No data yet", "Load a dataset above to build charts.", icon = "cloud-upload"))
-      if (is.null(spec_applied())) return(tags$div(class = "small text-muted mb-2", "Choose the columns on the left, then click Preview."))
-      if (!identical(spec_applied(), spec_now())) return(tags$div(class = "small text-warning mb-2", bsicons::bs_icon("exclamation-circle"),
-                                                                  " The fields changed: click Preview to update the chart."))
-      if (is.null(agg())) return(tags$div(class = "small text-muted mb-2", "Nothing to chart with these columns: check the fields on the left."))
+      if (!is.null(too_many())) return(tags$div(class = "small text-warning mb-2", bsicons::bs_icon("exclamation-circle"), " ", too_many()))
+      if (is.null(agg())) return(tags$div(class = "small text-muted mb-2", "Choose the columns on the left to see the chart."))
       NULL
     })
     output$preview <- render_wfp_plotly({
@@ -182,11 +207,12 @@ mod_chart_builder_server <- function(id, data, source, dataset_name = reactive("
         p <- plotly::plot_ly(d, x = ~x, y = ~value, color = if (grp) ~group else I("#0A6EB4"), type = "bar",
                              text = ~value, textposition = "outside", cliponaxis = FALSE)
         if (grp && chart_stacks(sp)) p <- plotly::layout(p, barmode = "stack")
-        return(plotly::layout(p, xaxis = list(title = "", automargin = TRUE), yaxis = list(title = chart_value_label(sp)),
+        return(plotly::layout(p, xaxis = list(title = "", automargin = TRUE),
+                              yaxis = c(list(title = chart_value_label(sp)), axis_range_list(d, sp)),
                               legend = list(orientation = "h", x = 0, y = 1.08, xanchor = "left", yanchor = "bottom")))
       }
       if (st %in% c("line", "area")) {
-        if (!identical(sp$type, "trend")) d$x <- factor(d$x, levels = unique(d$x))
+        d$x <- factor(d$x, levels = unique(d$x))   # periods arrive in date order, shown day first
         p <- plotly::plot_ly(d, x = ~x, y = ~value, color = if (grp) ~group else I("#0A6EB4"),
                              type = "scatter", mode = "lines+markers", fill = if (identical(st, "area")) "tozeroy" else "none")
       } else {
@@ -196,20 +222,20 @@ mod_chart_builder_server <- function(id, data, source, dataset_name = reactive("
         if (grp && chart_stacks(sp)) p <- plotly::layout(p, barmode = "stack")
       }
       line <- st %in% c("line", "area")
-      plotly::layout(p, xaxis = list(title = if (line) "" else chart_value_label(sp)),
-                     yaxis = list(title = if (line) chart_value_label(sp) else "", automargin = TRUE),
+      plotly::layout(p, xaxis = c(list(title = if (line) "" else chart_value_label(sp)), if (!line) axis_range_list(d, sp)),
+                     yaxis = c(list(title = if (line) chart_value_label(sp) else "", automargin = TRUE), if (line) axis_range_list(d, sp)),
                      legend = list(orientation = "h", x = 0, y = 1.08, xanchor = "left", yanchor = "bottom"))
     })
 
     output$preview_table <- DT::renderDT({
       d <- agg(); req(d, nrow(d) > 0)
-      DT::datatable(chart_table(d, spec()), rownames = FALSE,
+      tw_datatable(chart_table(d, spec()), rownames = FALSE,
                     options = list(dom = "t", paging = FALSE, ordering = FALSE))
     })
 
     observeEvent(input$add, {
-      spec_applied(spec_now())   # Add to report takes the fields as they are
-      d <- isolate(agg())
+      d <- agg()
+      if (!is.null(too_many())) { showNotification(too_many(), type = "warning", duration = 8); return() }
       if (is.null(d) || !nrow(d)) {
         showNotification("Nothing to add yet: choose the columns first.", type = "warning")
         return()

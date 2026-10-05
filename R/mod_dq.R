@@ -30,7 +30,7 @@ mod_dq_ui <- function(id) {
                   options = shinyWidgets::pickerOptions(container = "body", actionsBox = TRUE, liveSearch = TRUE, size = 10))),
               side_step("2. Interview dates", "calendar-range",
                 shinyWidgets::airDatepickerInput(
-                  ns("dq_filter_date"), label = NULL, range = TRUE, autoClose = TRUE,
+                  ns("dq_filter_date"), label = NULL, range = TRUE, autoClose = TRUE, dateFormat = "dd/MM/yyyy",
                   placeholder = "All dates", width = "100%", addon = "none"))),
             side_actions(
               tags$div(

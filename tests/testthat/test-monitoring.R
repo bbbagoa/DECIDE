@@ -18,7 +18,7 @@ test_that("chart_aggregate counts, totals, averages, shares and trends", {
   sh <- agg(pm, list(type = "share", x = "province", value = "women", den = "participants_total"))
   expect_equal(sh$value[sh$x == "Ituri"], round(100 * 17 / 35, 2))
   tr <- agg(pm, list(type = "trend", date = "date", period = "month"))
-  expect_equal(tr$x, c("2026-01", "2026-02"))
+  expect_equal(tr$x, c("01/2026", "02/2026"))
   expect_equal(tr$value, c(2, 3))
   f <- agg(pm, list(type = "count", x = "province", filter_col = "activity", filter_vals = "FGD criteria"))
   expect_equal(sum(f$value), 2)
@@ -96,7 +96,7 @@ test_that("two half-width items sit side by side in the monitoring report", {
   expect_equal(lengths(regmatches(html, gregexpr('class="pair"', html))), 1)   # a+b paired, c alone
   expect_false(grepl("@@FIG|@@PAIR", html))
   expect_match(html, "Chi-square")
-  expect_match(html, "Implementation accuracy (Baseline)", fixed = TRUE)
+  expect_match(html, "Implementation accuracy (post-targeting survey, before distribution)", fixed = TRUE)
 })
 
 test_that("the officer's formatted texts and comments reach the monitoring report", {
@@ -113,4 +113,35 @@ test_that("the officer's formatted texts and comments reach the monitoring repor
   expect_match(html, '<div class="rich"><p><i>seen</i> in <b>A</b></p></div>', fixed = TRUE)
   expect_false(grepl("<script>x()", html, fixed = TRUE) || grepl("@@RICH", html))
   expect_match(html, "_Not written._|<em>Not written.</em>")   # recommendations left empty
+})
+
+test_that("value-axis bounds: blank is automatic, one blank end comes from the data", {
+  d <- data.frame(x = c("a", "b"), group = "All", value = c(2, 10))
+  expect_null(chart_axis_range(d, list(axis_min = NA, axis_max = NA)))
+  expect_equal(chart_axis_range(d, list(axis_min = 5, axis_max = NA)), c(5, 10.8))
+  expect_equal(chart_axis_range(d, list(axis_min = NA, axis_max = 50)), c(0, 50))
+  expect_length(axis_bounds(NA, NA, c(0, 10)), 0)
+  expect_equal(axis_bounds(NA, 20, c(0, 10))$range, c(0, 20))
+})
+
+test_that("chart builder: the Axes dialog sets the value-axis bounds, Automatic clears them", {
+  df <- data.frame(area = c("A", "A", "B"), v = c(1, 2, 3))
+  shiny::testServer(mod_chart_builder_server, args = list(data = shiny::reactive(df), source = shiny::reactive("x"),
+                                                          add_item = function(...) NULL), {
+    expect_true(is.na(spec()$axis_min))
+    session$setInputs(ax_ymin = 5, ax_ymax = 50, ax_apply = 1)
+    expect_equal(c(spec()$axis_min, spec()$axis_max), c(5, 50))
+    session$setInputs(ax_reset = 1)
+    expect_true(is.na(spec()$axis_max))
+  })
+})
+
+test_that("chart builder refuses a By column with too many options", {
+  df <- data.frame(site = paste0("s", seq_len(MAX_OPTIONS + 10)), v = 1)
+  shiny::testServer(mod_chart_builder_server, args = list(data = shiny::reactive(df), source = shiny::reactive("x"),
+                                                          add_item = function(...) NULL), {
+    session$setInputs(type = "count", x = "site")
+    expect_match(too_many(), "Too many options for site", fixed = TRUE)
+    expect_null(agg())
+  })
 })

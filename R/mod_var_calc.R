@@ -490,7 +490,7 @@ mod_var_calc_server <- function(id, get_data, set_data, log = NULL, phase = "Sel
         label_new(d$new_name, d$variable, vapply(seq_len(nrow(d)), function(i) {
           r <- d$rule[[i]]; if (identical(r$op, ">=")) paste("at least", r$value) else paste(strsplit(r$value, ",")[[1]], collapse = " or ")
         }, character(1)))
-        now <- format(Sys.time(), "%Y-%m-%d %H:%M")
+        now <- fmt_datetime()
         created(rbind(created()[!created()$name %in% d$new_name, , drop = FALSE],
                       data.frame(name = d$new_name, definition = desc, created = now, stringsAsFactors = FALSE)))
         if (!is.null(log)) {
@@ -516,7 +516,7 @@ mod_var_calc_server <- function(id, get_data, set_data, log = NULL, phase = "Sel
         for (i in seq_along(r$names)) df[[r$names[i]]] <- r$values[[i]]
         set_data(df)
         label_new(r$names, r$sources, r$rule)
-        now <- format(Sys.time(), "%Y-%m-%d %H:%M")
+        now <- fmt_datetime()
         created(rbind(created()[!created()$name %in% r$names, , drop = FALSE],
                       data.frame(name = r$names, definition = r$descriptions, created = now,
                                  stringsAsFactors = FALSE)))
@@ -546,7 +546,7 @@ mod_var_calc_server <- function(id, get_data, set_data, log = NULL, phase = "Sel
       set_data(df)
       created(rbind(created()[created()$name != res$name, , drop = FALSE],
                     data.frame(name = res$name, definition = res$r$description,
-                               created = format(Sys.time(), "%Y-%m-%d %H:%M"),
+                               created = fmt_datetime(),
                                stringsAsFactors = FALSE)))
       if (!is.null(log)) {
         entry <- data.frame(

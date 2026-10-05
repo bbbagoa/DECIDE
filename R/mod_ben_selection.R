@@ -469,7 +469,7 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
       quota_plan(list(unit = input$ben_quota_unit, kind = kind, count = count_unit(),
                       fig = if (all(is.na(fv))) NULL else as.list(fv), fig_type = input$fig_type %||% "ipc3plus", total = if (identical(kind, "share")) input$quota_total else sum(caseload),
                       values = as.list(v), caseload = as.list(stats::setNames(caseload, a$area)),
-                      rationale = trimws(input$quota_rationale), set_at = format(Sys.time(), "%Y-%m-%d %H:%M")))
+                      rationale = trimws(input$quota_rationale), set_at = fmt_datetime()))
       audit_add(modification_log, "Selection", "Caseload per area set",
                 sprintf("%s per %s: %s %s in %d areas (%s)", if (identical(kind, "share")) "Shares" else "Caseloads",
                         quota_label(input$ben_quota_unit), format(sum(caseload), big.mark = ","), unit_word(), sum(caseload > 0),
@@ -1626,7 +1626,7 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
         }),
         "Selection" = c(
           "Country office" = user_setup$country_office %||% "not set",
-          "Exported" = format(Sys.time(), "%Y-%m-%d %H:%M"),
+          "Exported" = fmt_datetime(),
           "Exported by" = Sys.getenv("USERNAME", Sys.getenv("USER", "")),
           "Variables exported" = sprintf("%d of %d: %s", length(keep_cols), ncol(df_all), paste(keep_cols, collapse = ", ")),
           "Targeting approach" = targeting_approaches()[[applied$approach]]$label,
@@ -1728,7 +1728,7 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
         full <- selected_data()
         lg <- if (is.function(modification_log)) modification_log() else NULL
         sections <- selection_sections(s, df_all, keep_cols, with_audit = isTRUE(input$export_audit))
-        subtitle <- paste(c(user_setup$country_office, format(Sys.Date())), collapse = " \u00b7 ")
+        subtitle <- paste(c(user_setup$country_office, fmt_date()), collapse = " \u00b7 ")
         make_wb <- function(sel_df, ex_df, area = NULL) {
           wb <- openxlsx::createWorkbook()
           xl_summary_sheet(wb, "Summary", "Beneficiary selection",
@@ -1743,6 +1743,7 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
           }
           if (!is.null(ex_df) && nrow(ex_df)) xl_data_sheet(wb, "Excluded_by_design", sanitize_for_excel(ex_df))
           if (isTRUE(input$export_audit) && !is.null(lg) && nrow(lg)) {
+            lg$timestamp <- fmt_datetime(lg$timestamp)
             xl_data_sheet(wb, "Audit_trail", sanitize_for_excel(data.frame(phase = audit_phase(lg$action), lg,
                                                                            stringsAsFactors = FALSE)))
           }
@@ -1782,6 +1783,14 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
         }
       }
     )
+
+    # What Targeting Monitoring draws its verification sample from: every
+    # household of the areas covered, served or not, and eligible or not.
+    list(frame = reactive({
+      df <- uploaded_df(); req(df)
+      s <- selection()
+      list(df = df, served = s$prioritized, eligible = s$eligible)
+    }))
   })
 }
 

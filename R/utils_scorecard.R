@@ -613,7 +613,7 @@ build_scorecard <- function(weights, outcome = NA_character_,
 #' Months since a scorecard was designed, or NA when not recorded
 #' @noRd
 scorecard_age_months <- function(sc, today = Sys.Date()) {
-  d <- suppressWarnings(as.Date(sc$created %||% NA_character_))
+  d <- as_date_any(sc$created %||% NA_character_)   # ISO in the card, day/month/year from a workbook
   if (is.na(d)) return(NA_real_)
   as.numeric(today - d) / 30.44
 }

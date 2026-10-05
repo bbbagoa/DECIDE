@@ -3053,7 +3053,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
           "AIC %.1f, McFadden pseudo-R2 %.3f", stats::AIC(f$model), 1 - f$model$deviance / f$model$null.deviance)
         bl <- safe(blockers())
         x <- list(
-          generated = format(Sys.time(), "%Y-%m-%d %H:%M"),
+          generated = fmt_datetime(),
           source = assessment_source(), n_rows = if (is.null(df)) NA else nrow(df),
           areas = scope$text(),
           n_cols = if (is.null(df)) NA else ncol(df),
@@ -3770,7 +3770,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
         b <- score_bands(s$score, n)
         req(nrow(b) > 0)
         names(b) <- c(if (n == 4) "Quartile" else "Quintile", "From", "To", "Households")
-        DT::datatable(b, rownames = FALSE, selection = "none",
+        tw_datatable(b, rownames = FALSE, selection = "none",
                       options = list(dom = "t", paging = FALSE))
       })
     }
@@ -3933,7 +3933,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
       sc <- draft_scorecard()
       sc$source <- "design"
       sc$fingerprint <- scorecard_fingerprint(sc)
-      sc$adopted_at <- format(Sys.time(), "%Y-%m-%d %H:%M")
+      sc$adopted_at <- fmt_datetime()
       sc$country_office <- user_setup$country_office
       sc$exceed_note <- if (nzchar(exceed_note())) exceed_note()
       # A ranking tells Selection what it is: purpose, method, orientation,
@@ -4081,7 +4081,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
           "Vulnerable level" = sc$outcome_positive %||% "",
           "Eligibility threshold" = sprintf("score > %s", fmt5(sc$threshold %||% 0)),
           "Country office" = user_setup$country_office %||% "",
-          "Designed on" = sc$created %||% format(Sys.Date()),
+          "Designed on" = fmt_date(sc$created %||% Sys.Date()),
           "Review due" = "Every 2-3 years in stable contexts, annually in highly dynamic ones (WFP Targeting OGN, 2021), or when new assessment data arrives.",
           "Criteria in the card" = length(sc$items),
           "Households scored" = format(e$n, big.mark = ","),
@@ -4116,7 +4116,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
           "Verdict" = v$interpretation,
           "Recommended action" = v$action,
           "Assessment source" = assessment_source() %||% "unknown",
-          "Built at" = format(Sys.time(), "%Y-%m-%d %H:%M:%S"),
+          "Built at" = fmt_datetime(),
           "Built with" = paste0("TargetWise ",
                                 tryCatch(as.character(utils::packageVersion("TargetWise")),
                                          error = function(e) ""))

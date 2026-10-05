@@ -113,7 +113,7 @@ write_selection_report <- function(file, x, lang = "en") {
                  sc$captions),
     lang = lang, title = "Beneficiary selection report", record = "Beneficiary selection record",
     meta = c("Country office" = x$country_office %||% "",
-             "Generated" = format(Sys.time(), "%Y-%m-%d %H:%M"),
+             "Generated" = fmt_datetime(),
              "Areas covered" = x$areas %||% "All areas",
              "Served" = format(x$totals[["served"]] %||% NA, big.mark = ",")),
     footer = "This record documents the selection so it can be reviewed, explained and challenged.",

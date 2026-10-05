@@ -44,7 +44,7 @@ write_overview_report <- function(file, df, settings, x, lang = "en") {
   en <- col("enumerator_id"); dt <- col("date")
   if (!is.null(cl$daily)) {
     add(sprintf("## %d. Data collection", sec), "", "@@FIG:days@@", "")
-    d <- cl$daily; d$day <- format(d$day, "%d %b")
+    d <- cl$daily; d$day <- format(d$day, "%d/%m")
     ord <- unique(d$day[order(cl$daily$day)])
     wide <- stats::reshape(stats::aggregate(n ~ day + area, d, sum), idvar = "day", timevar = "area", direction = "wide")
     names(wide) <- sub("^n\\.", "", names(wide)); wide[is.na(wide)] <- 0
@@ -65,7 +65,7 @@ write_overview_report <- function(file, df, settings, x, lang = "en") {
         agg <- do.call(rbind, lapply(split(e, e$en), function(g) data.frame(
           Enumerator = g$en[1], Interviews = nrow(g), Days = length(unique(stats::na.omit(g$day))),
           `Per day` = round(nrow(g) / max(1, length(unique(stats::na.omit(g$day)))), 1),
-          First = format(suppressWarnings(min(g$day, na.rm = TRUE)), "%d %b"), Last = format(suppressWarnings(max(g$day, na.rm = TRUE)), "%d %b"),
+          First = fmt_date(suppressWarnings(min(g$day, na.rm = TRUE))), Last = fmt_date(suppressWarnings(max(g$day, na.rm = TRUE))),
           check.names = FALSE)))
         agg <- agg[order(-agg$Interviews), , drop = FALSE]
         add("### By enumerator", "", if (nrow(agg) > 30) "The 30 enumerators with the most interviews." else NULL, "",
@@ -161,7 +161,7 @@ write_overview_report <- function(file, df, settings, x, lang = "en") {
   report_write_page(
     file, paste(L, collapse = "\n"), plots, captions = caps, lang = lang,
     title = "Overview", record = "Data collection record",
-    meta = c("Country office" = x$country_office %||% "", "Generated" = format(Sys.time(), "%Y-%m-%d %H:%M"),
+    meta = c("Country office" = x$country_office %||% "", "Generated" = fmt_datetime(),
              "Areas covered" = x$areas %||% "All areas", "Households" = num(n)),
     footer = "This record summarises the data collected, as shown on the Overview page.",
     blocks = c(list("@@KPI@@" = overview_kpis(tiles_of(cl$tiles), lang), "@@AREAS@@" = area_summary_html(ga)), blocks))

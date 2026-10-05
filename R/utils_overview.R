@@ -68,7 +68,7 @@ ov_collection <- function(df, settings, max_areas = 6) {
     if (any(!is.na(day))) {
       nd <- length(unique(stats::na.omit(day)))
       tiles[[length(tiles) + 1]] <- list(label = "Days of collection", value = ov_num(nd), icon = "calendar-range",
-                                         sub = sprintf("%s to %s", format(min(day, na.rm = TRUE), "%d %b"), format(max(day, na.rm = TRUE), "%d %b %Y")))
+                                         sub = sprintf("%s to %s", fmt_date(min(day, na.rm = TRUE)), fmt_date(max(day, na.rm = TRUE))))
       last <- max(day, na.rm = TRUE); recent <- !is.na(day) & day > last - 7
       tiles[[length(tiles) + 1]] <- list(label = "Households per day", value = ov_num(sum(w[!is.na(day)]) / nd), icon = "graph-up",
                                          sub = sprintf("last 7 days: %s a day", ov_num(sum(w[recent]) / max(1, length(unique(day[recent]))))))
@@ -498,4 +498,74 @@ analysis_cols <- function(df, cols = names(df), sample_n = 2000) {
     length(v) < 50 || length(unique(v)) / length(v) < 0.9
   }, logical(1))
   cols[keep]
+}
+
+
+#' A plotly axis range from typed bounds: nothing when both are blank
+#' (automatic), else the typed bounds with a blank end taken from `auto`
+#' (the data's own range)
+#' @noRd
+axis_bounds <- function(lo, hi, auto) {
+  num <- function(v) { v <- suppressWarnings(as.numeric(v)); if (length(v) == 1 && is.finite(v)) v else NA_real_ }
+  lo <- num(lo); hi <- num(hi)
+  if ((!is.finite(lo) && !is.finite(hi)) || is.null(auto) || any(!is.finite(auto))) return(list())
+  pad <- 0.05 * max(abs(diff(auto)), 1e-9)
+  list(range = c(if (is.finite(lo)) lo else auto[1] - (if (auto[1] == 0) 0 else pad), if (is.finite(hi)) hi else auto[2] + pad),
+       autorange = FALSE)
+}
+
+#' The axes button of a chart builder: quiet, says when bounds are set
+#' @noRd
+axis_button <- function(id) {
+  actionButton(id, "Axes", icon = icon("up-down"), class = "btn-sm btn-outline-secondary")
+}
+
+#' The axes dialog: bounds prefilled with what is set, blank = automatic.
+#' `prefix` names its inputs (<prefix>ymin, ..., <prefix>apply, <prefix>reset).
+#' @noRd
+axis_dialog <- function(ns, prefix, cur, hint = NULL, with_x = FALSE) {
+  f <- function(id, lab) numericInput(ns(paste0(prefix, id)), lab, value = cur[[id]] %||% NA, width = "100%")
+  modalDialog(
+    title = "Axes", size = "m", easyClose = TRUE,
+    tags$p(class = "small text-muted", "Leave a box blank and the chart sets it from the data."),
+    tags$div(class = "d-flex gap-2", f("ymin", if (with_x) "Y axis from" else "Value axis from"), f("ymax", "to")),
+    if (with_x) tags$div(class = "d-flex gap-2", f("xmin", "X axis from"), f("xmax", "to")),
+    if (with_x) tags$p(class = "small text-muted", "The X bounds apply when the X axis is a number."),
+    if (!is.null(hint)) tags$div(class = "small text-muted", hint),
+    footer = tagList(actionButton(ns(paste0(prefix, "reset")), "Automatic", class = "btn-outline-secondary"),
+                     modalButton("Cancel"),
+                     actionButton(ns(paste0(prefix, "apply")), "Apply", class = "btn-primary")))
+}
+
+#' The bounds typed in the axes dialog (NA = automatic)
+#' @noRd
+axis_read <- function(input, prefix) {
+  num <- function(v) { v <- suppressWarnings(as.numeric(v)); if (length(v) == 1 && is.finite(v)) v else NA_real_ }
+  ids <- c("ymin", "ymax", "xmin", "xmax")
+  stats::setNames(lapply(ids, function(k) num(input[[paste0(prefix, k)]])), ids)
+}
+
+# ---- Too many options --------------------------------------------------------
+
+#' The most different answers a variable may have to be shown as categories
+#' (map colours, table rows and columns, chart bars and groups); above it the
+#' display would be unreadable, so the variable is refused with a message.
+MAX_OPTIONS <- 30L
+
+#' Number of different answers (missing and blank left out)
+#' @noRd
+n_options <- function(x) {
+  if (is.factor(x)) x <- as.character(x)
+  u <- unique(x[!is.na(x)])
+  if (is.character(u)) u <- u[nzchar(trimws(u))]
+  length(u)
+}
+
+#' The message for a variable with too many options, or NULL when it is fine
+#' @noRd
+too_many_options <- function(x, name) {
+  n <- n_options(x)
+  if (n <= MAX_OPTIONS) return(NULL)
+  sprintf("Too many options for %s (%s different answers): it cannot be shown clearly. Choose a variable with at most %d answers.",
+          name, format(n, big.mark = ","), MAX_OPTIONS)
 }

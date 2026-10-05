@@ -546,7 +546,7 @@ dq_outliers_server <- function(input, output, session, ns, core) {
     keys <- if (!is.null(info$uid_col)) as.character(df[[info$uid_col]][d$.idx]) else as.character(d$.idx)
     show <- d[, setdiff(names(d), ".idx"), drop = FALSE]
     show$Details <- record_detail_buttons(keys, ns("ol_view"))
-    DT::datatable(
+    tw_datatable(
       show, rownames = FALSE, selection = "multiple", class = "compact stripe hover",
       escape = setdiff(names(show), "Details"),
       options = list(pageLength = 15, scrollX = TRUE,
@@ -846,7 +846,7 @@ dq_outliers_server <- function(input, output, session, ns, core) {
     req(s, nrow(s) > 0)
     names(s) <- c("Variable", "Mapped as", "Answered", "Missing (%)", "Min", "Median", "Max",
                   "Allowed range", "Flagged", "Flagged (%)")
-    DT::datatable(s, rownames = FALSE, selection = "single", class = "compact stripe hover",
+    tw_datatable(s, rownames = FALSE, selection = "single", class = "compact stripe hover",
                   options = list(pageLength = 15, scrollX = TRUE)) |>
       DT::formatRound(c("Min", "Median", "Max"), digits = 2) |>
       DT::formatStyle("Flagged (%)", background = DT::styleColorBar(c(0, max(s[["Flagged (%)"]], 1)), "rgba(197,25,45,0.25)"),

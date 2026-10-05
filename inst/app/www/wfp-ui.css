@@ -2888,7 +2888,7 @@ td[data-tw], th[data-tw] { cursor: help; }
    so the row under the mouse never looks like a second selection */
 .bootstrap-select .dropdown-menu li > a { position: relative; }
 .bootstrap-select .dropdown-menu li:not(.selected) > a.active, .bootstrap-select .dropdown-menu li:not(.selected).active > a { background: transparent !important; color: inherit !important; }
-.bootstrap-select .dropdown-menu li > a:hover { background: rgba(128, 128, 128, .12) !important; }
+.bootstrap-select .dropdown-menu li:not(.selected) > a:hover { background: rgba(128, 128, 128, .05) !important; }
 .bootstrap-select .dropdown-menu li.selected > a, .bootstrap-select .dropdown-menu li.selected > a:hover {
   font-weight: 600; color: var(--wfp-blue) !important; background: rgba(10, 110, 180, .08) !important; padding-right: 28px; }
 .bootstrap-select:not([multiple]) .dropdown-menu li.selected > a::after, .bootstrap-select .dropdown-menu:not(.show-tick) li.selected > a::after {
@@ -2921,3 +2921,25 @@ td[data-tw], th[data-tw] { cursor: help; }
            border-radius: 14px; padding: 1.4rem 1.6rem; box-shadow: 0 12px 40px rgba(0,0,0,.25); }
 #tw-lost .tw-lost-title { font-weight: 700; font-size: 1.1rem; margin-bottom: .6rem; color: #c5192d; }
 #tw-lost p { font-size: .9rem; margin-bottom: .7rem; }
+
+/* A quiet segmented toggle (Overview's Total / By area): a soft track, the
+   chosen option raised on it, no outlines */
+.tw-seg .form-group { margin: 0; }
+.tw-seg .btn-group { background: rgba(128,128,128,.12); border-radius: 7px; padding: 2px; gap: 2px; }
+.tw-seg .btn-group .btn, .tw-seg .btn-group .btn.btn-outline-primary {
+  border: 0 !important; border-radius: 5px !important; background: transparent; color: var(--bs-secondary-color);
+  font-size: .7rem; font-weight: 600; line-height: 1.2; padding: .18rem .55rem; box-shadow: none; }
+.tw-seg .btn-group .btn:hover { color: var(--bs-body-color); background: transparent; }
+.tw-seg .btn-group .btn.active, .tw-seg .btn-group .btn.btn-outline-primary.active {
+  background: var(--bs-body-bg); color: var(--wfp-blue, #0A6EB4); box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+
+[data-bs-theme="dark"] .tw-seg .btn-group .btn:not(.active) { background: transparent; border: 0; }
+
+/* A status label inside a table cell (Enumerator Performance's flag) */
+.tw-pill { display: inline-block; padding: .1rem .5rem; border-radius: 999px; font-size: .72rem; font-weight: 700; line-height: 1.4; }
+.tw-pill-ok { background: rgba(63, 126, 68, .14); color: #2f6a35; }
+.tw-pill-review { background: rgba(197, 25, 45, .12); color: #b0182a; }
+[data-bs-theme="dark"] .tw-pill-ok { background: rgba(92, 184, 100, .18); color: #8fd497; }
+[data-bs-theme="dark"] .tw-pill-review { background: rgba(240, 80, 95, .18); color: #ff9aa5; }
+.bootstrap-select .dropdown-menu li.selected > a { box-shadow: inset 3px 0 0 var(--wfp-blue, #0A6EB4); }
+table.dataTable td.tw-wide-cell, table.dataTable th.tw-wide-cell { min-width: 320px; white-space: normal; }

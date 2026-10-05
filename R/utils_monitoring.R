@@ -80,7 +80,12 @@ chart_aggregate <- function(df, spec) {
   }))
   if (is.null(out)) return(NULL)
   out$value <- round(out$value, 2)
-  out <- if (identical(type, "trend")) out[order(out$x, out$group), , drop = FALSE] else
+  if (identical(type, "trend")) {
+    # sorted on the ISO period, then shown day first: 05/01/2026, or 01/2026 for a month
+    out <- out[order(out$x, out$group), , drop = FALSE]
+    out$x <- if (identical(spec$period, "week")) fmt_date(out$x) else sub("^(\\d{4})-(\\d{2})$", "\\2/\\1", out$x)
+  }
+  out <- if (identical(type, "trend")) out else
     out[order(-stats::ave(out$value, out$x, FUN = function(z) sum(z, na.rm = TRUE)), out$x, out$group), , drop = FALSE]
   rownames(out) <- NULL
   out
@@ -190,6 +195,33 @@ apply_preset <- function(preset, df) {
 
 #' The chart of a report item, for the HTML report (billboarder)
 #' @noRd
+#' The value axis a chart would draw by itself: from 0 (or the lowest value)
+#' to the highest value, or the highest stack when the split is stacked
+#' @noRd
+chart_auto_range <- function(d, spec) {
+  v <- d$value[is.finite(d$value)]
+  if (!length(v)) return(c(0, 1))
+  top <- if (length(unique(d$group)) > 1 && chart_stacks(spec)) max(tapply(pmax(d$value, 0), d$x, sum, na.rm = TRUE)) else max(v)
+  c(min(0, min(v)), top)
+}
+
+#' The value axis set in the chart builder: NULL when both bounds are blank
+#' (automatic), else the two bounds, a blank one taken from the data
+#' @noRd
+chart_axis_range <- function(d, spec) {
+  lo <- spec$axis_min %||% NA_real_; hi <- spec$axis_max %||% NA_real_
+  if (!is.finite(lo) && !is.finite(hi)) return(NULL)
+  a <- chart_auto_range(d, spec)
+  c(if (is.finite(lo)) lo else a[1], if (is.finite(hi)) hi else a[2] * 1.08)
+}
+
+#' The axis bounds as a plotly axis setting (empty when automatic)
+#' @noRd
+axis_range_list <- function(d, spec) {
+  r <- chart_axis_range(d, spec)
+  if (is.null(r)) list() else list(range = r, autorange = FALSE)
+}
+
 monitoring_item_chart <- function(item, lang = "en") {
   d <- item$data
   if (is.null(d) || !nrow(d)) return(NULL)
@@ -217,6 +249,7 @@ monitoring_item_chart <- function(item, lang = "en") {
              rp_colors(cols) |>
              billboarder::bb_x_axis(tick = list(multiline = FALSE, culling = list(max = 15))) |>
              billboarder::bb_y_axis(label = rp_axis_label(vlab)) |>
+             bb_value_range(d, item$spec) |>
              one())
   }
   if (st %in% c("line", "area")) {
@@ -224,11 +257,23 @@ monitoring_item_chart <- function(item, lang = "en") {
              billboarder::bb_linechart(wide, type = if (identical(st, "area")) "area-spline" else "spline") |>
              billboarder::bb_x_axis(type = "category", tick = list(culling = list(max = 12), multiline = FALSE)) |>
              billboarder::bb_y_axis(label = rp_axis_label(vlab)) |>
+             bb_value_range(d, item$spec) |>
              rp_colors(cols) |>
              one())
   }
-  b <- rp_hbars(wide, cols, vlab, stacked = length(groups) > 1 && chart_stacks(item$spec))
+  b <- rp_hbars(wide, cols, vlab, stacked = length(groups) > 1 && chart_stacks(item$spec)) |> bb_value_range(d, item$spec)
   if (length(groups) == 1) b <- billboarder::bb_legend(b, show = FALSE)
+  b
+}
+
+#' The chart builder's axis bounds on a report chart (the value axis is y,
+#' rotated or not)
+#' @noRd
+bb_value_range <- function(b, d, spec) {
+  r <- chart_axis_range(d, spec)
+  if (is.null(r)) return(b)
+  b$x$bb_opts$axis$y$min <- r[1]; b$x$bb_opts$axis$y$max <- r[2]
+  b$x$bb_opts$axis$y$padding <- list(top = 0, bottom = 0)
   b
 }
 
@@ -279,14 +324,14 @@ write_monitoring_report <- function(file, x, lang = "en") {
 
   add("# Targeting monitoring report", "",
       "This report brings together how the targeting was carried out on the ground (targeting process) and how accurately",
-      if (identical(kind, "Baseline")) "it reached the intended households (baseline survey)." else "it reached the intended households (post-distribution monitoring).", "")
+      if (identical(kind, "Baseline")) "it reached the intended households (a post-targeting survey of selected and non-selected households, before distribution)." else "it reached the intended households (post-distribution monitoring).", "")
   if (!is.null(p)) add("## Key results", "", "@@IMPL@@", "")
   # The error gauges above already show the two errors; their tiles are only
   # repeated when there is a previous round to compare with.
   if (!is.null(p) && is.null(last)) ind <- ind[setdiff(names(ind), c("inclusion", "exclusion"))]
   if (length(ind) || length(todo) || has_map) {
     add("## Executive summary", "",
-        if (!is.null(last)) sprintf("_Changes are shown against the previous round, %s (%s)._", last$label, last$date) else NULL, "",
+        if (!is.null(last)) sprintf("_Changes are shown against the previous round, %s (%s)._", last$label, fmt_date(last$date)) else NULL, "",
         "@@EXEC@@", "",
         if (has_map && !is.null(trend)) "@@FIG:areamap,trend@@" else if (has_map) "@@FIG:areamap@@" else if (!is.null(trend)) "@@FIG:trend@@" else NULL, "")
   }
@@ -294,7 +339,8 @@ write_monitoring_report <- function(file, x, lang = "en") {
   # What the officer concluded comes straight after the context; the evidence follows.
   add("## 2. Key findings", "", quote_block(x$findings), "")
 
-  add(sprintf("## 3. Implementation accuracy (%s)", kind), "")
+  kind_txt <- if (identical(kind, "Baseline")) "post-targeting survey, before distribution" else "PDM, after distribution"
+  add(sprintf("## 3. Implementation accuracy (%s)", kind_txt), "")
   if (is.null(p)) {
     add(sprintf("_No %s analysis was run._", kind), "")
   } else {
@@ -318,6 +364,15 @@ write_monitoring_report <- function(file, x, lang = "en") {
                               `Beneficiary households` = st$beneficiaries, `Non-beneficiary households` = st$non_beneficiaries,
                               check.names = FALSE)), "")
     }
+    dd <- p$decisions
+    if (!is.null(dd) && nrow(dd)) {
+      add(if (identical(kind, "Baseline")) "Decision by area, before distribution:" else "Lessons by area, for the next round:", "",
+          md_table(data.frame(Area = dd$area, `Selected surveyed` = dd$n_selected, `Not selected surveyed` = dd$n_not,
+                              `Inclusion error` = vapply(dd$inclusion_error, pct, character(1)),
+                              `Exclusion error` = vapply(dd$exclusion_error, pct, character(1)),
+                              Decision = dd$decision, check.names = FALSE)), "")
+    }
+    if (identical(kind, "PDM")) add("_Measured after distribution: nothing could be corrected before assistance was given, and the assistance itself may have changed some answers. A post-targeting survey before distribution is preferred._", "")
     if (!is.null(p$by_unit) && nrow(p$by_unit)) {
       bu <- p$by_unit
       add("Coverage by area:", "", md_table(data.frame(Area = bu[[1]], Eligible = round(bu$eligible), Selected = round(bu$selected),
@@ -397,7 +452,7 @@ write_monitoring_report <- function(file, x, lang = "en") {
   report_write_page(
     file, paste(L, collapse = "\n"), plots, captions = caps, lang = lang,
     title = "Targeting monitoring report", record = "Targeting monitoring record",
-    meta = c("Country office" = x$country_office %||% "", "Generated" = format(Sys.time(), "%Y-%m-%d %H:%M"),
+    meta = c("Country office" = x$country_office %||% "", "Generated" = fmt_datetime(),
              "Charts" = as.character(length(items))),
     footer = "This record documents how the targeting was implemented so it can be reviewed and improved.",
     blocks = c(list("@@IMPL@@" = impl,

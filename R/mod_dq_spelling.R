@@ -166,7 +166,7 @@ dq_spelling_server <- function(input, output, session, ns, core) {
       bad_rows <- isolate(bad_rows)
       req(nrow(bad_rows) > 0) ## Continue while there is still data
 
-      DT::datatable(
+      tw_datatable(
         bad_rows,
         # escape = FALSE, # Required to render the HTML button
         rownames = FALSE,

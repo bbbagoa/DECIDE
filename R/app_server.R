@@ -182,7 +182,7 @@ app_server <- function(input, output, session) {
       sprintf("MODA form %s", current_moda_credentials()$form_id %||% "")
     # What the list will be traced back to; shown in the selection export.
     user_setup$data_source <- sprintf("%s, %s rows, %s columns, imported %s", src,
-                                      format(nrow(df), big.mark = ","), ncol(df), format(Sys.time(), "%Y-%m-%d %H:%M"))
+                                      format(nrow(df), big.mark = ","), ncol(df), fmt_datetime())
     audit_add(modification_log, "Selection", "Registration data imported", user_setup$data_source)
     if (identical(source, "File")) show_import_summary(df, source = source, label = "File upload")
     else show_import_summary(df, source = source, label = moda_import_result$label() %||% src,
@@ -389,7 +389,7 @@ app_server <- function(input, output, session) {
   # Each module registers its work here so a saved session carries it.
   workspace <- workspace_new()
   mod_spot_checking_server("spot_checking_1", uploaded_df, user_setup, workspace)
-  mod_ben_selection_server("ben_selection_1", uploaded_df, user_setup, workspace, modification_log)
+  ben_sel <- mod_ben_selection_server("ben_selection_1", uploaded_df, user_setup, workspace, modification_log)
   # The scorecard is built on the assessment data currently loaded, and stores
   # the finished card on user_setup so it travels in the setup profile and can
   # be applied by Beneficiary Selection.
@@ -397,7 +397,7 @@ app_server <- function(input, output, session) {
   # PDM accuracy works off its own uploaded extract, so it takes no app state.
   # Targeting Monitoring: the PDM analysis, targeting process and the report.
   mod_monitoring_server("monitoring_1", workspace, country_office = reactive(user_setup$country_office),
-                        modification_log = modification_log, user_setup = user_setup)
+                        modification_log = modification_log, user_setup = user_setup, selection = ben_sel$frame)
 
   ## ===================================================================================
   #  ------------------- Data Quality Panel Server Side

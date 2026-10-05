@@ -180,7 +180,7 @@ dq_location_server <- function(input, output, session, ns, core) {
   # 1. Render the Summary Table
   output$tab_location_norm <- DT::renderDT(
     {
-      DT::datatable(
+      tw_datatable(
         norm_data_summary(),
         selection = "multiple",
         options = list(

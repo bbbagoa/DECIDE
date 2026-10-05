@@ -145,7 +145,7 @@ write_verification_report <- function(file, x, lang = "en") {
     lang = lang,
     title = "Verification report", record = "Spot-check back-check record",
     meta = c("Country office" = x$country_office %||% "",
-             "Generated" = format(Sys.time(), "%Y-%m-%d %H:%M"),
+             "Generated" = fmt_datetime(),
              "Matched" = if (is.null(r)) "" else format(r$matched_n, big.mark = ",")),
     footer = "This record documents the back-check so data quality can be reviewed and followed up.",
     blocks = list("@@AGREE@@" = verification_cards(r, lang),

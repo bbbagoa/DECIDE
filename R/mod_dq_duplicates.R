@@ -218,7 +218,7 @@ dq_duplicates_server <- function(input, output, session, ns, core) {
     # Row position, not the id: the id itself may be what is duplicated.
     out$Details <- record_detail_buttons(seq_len(nrow(d)), ns("dup_view"))
     n <- ncol(out)
-    DT::datatable(
+    tw_datatable(
       out, rownames = FALSE, selection = "multiple", class = "compact hover",
       escape = setdiff(names(out), c("Compare", "Details")),
       extensions = "RowGroup",

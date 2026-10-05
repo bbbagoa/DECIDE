@@ -29,7 +29,7 @@ mod_overview_ui <- function(id) {
               options = shinyWidgets::pickerOptions(container = "body", actionsBox = TRUE, liveSearch = TRUE))),
           side_step("2. Interview dates", "calendar-range",
             shinyWidgets::airDatepickerInput(
-              inputId = ns("filter_date"), label = NULL, range = TRUE,
+              inputId = ns("filter_date"), label = NULL, range = TRUE, dateFormat = "dd/MM/yyyy",
               value = c("2026-01-01", Sys.Date()), autoClose = TRUE, width = "100%"))),
         side_actions(
           tags$div(
@@ -52,15 +52,7 @@ mod_overview_ui <- function(id) {
             class = "wfp-map-toolbar",
             tags$div(class = "d-flex align-items-center gap-2",
                      tags$span(class = "wfp-map-toolbar-label", "Colour by"),
-                     uiOutput(ns("map_var_ui"), class = "wfp-map-var")),
-            tags$div(class = "d-flex align-items-center gap-2",
-              shinyWidgets::radioGroupButtons(
-                inputId = ns("map_mode"), label = NULL,
-                choices = c("Households" = "points", "By area" = "choropleth"),
-                selected = "points", size = "sm", status = "outline-primary"),
-              actionButton(ns("map_apply"), "Apply", icon = icon("check"), class = "btn-primary btn-sm",
-                           title = "Redraw the map with this colour and mode"))),
-          tags$div(class = "small text-muted wfp-map-note", textOutput(ns("map_note"), inline = TRUE)),
+                     uiOutput(ns("map_var_ui"), class = "wfp-map-var"))),
           tags$div(class = "tw-ov-map-body", leafgl::leafglOutput(ns("map_plot"), height = "100%")))
         ),
         # Right half: the collection stays in view, the sections below fold
@@ -73,17 +65,17 @@ mod_overview_ui <- function(id) {
               tags$span(class = "tw-ov-title", bsicons::bs_icon("broadcast"), " Data collection"),
               uiOutput(ns("view_chip"), inline = TRUE),
               tags$div(class = "tw-ov-follow",
-                       actionButton(ns("view_use"), "Figures for the map view", icon = icon("crosshairs"),
-                                    class = "btn-outline-secondary btn-sm",
-                                    title = "Recompute the figures on the households in the map view; 'show all' goes back to every household"))),
+                       tags$span(title = "On: the figures describe the households in the map view and follow it as you pan or zoom. Off: every household.",
+                                 bslib::input_switch(ns("view_follow"), "Follow the map", value = FALSE)))),
             uiOutput(ns("readiness_strip")),
             uiOutput(ns("col_tiles")),
             tags$div(
               class = "tw-ov-daily",
               tags$div(class = "tw-ov-daily-bar",
                        tags$span(class = "tw-ov-sub", "Households per day"),
-                       shinyWidgets::radioGroupButtons(ns("daily_by"), NULL, choices = c("Total" = "total", "By area" = "area"),
-                                                       selected = "area", size = "xs", status = "outline-primary")),
+                       tags$div(class = "tw-seg",
+                                shinyWidgets::radioGroupButtons(ns("daily_by"), NULL, choices = c("Total" = "total", "By area" = "area"),
+                                                                selected = "area", size = "xs", status = "outline-primary"))),
               plotly::plotlyOutput(ns("daily_plot"), height = "205px"))
           ),
           bslib::accordion(
@@ -385,14 +377,26 @@ mod_overview_server <- function(id, uploaded_df, user_setup) {
       leaflet::showGroup(target)
   }, ignoreInit = TRUE)
 
-  # Points and choropleth are two branches of ONE render. The previous version
-  # drove the toggle through leafletProxy and called clearGroup("points") on the
-  # way into choropleth; nothing ever put the points back, so switching back to
-  # Points left an empty map.
   # A button on the map: draw a rectangle, the map zooms to it (Leaflet's own
   # Shift + drag does the same, but nobody knows it).
   box_zoom_js <- htmlwidgets::JS("function(el, x) {
-    var map = this; if (map._twBox) return; map._twBox = true;
+    var map = this;
+    // leafgl redraws its points on 'moveend' only, and on 'resize' it just
+    // sets the canvas size, which wipes a WebGL canvas. Leaflet fires
+    // 'moveend' before 'resize', so any resize of the map box (a session load
+    // re-lays the page out) left the points blank until the next zoom or pan.
+    // Redraw them after each resize.
+    if (!map._twGlResize) {
+      map._twGlResize = true;
+      map.on('resize', function() {
+        setTimeout(function() {
+          ((L.glify && L.glify.pointsInstances) || []).forEach(function(q) {
+            if (q.map === map && q.layer && q.layer._redraw) q.layer._redraw();
+          });
+        }, 0);
+      });
+    }
+    if (map._twBox) return; map._twBox = true;
     var on = false, start = null, rect = null, link = null;
     function toggle(v) { on = v; link.classList.toggle('active', on); map.getContainer().style.cursor = on ? 'crosshair' : '';
       if (on) map.dragging.disable(); else map.dragging.enable(); }
@@ -421,16 +425,17 @@ mod_overview_server <- function(id, uploaded_df, user_setup) {
             if (is.null(col)) "" else sprintf("<span>%s</span><strong>%s</strong>", esc(col), esc(as.character(values[i]))))
   }
   # large maps: the popup of the point clicked, built when it is clicked
-  # the map's colour and mode, as last applied
-  map_set <- reactiveVal(list(mode = "points", var = NULL))
-  observeEvent(input$map_apply, map_set(list(mode = input$map_mode %||% "points", var = input$map_var)))
+  # The column the points are coloured by: the picker, else the vulnerability groups
+  map_col <- function(df) {
+    col <- if (shiny::isTruthy(input$map_var)) input$map_var else user_setup$v_groups
+    if (shiny::isTruthy(col) && col %in% names(df)) col else NULL
+  }
   observeEvent(input$map_plot_glify_click, {
     ev <- input$map_plot_glify_click
     pts <- tryCatch(map_points(), error = function(e) NULL)
-    if (is.null(pts) || nrow(pts$df) <= MAP_POPUP_MAX || !identical(map_set()$mode %||% "points", "points")) return()
+    if (is.null(pts) || nrow(pts$df) <= MAP_POPUP_MAX) return()
     i <- suppressWarnings(as.integer(ev$id)); if (is.na(i) || i < 1 || i > nrow(pts$df)) return()
-    mv <- map_set()$var
-    col <- if (shiny::isTruthy(mv) && mv %in% names(pts$df)) mv else NULL
+    col <- map_col(pts$df)
     html <- map_popup(pts$df, i, col, if (is.null(col)) NULL else pts$df[[col]])
     leaflet::leafletProxy("map_plot", session) |> leaflet::clearPopups() |>
       leaflet::addPopups(lng = pts$lng[i], lat = pts$lat[i], popup = html)
@@ -439,71 +444,49 @@ mod_overview_server <- function(id, uploaded_df, user_setup) {
   output$map_plot <- leaflet::renderLeaflet({
     htmlwidgets::onRender(map_render(), box_zoom_js)
   })
+  # The map is drawn when the data or the filters change; a new colour only
+  # swaps the points and the legend in place, so the view stays where it is.
+  map_drawn_col <- NULL
   map_render <- function() {
     pts <- map_points()
     if (nrow(pts$df) == 0) return(base_map())
     xr <- fit_range(pts$lng); yr <- fit_range(pts$lat)
-    map <- base_map(c(xr[1], yr[1], xr[2], yr[2]))
-
-    df <- pts$df
-    choropleth <- identical(map_set()$mode, "choropleth")
-    col <- if (shiny::isTruthy(map_set()$var)) map_set()$var else user_setup$v_groups
-    if (!shiny::isTruthy(col) || !col %in% names(df)) col <- NULL
-
-    if (choropleth) {
-      unit_col <- user_setup$admin1
-      # Colour the units by the selected variable when it is numeric, else by
-      # the vulnerability score.
-      score_col <- if (!is.null(col) && is.numeric(df[[col]])) col else user_setup$v_score
-      if (!shiny::isTruthy(unit_col) || !unit_col %in% names(df) ||
-          !shiny::isTruthy(score_col) || !score_col %in% names(df)) {
-        return(map)
-      }
-
-      w <- rep(1, nrow(df))
-      sc <- as_number(df[[score_col]])
-      unit <- as.character(df[[unit_col]])
-
-      agg <- do.call(rbind, lapply(split(seq_len(nrow(df)), unit), function(idx) {
-        ww <- w[idx]; ss <- sc[idx]
-        data.frame(
-          unit = unit[idx[1]],
-          mean_score = sum(ss * ww, na.rm = TRUE) / sum(ww[!is.na(ss)], na.rm = TRUE),
-          n = sum(ww, na.rm = TRUE),
-          lng = mean(pts$lng[idx], na.rm = TRUE),
-          lat = mean(pts$lat[idx], na.rm = TRUE),
-          stringsAsFactors = FALSE
-        )
-      }))
-      agg <- agg[is.finite(agg$mean_score), , drop = FALSE]
-      if (is.null(agg) || nrow(agg) == 0) return(map)
-
-      pal <- leaflet::colorNumeric("YlOrRd", domain = agg$mean_score, na.color = "transparent")
-      r_in <- log1p(agg$n)
-      radius_scaled <- 6 + 18 * (r_in - min(r_in)) / (max(r_in) - min(r_in) + 1e-9)
-
-      return(
-        map |>
-          leaflet::addCircleMarkers(
-            data = agg, lng = ~lng, lat = ~lat, group = "choropleth",
-            radius = radius_scaled, fillColor = ~pal(mean_score),
-            fillOpacity = 0.8, stroke = TRUE, color = "#ffffff", weight = 1.5, opacity = 0.9,
-            label = ~unit,
-            labelOptions = leaflet::labelOptions(direction = "top", className = "wfp-map-label"),
-            popup = ~sprintf("<div class='wfp-map-pop'><b>%s</b><span>Mean %s</span><strong>%.1f</strong><span>%s households</span></div>",
-                             htmltools::htmlEscape(unit), htmltools::htmlEscape(score_col), mean_score,
-                             format(round(n), big.mark = ","))
-          ) |>
-          leaflet::addLegend("bottomright", pal = pal, values = agg$mean_score,
-                             title = paste("Mean", score_col), layerId = "choro_legend") |>
-          leaflet::fitBounds(min(agg$lng), min(agg$lat), max(agg$lng), max(agg$lat))
-      )
+    col <- isolate(map_col(pts$df))
+    if (!is.null(col) && map_too_many(pts$df[[col]], col)) col <- NULL
+    map_drawn_col <<- col
+    # A fixed zoom of 8 centred on the mean coordinate showed a sliver of a
+    # country-wide sample; fit to the data instead.
+    add_map_points(base_map(c(xr[1], yr[1], xr[2], yr[2])), pts, col) |>
+      leaflet::fitBounds(xr[1], yr[1], xr[2], yr[2])
+  }
+  observeEvent(input$map_var, {
+    pts <- tryCatch(map_points(), error = function(e) NULL)
+    if (is.null(pts) || nrow(pts$df) == 0) return()
+    col <- map_col(pts$df)
+    if (identical(col, map_drawn_col)) return()
+    if (!is.null(col) && map_too_many(pts$df[[col]], col)) {
+      showNotification(too_many_options(pts$df[[col]], col_label(col)), type = "warning", duration = 8)
+      updateSelectInput(session, "map_var", selected = map_drawn_col %||% "")
+      return()
     }
-
+    map_drawn_col <<- col
+    leaflet::leafletProxy("map_plot", session) |>
+      leaflet::clearPopups() |>
+      leafgl::clearGlGroup("points") |>
+      leaflet::removeControl("map_legend") |>
+      add_map_points(pts, col)
+  }, ignoreInit = TRUE)
+  # Coloured as categories (not a number scale) with more options than can be told apart
+  map_too_many <- function(values, col) {
+    as_scale <- is.numeric(values) && length(unique(stats::na.omit(values))) > 8
+    !as_scale && !is.null(too_many_options(values, col))
+  }
+  # The points coloured by `col`, with their legend (works on a map or a proxy)
+  add_map_points <- function(map, pts, col) {
+    df <- pts$df
     values <- if (is.null(col)) rep(NA_character_, nrow(df)) else df[[col]]
     if (inherits(values, "haven_labelled")) values <- haven::as_factor(values)
     p <- map_palette(values)
-
     # Popup: the household, where it is, and the value it is coloured by.
     # Above MAP_POPUP_MAX points the popups are not sent with the map (they
     # were three quarters of its weight: 47 of 61 MB for 300k households); a
@@ -514,22 +497,15 @@ mod_overview_server <- function(id, uploaded_df, user_setup) {
                  popup = if (inline) map_popup(df, seq_len(nrow(df)), col, values) else "", stringsAsFactors = FALSE),
       coords = c("lng", "lat"), crs = 4326
     )
-
-    map <- map |>
-      leafgl::addGlPoints(
-        data = if (inline) sf_pts else sf_pts[, "geometry"], fillColor = p$color, radius = 7, fillOpacity = 0.9,
-        group = "points", popup = if (inline) "popup" else NULL
-      ) |>
-      # A fixed zoom of 8 centred on the mean coordinate showed a sliver of a
-      # country-wide sample; fit to the data instead.
-      leaflet::fitBounds(xr[1], yr[1], xr[2], yr[2])
-
+    map <- leafgl::addGlPoints(map,
+      data = if (inline) sf_pts else sf_pts[, "geometry"], fillColor = p$color, radius = 7, fillOpacity = 0.9,
+      group = "points", popup = if (inline) "popup" else NULL)
     if (p$numeric) {
       map <- leaflet::addLegend(map, "bottomright", pal = p$pal, values = p$values,
-                                title = col, opacity = 0.8)
+                                title = col, opacity = 0.8, layerId = "map_legend")
     } else if (length(p$legend_colors) > 0) {
       map <- leaflet::addLegend(map, "bottomright", colors = p$legend_colors,
-                                labels = p$legend_labels, title = col, opacity = 0.8)
+                                labels = p$legend_labels, title = col, opacity = 0.8, layerId = "map_legend")
     }
     map
   }
@@ -537,14 +513,11 @@ mod_overview_server <- function(id, uploaded_df, user_setup) {
   ### ----------------- The figures follow the map view
   # ---------------------------------------------------------------------------
 
-  # The households the insights describe: all of them, or those in the map
-  # view once "Figures for the map view" is clicked (panning and zooming
-  # recompute nothing by themselves).
-  view_bounds <- reactiveVal(NULL)
-  observeEvent(input$view_use, {
-    need_ok(!is.null(input$map_plot_bounds), "Move or zoom the map first.")
-    view_bounds(input$map_plot_bounds)
-  })
+  # The households the insights describe: all of them, or, with "Follow the
+  # map" on (off by default), those in the map view, following it as the map
+  # moves (debounced so a pan recomputes once).
+  map_bounds <- shiny::debounce(reactive(input$map_plot_bounds), 600)
+  view_bounds <- reactive(if (isTRUE(input$view_follow)) map_bounds())
   view_rows <- reactive({
     b <- view_bounds(); if (is.null(b)) return(NULL)
     pts <- tryCatch(map_points(), error = function(e) NULL)
@@ -568,7 +541,7 @@ mod_overview_server <- function(id, uploaded_df, user_setup) {
               if (zoomed) actionLink(ns("view_all"), "show all", class = "ms-1"))
   })
   observeEvent(input$view_all, {
-    view_bounds(NULL)
+    bslib::update_switch("view_follow", value = FALSE, session = session)
     pts <- map_points(); xr <- fit_range(pts$lng); yr <- fit_range(pts$lat)
     leaflet::leafletProxy("map_plot", session) |> leaflet::fitBounds(xr[1] - 1, yr[1] - 1, xr[2] + 1, yr[2] + 1)
   })
@@ -613,7 +586,7 @@ mod_overview_server <- function(id, uploaded_df, user_setup) {
       plotly::layout(barmode = "stack", bargap = 0.15, showlegend = by_area,
                      legend = list(orientation = "h", y = 1.02, yanchor = "bottom", x = 0, font = list(size = 9), itemwidth = 30),
                      margin = list(l = 30, r = 36, t = if (by_area) 16 else 4, b = 20),
-                     xaxis = list(title = "", type = "date", tickformat = "%d %b", tickfont = list(size = 10)),
+                     xaxis = list(title = "", type = "date", tickformat = "%d/%m", hoverformat = "%d/%m/%Y", tickfont = list(size = 10)),
                      yaxis = list(title = "", tickfont = list(size = 10)),
                      yaxis2 = list(overlaying = "y", side = "right", showgrid = FALSE, title = "", tickfont = list(size = 9), rangemode = "tozero"))
   })
@@ -773,8 +746,7 @@ mod_overview_server <- function(id, uploaded_df, user_setup) {
                     choices = c("Households" = "n", "Row %" = "row", "Column %" = "col", "Total %" = "total",
                                 "Mean of a number" = "mean", "Sum of a number" = "sum")),
         conditionalPanel(sprintf("['mean','sum'].indexOf(input['%s']) >= 0", ns("ct_stat")),
-                         pick("ct_value", "Number", if (length(nums)) nums else c("(no numeric column)" = ""), nums[1])),
-        tags$div(class = "tw-ct-go", actionButton(ns("ct_show"), "Show table", icon = icon("table"), class = "btn-primary btn-sm"))),
+                         pick("ct_value", "Number", if (length(nums)) nums else c("(no numeric column)" = ""), nums[1]))),
       uiOutput(ns("ct_table")))
   })
 
@@ -786,21 +758,21 @@ mod_overview_server <- function(id, uploaded_df, user_setup) {
         pick("gb_x", "Variable", ch, all[1]),
         pick("gb_y", "Against", c(`(none)` = "", ch), ""),
         pick("gb_group", "Grouped by", c(`(none)` = "", ch), ""),
-        uiOutput(ns("gb_type_ui")),
-        tags$div(class = "tw-ct-go", actionButton(ns("gb_draw"), "Draw chart", icon = icon("chart-column"), class = "btn-primary btn-sm"))),
+        uiOutput(ns("gb_type_ui"))),
+      tags$div(class = "mb-2", axis_button(ns("gb_axes"))),
       plotly::plotlyOutput(ns("gb_plot"), height = "360px"),
       tags$div(class = "tw-ct-note", textOutput(ns("gb_note"), inline = TRUE)))
   })
 
-  # the table's settings, as last shown
-  ct_params <- reactiveVal(NULL)
-  observeEvent(input$ct_show, ct_params(list(row = input$ct_row, col = input$ct_col, stat = input$ct_stat, value = input$ct_value)))
+  # the table follows the fields as they change (builders are the exception
+  # to "settings wait for their button")
   output$ct_table <- renderUI({
-    p <- ct_params()
-    if (is.null(p)) return(tags$div(class = "small text-muted mt-2", "Choose the rows, the columns and the cells, then click Show table."))
+    p <- list(row = input$ct_row, col = input$ct_col, stat = input$ct_stat, value = input$ct_value)
+    if (!shiny::isTruthy(p$row)) return(tags$div(class = "small text-muted mt-2", "Choose the rows, the columns and the cells to see the table."))
     df <- view_data(); req(df, p$row, p$row %in% names(df))
     stat <- p$stat %||% "n"
     col <- if (shiny::isTruthy(p$col) && p$col %in% names(df) && p$col != p$row) p$col else NULL
+    for (k in c(p$row, col)) if (ov_var_kind(df[[k]]) == "cat") shiny::validate(shiny::need(is.null(too_many_options(df[[k]], col_label(k))), too_many_options(df[[k]], col_label(k))))
     if (stat %in% c("mean", "sum")) shiny::validate(shiny::need(shiny::isTruthy(p$value) && p$value %in% names(df), "Choose the number to average or sum."))
     ct <- contingency(df, p$row, col, NULL, stat, p$value)
     tab <- ct$table
@@ -846,26 +818,33 @@ mod_overview_server <- function(id, uploaded_df, user_setup) {
       data.frame(c = as.character(cat[k[1]]), g = if (is.null(grp)) "" else as.character(grp[k[1]]), q1 = q[1], med = q[2], q3 = q[3],
                  lf = min(inr), uf = max(inr), mean = mean(yv[k]), n = length(k), stringsAsFactors = FALSE)
     }))
+    # Clean by design: a light fill in the line's colour, thin lines, the
+    # median as the one strong mark, short whiskers, no mean line (the note
+    # and the hover give the mean), slim boxes with air between them.
     p <- plotly::plot_ly()
     for (lv in unique(st$g)) {
       s <- st[st$g == lv, , drop = FALSE]
+      col <- if (nzchar(lv)) pal(grp)[[lv]] else GB_COLS[1]
       p <- plotly::add_trace(p, type = "box", x = factor(s$c, levels = levels(cat)), q1 = s$q1, median = s$med, q3 = s$q3,
-                             lowerfence = s$lf, upperfence = s$uf, mean = s$mean, name = if (nzchar(lv)) lv else "Households",
-                             marker = list(color = if (nzchar(lv)) pal(grp)[[lv]] else GB_COLS[1]),
-                             line = list(color = if (nzchar(lv)) pal(grp)[[lv]] else GB_COLS[1]))
+                             lowerfence = s$lf, upperfence = s$uf, name = if (nzchar(lv)) lv else "Households",
+                             fillcolor = tint(col, 0.16), line = list(color = col, width = 1.4), whiskerwidth = 0.35,
+                             marker = list(color = col), boxpoints = FALSE, legendgroup = lv)
     }
-    plotly::layout(p, boxmode = "group")
+    n_box <- length(unique(st$c))
+    plotly::layout(p, boxmode = "group", boxgap = if (n_box == 1) 0.75 else 0.35, boxgroupgap = 0.18,
+                   xaxis = list(showgrid = FALSE, zeroline = FALSE, showline = TRUE, linecolor = "rgba(128,128,128,0.35)"),
+                   yaxis = list(zeroline = FALSE, gridcolor = "rgba(128,128,128,0.15)"))
   }
   GB_COLS <- c("#0A6EB4", "#f7b825", "#3f7e44", "#c5192d", "#26bde2", "#8a96a3", "#5b6b7c", "#e67e22")
-  # the chart's settings, as last drawn
-  gb_params <- reactiveVal(NULL)
-  observeEvent(input$gb_draw, gb_params(list(x = input$gb_x, y = input$gb_y, g = input$gb_group, type = input$gb_type)))
+  # one look for box plots, means and violins: a light fill in the line's colour
+  tint <- function(hex, a) { v <- grDevices::col2rgb(hex); sprintf("rgba(%d,%d,%d,%.2f)", v[1], v[2], v[3], a) }
+  # The chart follows the fields as they change: the one exception to
+  # "settings wait for their button" (a chart is what the choice is for).
   gb_vars <- reactive({
-    p <- gb_params(); req(p)
-    df <- view_data(); x <- p$x
+    df <- view_data(); x <- input$gb_x
     req(df, shiny::isTruthy(x), x %in% names(df))
-    y <- if (shiny::isTruthy(p$y) && p$y %in% names(df) && p$y != x) p$y
-    g <- if (shiny::isTruthy(p$g) && p$g %in% names(df) && !p$g %in% c(x, y)) p$g
+    y <- if (shiny::isTruthy(input$gb_y) && input$gb_y %in% names(df) && input$gb_y != x) input$gb_y
+    g <- if (shiny::isTruthy(input$gb_group) && input$gb_group %in% names(df) && !input$gb_group %in% c(x, y)) input$gb_group
     list(df = df, x = x, y = y, g = g, kx = ov_var_kind(df[[x]]), ky = if (is.null(y)) "none" else ov_var_kind(df[[y]]))
   })
   # the chart types the chosen variables allow (one column each is looked at)
@@ -879,18 +858,28 @@ mod_overview_server <- function(id, uploaded_df, user_setup) {
   output$gb_note <- renderText(gb_note())
   output$gb_plot <- render_wfp_plotly({
     v <- gb_vars(); df <- v$df; n <- nrow(df)
+    for (k in c(v$x, v$y, v$g)) {
+      if (ov_var_kind(df[[k]]) != "cat") next
+      msg <- too_many_options(df[[k]], col_label(k))
+      shiny::validate(shiny::need(is.null(msg), msg))
+    }
     types <- ov_chart_types(v$kx, v$ky)
-    type <- if (isTRUE(gb_params()$type %in% types)) gb_params()$type else unname(types[1])
+    type <- if (isTRUE(input$gb_type %in% types)) input$gb_type else unname(types[1])
     as_cat <- function(col, k = 12) { f <- ov_categories(df[[col]], rep(1, n), max_levels = k); f }
     num <- function(col) as_number(df[[col]])
     g <- if (is.null(v$g)) NULL else as_cat(v$g, 6)
     lab <- function(col) col_label(col)
     pal <- function(f) stats::setNames(rep_len(GB_COLS, nlevels(f)), levels(f))
-    base_layout <- function(p, xt, yt, legend = !is.null(g)) plotly::layout(p,
-      xaxis = list(title = list(text = xt, font = list(size = 11)), tickfont = list(size = 10), automargin = TRUE),
-      yaxis = list(title = list(text = yt, font = list(size = 11)), tickfont = list(size = 10), automargin = TRUE),
+    base_layout <- function(p, xt, yt, legend = !is.null(g), xr = NULL, yr = NULL) {
+      gb_auto(list(x = xr, y = yr))
+      plotly::layout(p,
+      xaxis = c(list(title = list(text = xt, font = list(size = 11)), tickfont = list(size = 10), automargin = TRUE),
+                axis_bounds(gb_axes()$xmin, gb_axes()$xmax, xr)),
+      yaxis = c(list(title = list(text = yt, font = list(size = 11)), tickfont = list(size = 10), automargin = TRUE),
+                axis_bounds(gb_axes()$ymin, gb_axes()$ymax, yr)),
       showlegend = legend, legend = list(orientation = "h", y = -0.22, font = list(size = 10), title = list(text = if (!is.null(v$g)) lab(v$g) else "")),
       margin = list(l = 8, r = 8, t = 8, b = 8))
+    }
     keep <- function(...) { ok <- Reduce(`&`, lapply(list(...), function(z) !is.na(z))); if (!is.null(g)) ok <- ok & !is.na(g); which(ok) }
 
     # one variable
@@ -901,7 +890,9 @@ mod_overview_server <- function(id, uploaded_df, user_setup) {
         if (is.null(g)) plotly::plot_ly(x = x[i], type = "histogram", marker = list(color = GB_COLS[1]), nbinsx = 30)
         else plotly::plot_ly(x = x[i], color = g[i], colors = pal(g), type = "histogram", alpha = 0.6, nbinsx = 30) |> plotly::layout(barmode = "overlay")
       } else box_plot(x[i], if (!is.null(g)) g[i] else factor(rep(lab(v$x), length(i))), NULL, pal)
-      return(base_layout(p, if (type == "hist") lab(v$x) else "", if (type == "hist") "Households" else lab(v$x)))
+      if (type == "hist") return(base_layout(p, lab(v$x), "Households", xr = range(x[i]),
+                                             yr = c(0, max(graphics::hist(x[i], breaks = 30, plot = FALSE)$counts))))
+      return(base_layout(p, "", lab(v$x), yr = range(x[i])))
     }
     if (v$ky == "none") {
       x <- as_cat(v$x); i <- keep(x)
@@ -912,7 +903,7 @@ mod_overview_server <- function(id, uploaded_df, user_setup) {
       p <- if (is.null(g)) plotly::plot_ly(d, x = ~x, y = ~val, type = "bar", marker = list(color = GB_COLS[1]),
                                            text = ~if (type == "bars") sprintf("%.0f%%", val) else format(val, big.mark = ","), textposition = "outside", cliponaxis = FALSE)
            else plotly::plot_ly(d, x = ~x, y = ~val, color = ~g, colors = pal(g), type = "bar") |> plotly::layout(barmode = "group")
-      return(base_layout(p, lab(v$x), if (type == "bars") "% of households" else "Households"))
+      return(base_layout(p, lab(v$x), if (type == "bars") "% of households" else "Households", yr = c(0, max(d$val))))
     }
     # two numbers
     if (v$kx == "num" && v$ky == "num") {
@@ -936,7 +927,7 @@ mod_overview_server <- function(id, uploaded_df, user_setup) {
         }
       }
       gb_note(paste(notes, collapse = " \u00b7 "))
-      return(base_layout(p, lab(v$x), lab(v$y)))
+      return(base_layout(p, lab(v$x), lab(v$y), xr = range(x[i]), yr = range(y[i])))
     }
     # a category and a number
     if (xor(v$kx == "num", v$ky == "num")) {
@@ -950,18 +941,39 @@ mod_overview_server <- function(id, uploaded_df, user_setup) {
           data.frame(c = as.character(cx[j[1]]), g = as.character(grp[j[1]]), m = m, ci = 1.96 * se, n = length(j))
         }))
         d$c <- factor(d$c, levels = levels(cx))
-        p <- plotly::plot_ly(d, x = ~c, y = ~m, color = if (is.null(g)) I(GB_COLS[1]) else ~g, colors = if (!is.null(g)) pal(g), type = "bar",
-                             error_y = ~list(array = ci, color = "#5b6b7c", thickness = 1.2, width = 4),
-                             hovertemplate = paste0("%{x}: mean %{y:.2f}<extra></extra>")) |> plotly::layout(barmode = "group")
-        return(base_layout(p, lab(ccol), paste("Mean of", lab(ncol), "(95% interval)")))
+        p <- plotly::plot_ly()
+        for (lv in unique(d$g)) {
+          s <- d[d$g == lv, , drop = FALSE]
+          col <- if (is.null(g)) GB_COLS[1] else pal(g)[[lv]]
+          p <- plotly::add_bars(p, x = s$c, y = s$m, name = if (is.null(g)) "Mean" else lv, legendgroup = lv,
+                                marker = list(color = tint(col, 0.16), line = list(color = col, width = 1.4)),
+                                error_y = list(type = "data", array = s$ci, color = col, thickness = 1.2, width = 4),
+                                # the hover reads its words from hovertext (customdata did not reach the template)
+                                hovertext = sprintf("%s%s<br>Mean %s \u00b1 %s<br>%s households", s$c,
+                                                    if (is.null(g)) "" else paste0(" \u00b7 ", lv), fmt5(signif(s$m, 3)),
+                                                    ifelse(is.na(s$ci), "-", fmt5(signif(s$ci, 2))), format(s$n, big.mark = ",")),
+                                hovertemplate = "%{hovertext}<extra></extra>")
+        }
+        p <- plotly::layout(p, barmode = "group", bargap = 0.35, bargroupgap = 0.18, xaxis = list(showgrid = FALSE, zeroline = FALSE))
+        return(base_layout(p, lab(ccol), paste("Mean of", lab(ncol), "(95% interval)"),
+                           yr = c(min(0, d$m - d$ci, na.rm = TRUE), max(d$m + d$ci, d$m, na.rm = TRUE))))
       }
-      if (type == "box") return(base_layout(box_plot(y[i], cx[i], if (is.null(g)) NULL else g[i], pal), lab(ccol), lab(ncol)))
+      if (type == "box") return(base_layout(box_plot(y[i], cx[i], if (is.null(g)) NULL else g[i], pal), lab(ccol), lab(ncol), yr = range(y[i])))
       # a violin needs the values: drawn from a sample on large data
       iv <- if (length(i) > GB_MAX_POINTS) sort(sample(i, GB_MAX_POINTS)) else i
-      p <- plotly::plot_ly(x = cx[iv], y = y[iv], color = if (is.null(g)) I(GB_COLS[1]) else g[iv], colors = if (!is.null(g)) pal(g),
-                           type = "violin", box = list(visible = TRUE), meanline = list(visible = TRUE))
-      p <- plotly::layout(p, boxmode = "group", violinmode = "group")
-      return(base_layout(p, lab(ccol), lab(ncol)))
+      p <- plotly::plot_ly()
+      gv <- if (is.null(g)) factor(rep("Households", length(iv))) else droplevels(g[iv])
+      for (lv in levels(gv)) {
+        k <- iv[gv == lv]
+        col <- if (is.null(g)) GB_COLS[1] else pal(g)[[lv]]
+        p <- plotly::add_trace(p, type = "violin", x = cx[k], y = y[k], name = lv, legendgroup = lv,
+                               fillcolor = tint(col, 0.16), line = list(color = col, width = 1.4), points = FALSE,
+                               box = list(visible = TRUE, width = 0.18, fillcolor = tint(col, 0.35), line = list(color = col, width = 1)),
+                               meanline = list(visible = FALSE), spanmode = "hard")
+      }
+      p <- plotly::layout(p, violinmode = "group", violingap = 0.3, violingroupgap = 0.15,
+                          xaxis = list(showgrid = FALSE, zeroline = FALSE), yaxis = list(zeroline = FALSE))
+      return(base_layout(p, lab(ccol), lab(ncol), yr = range(y[iv])))
     }
     # two categories: bars, one panel per group
     x <- as_cat(v$x); y <- as_cat(v$y, 8); i <- keep(x, y)
@@ -979,17 +991,34 @@ mod_overview_server <- function(id, uploaded_df, user_setup) {
       plotly::layout(pp, barmode = if (type == "dodge") "group" else "stack")
     }
     ytitle <- if (type == "stack100") "% of households" else "Households"
+    tab <- table(x[i], y[i])
+    yr2 <- c(0, if (type == "stack100") 100 else if (type == "dodge") max(tab) else max(rowSums(tab)))
     if (is.null(g)) {
       p <- panel(i, TRUE)
-      return(base_layout(p, lab(v$x), ytitle, legend = TRUE) |> plotly::layout(legend = list(title = list(text = lab(v$y)))))
+      return(base_layout(p, lab(v$x), ytitle, legend = TRUE, yr = yr2) |> plotly::layout(legend = list(title = list(text = lab(v$y)))))
     }
+    gb_auto(list(x = NULL, y = yr2))
     lvs <- levels(droplevels(g[i]))
     panels <- lapply(seq_along(lvs), function(k) panel(i[g[i] == lvs[k]], k == 1) |>
                        plotly::layout(annotations = list(list(text = lvs[k], x = 0.5, y = 1.06, xref = "paper", yref = "paper", showarrow = FALSE, font = list(size = 11)))))
     p <- plotly::subplot(panels, nrows = ceiling(length(lvs) / 3), shareY = TRUE, titleX = FALSE, margin = 0.04)
     plotly::layout(p, showlegend = TRUE, legend = list(orientation = "h", y = -0.15, font = list(size = 10), title = list(text = lab(v$y))),
-                   margin = list(l = 8, r = 8, t = 24, b = 8), yaxis = list(title = list(text = ytitle, font = list(size = 11))))
+                   margin = list(l = 8, r = 8, t = 24, b = 8),
+                   yaxis = c(list(title = list(text = ytitle, font = list(size = 11))), axis_bounds(gb_axes()$ymin, gb_axes()$ymax, yr2)))
   })
+  # the axes, set in the Axes dialog (NA = automatic); gb_auto is the chart's
+  # own range, shown in the dialog
+  gb_axes <- reactiveVal(list(ymin = NA_real_, ymax = NA_real_, xmin = NA_real_, xmax = NA_real_))
+  gb_auto <- reactiveVal(NULL)
+  observeEvent(input$gb_axes, {
+    a <- gb_auto()
+    r <- function(v) if (is.null(v)) "categories" else sprintf("%s to %s", fmt5(signif(v[1], 3)), fmt5(signif(v[2], 3)))
+    hint <- if (!is.null(a)) sprintf("Automatic now: Y %s; X %s.", r(a$y), r(a$x))
+    showModal(axis_dialog(ns, "gbax_", gb_axes(), hint, with_x = TRUE))
+  })
+  observeEvent(input$gbax_apply, { gb_axes(axis_read(input, "gbax_")); removeModal() })
+  observeEvent(input$gbax_reset, { gb_axes(list(ymin = NA_real_, ymax = NA_real_, xmin = NA_real_, xmax = NA_real_)); removeModal() })
+  observe(updateActionButton(session, "gb_axes", label = if (any(is.finite(unlist(gb_axes())))) "Axes (set)" else "Axes"))
 
   ## ---------------------- What these data do not allow (one quiet line)
 

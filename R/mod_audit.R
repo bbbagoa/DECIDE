@@ -73,7 +73,7 @@ mod_audit_server <- function(id, modification_log) {
       # edits of a value) are left out; the export keeps them all.
       empty <- vapply(dat, function(x) all(is.na(x) | !nzchar(trimws(as.character(x)))), logical(1))
       dat <- dat[, !empty | names(dat) %in% c("Phase", "When", "Action"), drop = FALSE]
-      DT::datatable(dat, options = list(pageLength = 15, scrollX = TRUE,
+      tw_datatable(dat, options = list(pageLength = 15, scrollX = TRUE,
                                         language = list(emptyTable = "Nothing logged yet.")),
                     rownames = FALSE)
     })
@@ -84,7 +84,10 @@ mod_audit_server <- function(id, modification_log) {
       },
       content = function(file) {
         dat <- modification_log()
-        if (!is.null(dat)) dat <- data.frame(phase = audit_phase(dat$action), dat, stringsAsFactors = FALSE)
+        if (!is.null(dat)) {
+          dat <- data.frame(phase = audit_phase(dat$action), dat, stringsAsFactors = FALSE)
+          dat$timestamp <- fmt_datetime(dat$timestamp)
+        }
         write_xlsx_readonly(dat %||% data.frame(Message = "Nothing logged yet."), file, "Audit_trail")
       }
     )

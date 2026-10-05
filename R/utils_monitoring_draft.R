@@ -246,8 +246,54 @@ monitoring_round <- function(label, p = NULL, items = list()) {
 
 #' A report as a template: the charts without their data
 #' @noRd
-template_from_items <- function(items) {
-  lapply(items, function(it) it[c("title", "source", "dataset", "spec", "display", "width", "preset")])
+template_from_items <- function(items, keep_comments = FALSE) {
+  lapply(items, function(it) {
+    t <- it[c("title", "source", "dataset", "spec", "display", "width", "preset")]
+    # the officer's own comment (not the finding written from the numbers)
+    if (keep_comments && nzchar(rich_text(it$comment %||% "")) && !identical(it$comment, it$caption)) t$comment <- it$comment
+    t
+  })
+}
+
+TEMPLATE_FORMAT <- "TargetWise monitoring template"
+
+#' A saved template as a JSON file, to share with colleagues or another office
+#'
+#' The charts' definitions, the kept texts and every round's figures; never
+#' the data. JSON rather than an R file: a template received from someone
+#' else carries nothing but values.
+#' @noRd
+template_json <- function(t) {
+  as.character(jsonlite::toJSON(list(
+    format = TEMPLATE_FORMAT, version = 1L, name = t$name, exported = fmt_datetime(),
+    items = t$items, texts = if (length(t$texts)) as.list(t$texts),
+    rounds = lapply(t$rounds %||% list(), function(r) list(label = r$label, date = r$date, indicators = as.list(r$indicators),
+                                                         items = lapply(r$items, as.list)))),
+    auto_unbox = TRUE, null = "null", na = "null", digits = NA, pretty = TRUE))
+}
+
+#' Read a template file back, checking it is one
+#' @return The template (name, items, texts, rounds), or an error with a
+#'   readable message.
+#' @noRd
+read_template_json <- function(txt) {
+  j <- tryCatch(jsonlite::fromJSON(txt, simplifyVector = FALSE), error = function(e) NULL)
+  if (!is.list(j) || !identical(j$format, TEMPLATE_FORMAT)) stop("This file is not a TargetWise monitoring template.", call. = FALSE)
+  one <- function(v, default = "") if (is.null(v) || !length(v)) default else as.character(v[[1]])
+  num <- function(l) { v <- vapply(l %||% list(), function(x) if (is.null(x)) NA_real_ else as.numeric(x), numeric(1)); stats::setNames(v, names(l)) }
+  items <- lapply(j$items %||% list(), function(it) {
+    sp <- lapply(it$spec %||% list(), function(v) if (is.list(v)) as.character(unlist(v)) else v)
+    sp$filter_vals <- as.character(unlist(sp$filter_vals))
+    out <- list(title = one(it$title), source = one(it$source, "process"), dataset = one(it$dataset), spec = sp,
+                display = one(it$display, "chart"), width = one(it$width, "full"), preset = if (!is.null(it$preset)) one(it$preset))
+    if (!is.null(it$comment)) out$comment <- one(it$comment)
+    out
+  })
+  if (!length(items)) stop("The template has no chart.", call. = FALSE)
+  texts <- if (is.list(j$texts)) vapply(j$texts, function(v) one(v), character(1))
+  rounds <- lapply(j$rounds %||% list(), function(r) list(label = one(r$label), date = one(r$date),
+                                                          indicators = num(r$indicators), items = lapply(r$items %||% list(), num)))
+  list(name = one(j$name, "Imported template"), items = items, texts = texts, rounds = rounds)
 }
 
 #' A template's charts on the new round's data
@@ -267,6 +313,9 @@ items_from_template <- function(tpl_items, pdm_df = NULL, process = list(), pdm_
     for (nm in names(sources)) {
       made <- monitoring_item(t$spec, sources[[nm]], t$source, nm, title = t$title, display = t$display %||% "chart",
                               width = t$width %||% "full", preset = t$preset)
+      # the comment kept from the last round comes back as the starting text;
+      # the finding from the new numbers stays offered beside it
+      if (!is.null(made) && !is.null(t$comment)) made$comment <- t$comment
       if (!is.null(made)) break
     }
     if (is.null(made)) skipped <- c(skipped, t$title) else items[[length(items) + 1]] <- made
@@ -371,14 +420,14 @@ monitoring_summary_html <- function(ind, prev = NULL, prev_label = NULL, todo = 
     if (!is.null(prev) && i$key %in% names(prev) && !is.na(prev[[i$key]])) {
       d <- i$value - prev[[i$key]]
       good <- if (identical(i$better, "up")) d > 0 else if (identical(i$better, "down")) d < 0 else NA
-      txt <- if (identical(i$format, "pct")) sprintf("%+.1f pts", 100 * d) else sprintf("%+s", format(round(d), big.mark = ","))
+      txt <- if (identical(i$format, "pct")) sprintf("%+.1f pts", 100 * d) else paste0(if (d > 0) "+" else "", format(round(d), big.mark = ","))
       cls <- if (abs(d) < 1e-9 || is.na(good)) "flat" else if (good) "up" else "down"
       delta <- sprintf('<div class="mx-delta is-%s">%s %s %s</div>', cls,
                        if (d > 0) "\u25b2" else if (d < 0) "\u25bc" else "\u25cf", txt,
                        htmltools::htmlEscape(paste(i18n_lookup("since", lang), prev_label %||% "")))
     }
     sprintf('<div class="mx-tile is-%s"><div class="mx-top"><span class="mx-label">%s</span>%s</div><div class="mx-value">%s</div><div class="mx-sub">%s</div>%s</div>',
-            i$band, tr(i$label), if (nzchar(state[[i$band]])) sprintf('<span class="mx-pill">%s</span>', tr(state[[i$band]])) else "",
+            i$band, tr(i$label), if (nzchar(state[[i$band]])) sprintf('<span class="mx-state"><i></i>%s</span>', tr(state[[i$band]])) else "",
             fmt(i, i$value), tr(i$sub), delta)
   }, character(1))
   todo_html <- if (length(todo)) paste0('<div class="mx-todo"><div class="mx-todo-head">', tr("What to do"), '</div><ol>',
@@ -391,20 +440,24 @@ monitoring_summary_html <- function(ind, prev = NULL, prev_label = NULL, todo = 
 #' Styles of the executive summary, carried in the report itself
 #' @noRd
 monitoring_summary_css <- function() {
+  # A quiet strip: figures side by side, hairline dividers, the status as a
+  # small coloured dot and a word. No boxes, no thick borders.
   paste0('<style>',
-         '.mx-tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin:12px 0 16px}',
-         '.mx-tile{background:var(--tint,#f2f6fa);border-radius:8px;padding:12px 14px;border-top:4px solid #8a96a3}',
-         '.mx-tile.is-ok{border-top-color:#3f7e44}.mx-tile.is-warn{border-top-color:#f7b825}.mx-tile.is-bad{border-top-color:#c5192d}',
-         '.mx-top{display:flex;justify-content:space-between;align-items:flex-start;gap:6px}',
-         '.mx-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted,#5b6b7c)}',
-         '.mx-pill{font-size:10px;font-weight:700;border-radius:999px;padding:1px 8px;color:#fff;background:#8a96a3;white-space:nowrap}',
-         '.is-ok .mx-pill{background:#3f7e44}.is-warn .mx-pill{background:#b87400}.is-bad .mx-pill{background:#c5192d}',
-         '.mx-value{font-size:26px;font-weight:700;line-height:1.2;margin-top:4px;font-variant-numeric:tabular-nums}',
-         '.mx-sub{font-size:12px;color:var(--muted,#5b6b7c)}',
-         '.mx-delta{font-size:12px;font-weight:600;margin-top:6px}.mx-delta.is-up{color:#3f7e44}.mx-delta.is-down{color:#c5192d}.mx-delta.is-flat{color:#5b6b7c}',
-         '.mx-todo{border:1px solid var(--line,#dde3ea);border-radius:8px;padding:10px 14px;margin:0 0 16px}',
-         '.mx-todo-head{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted,#5b6b7c)}',
-         '.mx-todo ol{margin:6px 0 0 18px;padding:0}',
+         '.mx-tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));margin:10px 0 18px;',
+         'border-top:1px solid var(--line,#dde3ea);border-bottom:1px solid var(--line,#dde3ea)}',
+         '.mx-tile{padding:12px 16px;border-left:1px solid var(--line,#dde3ea)}.mx-tile:first-child{border-left:0;padding-left:2px}',
+         '.mx-top{display:flex;justify-content:space-between;align-items:baseline;gap:8px}',
+         '.mx-label{font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted,#5b6b7c)}',
+         '.mx-state{font-size:11px;font-weight:600;color:var(--muted,#5b6b7c);white-space:nowrap}',
+         '.mx-state i{display:inline-block;width:7px;height:7px;border-radius:50%;background:#8a96a3;margin-right:5px;vertical-align:1px}',
+         '.is-ok .mx-state i{background:#3f7e44}.is-warn .mx-state i{background:#e0a100}.is-bad .mx-state i{background:#c5192d}',
+         '.is-bad .mx-state{color:#c5192d}',
+         '.mx-value{font-size:24px;font-weight:600;line-height:1.25;margin-top:6px;color:var(--ink,#1f2a37);font-variant-numeric:tabular-nums}',
+         '.mx-sub{font-size:11.5px;color:var(--muted,#5b6b7c);margin-top:1px}',
+         '.mx-delta{font-size:11.5px;font-weight:600;margin-top:5px}.mx-delta.is-up{color:#3f7e44}.mx-delta.is-down{color:#c5192d}.mx-delta.is-flat{color:#5b6b7c}',
+         '.mx-todo{margin:0 0 18px}',
+         '.mx-todo-head{font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted,#5b6b7c)}',
+         '.mx-todo ol{margin:6px 0 0 18px;padding:0}.mx-todo li{margin:2px 0}',
          '</style>')
 }
 

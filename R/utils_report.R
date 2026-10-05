@@ -21,6 +21,8 @@ md_table <- function(df, digits = 3) {
                               ifelse(v == round(v), format(round(v), big.mark = ",", trim = TRUE),
                                      format(round(v, 5), big.mark = ",", trim = TRUE,
                                             scientific = FALSE, drop0trailing = TRUE)))
+    else if (inherits(v, "Date")) fmt_date(v)
+    else if (inherits(v, "POSIXt")) fmt_datetime(v)
     else ifelse(is.na(v), "", gsub("|", "\\|", as.character(v), fixed = TRUE))
   }
   body <- vapply(seq_len(nrow(df)), function(i)
@@ -54,13 +56,13 @@ design_report_md <- function(x, figures = character(0)) {
   nof <- isTRUE(x$no_outcome)
   if (nof) {
     add("# Vulnerability ranking report", "",
-        sprintf("_Generated %s by TargetWise._", x$generated %||% format(Sys.time(), "%Y-%m-%d %H:%M")), "",
+        sprintf("_Generated %s by TargetWise._", x$generated %||% fmt_datetime()), "",
         "This document records how households were ranked without an outcome indicator, from the data to the ranking",
         "and its threshold, so the ranking can be reviewed, reproduced and challenged.", "",
         "## Key results", "", "@@RANK_CARDS@@", "")
   } else {
     add("# Targeting design report", "",
-        sprintf("_Generated %s by TargetWise._", x$generated %||% format(Sys.time(), "%Y-%m-%d %H:%M")), "",
+        sprintf("_Generated %s by TargetWise._", x$generated %||% fmt_datetime()), "",
         "This document records every step from the assessment data to the scorecard, so the design can be",
         "reviewed, reproduced and challenged.", "")
     if (!is.null(x$errors)) add("## Key results", "", "@@ERRORS@@", "")
@@ -636,7 +638,7 @@ write_design_report <- function(file, x, plots = list(), lang = "en") {
     title = if (nof) "Vulnerability ranking report" else if (!is.null(x$pmt)) "Proxy means test (PMT) design report" else "Targeting design report",
     record = if (nof) "Vulnerability ranking record" else if (!is.null(x$pmt)) "Proxy means test (PMT) design record" else "Targeting design record",
     meta = c("Country office" = x$country_office %||% "",
-             "Generated" = x$generated %||% format(Sys.time(), "%Y-%m-%d %H:%M"),
+             "Generated" = x$generated %||% fmt_datetime(),
              "Status" = if (isTRUE(x$adopted)) "Adopted" else "Draft, not adopted",
              "Source" = x$source %||% "",
              "Areas covered" = x$areas %||% "All areas"),
@@ -775,7 +777,7 @@ report_write_page <- function(file, md, plots = list(), captions = character(0),
     paste0('<dt>', vapply(names(meta), tr, character(1)), '</dt><dd>', vapply(meta, tr, character(1)), '</dd>', collapse = ""),
     '</dl></div></header>',
     '<div class="wrap layout">', toc, '<main>', body, '</main></div>',
-    '<footer class="wrap">', tr("Generated"), ' ', esc(format(Sys.time(), "%Y-%m-%d %H:%M")), '. ', tr(footer), '</footer>',
+    '<footer class="wrap">', tr("Generated"), ' ', esc(fmt_datetime()), '. ', tr(footer), '</footer>',
     # Long tables show their first 10 rows and a button for the rest (all
     # rows are printed).
     '<script>(function(){document.querySelectorAll("main table:not(.bt)").forEach(function(t){',

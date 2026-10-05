@@ -2,7 +2,7 @@
 
 *Reaching the most vulnerable.*
 
-**An R package and Shiny application for humanitarian targeting: design the targeting on assessment data, select beneficiaries on registration data, and monitor what was delivered on post-distribution monitoring (PDM) data.**
+**An R package and Shiny application for humanitarian targeting: design the targeting on assessment data, select beneficiaries on registration data, and check the selection on a post-targeting survey before distribution (or on post-distribution monitoring data).**
 
 It follows the WFP *Targeting and Prioritization Operational Guidance Note* (2021) and the WFP APP-FA Targeting Advisories 1/2025 (outcome indicators are not criteria), 2/2025 (design vs implementation errors) and 3/2025 (ROC curves and thresholds). It is built for large registries (millions of rows), keeps an audit trail of every change, and documents each step in a self-contained report that serves as evidence for review and audit.
 
@@ -35,7 +35,7 @@ The app follows the targeting cycle in three phases, each working on its own dat
 |---|---|---|
 | **1. Targeting Design** | Needs-assessment survey with a food-security outcome (e.g. CARI) | A weighted **scorecard** of household criteria, its eligibility threshold, design inclusion/exclusion errors, a verdict against your tolerance band, and a full HTML design report |
 | **2. Beneficiary Selection** | Household registration list | Data-quality checks and corrections, spot-check sampling, and a beneficiary list produced by the targeting approach you choose (scorecard, categorical, hybrid, community-based, geographic, blanket), with prioritisation when resources are short |
-| **3. Targeting Monitoring** | PDM survey | Implementation inclusion/exclusion errors and coverage, judged with the Advisory 2/2025 decision table |
+| **3. Targeting Monitoring** | Post-targeting survey (preferred) or PDM | A verification sample of selected and non-selected households; implementation inclusion/exclusion errors and coverage, judged with the Advisory 2/2025 decision table, with a decision per area before distribution |
 
 ---
 
@@ -239,7 +239,9 @@ Every variable created on the registration data is written to the **Audit Trail*
 
 ### Phase 3: Targeting Monitoring
 
-Load the PDM extract and map the eligibility (ground truth) and beneficiary columns. Optionally also map a prioritised column, a breakdown unit and weights. Click **Compute accuracy** to get the implementation inclusion/exclusion errors, coverage, precision and recall, the confusion matrix, coverage by unit, and the Advisory 2/2025 implementation verdict.
+**Measure implementation errors before distribution (recommended).** In step 0, draw the verification sample from the current selection: households selected and not selected, area by area (those excluded by design are left out), sized from a margin of error or a fixed number, with a reserve list. Survey them before any distribution, load the survey, match it on the household ID (the group comes from the list) and weight it from the sample design. Each area then gets its own errors and a decision: proceed, review the list first, or pause the distribution there. A post-distribution monitoring (PDM) survey can still be analysed, but it is the least preferred option: nothing can be undone after distribution, vulnerability may have changed, and the assistance itself may have changed some answers.
+
+With a PDM extract (or a survey not drawn in the app), map the eligibility (ground truth) and beneficiary columns. Optionally also map a prioritised column, a breakdown unit and weights. Click **Compute accuracy** to get the implementation inclusion/exclusion errors, coverage, precision and recall, the confusion matrix, coverage by unit, and the Advisory 2/2025 implementation verdict.
 
 ---
 

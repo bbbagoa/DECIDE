@@ -341,9 +341,18 @@ dq_enumerator_server <- function(input, output, session, ns, core) {
   output$enum_metrics_table <- DT::renderDT({
     req(enum_metrics())
     m <- enum_metrics()
-    DT::datatable(
-      m,
-      class = "compact stripe hover",
+    # The flag is a coloured label inside the cell: the tables' theme clears
+    # cell backgrounds, which left white text on white.
+    pill <- ifelse(m$flag == "Review", "<span class='tw-pill tw-pill-review'>Review</span>",
+                   "<span class='tw-pill tw-pill-ok'>OK</span>")
+    d <- data.frame(Flag = pill, Enumerator = as.character(m$enumerator_id), Interviews = m$interviews,
+                    `Average duration (min)` = m$avg_duration, `Empty answers` = m$missingness_rate,
+                    `Average household size` = m$avg_hh_size, Reasons = m$reasons,
+                    check.names = FALSE, stringsAsFactors = FALSE)
+    tw_datatable(
+      d,
+      class = "compact hover",
+      escape = -1,
       options = list(
         pageLength = 10,
         scrollX = TRUE,
@@ -351,26 +360,16 @@ dq_enumerator_server <- function(input, output, session, ns, core) {
         lengthChange = FALSE,
         dom = "tp",
         ordering = TRUE,
-        columnDefs = list(list(targets = which(colnames(m) == "flag") - 1L, searchable = FALSE))
+        autoWidth = FALSE,
+        order = list(list(0, "desc")),
+        columnDefs = list(list(targets = 0, searchable = FALSE, className = "dt-center", width = "70px"),
+                          list(targets = 6, className = "tw-wide-cell"))
       ),
       rownames = FALSE
     ) |>
-      DT::formatRound(c("avg_duration", "avg_hh_size"), digits = 1) |>
-      DT::formatPercentage("missingness_rate", digits = 1) |>
-      DT::formatCurrency("interviews", currency = "", interval = 3, mark = ",", digits = 0) |>
-      DT::formatStyle(
-        columns = "missingness_rate",
-        background = DT::styleColorBar(c(0, 1), "#f7b825"),
-        backgroundSize = "100% 80%",
-        backgroundRepeat = "no-repeat",
-        backgroundPosition = "center"
-      ) |>
-      # Flag column: green for OK, red for Review
-      DT::formatStyle(
-        "flag",
-        backgroundColor = DT::styleEqual(c("OK", "Review"), c("#3f7e44", "#c5192d")),
-        color = "#FFFFFF", fontWeight = "bold"
-      )
+      DT::formatRound(c("Average duration (min)", "Average household size"), digits = 1) |>
+      DT::formatPercentage("Empty answers", digits = 1) |>
+      DT::formatCurrency("Interviews", currency = "", interval = 3, mark = ",", digits = 0)
   })
 }
 
@@ -426,7 +425,7 @@ enumerator_flags <- function(m, per_day = NULL) {
     i <- match(busy$enumerator_id, as.character(m$enumerator_id))
     keep <- !is.na(i)
     if (any(keep)) add(i[keep], sprintf("Busy day: %d interviews on %s, over the team's usual maximum of %.0f",
-                                        busy$Freq[keep], busy$day[keep], day_hi))
+                                        busy$Freq[keep], fmt_date(as_date_any(busy$day[keep])), day_hi))
   }
 
   m$reasons <- vapply(reasons, function(r) paste(r, collapse = "; "), character(1))

@@ -93,7 +93,7 @@ mod_session_manager_server <- function(
     session_choices <- function(sessions) {
       lab <- c(session_kinds(), all = "Older sessions (all the work)")
       mb <- ifelse(sessions$size < 1024^2, sprintf("%.0f KB", sessions$size / 1024), sprintf("%.1f MB", sessions$size / 1024^2))
-      opts <- stats::setNames(sessions$name, sprintf("%s (%s, %s)", sessions$label, format(sessions$saved_at, "%Y-%m-%d %H:%M"), mb))
+      opts <- stats::setNames(sessions$name, sprintf("%s (%s, %s)", sessions$label, fmt_datetime(sessions$saved_at), mb))
       grp <- split(opts, factor(sessions$kind, levels = names(lab)))
       grp <- grp[lengths(grp) > 0]
       # a one-option group would render as a single option named after the group
@@ -182,7 +182,7 @@ mod_session_manager_server <- function(
         showModal(modalDialog(
           title = tagList(bsicons::bs_icon("check2-circle"), sprintf(" Session \"%s\" restored", shown)),
           size = "m", easyClose = TRUE, footer = modalButton("Continue"),
-          tags$p(class = "small text-muted", sprintf("Saved %s.", format(saved$saved_at %||% Sys.time(), "%Y-%m-%d %H:%M"))),
+          tags$p(class = "small text-muted", sprintf("Saved %s.", fmt_datetime(saved$saved_at %||% Sys.time()))),
           tags$ul(class = "small", lapply(got, tags$li))
         ))
       }

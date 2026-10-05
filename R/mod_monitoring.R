@@ -17,7 +17,7 @@ mod_monitoring_ui <- function(id) {
   htmltools::bindFillRole(item = TRUE, tags$div(class = "wfp-scroll-page", bslib::navset_underline(
     id = ns("tabs"),
     bslib::nav_panel(
-      value = "pdm", title = tagList(bsicons::bs_icon("bullseye"), " 1. PDM / baseline analysis"),
+      value = "pdm", title = tagList(bsicons::bs_icon("bullseye"), " 1. Implementation errors"),
       mod_pdm_ui(ns("pdm"), explore = mod_chart_builder_ui(ns("pdm_charts"), presets = "PDM"))
     ),
     bslib::nav_panel(
@@ -70,12 +70,14 @@ mod_monitoring_ui <- function(id) {
                                                              class = "btn-outline-primary",
                                                              title = "Fill the report with this template's charts, with findings written from the numbers"))),
               tags$p(class = "small text-muted mb-1",
-                     "At the end of a round, save this report as a template: next round, pick it and click Draft to compare."),
-              tags$div(class = "d-flex gap-2 flex-wrap",
-                       actionButton(ns("tpl_save"), "Save as template", icon = icon("floppy-disk"),
-                                    class = "btn-outline-secondary btn-sm"),
+                     "Share a saved template with colleagues or another office as a file (charts and figures, never the data), or import one."),
+              tags$div(class = "d-flex gap-2 flex-wrap align-items-start",
+                       downloadButton(ns("tpl_export"), "Export", class = "btn-outline-secondary btn-sm",
+                                      title = "Save the template picked above as a file"),
                        actionButton(ns("tpl_delete"), NULL, icon = icon("trash"), class = "btn-outline-danger btn-sm",
                                     title = "Delete the saved template picked above")),
+              fileInput(ns("tpl_import"), NULL, accept = ".json", width = "100%", buttonLabel = "Import...",
+                        placeholder = "A template file (.json)"),
               uiOutput(ns("rounds_note"))),
             rich_text_input(ns("context"), "Context", rows = 3,
                             placeholder = "Programme, area, period, targeting approach, who collected what."),
@@ -83,11 +85,15 @@ mod_monitoring_ui <- function(id) {
                             placeholder = "What worked, what did not, where and for whom."),
             rich_text_input(ns("recommendations"), "Recommendations", rows = 3,
                             placeholder = "What to change in the next round, and who does it."),
-            checkboxInput(ns("include_pdm"), "Include the implementation errors from the PDM / baseline analysis", value = TRUE),
+            checkboxInput(ns("include_pdm"), "Include the implementation errors (post-targeting survey or PDM)", value = TRUE),
             # Checked first (small groups, missing titles or comments...), then
             # downloaded through the hidden link below.
             actionButton(ns("report_check"), "Targeting monitoring report (HTML)", icon = icon("download"), class = "btn-primary w-100"),
             tags$div(class = "small text-muted mt-1", "The report is checked first (titles, comments, small groups); you can still export as it is."),
+            # Next round starts from this one: same charts, change since this round.
+            actionButton(ns("tpl_save"), "Save this report as a template", icon = icon("floppy-disk"),
+                         class = "btn-outline-primary w-100 mt-2",
+                         title = "Keep the charts (not the data) and this round's figures; next round, pick it and click Draft"),
             tags$div(style = "display:none", downloadButton(ns("report"), "Download")),
             tags$script(HTML("$(function(){Shiny.addCustomMessageHandler('tw-mon-download',function(m){var a=document.getElementById(m.id);if(a)a.click();});});"))
           )
@@ -103,11 +109,11 @@ mod_monitoring_ui <- function(id) {
 
 #' @noRd
 mod_monitoring_server <- function(id, workspace = NULL, country_office = reactive(NULL), modification_log = NULL,
-                                  user_setup = NULL) {
+                                  user_setup = NULL, selection = NULL) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
     pdm <- mod_pdm_server("pdm", workspace, country_office = country_office, modification_log = modification_log,
-                          user_setup = user_setup)
+                          user_setup = user_setup, selection = selection)
 
     items <- reactiveVal(list())
     add_item <- function(it) {
@@ -193,6 +199,9 @@ mod_monitoring_server <- function(id, workspace = NULL, country_office = reactiv
         t <- saved_templates()[[sub("^saved:", "", sel)]]
         need_ok(!is.null(t), "Pick a template first.")
         previous_rounds(t$rounds %||% list())
+        # the kept texts fill the boxes that are still empty
+        for (k in intersect(names(t$texts), c("context", "findings", "recommendations")))
+          if (!nzchar(trimws(rich_text(input[[k]] %||% ""))) && nzchar(trimws(rich_text(t$texts[[k]])))) update_rich_text(session, k, t$texts[[k]])
         items_from_template(t$items, pdm$df(), process_sets(), pdm_label())
       }
       if (!length(res$items)) {
@@ -231,6 +240,8 @@ mod_monitoring_server <- function(id, workspace = NULL, country_office = reactiv
                " the same charts are drawn on the new data and the report shows what changed since this round."),
         textInput(ns("tpl_name"), "Template name", value = if (startsWith(input$tpl %||% "", "saved:")) cur else "Monitoring report", width = "100%"),
         textInput(ns("tpl_round"), "This round", value = format(Sys.Date(), "%B %Y"), width = "100%"),
+        checkboxInput(ns("tpl_keep_texts"), "Keep my comments and the report texts (context, findings, recommendations) as the starting point next round",
+                      value = TRUE),
         footer = tagList(modalButton("Cancel"), actionButton(ns("tpl_save_go"), "Save", class = "btn-primary", icon = icon("floppy-disk")))))
     })
     observeEvent(input$tpl_save_go, {
@@ -238,7 +249,10 @@ mod_monitoring_server <- function(id, workspace = NULL, country_office = reactiv
       need_ok(nzchar(nm) && nzchar(rd), "Name the template and the round.")
       sv <- saved_templates()
       t <- sv[[nm]] %||% list(name = nm, rounds = list())
-      t$items <- template_from_items(items())
+      keep <- isTRUE(input$tpl_keep_texts)
+      t$items <- template_from_items(items(), keep_comments = keep)
+      t$texts <- if (keep) c(context = input$context %||% "", findings = input$findings %||% "",
+                             recommendations = input$recommendations %||% "")
       t$rounds <- c(Filter(function(r) !identical(r$label, rd), t$rounds %||% list()),
                     list(monitoring_round(rd, report_pdm(checks = TRUE), items())))
       sv[[nm]] <- t
@@ -248,6 +262,34 @@ mod_monitoring_server <- function(id, workspace = NULL, country_office = reactiv
       updateSelectInput(session, "tpl", selected = paste0("saved:", nm))
       audit_add(modification_log, "Monitoring", "Report saved as a template", sprintf("%s, round %s", nm, rd))
       showNotification(sprintf("Saved '%s' with the figures of %s.", nm, rd), type = "message")
+    })
+    # A template as a file, to share; and a shared one brought in.
+    output$tpl_export <- download_handler(
+      filename = function() paste0(gsub("[^A-Za-z0-9_-]+", "_", sub("^saved:", "", input$tpl %||% "template")), "_monitoring_template.json"),
+      content = function(file) {
+        t <- saved_templates()[[sub("^saved:", "", input$tpl %||% "")]]
+        req(t)
+        writeLines(template_json(t), file, useBytes = TRUE)
+        audit_add(modification_log, "Monitoring", "Template exported", t$name %||% "")
+      })
+    observe(gate_button("tpl_export", startsWith(input$tpl %||% "", "saved:"),
+                        "Pick one of your saved templates (under 'Saved from earlier rounds') to export it."))
+    observeEvent(input$tpl_import, {
+      f <- input$tpl_import; req(f)
+      t <- tryCatch(read_template_json(paste(readLines(f$datapath, encoding = "UTF-8", warn = FALSE), collapse = "\n")),
+                    error = function(e) e)
+      need_ok(!inherits(t, "error"), if (inherits(t, "error")) conditionMessage(t) else "")
+      sv <- saved_templates()
+      nm <- t$name; k <- 2L
+      while (nm %in% names(sv)) { nm <- sprintf("%s (%d)", t$name, k); k <- k + 1L }
+      t$name <- nm
+      sv[[nm]] <- t
+      saved_templates(sv)
+      tryCatch(app_setting_set("monitoring_templates", sv, who), error = function(e) NULL)
+      updateSelectInput(session, "tpl", selected = paste0("saved:", nm))
+      audit_add(modification_log, "Monitoring", "Template imported", sprintf("%s (%d charts, %d rounds)", nm, length(t$items), length(t$rounds)))
+      showNotification(sprintf("Template '%s' imported: %d charts, %d earlier round%s. Load this round's data, then click Draft.",
+                               nm, length(t$items), length(t$rounds), if (length(t$rounds) == 1) "" else "s"), type = "message", duration = 10)
     })
     observeEvent(input$tpl_delete, {
       sel <- input$tpl %||% ""
@@ -262,7 +304,7 @@ mod_monitoring_server <- function(id, workspace = NULL, country_office = reactiv
       if (!length(r)) return(NULL)
       last <- r[[length(r)]]
       tags$div(class = "small mt-1", bsicons::bs_icon("clock-history"),
-               sprintf(" Compared with %s (%s)%s.", last$label, last$date,
+               sprintf(" Compared with %s (%s)%s.", last$label, fmt_date(last$date),
                        if (length(r) > 1) sprintf(" and %d earlier round%s", length(r) - 1, if (length(r) > 2) "s" else "") else ""))
     })
 
@@ -360,7 +402,7 @@ mod_monitoring_server <- function(id, workspace = NULL, country_office = reactiv
       tol <- pdm$tolerance()
       list(metrics = r$metrics, n = r$n, by_unit = r$by_unit, excl_design = r$excl_design, tolerance = tol,
            elig_source = r$elig_source, weighting = r$weighting, strata = r$strata, no_nonbenef = r$no_nonbenef,
-           kind = pdm$kind(), areas = pdm$areas(), unit_col = r$unit_col,
+           kind = pdm$kind(), areas = pdm$areas(), unit_col = r$unit_col, decisions = r$decisions,
            verdict = tryCatch(error_verdict(r$metrics$inclusion_error, r$metrics$exclusion_error, tol[1], tol[2],
                                             stage = "implementation"), error = function(e) NULL))
     }
