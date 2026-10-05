@@ -512,7 +512,7 @@ mod_scorecard_ui <- function(id) {
               title = tags$span(bsicons::bs_icon("search"), " Explore the threshold"),
               # Two charts per tab, side by side
               bslib::nav_panel(
-                tagList("ROC and ", binary_only("by vulnerability"), pmt_only("by poverty status")),
+                "How well it separates",
                 with_outcome(bslib::layout_columns(
                   col_widths = c(6, 6),
                   tags$div(tags$div(class = "small text-muted", "ROC curve ", chart_help("roc_plot")),
@@ -521,7 +521,7 @@ mod_scorecard_ui <- function(id) {
                            plotly::plotlyOutput(ns("box_plot"), height = "420px")))),
                 without_outcome(tags$div(class = "small text-muted p-2", "Needs an outcome indicator: see the ranking distribution above."))),
               bslib::nav_panel(
-                "Scores and criteria met",
+                "Where households fall",
                 bslib::layout_columns(
                   col_widths = c(6, 6),
                   tags$div(with_outcome(tags$div(class = "small text-muted", "Score distribution ", chart_help("score_plot")),
@@ -533,7 +533,7 @@ mod_scorecard_ui <- function(id) {
               # read) the selection by number of criteria met. Taller: one
               # bar per criterion.
               bslib::nav_panel(
-                "Drivers and by criterion",
+                "What drives it",
                 bslib::layout_columns(
                   col_widths = c(6, 6),
                   tags$div(tags$div(class = "small text-muted", "What drives the score ", chart_help("contribution_plot")),

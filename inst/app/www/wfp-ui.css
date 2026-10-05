@@ -2972,3 +2972,16 @@ table.dataTable td.tw-wide-cell, table.dataTable th.tw-wide-cell { min-width: 32
 .nav-link { white-space: nowrap; }
 .wfp-fit-details > summary { cursor: pointer; }
 .wfp-fit-details > div { margin-top: .35rem; padding-left: 1.1rem; }
+/* Model tables: p-values and directions as coloured text, no pills (saves room) */
+.wfp-p { min-width: 0; padding: 0; border-radius: 0; background: none !important; font-weight: 700; }
+.wfp-p-p001 { color: #1e6b2a; }
+.wfp-p-p01  { color: #3f7e44; }
+.wfp-p-p05  { color: #5f9a63; }
+.wfp-p-p10  { color: #b07a00; }
+.wfp-p-ns, .wfp-p-na { color: var(--text-muted); font-weight: 500; }
+[data-bs-theme="dark"] .wfp-p-p001, [data-bs-theme="dark"] .wfp-p-p01 { color: #7fd08a; }
+[data-bs-theme="dark"] .wfp-p-p05 { color: #a9dcb0; }
+[data-bs-theme="dark"] .wfp-p-p10 { color: #f2c464; }
+[data-bs-theme="dark"] .wfp-p-ns, [data-bs-theme="dark"] .wfp-p-na { color: #9aa8b8; }
+.wfp-p-legend .wfp-p { margin-right: .5rem; }
+.wfp-dir { padding: 0; border-radius: 0; background: none !important; }

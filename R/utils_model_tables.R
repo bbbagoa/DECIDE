@@ -75,7 +75,8 @@ p_legend <- function() {
 
 dir_badge <- function(d) {
   if (is.na(d)) return(tags$span(class = "text-muted", "-"))
-  tags$span(class = paste("wfp-dir", if (d == "inclusion") "is-incl" else "is-excl"), d)
+  incl <- d == "inclusion"
+  tags$span(class = paste("wfp-dir", if (incl) "is-incl" else "is-excl"), title = d, if (incl) "Incl" else "Excl")
 }
 
 #' Fitted model coefficients as an HTML table
