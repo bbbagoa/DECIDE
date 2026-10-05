@@ -44,17 +44,26 @@ The app follows the targeting cycle in three phases, each working on its own dat
 ### Requirements
 
 - **R ≥ 4.6** (the package is developed and checked against R 4.6).
-- On Windows, no compiler is needed: every dependency is available as a binary from CRAN.
+- **Rtools (Windows), required to build the package.** Installing from GitHub (route A), with renv, or from a clone builds TargetWise from its source, and R cannot do that without Rtools. Install the Rtools that matches your R version (**Rtools 4.6 for R 4.6**) from <https://cran.r-project.org/bin/windows/Rtools/>, keeping the default options, then restart R and check:
+
+  ```r
+  install.packages("pkgbuild")
+  pkgbuild::check_build_tools(debug = TRUE)   # must end with TRUE
+  ```
+
+  On macOS the equivalent is the Xcode command line tools (`xcode-select --install` in a terminal); on Linux, `build-essential` (Debian/Ubuntu) or the "Development Tools" group (Fedora/RHEL). Only the offline installer (route B) works without Rtools: it ships the package already built.
 - A modern browser (Chrome, Edge, Firefox).
 
 The app runs entirely on your computer and **works offline** once installed; only the MODA/Kobo/ODK import and the map's background tiles need a connection. The repository is **private**: installing from GitHub needs an access token (a read-only key given by the maintainer). Choose the route that fits:
 
 | Route | Internet needed | Needs |
 |---|---|---|
-| **A. From GitHub** (recommended) | Yes, to install | An access token |
-| **B. Offline installer** (Windows) | No | The installer file |
+| **A. From GitHub** (recommended) | Yes, to install | **Rtools** and an access token |
+| **B. Offline installer** (Windows) | No | The installer file (no Rtools) |
 
-### A. From GitHub (internet, access token)
+### A. From GitHub (internet, Rtools, access token)
+
+**0. Install Rtools** (Windows) as described under [Requirements](#requirements), and check that `pkgbuild::check_build_tools(debug = TRUE)` returns `TRUE`. Without it the installation stops with *"Could not find tools necessary to compile a package"*.
 
 **1. Save the token once on the computer.** The maintainer gives you a token (it starts with `github_pat_`). In R or RStudio:
 
@@ -73,7 +82,7 @@ pak::pak("bbbagoa/TargetWise")
 
 `pak` finds the token saved in step 1 (or in `GITHUB_PAT`) by itself.
 
-Every dependency is installed from CRAN at the same time. On Windows no compiler is needed. The first installation takes a few minutes.
+Every dependency is installed from CRAN at the same time, and TargetWise itself is built with Rtools. The first installation takes a few minutes.
 
 - **A given version** (for example the one your office validated): `pak::pak("bbbagoa/TargetWise@v0.1.0")`, using a tag from the [Releases](https://github.com/bbbagoa/TargetWise/releases) page.
 - **The optional machine-learning models** (random forest, XGBoost, naive Bayes, neural network, SVM): `install.packages(c("ranger", "xgboost", "e1071", "nnet"))`.
@@ -81,7 +90,7 @@ Every dependency is installed from CRAN at the same time. On Windows no compiler
 **Common errors**
 - `HTTP error 404. Not Found` (or `Bad credentials`): the token is missing, mistyped, expired, or does not give access to this repository. Run `gitcreds::gitcreds_set()` again with the current token (choose *Replace these credentials*); ask the maintainer for a new one if it expired.
 - `HTTP error 403. API rate limit exceeded`: only without a token; set it as in step 1.
-- `Could not find tools necessary to compile a package`: a dependency has no ready-made binary for your R version. Install the latest R release, or use the offline installer.
+- `Could not find tools necessary to compile a package` (or `WARNING: Rtools is required to build R packages`): Rtools is missing, or its version does not match R (Rtools 4.6 for R 4.6). Install the matching Rtools, restart R, and check with `pkgbuild::check_build_tools(debug = TRUE)`. If you cannot install it (no admin rights), use the offline installer.
 - Behind a proxy: set `Sys.setenv(https_proxy = "http://proxy:port")` before installing.
 
 ### B. Offline installer (Windows, no internet)
@@ -123,7 +132,7 @@ What changed in each version is listed in [NEWS.md](NEWS.md). Your saved session
 
 ### Reproducible install with renv (for deployments)
 
-The repository ships an `renv.lock` with the exact package versions used in development:
+The repository ships an `renv.lock` with the exact package versions used in development (needs **Rtools**, as in route A):
 
 ```r
 # in a clone of the repository
@@ -325,6 +334,8 @@ Set these environment variables, for example in `.Renviron` or in your hosting p
 
 ## Development
 
+Developing, testing and building TargetWise need **Rtools** on Windows (see [Requirements](#requirements)).
+
 ```r
 # in a clone of the repository
 renv::restore()
@@ -349,7 +360,7 @@ dev/          development and deployment scripts
 1. Bump `Version:` in `DESCRIPTION` (e.g. 0.1.0 → 0.2.0; use 0.1.1 for a bug fix). Users are only told about a new version when this number increases.
 2. Add a section at the top of `NEWS.md` describing the changes.
 3. Run `devtools::test()` and `devtools::check()`.
-4. Build the release on Windows, with the same R version as your users:
+4. Build the release on Windows, with the same R version as your users and the matching **Rtools** (it builds the Windows binary that the offline installer ships, so users of route B do not need Rtools):
 
    ```r
    source("dev/release.R")
