@@ -2967,3 +2967,8 @@ table.dataTable td.tw-wide-cell, table.dataTable th.tw-wide-cell { min-width: 32
 .wfp-model-table.wfp-cmp td:last-child { text-align: right; white-space: nowrap; }
 .wfp-model-table.wfp-cmp tr.wfp-band-row td { text-align: left; }
 .tw-pill-na { background: rgba(128,128,128,.14); color: var(--text-muted); }
+/* Tab names with a mode-dependent word (binary_only / pmt_only) stay on one line */
+.nav-link .shiny-panel-conditional.shiny-conditional--shown { display: inline; }
+.nav-link { white-space: nowrap; }
+.wfp-fit-details > summary { cursor: pointer; }
+.wfp-fit-details > div { margin-top: .35rem; padding-left: 1.1rem; }

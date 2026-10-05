@@ -174,6 +174,8 @@ design_report_md <- function(x, figures = character(0)) {
                 format(m$n_train, big.mark = ","), format(m$n_test, big.mark = ","), m$seed),
         sprintf("- Survey weights: %s", if (shiny::isTruthy(m$weights)) paste0("`", m$weights, "`") else "none"),
         if (length(m$dropped)) sprintf("- Removed by the model: %s", paste0("`", m$dropped, "`", collapse = ", ")),
+        if (length(m$filled)) sprintf("- Missing answers counted as 'no' (as in the score): %s",
+                                      paste(sprintf("`%s` (%s)", names(m$filled), format(m$filled, big.mark = ",")), collapse = ", ")),
         if (!is.null(m$fit_stats)) sprintf("- Fit: %s", m$fit_stats),
         if (isFALSE(m$converged)) "- **Warning:** the model did not converge cleanly (likely complete separation).",
         "")

@@ -291,11 +291,21 @@ mod_scorecard_ui <- function(id) {
                                  choices = c("(none: more criteria met = more vulnerable)" = ""), width = "100%",
                                  options = list(allowEmptyOption = TRUE))),
                 # Rarely changed: survey weights, the models compared and
-                # stepwise wait folded under "More options" (defaults apply).
-                bslib::accordion(
-                  id = ns("fit_more"), open = FALSE, class = "wfp-more mb-2",
-                  bslib::accordion_panel(
-                    "More options", value = "more", icon = bsicons::bs_icon("sliders"),
+                # stepwise sit in a dialog (defaults apply); the line under
+                # the button says what is set. The dialog stays on the page,
+                # hidden, so restoring a session and loading data still set them.
+                tags$button(type = "button", class = "btn btn-outline-secondary btn-sm w-100",
+                            `data-bs-toggle` = "modal", `data-bs-target` = paste0("#", ns("fit_more_modal")),
+                            bsicons::bs_icon("sliders"), " More options"),
+                tags$div(class = "small text-muted mt-1 mb-2", textOutput(ns("fit_more_summary"), inline = TRUE)),
+                tags$div(
+                  class = "modal fade", id = ns("fit_more_modal"), tabindex = "-1", `aria-hidden` = "true",
+                  tags$div(class = "modal-dialog", tags$div(
+                    class = "modal-content",
+                    tags$div(class = "modal-header",
+                             tags$h5(class = "modal-title", bsicons::bs_icon("sliders"), " More options"),
+                             tags$button(type = "button", class = "btn-close", `data-bs-dismiss` = "modal", `aria-label` = "Close")),
+                    tags$div(class = "modal-body",
                 selectizeInput(ns("model_weights"),
                                tagList("Survey weights (optional)", info_tip("Sampling weight column. When set, the model counts each household by its weight so the estimates represent the population, not the sample.")),
                                choices = c("(none)" = ""), width = "100%", options = list(allowEmptyOption = TRUE)),
@@ -328,7 +338,12 @@ mod_scorecard_ui <- function(id) {
                     condition = sprintf("input['%s'] !== 'none'", ns("stepwise")),
                     selectInput(ns("stepwise_ic"),
                                 tagList("Criterion", info_tip("AIC is the usual choice; BIC penalises each criterion more (log of the sample size) and keeps fewer.")),
-                                choices = c("AIC" = "aic", "BIC" = "bic"), selected = "aic", width = "100%", selectize = FALSE)))))),
+                                choices = c("AIC" = "aic", "BIC" = "bic"), selected = "aic", width = "100%", selectize = FALSE))))),
+                    tags$div(class = "modal-footer",
+                             tags$span(class = "small text-muted me-auto", "Applied at the next Fit."),
+                             tags$button(type = "button", class = "btn btn-primary", `data-bs-dismiss` = "modal", "Done"))))),
+                # a modal inside a card can sit under its backdrop: move it to the page body
+                tags$script(HTML(sprintf("$(function(){ $('#%s').appendTo(document.body); });", ns("fit_more_modal")))),
 
                 tags$div(
                   class = "wfp-fit-go",
@@ -344,6 +359,7 @@ mod_scorecard_ui <- function(id) {
             uiOutput(ns("runs_ui")),
             hr(),
             uiOutput(ns("weights_ui")),
+            uiOutput(ns("fit_details")),
             # Right under the estimates: which model to trust is the next
             # question once the coefficients are read.
             uiOutput(ns("comparison_ui")),
@@ -494,37 +510,38 @@ mod_scorecard_ui <- function(id) {
             bslib::navset_card_underline(
               id = ns("thr_explore"), full_screen = TRUE,
               title = tags$span(bsicons::bs_icon("search"), " Explore the threshold"),
+              # Two charts per tab, side by side
               bslib::nav_panel(
-                "ROC",
-                with_outcome(tags$div(class = "small text-muted", "ROC curve ", chart_help("roc_plot")),
-                             plotly::plotlyOutput(ns("roc_plot"), height = "420px")),
-                without_outcome(tags$div(class = "small text-muted p-2", "Needs an outcome indicator."))),
-              bslib::nav_panel(
-                "Scores",
-                with_outcome(tags$div(class = "small text-muted", "Score distribution ", chart_help("score_plot")),
-                             plotly::plotlyOutput(ns("score_plot"), height = "420px")),
+                tagList("ROC and ", binary_only("by vulnerability"), pmt_only("by poverty status")),
+                with_outcome(bslib::layout_columns(
+                  col_widths = c(6, 6),
+                  tags$div(tags$div(class = "small text-muted", "ROC curve ", chart_help("roc_plot")),
+                           plotly::plotlyOutput(ns("roc_plot"), height = "420px")),
+                  tags$div(tags$div(class = "small text-muted", "Score by group ", chart_help("box_plot")),
+                           plotly::plotlyOutput(ns("box_plot"), height = "420px")))),
                 without_outcome(tags$div(class = "small text-muted p-2", "Needs an outcome indicator: see the ranking distribution above."))),
               bslib::nav_panel(
-                tagList(binary_only("By vulnerability"), pmt_only("By poverty status")),
-                with_outcome(tags$div(class = "small text-muted", "Score by group ", chart_help("box_plot")),
-                             plotly::plotlyOutput(ns("box_plot"), height = "420px")),
-                without_outcome(tags$div(class = "small text-muted p-2", "Needs an outcome indicator."))),
-              bslib::nav_panel(
-                "Drivers",
-                tags$div(class = "small text-muted", "What drives the score ", chart_help("contribution_plot")),
-                plotly::plotlyOutput(ns("contribution_plot"), height = "460px")),
-              bslib::nav_panel(
-                "Criteria met",
-                tags$div(class = "small text-muted", "Criteria met, eligible vs not ", chart_help("met_plot")),
-                plotly::plotlyOutput(ns("met_plot"), height = "460px")),
+                "Scores and criteria met",
+                bslib::layout_columns(
+                  col_widths = c(6, 6),
+                  tags$div(with_outcome(tags$div(class = "small text-muted", "Score distribution ", chart_help("score_plot")),
+                                        plotly::plotlyOutput(ns("score_plot"), height = "420px")),
+                           without_outcome(tags$div(class = "small text-muted p-2", "Score distribution: needs an outcome indicator."))),
+                  tags$div(tags$div(class = "small text-muted", "Criteria met, eligible vs not ", chart_help("met_plot")),
+                           plotly::plotlyOutput(ns("met_plot"), height = "420px")))),
               # coverage with an outcome; without one (coverage cannot be
-              # read) the selection by number of criteria met
+              # read) the selection by number of criteria met. Taller: one
+              # bar per criterion.
               bslib::nav_panel(
-                "By criterion",
-                with_outcome(tags$div(class = "small text-muted", "Coverage by criterion ", chart_help("coverage_plot")),
-                             plotly::plotlyOutput(ns("coverage_plot"), height = "460px")),
-                without_outcome(tags$div(class = "small text-muted", "Share selected by number of criteria met ", chart_help("sel_by_met_plot")),
-                                plotly::plotlyOutput(ns("sel_by_met_plot"), height = "460px"))),
+                "Drivers and by criterion",
+                bslib::layout_columns(
+                  col_widths = c(6, 6),
+                  tags$div(tags$div(class = "small text-muted", "What drives the score ", chart_help("contribution_plot")),
+                           plotly::plotlyOutput(ns("contribution_plot"), height = "640px")),
+                  tags$div(with_outcome(tags$div(class = "small text-muted", "Coverage by criterion ", chart_help("coverage_plot")),
+                                        plotly::plotlyOutput(ns("coverage_plot"), height = "640px")),
+                           without_outcome(tags$div(class = "small text-muted", "Share selected by number of criteria met ", chart_help("sel_by_met_plot")),
+                                           plotly::plotlyOutput(ns("sel_by_met_plot"), height = "640px"))))),
               bslib::nav_spacer(),
               bslib::nav_item(
                 actionButton(ns("pct_open"), "Score percentiles", icon = icon("percent"),
@@ -1812,6 +1829,17 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
       showNotification(sprintf("Targeting profile%s %s.", if (length(pick) > 1) "s" else "", paste(pick, collapse = ", ")), type = "message")
     })
 
+    # What the More options dialog holds, in one line under its button
+    output$fit_more_summary <- renderText({
+      w <- input$model_weights
+      cmp <- if (pmt()) input$pmt_compare else input$compare_models
+      st <- input$stepwise %||% "none"
+      paste(c(if (shiny::isTruthy(w)) paste("Weights:", w) else "No survey weights",
+              sprintf("%d model%s compared", length(cmp), if (length(cmp) == 1) "" else "s"),
+              if (!no_outcome()) { if (identical(st, "none")) "no stepwise" else sprintf("stepwise %s (%s)", st, toupper(input$stepwise_ic %||% "aic")) }),
+            collapse = " \u00b7 ")
+    })
+
     # The other models' effects per criterion, shown in the estimates table
     # (the chosen model's own column would repeat its beta)
     other_effects <- function(f) {
@@ -2127,6 +2155,33 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
       saved_points(NULL); weight_bump(weight_bump() + 1)
     }, ignoreInit = TRUE)
 
+    # Below the estimates, folded: the per-criterion notes on the fit (missing
+    # answers counted as "no", criteria removed by stepwise), which grow with
+    # the number of criteria.
+    output$fit_details <- renderUI({
+      f <- fitted()
+      if (is.null(f) || (!length(f$filled) && !length(f$dropped))) return(NULL)
+      head <- c(if (length(f$filled)) sprintf("%d criteria had missing answers counted as %s", length(f$filled),
+                                               if (!is.null(f$pmt)) "'no' (numbers as the average)" else "'no'"),
+                if (length(f$dropped)) sprintf("%d removed by stepwise selection", length(f$dropped)))
+      tags$details(
+        class = "wfp-fit-details small text-muted mt-2",
+        tags$summary(bsicons::bs_icon("info-circle"), " Notes on the fit: ", paste(head, collapse = " \u00b7 ")),
+        # Missing criterion answers count as "no", in the model as in the score.
+        if (length(f$filled)) tags$div(
+          class = "small text-muted",
+          bsicons::bs_icon("info-circle"), if (!is.null(f$pmt)) " Missing answers counted as 'no', missing numbers as the average (as in the score): "
+                                           else " Missing answers counted as 'no' (as in the score): ",
+          paste(sprintf("%s (%s)", names(f$filled), format(f$filled, big.mark = ",")), collapse = ", "), "."),
+        if (length(f$dropped)) {
+          tags$div(class = "small text-muted",
+                   bsicons::bs_icon("scissors"),
+                   " Removed by stepwise selection (no information once the others are known): ",
+                   paste(f$dropped, collapse = ", "))
+        }
+      )
+    })
+
     output$fit_note <- renderUI({
       f <- fitted()
       if (is.null(f)) return(NULL)
@@ -2148,18 +2203,6 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
                   else "",
                   nrow(f$weights))
         ),
-        # Missing criterion answers count as "no", in the model as in the score.
-        if (length(f$filled)) tags$div(
-          class = "small text-muted",
-          bsicons::bs_icon("info-circle"), if (!is.null(f$pmt)) " Missing answers counted as 'no', missing numbers as the average (as in the score): "
-                                           else " Missing answers counted as 'no' (as in the score): ",
-          paste(sprintf("%s (%s)", names(f$filled), format(f$filled, big.mark = ",")), collapse = ", "), "."),
-        if (length(f$dropped)) {
-          tags$div(class = "small text-muted",
-                   bsicons::bs_icon("scissors"),
-                   " Removed by stepwise selection (no information once the others are known): ",
-                   paste(f$dropped, collapse = ", "))
-        },
         if (!is.null(f$index)) index_note(f$index),
         if (!is.null(f$pmt)) pmt_fit_html(f$pmt),
         if (!f$converged) {
@@ -3124,7 +3167,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
             scheme = scheme_label(f$scheme, f$method),
             method_code = f$method, scheme_code = f$scheme, stepwise = f$stepwise %||% "none", stepwise_dir = f$stepwise_dir %||% "backward",
             n_train = f$n, n_test = length(sp$test), seed = model_params$split_seed,
-            weights = input$model_weights, dropped = f$dropped, converged = f$converged,
+            weights = input$model_weights, dropped = f$dropped, filled = f$filled, converged = f$converged,
             tuning = f$tuning, tree_rules = f$tree_rules, diagram = if (!isFALSE(model_params$diagram)) f$diagram, k_quality = f$index$k_quality,
             fit_stats = fit_stats),
           runs = runs_df, estimates = wts,
