@@ -354,6 +354,11 @@ design_report_md <- function(x, figures = character(0)) {
     fig("box", "met")
     fig("drivers", "coverage")
   }
+  # the score bands shown on the page (Quartiles and quintiles tab)
+  if (length(x$bands)) {
+    add("### Score bands", "", "Households in each quartile and quintile of the score.", "")
+    for (nm in names(x$bands)) if (!is.null(x$bands[[nm]]) && nrow(x$bands[[nm]])) add(sprintf("**%s**", nm), "", md_table(x$bands[[nm]]), "")
+  }
 
   add("## 6. Adoption", "")
   word <- if (nof) "vulnerability ranking" else "scorecard"

@@ -280,9 +280,6 @@ mod_scorecard_ui <- function(id) {
                   choices = character(0), multiple = TRUE, width = "100%",
                   options = shinyWidgets::pickerOptions(container = "body", actionsBox = TRUE, liveSearch = TRUE,
                                                         selectedTextFormat = "count > 3")),
-                selectizeInput(ns("model_weights"),
-                               tagList("Survey weights (optional)", info_tip("Sampling weight column. When set, the model counts each household by its weight so the estimates represent the population, not the sample.")),
-                               choices = c("(none)" = ""), width = "100%", options = list(allowEmptyOption = TRUE)),
                 NULL),
               tags$div(
                 class = "wfp-fit-group",
@@ -293,6 +290,15 @@ mod_scorecard_ui <- function(id) {
                                  tagList("Anchor criterion (optional)", info_tip("Sets the direction of the ranking: a PCA or MCA axis has no direction of its own, so the index is turned so that this criterion raises it, and the cluster profiles are ranked on it. Choose a criterion that clearly marks vulnerability here. With none, more criteria met means more vulnerable (tick criteria so that yes = deprived). Deprivation counting does not use it.")),
                                  choices = c("(none: more criteria met = more vulnerable)" = ""), width = "100%",
                                  options = list(allowEmptyOption = TRUE))),
+                # Rarely changed: survey weights, the models compared and
+                # stepwise wait folded under "More options" (defaults apply).
+                bslib::accordion(
+                  id = ns("fit_more"), open = FALSE, class = "wfp-more mb-2",
+                  bslib::accordion_panel(
+                    "More options", value = "more", icon = bsicons::bs_icon("sliders"),
+                selectizeInput(ns("model_weights"),
+                               tagList("Survey weights (optional)", info_tip("Sampling weight column. When set, the model counts each household by its weight so the estimates represent the population, not the sample.")),
+                               choices = c("(none)" = ""), width = "100%", options = list(allowEmptyOption = TRUE)),
                 # Each extra model is a full fit: the machine-learning ones
                 # take most of the time, so only the quick ones run by default.
                 binary_only(shinyWidgets::pickerInput(
@@ -322,7 +328,7 @@ mod_scorecard_ui <- function(id) {
                     condition = sprintf("input['%s'] !== 'none'", ns("stepwise")),
                     selectInput(ns("stepwise_ic"),
                                 tagList("Criterion", info_tip("AIC is the usual choice; BIC penalises each criterion more (log of the sample size) and keeps fewer.")),
-                                choices = c("AIC" = "aic", "BIC" = "bic"), selected = "aic", width = "100%", selectize = FALSE)))),
+                                choices = c("AIC" = "aic", "BIC" = "bic"), selected = "aic", width = "100%", selectize = FALSE)))))),
 
                 tags$div(
                   class = "wfp-fit-go",
@@ -341,9 +347,16 @@ mod_scorecard_ui <- function(id) {
             # Right under the estimates: which model to trust is the next
             # question once the coefficients are read.
             uiOutput(ns("comparison_ui")),
-            uiOutput(ns("diagram_ui")),
-            uiOutput(ns("tree_ui")),
-            uiOutput(ns("weights_charts")),
+            # Folded until wanted: the model's diagram, its rules and the
+            # per-criterion charts (all still in the design report).
+            bslib::accordion(
+              id = ns("diag_more"), open = FALSE, class = "wfp-more mt-3",
+              bslib::accordion_panel(
+                "More diagnostics: diagram, decision rules and charts", value = "diag",
+                icon = bsicons::bs_icon("bar-chart-line"),
+                uiOutput(ns("diagram_ui")),
+                uiOutput(ns("tree_ui")),
+                uiOutput(ns("weights_charts")))),
             uiOutput(ns("nav_weights"))
           )
         ),
@@ -462,8 +475,9 @@ mod_scorecard_ui <- function(id) {
               uiOutput(ns("kpi_incl_gauge")),
               uiOutput(ns("kpi_excl_gauge"))
             ),
+            # Up front: the errors and the verdict.
             bslib::layout_columns(
-              col_widths = c(8, 4),
+              col_widths = c(7, 5),
               bslib::card(
                 bslib::card_header(
                   bsicons::bs_icon("grid-3x3"),
@@ -475,61 +489,47 @@ mod_scorecard_ui <- function(id) {
                 bslib::card_header(bsicons::bs_icon("clipboard-check"), " Verdict"),
                 bslib::card_body(uiOutput(ns("verdict")))
               )
-            ),
-            bslib::layout_columns(
-              col_widths = c(4, 4, 4),
-              bslib::card(full_screen = TRUE, 
-                bslib::card_header("ROC curve", chart_help("roc_plot")),
-                plotly::plotlyOutput(ns("roc_plot"), height = "400px")
-              ),
-              bslib::card(full_screen = TRUE, 
-                bslib::card_header("Score distribution", chart_help("score_plot")),
-                plotly::plotlyOutput(ns("score_plot"), height = "400px")
-              ),
-              bslib::card(full_screen = TRUE, 
-                bslib::card_header(bsicons::bs_icon("box"), binary_only(" Score by vulnerability"), pmt_only(" PMT score by poverty status"), chart_help("box_plot")),
-                plotly::plotlyOutput(ns("box_plot"), height = "400px")
-              )
             )),
-            bslib::layout_columns(
-              col_widths = c(4, 4, 4),
-              bslib::card(full_screen = TRUE, 
-                bslib::card_header(
-                  bsicons::bs_icon("bar-chart-steps"),
-                  " What actually drives the score", chart_help("contribution_plot")
-                ),
-                plotly::plotlyOutput(ns("contribution_plot"), height = "480px")
-              ),
-              bslib::card(full_screen = TRUE, 
-                bslib::card_header(
-                  bsicons::bs_icon("people"),
-                  " Criteria met, eligible vs not", chart_help("met_plot")
-                ),
-                plotly::plotlyOutput(ns("met_plot"), height = "480px")
-              ),
-              # one slot: coverage with an outcome; without one (coverage cannot
-              # be read) the selection by number of criteria met
-              tags$div(
-                class = "h-100",
-                with_outcome(bslib::card(full_screen = TRUE, 
-                  bslib::card_header(bsicons::bs_icon("person-check"), " Coverage by criterion", chart_help("coverage_plot")),
-                  plotly::plotlyOutput(ns("coverage_plot"), height = "480px")
-                )),
-                without_outcome(bslib::card(full_screen = TRUE, 
-                  bslib::card_header(bsicons::bs_icon("graph-up-arrow"), " Share selected by number of criteria met", chart_help("sel_by_met_plot")),
-                  plotly::plotlyOutput(ns("sel_by_met_plot"), height = "480px")
-                )))
-            ),
-            bslib::layout_columns(
-              col_widths = c(6, 6),
-              bslib::card(
-                bslib::card_header("Quartiles"),
-                DT::DTOutput(ns("quartiles"), fill = FALSE)
-              ),
-              bslib::card(
-                bslib::card_header("Quintiles"),
-                DT::DTOutput(ns("quintiles"), fill = FALSE)
-              )
+            # Everything else about the threshold, one tab at a time.
+            bslib::navset_card_underline(
+              id = ns("thr_explore"), full_screen = TRUE,
+              title = tags$span(bsicons::bs_icon("search"), " Explore the threshold"),
+              bslib::nav_panel(
+                "ROC",
+                with_outcome(tags$div(class = "small text-muted", "ROC curve ", chart_help("roc_plot")),
+                             plotly::plotlyOutput(ns("roc_plot"), height = "420px")),
+                without_outcome(tags$div(class = "small text-muted p-2", "Needs an outcome indicator."))),
+              bslib::nav_panel(
+                "Scores",
+                with_outcome(tags$div(class = "small text-muted", "Score distribution ", chart_help("score_plot")),
+                             plotly::plotlyOutput(ns("score_plot"), height = "420px")),
+                without_outcome(tags$div(class = "small text-muted p-2", "Needs an outcome indicator: see the ranking distribution above."))),
+              bslib::nav_panel(
+                tagList(binary_only("By vulnerability"), pmt_only("By poverty status")),
+                with_outcome(tags$div(class = "small text-muted", "Score by group ", chart_help("box_plot")),
+                             plotly::plotlyOutput(ns("box_plot"), height = "420px")),
+                without_outcome(tags$div(class = "small text-muted p-2", "Needs an outcome indicator."))),
+              bslib::nav_panel(
+                "Drivers",
+                tags$div(class = "small text-muted", "What drives the score ", chart_help("contribution_plot")),
+                plotly::plotlyOutput(ns("contribution_plot"), height = "460px")),
+              bslib::nav_panel(
+                "Criteria met",
+                tags$div(class = "small text-muted", "Criteria met, eligible vs not ", chart_help("met_plot")),
+                plotly::plotlyOutput(ns("met_plot"), height = "460px")),
+              # coverage with an outcome; without one (coverage cannot be
+              # read) the selection by number of criteria met
+              bslib::nav_panel(
+                "By criterion",
+                with_outcome(tags$div(class = "small text-muted", "Coverage by criterion ", chart_help("coverage_plot")),
+                             plotly::plotlyOutput(ns("coverage_plot"), height = "460px")),
+                without_outcome(tags$div(class = "small text-muted", "Share selected by number of criteria met ", chart_help("sel_by_met_plot")),
+                                plotly::plotlyOutput(ns("sel_by_met_plot"), height = "460px"))),
+              bslib::nav_spacer(),
+              bslib::nav_item(
+                actionButton(ns("pct_open"), "Score percentiles", icon = icon("percent"),
+                             class = "btn-outline-secondary btn-sm",
+                             title = "Households between the percentiles of the score you choose, with an Excel export"))
             ),
             uiOutput(ns("nav_threshold"))
           )
@@ -3138,6 +3138,9 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
           comparison = if (!pmt()) safe(live_bench()$table),
           threshold = thr_applied(), threshold_note = thr_msg(),
           tolerance = c(lower, upper), rationale = input$tol_rationale,
+          bands = safe({ sc_ <- scored()$score
+            lapply(c(Quartiles = 4L, Quintiles = 5L), function(n) { b <- score_bands(sc_, n)
+              names(b) <- c(if (n == 4L) "Quartile" else "Quintile", "From", "To", "Households"); b }) }),
           no_outcome = no_outcome(), rank_label = input$rank_label, stability = stability(),
           insights = if (no_outcome()) safe(sel_insights()), cov_area = if (no_outcome()) safe(cov_area_tab()), cov_area_col = input$cov_area,
           selected = if (no_outcome()) safe(list(n = sum(scored()$eligible %in% TRUE), share = mean(scored()$eligible %in% TRUE))),
@@ -3792,18 +3795,53 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
         )
     })
 
-    band_table <- function(n) {
-      DT::renderDT({
-        s <- scored()
-        b <- score_bands(s$score, n)
-        req(nrow(b) > 0)
-        names(b) <- c(if (n == 4) "Quartile" else "Quintile", "From", "To", "Households")
-        tw_datatable(b, rownames = FALSE, selection = "none",
-                      options = list(dom = "t", paging = FALSE))
+    # Score percentiles, in a dialog: the user picks the cut points, the table
+    # is computed there on Compute and can be exported.
+    pct_res <- reactiveVal(NULL)
+    observeEvent(input$pct_open, {
+      need_ok(!is.null(tryCatch(scored(), error = function(e) NULL)), "Fit a model first.")
+      pct_res(NULL)
+      showModal(modalDialog(
+        title = tagList(bsicons::bs_icon("percent"), " Score percentiles"), size = "l", easyClose = TRUE,
+        tags$p(class = "small text-muted", "Households between consecutive percentiles of the score, on the households the threshold is evaluated on."),
+        tags$div(class = "d-flex flex-wrap gap-3 align-items-end",
+                 radioButtons(ns("pct_preset"), NULL, inline = TRUE, selected = "q4",
+                              choices = c("Quartiles" = "q4", "Quintiles" = "q5", "Deciles" = "q10", "My percentiles" = "custom")),
+                 conditionalPanel(sprintf("input['%s'] === 'custom'", ns("pct_preset")),
+                                  textInput(ns("pct_custom"), "Percentiles", placeholder = "e.g. 10, 25, 50, 75, 90", width = "16rem")),
+                 tags$div(class = "mb-3", actionButton(ns("pct_go"), "Compute", icon = icon("play"), class = "btn-primary btn-sm"))),
+        uiOutput(ns("pct_table")),
+        footer = tagList(downloadButton(ns("pct_dl"), "Export (Excel)", class = "btn-outline-primary"), modalButton("Close"))))
+    })
+    observeEvent(input$pct_go, {
+      probs <- switch(input$pct_preset %||% "q4",
+                      q4 = c(.25, .5, .75), q5 = seq(.2, .8, .2), q10 = seq(.1, .9, .1),
+                      custom = suppressWarnings(as.numeric(strsplit(input$pct_custom %||% "", "[^0-9.]+")[[1]])) / 100)
+      probs <- probs[is.finite(probs) & probs > 0 & probs < 1]
+      need_ok(length(probs) > 0, "Type percentiles between 1 and 99, e.g. 10, 25, 50, 75, 90.")
+      s <- scored(); r <- tryCatch(eval_rows(), error = function(e) NULL)
+      sc <- if (!is.null(r)) s$score[r] else s$score
+      pct_res(list(tab = score_percentiles(sc, probs), probs = probs))
+    })
+    output$pct_table <- renderUI({
+      p <- pct_res()
+      if (is.null(p)) return(tags$div(class = "small text-muted", "Choose the percentiles, then click Compute."))
+      t <- p$tab; req(nrow(t))
+      tags$div(class = "wfp-model-table-wrap", tags$table(
+        class = "wfp-model-table",
+        tags$thead(tags$tr(tags$th("Band"), tags$th(class = "num", "Score from"), tags$th(class = "num", "to"),
+                           tags$th(class = "num", "Households"), tags$th(class = "num", "Share"))),
+        tags$tbody(lapply(seq_len(nrow(t)), function(i) tags$tr(
+          tags$td(tags$strong(t$band[i])), tags$td(class = "num", fmt5(t$from[i])), tags$td(class = "num", fmt5(t$to[i])),
+          tags$td(class = "num", format(t$households[i], big.mark = ",")), tags$td(class = "num", sprintf("%.1f%%", t$share[i])))))))
+    })
+    output$pct_dl <- download_handler(
+      filename = function() export_file_name("Score_percentiles", "xlsx"),
+      content = function(file) {
+        p <- pct_res(); t <- if (is.null(p)) data.frame(Message = "Click Compute first") else p$tab
+        if (!is.null(p)) names(t) <- c("Band", "Score from", "Score to", "Households", "Share (%)")
+        write_xlsx_readonly(t, file, "Percentiles")
       })
-    }
-    output$quartiles <- band_table(4L)
-    output$quintiles <- band_table(5L)
 
     # -----------------------------------------------------------------------
     # Progress, adoption and export

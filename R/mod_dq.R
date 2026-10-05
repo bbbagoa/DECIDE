@@ -51,7 +51,9 @@ mod_dq_ui <- function(id) {
           bslib::navset_tab(
             id = ns("dq_tabs"),
 
-            # Each sub-tab is rendered by its own UI helper (see mod_dq_*.R)
+            # Each sub-tab is rendered by its own UI helper (see mod_dq_*.R);
+            # the health check comes first: what needs attention, and where
+            dq_health_ui(ns),
             dq_spelling_ui(ns),
             dq_location_ui(ns),
             dq_missing_ui(ns),
@@ -265,6 +267,7 @@ mod_dq_server <- function(id, uploaded_df, user_setup, modification_log, origina
     })
 
   # --- Delegate each sub-tab's logic to its own helper (mod_dq_*.R) ---
+  dq_health_server(input, output, session, ns, core)
   dq_spelling_server(input, output, session, ns, core)
   dq_location_server(input, output, session, ns, core)
   dq_missing_server(input, output, session, ns, core)

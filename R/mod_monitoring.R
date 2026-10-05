@@ -58,9 +58,11 @@ mod_monitoring_ui <- function(id) {
           bslib::card_body(
             # Start from a template: ready-made charts on the data loaded, or a
             # report saved from an earlier round (compared with it).
+            # Open on arrival: a template is the quickest start; fold it to
+            # build the charts yourself.
             tags$details(
-              class = "wfp-mon-draft",
-              tags$summary(class = "small fw-bold", bsicons::bs_icon("magic"), " Start from a template (optional)"),
+              class = "wfp-mon-draft", open = NA,
+              tags$summary(class = "small fw-bold", bsicons::bs_icon("magic"), " Start from a template, or build your own charts"),
               tags$p(class = "small text-muted mt-2 mb-2",
                      "Fills the report with ready-made charts from the data you loaded, each with a suggested finding you can edit. ",
                      "Your own charts and texts are kept unless you choose to replace them."),

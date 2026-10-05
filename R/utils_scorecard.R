@@ -943,6 +943,27 @@ implementation_verdict <- function(inclusion_error, exclusion_error, lower, uppe
 #'
 #' @param n_bands 4 for quartiles, 5 for quintiles.
 #' @noRd
+#' Households between chosen percentiles of the score
+#'
+#' @param score Numeric scores (NA dropped).
+#' @param probs Cut points as shares (0-1), e.g. c(.25, .5, .75).
+#' @return data.frame(band, from, to, households, share): one row per band
+#'   between consecutive percentiles (P0 to the first, ..., the last to P100).
+#' @noRd
+score_percentiles <- function(score, probs) {
+  s <- score[is.finite(score)]
+  probs <- sort(unique(probs[is.finite(probs) & probs > 0 & probs < 1]))
+  if (!length(s) || !length(probs)) return(data.frame())
+  br <- stats::quantile(s, c(0, probs, 1), names = FALSE)
+  pc <- c(0, 100 * probs, 100)
+  lab <- function(x) sub("\\.?0+$", "", formatC(x, format = "f", digits = 1))
+  band <- findInterval(s, br[-c(1, length(br))], left.open = TRUE) + 1L
+  n <- tabulate(band, nbins = length(br) - 1L)
+  data.frame(band = sprintf("P%s to P%s", lab(pc[-length(pc)]), lab(pc[-1])),
+             from = round(br[-length(br)], 2), to = round(br[-1], 2),
+             households = n, share = round(100 * n / length(s), 1), stringsAsFactors = FALSE)
+}
+
 score_bands <- function(score, n_bands = 4L) {
   s <- score[!is.na(score) & score > 0]
   if (length(s) < n_bands) return(data.frame())

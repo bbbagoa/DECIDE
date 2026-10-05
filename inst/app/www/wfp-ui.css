@@ -2962,7 +2962,8 @@ table.dataTable td.tw-wide-cell, table.dataTable th.tw-wide-cell { min-width: 32
 .wfp-model-table tr.wfp-band-row td { font-size: .66rem; letter-spacing: .06em; text-transform: uppercase; color: var(--text-muted);
   font-weight: 600; background: var(--surface-2, rgba(128,128,128,.06)); padding-top: .35rem; padding-bottom: .35rem; }
 .wfp-model-table tr.is-current td { background: var(--accent-primary-bg); }
-.wfp-model-table.wfp-cmp td:first-child { min-width: 13rem; }
-.wfp-model-table.wfp-cmp .wfp-auc { min-width: 5.5rem; }
+.wfp-model-table.wfp-cmp td:first-child { min-width: 10rem; }
+.wfp-model-table.wfp-cmp .wfp-auc { min-width: 4.2rem; }
 .wfp-model-table.wfp-cmp td:last-child { text-align: right; white-space: nowrap; }
 .wfp-model-table.wfp-cmp tr.wfp-band-row td { text-align: left; }
+.tw-pill-na { background: rgba(128,128,128,.14); color: var(--text-muted); }

@@ -518,3 +518,10 @@ test_that("balanced_threshold minimises the larger of the two design errors", {
   expect_equal(max(r$inclusion_error, r$exclusion_error), min(worst))
   expect_true(is.na(bt(s, rep(1, 600))$threshold))
 })
+
+test_that("score_percentiles cuts the scores at the chosen percentiles", {
+  p <- score_percentiles(1:100, c(.25, .5, .75))
+  expect_equal(p$band, c("P0 to P25", "P25 to P50", "P50 to P75", "P75 to P100"))
+  expect_equal(sum(p$households), 100)
+  expect_equal(nrow(score_percentiles(c(NA, 1:10), c(0, 1, NA))), 0)
+})

@@ -1,5 +1,10 @@
 # TargetWise 1.0.0
 
+* Simpler pages, nothing left out (reports and exports keep every detail):
+  * Targeting Design, step 3: "Fit model" up front; survey weights, the models to compare and stepwise fold under **More options**; the model diagram, decision rules and per-criterion charts under **More diagnostics**.
+  * Step 4: settings, figures, error matrix and verdict up front; the ROC curve and the other charts in one **Explore the threshold** card with tabs. Quartiles and quintiles give way to a **Score percentiles** button: pick quartiles, quintiles, deciles or your own percentiles, compute them in the dialog and export them to Excel. The design report now also lists the quartiles and quintiles.
+  * Data Quality opens on a **Health check**: one row per check (duplicates, missing answers, outliers, area names, spelling variants, enumerators) with what it found and a Review button that opens the tab.
+  * Monitoring: the report opens on "Start from a template, or build your own charts".
 * Targeting Design: every chart on the Model and Threshold pages (and the model diagram and decision tree) opens full screen with the "Expand" button in its corner; Close or Esc returns to the page.
 * Targeting Design, step 3: one **Model estimates** table holds the chosen model and, in the same rows, each criterion's effect under the other models compared, the random-forest importance and whether every model agrees on its direction (the separate "Each variable under every model" card is gone). The **Model comparison** table now also lists the run history (with Restore), half width beside the held-out ROC curve.
 * After an update, no old version is served: `run_app()` stops with a clear message when the R session still holds the previous installation (restart R), and the app's styles and scripts are served under the installation time, so the browser fetches the new ones.
