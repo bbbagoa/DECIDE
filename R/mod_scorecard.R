@@ -341,7 +341,6 @@ mod_scorecard_ui <- function(id) {
             # Right under the estimates: which model to trust is the next
             # question once the coefficients are read.
             uiOutput(ns("comparison_ui")),
-            uiOutput(ns("effects_ui")),
             uiOutput(ns("diagram_ui")),
             uiOutput(ns("tree_ui")),
             uiOutput(ns("weights_charts")),
@@ -436,7 +435,7 @@ mod_scorecard_ui <- function(id) {
                 bslib::card(bslib::card_header(bsicons::bs_icon("lightbulb"), " What the selection concentrates",
                                                info_tip("A household's deprivations are the criteria it meets in the vulnerable direction (an inclusion criterion met, an exclusion criterion not met).")),
                             bslib::card_body(uiOutput(ns("insights_ui")))),
-                bslib::card(bslib::card_header(
+                bslib::card(full_screen = TRUE, bslib::card_header(
                               class = "d-flex align-items-center justify-content-between gap-2",
                               tags$span(bsicons::bs_icon("geo-alt"), " Share selected by area", chart_help("cov_area_plot")),
                               tags$div(style = "min-width: 180px;",
@@ -445,9 +444,9 @@ mod_scorecard_ui <- function(id) {
                             plotly::plotlyOutput(ns("cov_area_plot"), height = "320px"))),
               bslib::layout_columns(
                 col_widths = c(6, 6),
-                bslib::card(bslib::card_header(bsicons::bs_icon("bar-chart"), " Ranking distribution", chart_help("rank_plot")),
+                bslib::card(full_screen = TRUE, bslib::card_header(bsicons::bs_icon("bar-chart"), " Ranking distribution", chart_help("rank_plot")),
                             plotly::plotlyOutput(ns("rank_plot"), height = "400px")),
-                bslib::card(bslib::card_header(bsicons::bs_icon("check2-square"), " Criteria among selected and other households", chart_help("sel_prev_plot")),
+                bslib::card(full_screen = TRUE, bslib::card_header(bsicons::bs_icon("check2-square"), " Criteria among selected and other households", chart_help("sel_prev_plot")),
                             plotly::plotlyOutput(ns("sel_prev_plot"), height = "400px")))),
             with_outcome(
             tags$div(class = "small text-muted mb-2", textOutput(ns("eval_note"))),
@@ -479,29 +478,29 @@ mod_scorecard_ui <- function(id) {
             ),
             bslib::layout_columns(
               col_widths = c(4, 4, 4),
-              bslib::card(
+              bslib::card(full_screen = TRUE, 
                 bslib::card_header("ROC curve", chart_help("roc_plot")),
                 plotly::plotlyOutput(ns("roc_plot"), height = "400px")
               ),
-              bslib::card(
+              bslib::card(full_screen = TRUE, 
                 bslib::card_header("Score distribution", chart_help("score_plot")),
                 plotly::plotlyOutput(ns("score_plot"), height = "400px")
               ),
-              bslib::card(
+              bslib::card(full_screen = TRUE, 
                 bslib::card_header(bsicons::bs_icon("box"), binary_only(" Score by vulnerability"), pmt_only(" PMT score by poverty status"), chart_help("box_plot")),
                 plotly::plotlyOutput(ns("box_plot"), height = "400px")
               )
             )),
             bslib::layout_columns(
               col_widths = c(4, 4, 4),
-              bslib::card(
+              bslib::card(full_screen = TRUE, 
                 bslib::card_header(
                   bsicons::bs_icon("bar-chart-steps"),
                   " What actually drives the score", chart_help("contribution_plot")
                 ),
                 plotly::plotlyOutput(ns("contribution_plot"), height = "480px")
               ),
-              bslib::card(
+              bslib::card(full_screen = TRUE, 
                 bslib::card_header(
                   bsicons::bs_icon("people"),
                   " Criteria met, eligible vs not", chart_help("met_plot")
@@ -512,11 +511,11 @@ mod_scorecard_ui <- function(id) {
               # be read) the selection by number of criteria met
               tags$div(
                 class = "h-100",
-                with_outcome(bslib::card(
+                with_outcome(bslib::card(full_screen = TRUE, 
                   bslib::card_header(bsicons::bs_icon("person-check"), " Coverage by criterion", chart_help("coverage_plot")),
                   plotly::plotlyOutput(ns("coverage_plot"), height = "480px")
                 )),
-                without_outcome(bslib::card(
+                without_outcome(bslib::card(full_screen = TRUE, 
                   bslib::card_header(bsicons::bs_icon("graph-up-arrow"), " Share selected by number of criteria met", chart_help("sel_by_met_plot")),
                   plotly::plotlyOutput(ns("sel_by_met_plot"), height = "480px")
                 )))
@@ -1813,16 +1812,13 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
       showNotification(sprintf("Targeting profile%s %s.", if (length(pick) > 1) "s" else "", paste(pick, collapse = ", ")), type = "message")
     })
 
-    output$effects_ui <- renderUI({
+    # The other models' effects per criterion, shown in the estimates table
+    # (the chosen model's own column would repeat its beta)
+    other_effects <- function(f) {
       eff <- effects()
-      if (is.null(fitted()) || is.null(eff) || !is.null(index_method())) return(NULL)
-      b <- bench()
-      bslib::card(
-        class = "mt-3",
-        bslib::card_header(bsicons::bs_icon("columns-gap"), " Each variable under every model"),
-        bslib::card_body(effects_html(eff, if (is.list(b)) b$importance else NULL))
-      )
-    })
+      if (is.null(eff) || !is.null(index_method())) return(NULL)
+      eff[eff$model != (EFFECT_LABELS[f$method %||% ""] %||% ""), c("criterion", "model", "effect"), drop = FALSE]
+    }
 
     output$effects_plot <- render_wfp_plotly({
       eff <- effects(); req(eff)
@@ -2008,9 +2004,37 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
     output$model_note <- renderText(paste(scorecard_model_note(input$model_method %||% "logit"),
                                           if (stepwise_on()) stepwise_note(input$stepwise_ic, input$stepwise) else ""))
 
-    output$runs_ui <- renderUI({
+    # The run history as rows of the model comparison table (same columns:
+    # model, criteria, AUC training, AUC held out, action)
+    run_rows <- function() {
       rl <- runs()
       if (length(rl) < 1) return(NULL)
+      best <- which.max(vapply(rl, function(r) r$auc %||% NA_real_, numeric(1)))
+      auc <- function(r, held) {
+        if (is.na(r$auc %||% NA) || !identical(isTRUE(r$held_out), held)) return(tags$td(class = "text-muted", "\u2014"))
+        tags$td(tags$strong(sprintf("%.3f", r$auc)))
+      }
+      lapply(rev(rl), function(r) {
+        cur <- isTRUE(r$id == current_run())
+        tags$tr(
+          class = paste(if (cur) "is-current" else "", if (isTRUE(r$id == best)) "is-best-run" else ""),
+          tags$td(tags$strong(paste0("#", r$id, " ")), model_label(r$settings$method),
+                  tags$div(class = "text-muted small", scheme_label(r$settings$scheme, r$settings$method), " \u00b7 ", r$at)),
+          tags$td(class = "num", nrow(r$fit$weights)),
+          auc(r, FALSE), auc(r, TRUE),
+          tags$td(if (cur) tags$span(class = "wfp-kept", bsicons::bs_icon("check2"), " shown")
+                  else tags$button(type = "button", class = "btn btn-outline-primary btn-sm",
+                                   onclick = sprintf("Shiny.setInputValue('%s', %d, {priority:'event'})",
+                                                     ns("restore_run"), r$id),
+                                   "Restore")))
+      })
+    }
+    # Scorecards show their history inside the model comparison table
+    runs_in_comparison <- reactive({ f <- fitted(); !is.null(f) && !isTRUE(f$unsupervised) && is.null(f$pmt) })
+
+    output$runs_ui <- renderUI({
+      rl <- runs()
+      if (length(rl) < 1 || runs_in_comparison()) return(NULL)
       best <- which.max(vapply(rl, function(r) r$auc %||% NA_real_, numeric(1)))
       rows <- lapply(rev(rl), function(r) {
         cur <- isTRUE(r$id == current_run())
@@ -2180,7 +2204,8 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
                                        icon = icon("rotate-left"), class = "btn-outline-secondary btn-sm"),
                           downloadButton(ns("dl_model_tables2"), "Export (Excel)",
                                          class = "btn-outline-primary btn-sm"))),
-        coefficients_html(wts, f$model, points = points, pmt = !is.null(f$pmt)),
+        coefficients_html(wts, f$model, points = points, pmt = !is.null(f$pmt),
+                          others = other_effects(f), importance = if (is.list(bench())) bench()$importance else NULL),
         tags$div(
           class = "small text-muted mt-2",
           bsicons::bs_icon("info-circle"),
@@ -2264,7 +2289,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
       f <- fitted(); rl <- f$tree_rules
       if (!identical(f$method, "tree") || is.null(rl) || !nrow(rl)) return(NULL)
       nof <- isTRUE(f$unsupervised)
-      bslib::card(
+      bslib::card(full_screen = TRUE,
         class = "mt-3",
         bslib::card_header(bsicons::bs_icon("diagram-2"), " Decision tree: the rules",
                            info_tip(if (nof) "Each row is a leaf of the tree: the answers that lead to it, how many households it holds and the share of them in the targeted profiles. The points of the ranking are the tree's average effects, so it stays additive; the rules show what the tree itself does."
@@ -2286,7 +2311,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
       svg <- diagram_svg(d, if (nof) "targeted" else "vulnerable")
       if (!nzchar(svg)) return(NULL)
       bslib::card(
-        class = "mt-3",
+        full_screen = TRUE, class = "mt-3",
         bslib::card_header(bsicons::bs_icon("diagram-3"), paste0(" ", diagram_title(d$kind)), info_tip(diagram_help(d$kind, nof))),
         bslib::card_body(HTML(svg)))
     })
@@ -2295,7 +2320,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
       if (is.null(fitted())) return(NULL)
       im <- index_method()
       if (!is.null(fitted()$pmt)) {
-        pchart <- function(icon_name, title, id, h = "400px") bslib::card(
+        pchart <- function(icon_name, title, id, h = "400px") bslib::card(full_screen = TRUE, 
           bslib::card_header(bsicons::bs_icon(icon_name), title, chart_help(id)),
           plotly::plotlyOutput(ns(id), height = h))
         return(tagList(
@@ -2310,7 +2335,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
             pchart("graph-down", " Leakage and under-coverage as the cut-off moves", "pmt_curve_plot"),
             pchart("distribute-vertical", " Prediction errors (residuals)", "pmt_resid_plot"))))
       }
-      chart <- function(icon_name, title, id) bslib::card(
+      chart <- function(icon_name, title, id) bslib::card(full_screen = TRUE, 
         bslib::card_header(bsicons::bs_icon(icon_name), title, chart_help(id)),
         plotly::plotlyOutput(ns(id), height = "480px"))
       if (identical(im, "pca")) return(tagList(tags$hr(), bslib::layout_columns(
@@ -2353,18 +2378,18 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
         tags$hr(),
         bslib::layout_columns(
           col_widths = c(4, 4, 4),
-          bslib::card(
+          bslib::card(full_screen = TRUE, 
             bslib::card_header(bsicons::bs_icon("arrow-left-right"),
                                " Weight and direction", chart_help("weights_plot")),
             plotly::plotlyOutput(ns("weights_plot"), height = "480px")
           ),
-          bslib::card(
+          bslib::card(full_screen = TRUE, 
             bslib::card_header(bsicons::bs_icon("percent"),
                                " How common each criterion is", chart_help("prevalence_plot")),
             plotly::plotlyOutput(ns("prevalence_plot"), height = "480px")
           ),
           # Is each weight robust to the method? Same criterion, four models.
-          bslib::card(
+          bslib::card(full_screen = TRUE, 
             bslib::card_header(bsicons::bs_icon("bullseye"),
                                " Effect by model", chart_help("effects_plot")),
             plotly::plotlyOutput(ns("effects_plot"), height = "480px")
@@ -2905,7 +2930,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
                       tags$div(class = "small text-muted p-2",
                                "Measured on the held-out households with the cut-off at the poverty line. The best held-out R\u00b2 is marked;",
                                " a model with a lower R\u00b2 can still have lower under-coverage (quantile regression usually does).")),
-          bslib::card(bslib::card_header(bsicons::bs_icon("graph-down"), " Error trade-off by model", chart_help("pmt_compare_plot")),
+          bslib::card(full_screen = TRUE, bslib::card_header(bsicons::bs_icon("graph-down"), " Error trade-off by model", chart_help("pmt_compare_plot")),
                       plotly::plotlyOutput(ns("pmt_compare_plot"), height = "360px")))))
       }
       b <- bench()
@@ -2913,14 +2938,17 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
              else if (!is.null(b$error)) paste("The models could not be compared:", b$error)
              else if (nrow(b$table) == 0) "None of the compared models could be fitted on these data."
       if (!is.null(why)) {
+        rr <- run_rows()
         return(tagList(tags$hr(), bslib::card(
           bslib::card_header(bsicons::bs_icon("trophy"), " Model comparison"),
-          empty_state("No comparison yet", why, icon = "trophy"))))
+          tags$div(class = "small text-muted p-2", bsicons::bs_icon("info-circle"), " No comparison yet. ", why),
+          if (length(rr)) comparison_html(data.frame(model = character(0), criteria = integer(0),
+                                                     auc_train = numeric(0), auc_test = numeric(0)), runs = rr))))
       }
       tagList(
         tags$hr(),
         bslib::layout_columns(
-          col_widths = c(5, 7),
+          col_widths = c(6, 6),
           bslib::card(
             bslib::card_header(bsicons::bs_icon("trophy"), " Model comparison"),
             uiOutput(ns("comparison_table")),
@@ -2929,7 +2957,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
                      " if the machine-learning models barely beat the logistic one, more complex models are not needed. The",
                      " gap between a model and the scorecard is the price of the weighting scheme and of flooring scores at zero.")
           ),
-          bslib::card(
+          bslib::card(full_screen = TRUE, 
             bslib::card_header(bsicons::bs_icon("graph-up"), " ROC, held-out households", chart_help("comparison_roc")),
             plotly::plotlyOutput(ns("comparison_roc"), height = "340px")
           )
@@ -2956,7 +2984,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
       b
     })
 
-    output$comparison_table <- renderUI(comparison_html(live_bench()$table))
+    output$comparison_table <- renderUI(comparison_html(live_bench()$table, runs = run_rows()))
 
     model_tables_dl <- download_handler(
       filename = function() export_file_name("Scorecard_model_tables", "xlsx", "%Y-%m-%d_%Hh%M"),

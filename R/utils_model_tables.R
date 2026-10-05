@@ -84,11 +84,35 @@ dir_badge <- function(d) {
 #'   instead of the plain points value, and in an extra review column -- the
 #'   page passes its editable inputs here so the estimates and the editable
 #'   card are one table.
+#' @param others Per-criterion effects of the other models compared
+#'   (`criterion`, `model`, `effect`, from `model_effects()` without the
+#'   chosen model): shown in the same rows, after the points, with whether
+#'   every model agrees on the direction. `importance`: random-forest
+#'   importance per criterion, shown there too.
 #' @noRd
-coefficients_html <- function(wts, model = NULL, points = NULL, review = NULL, pmt = FALSE) {
+coefficients_html <- function(wts, model = NULL, points = NULL, review = NULL, pmt = FALSE,
+                              others = NULL, importance = NULL) {
   if (isTRUE(pmt)) return(pmt_coefficients_html(wts, points))
+  if (!is.null(others) && !nrow(others)) others <- NULL
+  oth_models <- if (is.null(others)) character(0) else unique(others$model)
+  imp <- if (length(importance) && !is.null(others)) importance / sum(importance) else NULL
+  oth_val <- function(cr, m) others$effect[others$criterion == cr & others$model == m][1]
+  oth_cell <- function(v, first) {
+    cls <- paste("num", if (first) "wfp-oth-first")
+    if (is.na(v)) return(tags$td(class = paste(cls, "text-muted"), "\u2014"))
+    tags$td(class = paste(cls, if (v >= 0) "wfp-eff-pos" else "wfp-eff-neg"), sprintf("%+.2f", v))
+  }
+  agree_cell <- function(beta, vals) {
+    v <- c(beta, vals); v <- v[!is.na(v) & v != 0]
+    if (length(v) < 2) return(tags$td(class = "text-muted text-center", "\u2014"))
+    if (length(unique(sign(v))) == 1)
+      tags$td(class = "text-center wfp-agree-yes", title = "Same direction under every model", bsicons::bs_icon("check-circle-fill"))
+    else tags$td(class = "text-center wfp-agree-no", title = "The direction differs between models: worth a second look",
+                 bsicons::bs_icon("exclamation-triangle-fill"))
+  }
   rows <- lapply(seq_len(nrow(wts)), function(i) {
     r <- wts[i, ]
+    vals <- vapply(oth_models, function(m) oth_val(r$criterion, m), numeric(1))
     tags$tr(
       tags$td(tags$strong(r$criterion)),
       tags$td(class = "num", sprintf("%+.3f", r$coefficient)),
@@ -97,9 +121,14 @@ coefficients_html <- function(wts, model = NULL, points = NULL, review = NULL, p
       tags$td(class = "num", p_pill(r$p_value)),
       tags$td(dir_badge(r$direction)),
       tags$td(class = "num", if (is.null(points)) tags$strong(sprintf("%.2f", r$weight)) else points[[i]]),
-      if (!is.null(review)) tags$td(review[[i]])
+      if (!is.null(review)) tags$td(review[[i]]),
+      if (length(oth_models)) lapply(seq_along(oth_models), function(k) oth_cell(vals[[k]], k == 1)),
+      if (!is.null(imp)) tags$td(class = "num", if (is.na(imp[r$criterion])) "\u2014" else sprintf("%.0f%%", 100 * imp[r$criterion])),
+      if (length(oth_models)) agree_cell(r$coefficient, vals)
     )
   })
+  n_main <- 7L + as.integer(!is.null(review))
+  n_oth <- length(oth_models) + as.integer(!is.null(imp)) + 1L
   fit_line <- NULL
   if (!is.null(model) && inherits(model, "glm")) {
     r2 <- 1 - model$deviance / model$null.deviance
@@ -115,23 +144,41 @@ coefficients_html <- function(wts, model = NULL, points = NULL, review = NULL, p
       class = "wfp-model-table-wrap",
       tags$table(
         class = "wfp-model-table",
-        tags$thead(tags$tr(
-          tags$th("Criterion"), tags$th(class = "num", "\u03b2"), tags$th(class = "num", "SE"),
+        tags$thead(
+          if (length(oth_models)) tags$tr(
+            class = "wfp-grp-row",
+            tags$th(colspan = n_main, "Chosen model"),
+            tags$th(colspan = n_oth, class = "wfp-oth-first", "Under the other models (log-odds)")),
+          tags$tr(
+          tags$th("Criterion"), tags$th(class = "num", style = "text-transform: none", "\u03b2"), tags$th(class = "num", "SE"),
           tags$th("Odds ratio (95% CI)"), tags$th(class = "num", "p"),
           tags$th("Direction"), tags$th(class = "num", "Points"),
-          if (!is.null(review)) tags$th("Review")
+          if (!is.null(review)) tags$th("Review"),
+          if (length(oth_models)) lapply(seq_along(oth_models), function(k)
+            tags$th(class = paste("num", if (k == 1) "wfp-oth-first"), oth_models[k])),
+          if (!is.null(imp)) tags$th(class = "num", "RF importance"),
+          if (length(oth_models)) tags$th(class = "text-center", "Agree")
         )),
         tags$tbody(rows)
       )
     ),
     fit_line,
+    if (length(oth_models)) tags$div(
+      class = "small text-muted mt-1",
+      "Other models: log-odds effect of each criterion, fitted on the same training households; a dash means the model dropped it. ",
+      bsicons::bs_icon("check-circle-fill", class = "wfp-agree-yes"), " same direction under every model, ",
+      bsicons::bs_icon("exclamation-triangle-fill", class = "wfp-agree-no"), " the direction differs: worth a second look."),
     p_legend()
   )
 }
 
-#' Model comparison as an HTML table; the best held-out AUC is highlighted
+#' Model comparison as an HTML table; the best held-out AUC is highlighted.
+#' `runs`: rows of the run history (`<tr>` with the same five columns), added
+#' under a band of their own so the comparison and the history are one table.
 #' @noRd
-comparison_html <- function(tab) {
+comparison_html <- function(tab, runs = NULL) {
+  merged <- length(runs) > 0
+  band <- function(txt) tags$tr(class = "wfp-band-row", tags$td(colspan = if (merged) 5 else 4, txt))
   best <- suppressWarnings(max(tab$auc_test, na.rm = TRUE))
   bar <- function(x) if (is.na(x)) "-" else tags$div(
     class = "wfp-auc",
@@ -146,16 +193,21 @@ comparison_html <- function(tab) {
         tags$span(class = "wfp-kept ms-2", bsicons::bs_icon("trophy"), " best")),
       tags$td(class = "num", if (is.na(r$criteria)) "" else r$criteria),
       tags$td(bar(r$auc_train)),
-      tags$td(bar(r$auc_test))
+      tags$td(bar(r$auc_test)),
+      if (merged) tags$td("")
     )
   })
   tags$div(
     class = "wfp-model-table-wrap",
     tags$table(
-      class = "wfp-model-table",
+      class = paste("wfp-model-table", if (merged) "wfp-cmp"),
       tags$thead(tags$tr(tags$th("Model"), tags$th(class = "num", "Criteria"),
-                         tags$th("AUC (training)"), tags$th("AUC (held out)"))),
-      tags$tbody(rows)
+                         tags$th("AUC (training)"), tags$th("AUC (held out)"), if (merged) tags$th(""))),
+      tags$tbody(
+        if (merged && nrow(tab)) band("This fit: the models compared"),
+        rows,
+        if (merged) band(sprintf("Run history (%d fit%s)", length(runs), if (length(runs) == 1) "" else "s")),
+        runs)
     )
   )
 }

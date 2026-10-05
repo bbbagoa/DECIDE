@@ -723,6 +723,12 @@ benchmark_models <- function(df, outcome, criteria, outcome_positive = NULL,
 #'
 #' @return A data frame: criterion, model (label), effect, p_value.
 #' @noRd
+#' Short model names used in the per-criterion comparison
+#' @noRd
+EFFECT_LABELS <- c(logit = "Logistic", woe = "Weight of evidence",
+                   stumps = "Boosted stumps", rf = "Random forest", xgb = "XGBoost", svm = "SVM",
+                   nb = "Naive Bayes", nnet = "Neural network", tree = "Decision tree")
+
 model_effects <- function(df, outcome, criteria, outcome_positive = NULL,
                           rows = NULL, weights = NULL, methods = NULL) {
   ch <- scorecard_model_choices()
@@ -731,9 +737,7 @@ model_effects <- function(df, outcome, criteria, outcome_positive = NULL,
   # Index weights (PCA, LDA) are not log-odds effects: comparing them here
   # would mislead, so the indices show their weights in their own table only.
   ch <- ch[!ch %in% c("pca", "lda")]
-  short <- c(logit = "Logistic", woe = "Weight of evidence",
-             stumps = "Boosted stumps", rf = "Random forest", xgb = "XGBoost", svm = "SVM",
-             nb = "Naive Bayes", nnet = "Neural network", tree = "Decision tree")
+  short <- EFFECT_LABELS
   fits <- list()   # kept for compare_models_auc(), dropped before leaving the worker
   out <- lapply(names(ch), function(full) {
     lab <- short[[ch[[full]]]]

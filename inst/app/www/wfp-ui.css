@@ -2950,3 +2950,19 @@ td[data-tw], th[data-tw] { cursor: help; }
 .bootstrap-select .dropdown-menu li.selected > a::after { color: var(--wfp-blue, #0A6EB4); }
 [data-bs-theme="dark"] .bootstrap-select .dropdown-menu li.selected > a::after { color: #8cc7f0; }
 table.dataTable td.tw-wide-cell, table.dataTable th.tw-wide-cell { min-width: 320px; white-space: normal; }
+
+/* Model estimates: the other models in the same rows, set apart by a hairline */
+.wfp-model-table tr.wfp-grp-row th { font-size: .66rem; letter-spacing: .06em; text-transform: uppercase; color: var(--text-muted);
+  font-weight: 600; border-bottom: 1px solid var(--border); padding-bottom: .2rem; }
+.wfp-model-table .wfp-oth-first { border-left: 1px solid var(--border); padding-left: .75rem; }
+.wfp-agree-yes { color: var(--accent-success, #3f7e44); }
+.wfp-agree-no { color: #c77700; }
+
+/* Model comparison + run history in one table: a quiet band names each part */
+.wfp-model-table tr.wfp-band-row td { font-size: .66rem; letter-spacing: .06em; text-transform: uppercase; color: var(--text-muted);
+  font-weight: 600; background: var(--surface-2, rgba(128,128,128,.06)); padding-top: .35rem; padding-bottom: .35rem; }
+.wfp-model-table tr.is-current td { background: var(--accent-primary-bg); }
+.wfp-model-table.wfp-cmp td:first-child { min-width: 13rem; }
+.wfp-model-table.wfp-cmp .wfp-auc { min-width: 5.5rem; }
+.wfp-model-table.wfp-cmp td:last-child { text-align: right; white-space: nowrap; }
+.wfp-model-table.wfp-cmp tr.wfp-band-row td { text-align: left; }
