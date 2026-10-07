@@ -53,7 +53,7 @@ mod_overview_ui <- function(id) {
             tags$div(class = "d-flex align-items-center gap-2",
                      tags$span(class = "wfp-map-toolbar-label", "Colour by"),
                      uiOutput(ns("map_var_ui"), class = "wfp-map-var"))),
-          tags$div(class = "tw-ov-map-body", leafgl::leafglOutput(ns("map_plot"), height = "100%")))
+          tags$div(class = "tw-ov-map-body", "The map is drawn by the React client."))
         ),
         # Right half: the collection stays in view, the sections below fold
         tags$div(
@@ -293,36 +293,6 @@ mod_overview_server <- function(id, uploaded_df, user_setup) {
          dropped = sum(!ok), total = length(ok))
   })
 
-  # Colour scale for the chosen variable. Blank / NA gets its own grey level
-  # instead of silently taking the first (least-severe) IPC colour, which is
-  # what shifted every category one step down the severity ramp.
-  map_palette <- function(values) {
-    ipc <- c("#CDFACD", "#FAE61E", "#E67800", "#C80000", "#640000")
-    grey <- "#BEBEBE"
-
-    if (is.numeric(values) && length(unique(stats::na.omit(values))) > 8) {
-      pal <- leaflet::colorNumeric("YlOrRd", domain = values, na.color = grey)
-      return(list(color = pal(values), numeric = TRUE, pal = pal, values = values))
-    }
-
-    v <- as.character(values)
-    v[is.na(v) | trimws(v) == ""] <- NA
-    lv <- sort(unique(v[!is.na(v)]))
-    # More levels than the IPC ramp has stops used to produce NA colours, i.e.
-    # invisible points; interpolate instead.
-    cols <- if (length(lv) == 0) character(0)
-            else if (length(lv) <= length(ipc)) ipc[seq_along(lv)]
-            else grDevices::colorRampPalette(ipc)(length(lv))
-    names(cols) <- lv
-
-    out <- unname(cols[v])
-    out[is.na(out)] <- grey
-    legend <- cols
-    if (anyNA(v)) legend <- c(legend, stats::setNames(grey, "Not specified"))
-    list(color = out, numeric = FALSE,
-         legend_colors = unname(legend), legend_labels = names(legend))
-  }
-
   # A single mis-keyed GPS fix (one row 10 degrees off) used to double the map
   # extent and shrink the real cluster to a speck in the corner. Fit the view to
   # the inner 99% and pad it -- every point is still drawn, the strays are just
@@ -335,90 +305,47 @@ mod_overview_server <- function(id, uploaded_df, user_setup) {
     c(q[1] - pad, q[2] + pad)
   }
 
-  # Esri Terrain is the default basemap. Whatever base the user picks then
-  # stays; the light/dark switch only moves between Light and Dark.
-  dark_mode <- reactive(identical(session$rootScope()$input$dark_mode, "dark"))
-  base_choice <- reactiveVal("Terrain")
-  light_base <- reactiveVal("Terrain")     # the base to go back to when leaving dark mode
-  observeEvent(input$map_plot_groups, {
-    g <- intersect(input$map_plot_groups, BASE_GROUPS)
-    if (length(g)) { base_choice(g[1]); if (g[1] != "Dark") light_base(g[1]) }
+  # The map is drawn by the client (react/src/pages/overview/MapView.tsx:
+  # MapLibre basemaps, deck.gl points). The server sends the points once per
+  # data or filter change (map_points: the client fits the view to them) and
+  # their colours separately (map_colours), so a new colour keeps the view.
+  # Basemaps, box zoom, full screen and the light / dark basemap are the
+  # client's; the view comes back as input$map_plot_bounds.
+  output$map_points <- shinyreact::reactive_output({
+    pts <- map_points()
+    if (!length(pts$lng)) return(list(n = 0L, pos = "", bounds = NULL))
+    xr <- fit_range(pts$lng); yr <- fit_range(pts$lat)
+    map_points_payload(pts$lng, pts$lat, c(xr[1], yr[1], xr[2], yr[2]))
   })
-  # dark mode draws the map on the dark basemap
-  base_group <- function() if (isTRUE(dark_mode())) "Dark" else base_choice()
 
-
-  base_map <- function(bounds = NULL) {
-    keep <- isolate(base_group())
-    # Esri basemaps: keyless, a matched light/dark pair, terrain and two
-    # satellite views, zooming to level 21 (add_esri_bases()).
-    m <- leaflet::leaflet(options = leaflet::leafletOptions(zoomControl = TRUE, attributionControl = TRUE, maxZoom = 21)) |>
-      add_esri_bases() |>
-      leaflet::hideGroup(setdiff(BASE_GROUPS, keep)) |>
-      leaflet::addLayersControl(
-        baseGroups = BASE_GROUPS,
-        position = "topright",
-        options = leaflet::layersControlOptions(collapsed = TRUE)
-      ) |>
-      leaflet::addScaleBar(position = "bottomleft", options = leaflet::scaleBarOptions(imperial = FALSE))
-    if (!is.null(bounds)) {
-      # Back to the data after panning around.
-      m <- leaflet::addEasyButton(m, leaflet::easyButton(
-        icon = "fa-expand", title = "Zoom to the households",
-        onClick = htmlwidgets::JS(sprintf(
-          "function(btn, map){ map.fitBounds([[%f, %f], [%f, %f]]); }",
-          bounds[2], bounds[1], bounds[4], bounds[3]))))
-    }
-    m
+  # The column the points are coloured by: the picker, else the vulnerability groups
+  map_col <- function(df) {
+    col <- if (shiny::isTruthy(input$map_var)) input$map_var else user_setup$v_groups
+    if (shiny::isTruthy(col) && col %in% names(df)) col else NULL
   }
-
-  observeEvent(dark_mode(), {
-    target <- if (isTRUE(dark_mode())) "Dark" else light_base()
-    base_choice(target)
-    leaflet::leafletProxy("map_plot", session) |>
-      leaflet::hideGroup(BASE_GROUPS) |>
-      leaflet::showGroup(target)
-  }, ignoreInit = TRUE)
-
-  # A button on the map: draw a rectangle, the map zooms to it (Leaflet's own
-  # Shift + drag does the same, but nobody knows it).
-  box_zoom_js <- htmlwidgets::JS("function(el, x) {
-    var map = this;
-    // leafgl redraws its points on 'moveend' only, and on 'resize' it just
-    // sets the canvas size, which wipes a WebGL canvas. Leaflet fires
-    // 'moveend' before 'resize', so any resize of the map box (a session load
-    // re-lays the page out) left the points blank until the next zoom or pan.
-    // Redraw them after each resize.
-    if (!map._twGlResize) {
-      map._twGlResize = true;
-      map.on('resize', function() {
-        setTimeout(function() {
-          ((L.glify && L.glify.pointsInstances) || []).forEach(function(q) {
-            if (q.map === map && q.layer && q.layer._redraw) q.layer._redraw();
-          });
-        }, 0);
-      });
+  # Coloured as categories (not a number scale) with more options than can be told apart
+  map_too_many <- function(values, col) {
+    as_scale <- is.numeric(values) && length(unique(stats::na.omit(values))) > 8
+    !as_scale && !is.null(too_many_options(values, col))
+  }
+  map_drawn_col <- NULL
+  # A refused variable keeps the colours drawn; `col` tells the client which
+  # one that is, so the picker goes back to it.
+  output$map_colours <- shinyreact::reactive_output({
+    pts <- map_points()
+    if (!length(pts$lng)) return(NULL)
+    col <- map_col(pts$df)
+    refused <- !is.null(col) && map_too_many(pts$df[[col]], col)
+    if (refused) {
+      showNotification(too_many_options(pts$df[[col]], col_label(col)), type = "warning", duration = 8)
+      old <- map_drawn_col
+      col <- if (!is.null(old) && old %in% names(pts$df) && !map_too_many(pts$df[[old]], old)) old
     }
-    if (map._twBox) return; map._twBox = true;
-    var on = false, start = null, rect = null, link = null;
-    function toggle(v) { on = v; link.classList.toggle('active', on); map.getContainer().style.cursor = on ? 'crosshair' : '';
-      if (on) map.dragging.disable(); else map.dragging.enable(); }
-    var Box = L.Control.extend({ options: { position: 'topleft' }, onAdd: function() {
-      var d = L.DomUtil.create('div', 'leaflet-bar tw-boxzoom'); link = L.DomUtil.create('a', '', d);
-      link.href = '#'; link.title = 'Zoom to an area: click, then draw a rectangle on the map (or Shift + drag)';
-      link.innerHTML = '<svg viewBox=\"0 0 16 16\" width=\"15\" height=\"15\"><rect x=\"2\" y=\"2\" width=\"12\" height=\"12\" rx=\"1\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-dasharray=\"2.5 2\"/><path d=\"M8 5v6M5 8h6\" stroke=\"currentColor\" stroke-width=\"1.5\"/></svg>';
-      L.DomEvent.on(link, 'click', function(e) { L.DomEvent.stop(e); toggle(!on); });
-      L.DomEvent.disableClickPropagation(d); return d; } });
-    map.addControl(new Box());
-    map.on('mousedown', function(e) { if (!on) return; start = e.latlng;
-      rect = L.rectangle([start, start], { color: '#0A6EB4', weight: 1.5, dashArray: '4 3', fillOpacity: 0.08, interactive: false }).addTo(map); });
-    map.on('mousemove', function(e) { if (on && start && rect) rect.setBounds(L.latLngBounds(start, e.latlng)); });
-    map.on('mouseup', function(e) { if (!on || !start) return;
-      var b = L.latLngBounds(start, e.latlng); if (rect) map.removeLayer(rect); rect = null; start = null; toggle(false);
-      if (b.isValid() && !b.getNorthEast().equals(b.getSouthWest())) map.fitBounds(b); });
-  }")
+    map_drawn_col <<- col
+    values <- if (is.null(col)) rep(NA_character_, nrow(pts$df)) else pts$df[[col]]
+    c(list(col = col %||% "", title = col %||% "", refused = refused), map_colour_codes(values))
+  })
 
-  MAP_POPUP_MAX <- 20000
   # A household's popup: its id, where it is, and the value it is coloured by
   map_popup <- function(df, i, col, values) {
     fld <- function(k) { cl <- user_setup[[k]]; if (shiny::isTruthy(cl) && cl %in% names(df)) as.character(df[[cl]][i]) else rep("", length(i)) }
@@ -427,91 +354,19 @@ mod_overview_server <- function(id, uploaded_df, user_setup) {
             esc(fld("unique_id")), esc(paste(fld("admin2"), fld("village"), sep = " \u00b7 ")),
             if (is.null(col)) "" else sprintf("<span>%s</span><strong>%s</strong>", esc(col), esc(as.character(values[i]))))
   }
-  # large maps: the popup of the point clicked, built when it is clicked
-  # The column the points are coloured by: the picker, else the vulnerability groups
-  map_col <- function(df) {
-    col <- if (shiny::isTruthy(input$map_var)) input$map_var else user_setup$v_groups
-    if (shiny::isTruthy(col) && col %in% names(df)) col else NULL
-  }
-  observeEvent(input$map_plot_glify_click, {
-    ev <- input$map_plot_glify_click
+  # A click on a point sends its place in map_points (from 1); the popup goes
+  # back as a message, built for that household only.
+  observeEvent(input$map_click, {
+    ev <- input$map_click
     pts <- tryCatch(map_points(), error = function(e) NULL)
-    if (is.null(pts) || nrow(pts$df) <= MAP_POPUP_MAX) return()
-    i <- suppressWarnings(as.integer(ev$id)); if (is.na(i) || i < 1 || i > nrow(pts$df)) return()
+    i <- suppressWarnings(as.integer(ev$i)[1])
+    if (is.null(pts) || is.na(i) || i < 1 || i > nrow(pts$df)) return()
     col <- map_col(pts$df)
-    html <- map_popup(pts$df, i, col, if (is.null(col)) NULL else pts$df[[col]])
-    leaflet::leafletProxy("map_plot", session) |> leaflet::clearPopups() |>
-      leaflet::addPopups(lng = pts$lng[i], lat = pts$lat[i], popup = html)
+    values <- if (is.null(col)) NULL else pts$df[[col]]
+    if (inherits(values, "haven_labelled")) values <- labelled_to_plain(data.frame(v = values))$v
+    shinyreact::send_message(session, "map_popup", list(
+      lng = pts$lng[i], lat = pts$lat[i], nonce = ev$nonce %||% 0, html = map_popup(pts$df, i, col, values)))
   })
-
-  output$map_plot <- leaflet::renderLeaflet({
-    htmlwidgets::onRender(map_render(), box_zoom_js)
-  })
-  # The map is drawn when the data or the filters change; a new colour only
-  # swaps the points and the legend in place, so the view stays where it is.
-  map_drawn_col <- NULL
-  map_render <- function() {
-    pts <- map_points()
-    if (nrow(pts$df) == 0) return(base_map())
-    xr <- fit_range(pts$lng); yr <- fit_range(pts$lat)
-    col <- isolate(map_col(pts$df))
-    if (!is.null(col) && map_too_many(pts$df[[col]], col)) col <- NULL
-    map_drawn_col <<- col
-    # A fixed zoom of 8 centred on the mean coordinate showed a sliver of a
-    # country-wide sample; fit to the data instead.
-    add_map_points(base_map(c(xr[1], yr[1], xr[2], yr[2])), pts, col) |>
-      leaflet::fitBounds(xr[1], yr[1], xr[2], yr[2])
-  }
-  observeEvent(input$map_var, {
-    pts <- tryCatch(map_points(), error = function(e) NULL)
-    if (is.null(pts) || nrow(pts$df) == 0) return()
-    col <- map_col(pts$df)
-    if (identical(col, map_drawn_col)) return()
-    if (!is.null(col) && map_too_many(pts$df[[col]], col)) {
-      showNotification(too_many_options(pts$df[[col]], col_label(col)), type = "warning", duration = 8)
-      updateSelectInput(session, "map_var", selected = map_drawn_col %||% "")
-      return()
-    }
-    map_drawn_col <<- col
-    leaflet::leafletProxy("map_plot", session) |>
-      leaflet::clearPopups() |>
-      leafgl::clearGlGroup("points") |>
-      leaflet::removeControl("map_legend") |>
-      add_map_points(pts, col)
-  }, ignoreInit = TRUE)
-  # Coloured as categories (not a number scale) with more options than can be told apart
-  map_too_many <- function(values, col) {
-    as_scale <- is.numeric(values) && length(unique(stats::na.omit(values))) > 8
-    !as_scale && !is.null(too_many_options(values, col))
-  }
-  # The points coloured by `col`, with their legend (works on a map or a proxy)
-  add_map_points <- function(map, pts, col) {
-    df <- pts$df
-    values <- if (is.null(col)) rep(NA_character_, nrow(df)) else df[[col]]
-    if (inherits(values, "haven_labelled")) values <- haven::as_factor(values)
-    p <- map_palette(values)
-    # Popup: the household, where it is, and the value it is coloured by.
-    # Above MAP_POPUP_MAX points the popups are not sent with the map (they
-    # were three quarters of its weight: 47 of 61 MB for 300k households); a
-    # click asks the server for that household's popup instead.
-    inline <- nrow(df) <= MAP_POPUP_MAX
-    sf_pts <- sf::st_as_sf(
-      data.frame(lng = round(pts$lng, 6), lat = round(pts$lat, 6),
-                 popup = if (inline) map_popup(df, seq_len(nrow(df)), col, values) else "", stringsAsFactors = FALSE),
-      coords = c("lng", "lat"), crs = 4326
-    )
-    map <- leafgl::addGlPoints(map,
-      data = if (inline) sf_pts else sf_pts[, "geometry"], fillColor = p$color, radius = 7, fillOpacity = 0.9,
-      group = "points", popup = if (inline) "popup" else NULL)
-    if (p$numeric) {
-      map <- leaflet::addLegend(map, "bottomright", pal = p$pal, values = p$values,
-                                title = col, opacity = 0.8, layerId = "map_legend")
-    } else if (length(p$legend_colors) > 0) {
-      map <- leaflet::addLegend(map, "bottomright", colors = p$legend_colors,
-                                labels = p$legend_labels, title = col, opacity = 0.8, layerId = "map_legend")
-    }
-    map
-  }
 
   ### ----------------- The figures follow the map view
   # ---------------------------------------------------------------------------
@@ -543,12 +398,8 @@ mod_overview_server <- function(id, uploaded_df, user_setup) {
     tags$span(class = paste("tw-ov-chip", if (zoomed) "zoomed"), bsicons::bs_icon(if (zoomed) "zoom-in" else "globe2"), " ", view_label(),
               if (zoomed) actionLink(ns("view_all"), "show all", class = "ms-1"))
   })
-  observeEvent(input$view_all, {
-    req(input$view_all > 0)
-    bslib::update_switch("view_follow", value = FALSE, session = session)
-    pts <- map_points(); xr <- fit_range(pts$lng); yr <- fit_range(pts$lat)
-    leaflet::leafletProxy("map_plot", session) |> leaflet::fitBounds(xr[1] - 1, yr[1] - 1, xr[2] + 1, yr[2] + 1)
-  })
+  # "show all" (input$view_all): the client turns Follow off and fits the map
+  # to the households itself (MapView.tsx).
 
   ### ----------------- 1. Data collection (always in view)
   # ---------------------------------------------------------------------------

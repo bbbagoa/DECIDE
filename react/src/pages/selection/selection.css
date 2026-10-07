@@ -56,3 +56,5 @@
 .tw-sel-step .form-check-label { margin-left: .35rem; }
 .tw-sel-step .form-check-inline { margin-right: 1.1rem; }
 [data-bs-theme="dark"] .tw-sel-step-num { color: #7dbbe8; background: rgba(10,110,180,.28); }
+.tw-sel-scnote svg, .tw-sel-quota svg { vertical-align: -2px; }
+.tw-sel-scnote { display: flex; flex-direction: column; gap: .25rem; margin-bottom: .4rem; }

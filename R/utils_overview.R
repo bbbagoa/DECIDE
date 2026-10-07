@@ -884,3 +884,56 @@ ct_frame <- function(ct, row_label, what) {
   list(data = out, labels = labels, formats = stats::setNames(rep(list(f), length(keys)), keys), styles = styles,
        what = what, n = ct$n, chi = ct$chi)
 }
+
+# ---- The Overview map (React: MapLibre + deck.gl) ---------------------------
+
+#' Bytes as base64 on one line (no line breaks)
+#' @noRd
+b64_line <- function(r) gsub("\n", "", jsonlite::base64_enc(r), fixed = TRUE)
+
+#' The map's points as compact binary: lon / lat pairs as little-endian
+#' float32, base64 (8 bytes a household; never one object per point)
+#' @param bounds c(west, south, east, north): the view the map opens on
+#' @noRd
+map_points_payload <- function(lng, lat, bounds) {
+  list(n = length(lng),
+       pos = b64_line(writeBin(as.vector(rbind(lng, lat)), raw(), size = 4, endian = "little")),
+       bounds = as.numeric(bounds))
+}
+
+#' The map's colours: one byte a point (its index in `palette`) and the legend
+#'
+#' Categories take the IPC ramp (interpolated beyond five), blank and missing
+#' a grey of their own; a number with more than 8 values a 255-step YlOrRd
+#' scale (the last palette entry is the grey).
+#' @return list(n, palette, code (base64 of one byte a point), legend =
+#'   list(numeric, colors, labels))
+#' @noRd
+map_colour_codes <- function(values) {
+  grey <- "#BEBEBE"
+  if (inherits(values, "haven_labelled")) values <- labelled_to_plain(data.frame(v = values))$v
+  n <- length(values)
+  out <- function(palette, code, legend) list(n = n, palette = I(palette), code = b64_line(as.raw(code)), legend = legend)
+  if (is.numeric(values) && length(unique(stats::na.omit(values))) > 8) {
+    r <- range(values[is.finite(values)])
+    pal <- leaflet::colorNumeric("YlOrRd", domain = r)(seq(r[1], r[2], length.out = 255))
+    code <- if (r[2] > r[1]) round((values - r[1]) / (r[2] - r[1]) * 254) else rep(0, n)
+    code[!is.finite(values)] <- 255
+    stops <- seq(r[1], r[2], length.out = 5)
+    return(out(c(pal, grey), code, list(numeric = TRUE, colors = I(pal[round(seq(1, 255, length.out = 7))]),
+                                        labels = I(format(signif(stops, 3), big.mark = ",", trim = TRUE)))))
+  }
+  # judged on the distinct answers, not on every household
+  v <- as.character(values)
+  u <- unique(v)
+  lv <- sort(u[!is.na(u) & nzchar(trimws(u))])
+  ipc <- c("#CDFACD", "#FAE61E", "#E67800", "#C80000", "#640000")
+  cols <- if (length(lv) == 0) character(0)
+          else if (length(lv) <= length(ipc)) ipc[seq_along(lv)]
+          else grDevices::colorRampPalette(ipc)(length(lv))
+  code <- match(v, lv) - 1L
+  na <- anyNA(code)
+  code[is.na(code)] <- length(lv)
+  out(c(cols, grey), code, list(numeric = FALSE, colors = I(c(cols, if (na) grey)),
+                                labels = I(c(lv, if (na) "Not specified"))))
+}

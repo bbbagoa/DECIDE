@@ -11,11 +11,22 @@ ui <- shinyreact::page_react(
 )
 
 server <- function(input, output, session) {
+  # how often the chart on the (hidden) Tables tab was computed
+  lazy_runs <- 0
+  output$c_lazy <- render_echart({
+    input$num   # changes while its tab is hidden must not recompute it
+    lazy_runs <<- lazy_runs + 1
+    session$userData$lazy(lazy_runs)
+    list(xAxis = list(type = "category", data = c("a", "b")), yAxis = list(type = "value"),
+         series = list(list(type = "bar", data = c(1, 2))))
+  })
+  session$userData$lazy <- reactiveVal(0)
   output$state <- shinyreact::reactive_output({
+    lazy <- session$userData$lazy()
     keys <- c("sel", "pick", "rad", "cg", "num", "txt", "sld", "dr", "chk", "tabs", "upd", "gated",
               "tbl_rows_selected", "tbl_rows_all", "tbl_cell_edit", "big_rows_selected")
     out <- lapply(keys, function(k) { v <- input[[k]]; if (is.null(v)) "NULL" else list(class = class(v)[1], value = if (inherits(v, "Date")) format(v) else v) })
-    stats::setNames(out, keys)
+    c(stats::setNames(out, keys), list(lazy_runs = lazy))
   })
   observe(gate_button("gated", FALSE, "Not yet: this button is frozen."))
   observeEvent(input$upd, {

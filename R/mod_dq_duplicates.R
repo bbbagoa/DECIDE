@@ -180,15 +180,12 @@ dq_duplicates_server <- function(input, output, session, ns, core) {
   })
   outputOptions(output, "dup_has_rows", suspendWhenHidden = FALSE)
 
-  output$dup_hint <- renderUI({
+  # what to say instead of the groups: drawn by React (DuplicatesTab.tsx)
+  output$dup_hint <- shinyreact::reactive_output({
     a <- analysis_or_null()
-    if (is.null(a)) {
-      empty_state("No duplicate analysis yet",
-                  "Choose the columns that identify a record, then click Find duplicates.", icon = "copy")
-    } else if (nrow(a$dup_df) == 0) {
-      empty_state("No duplicates found",
-                  paste0("Checked ", format(a$total, big.mark = ","), " records on the selected columns."), icon = "check2-circle")
-    }
+    if (is.null(a)) list(state = "none")
+    else if (nrow(a$dup_df) == 0) list(state = "clean", n = a$total)
+    else NULL
   })
 
   short_list <- function(x) vapply(x, function(s) {

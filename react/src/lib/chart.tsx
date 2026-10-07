@@ -3,7 +3,10 @@
 // dark. Formatters travel as names ("fn:pct", "fn:tip", ...) and become
 // functions here, since JSON carries no functions.
 import { useEffect, useRef, useState } from "react";
-import * as echarts from "echarts";
+// ECharts (about a megabyte) is loaded the first time a chart is drawn, not
+// with the page: the app opens sooner (vite puts it in its own chunk).
+import type * as Echarts from "echarts";
+import { useOutputVisibility } from "./visibility";
 import { useShinyOutputError, useShinyOutputStatus, useShinyOutputValue } from "@/shiny";
 
 export const WFP_COLOURS = ["#0A6EB4", "#26bde2", "#f7b825", "#3f7e44", "#c5192d", "#8a96a3", "#5b6b7c", "#7fb3d5", "#fbd679", "#8bc28f"];
@@ -24,11 +27,18 @@ function theme(dark: boolean) {
     line: { symbolSize: 5, lineStyle: { width: 2 }, label: { color: text, textBorderWidth: 0, textBorderColor: "transparent" } },
     scatter: { label: { color: text, textBorderWidth: 0, textBorderColor: "transparent" } },
     boxplot: { itemStyle: { color: dark ? "rgba(10,110,180,.25)" : "rgba(10,110,180,.12)", borderColor: "#0A6EB4" } },
-    pie: { itemStyle: { borderColor: dark ? "#1b2333" : "#fff", borderWidth: 1 }, label: { color: text, textBorderWidth: 0 } },
+    pie: { itemStyle: { borderColor: dark ? "#10233b" : "#fff", borderWidth: 1 }, label: { color: text, textBorderWidth: 0 } },
   };
 }
-echarts.registerTheme("tw-light", theme(false));
-echarts.registerTheme("tw-dark", theme(true));
+let loading: Promise<typeof Echarts> | null = null;
+export function loadEcharts(): Promise<typeof Echarts> {
+  loading ??= import("./echarts-core").then(({ default: m }) => {
+    m.registerTheme("tw-light", theme(false));
+    m.registerTheme("tw-dark", theme(true));
+    return m;
+  });
+  return loading;
+}
 
 type P = { value?: unknown; data?: { tip?: string; value?: unknown } | unknown; marker?: string; seriesName?: string; name?: string };
 const numOf = (x: unknown): number => {
@@ -65,6 +75,33 @@ function resolve(o: unknown): unknown {
   return o;
 }
 
+/**
+ * Bar thickness follows the number of categories: thick bars for a few,
+ * thinner ones as they multiply (the caps set chart by chart made a handful
+ * of categories look thin). A series that sets barWidth keeps it
+ * (histograms, lollipops), and so does one with no gap (barCategoryGap 0).
+ */
+export function sizeBars(o: Record<string, unknown>): Record<string, unknown> {
+  const series = Array.isArray(o.series) ? (o.series as Record<string, unknown>[]) : o.series ? [o.series as Record<string, unknown>] : [];
+  if (!series.some((x) => x?.type === "bar")) return o;
+  const axes = (k: string) => (Array.isArray(o[k]) ? (o[k] as Record<string, unknown>[]) : o[k] ? [o[k] as Record<string, unknown>] : []);
+  const catAxis = [...axes("xAxis"), ...axes("yAxis")].find((a) => a?.type === "category");
+  const sz = (x: Record<string, unknown>) => {
+    const d = (catAxis?.data as unknown[] | undefined) ?? (x.data as unknown[] | undefined) ?? [];
+    return d.length;
+  };
+  const max = (n: number) => (n <= 2 ? 90 : n <= 4 ? 72 : n <= 7 ? 54 : n <= 12 ? 38 : n <= 20 ? 26 : n <= 35 ? 16 : 10);
+  const gap = (n: number) => (n <= 4 ? "30%" : n <= 20 ? "22%" : "12%");
+  const out = series.map((x) => {
+    if (x?.type !== "bar" || x.barWidth !== undefined || x.barCategoryGap === 0 || x.barCategoryGap === "0%") return x;
+    const n = Math.max(1, sz(x));
+    const y: Record<string, unknown> = { ...x, barMaxWidth: max(n) };
+    if (x.barCategoryGap === undefined) y.barCategoryGap = gap(n);
+    return y;
+  });
+  return { ...o, series: out };
+}
+
 function useDark(): boolean {
   const get = () => document.documentElement.getAttribute("data-bs-theme") === "dark";
   const [dark, setDark] = useState(get);
@@ -79,29 +116,36 @@ function useDark(): boolean {
 /** Draw an ECharts option (from the server or built here). */
 export function EChart({ option, height = 320, className }: { option: Record<string, unknown> | null | undefined; height?: number | string; className?: string }) {
   const el = useRef<HTMLDivElement>(null);
-  const chart = useRef<echarts.ECharts | null>(null);
+  const chart = useRef<Echarts.ECharts | null>(null);
+  const [ready, setReady] = useState(0);
   const dark = useDark();
   useEffect(() => {
-    if (!el.current) return;
-    const c = echarts.init(el.current, dark ? "tw-dark" : "tw-light", { renderer: "canvas" });
-    chart.current = c;
-    const ro = new ResizeObserver(() => { if (el.current && el.current.offsetWidth > 0) c.resize(); });
-    ro.observe(el.current);
-    return () => { ro.disconnect(); c.dispose(); chart.current = null; };
+    let gone = false, ro: ResizeObserver | null = null;
+    loadEcharts().then((ec) => {
+      if (gone || !el.current) return;
+      const c = ec.init(el.current, dark ? "tw-dark" : "tw-light", { renderer: "canvas" });
+      chart.current = c;
+      ro = new ResizeObserver(() => { if (el.current && el.current.offsetWidth > 0) c.resize(); });
+      ro.observe(el.current);
+      setReady((n) => n + 1);
+    });
+    return () => { gone = true; ro?.disconnect(); chart.current?.dispose(); chart.current = null; };
   }, [dark]);
   useEffect(() => {
     if (!chart.current || !option) return;
-    chart.current.setOption(resolve({ animationDuration: 300, ...option }) as echarts.EChartsOption, { notMerge: true });
-  }, [option, dark]);
+    chart.current.setOption(resolve(sizeBars({ animationDuration: 300, ...option })) as Echarts.EChartsOption, { notMerge: true });
+  }, [option, ready]);
   return <div ref={el} className={`tw-echart${className ? " " + className : ""}`} style={{ height, width: "100%" }} />;
 }
 
 /** A chart rendered by the server: output$<id> <- render_echart(...). Validation messages show in its place. */
 export function Chart({ id, height, className }: { id: string; height?: number | string; className?: string }) {
   const v = useShinyOutputValue<{ option: Record<string, unknown>; height?: number | null }>(id);
+  useOutputVisibility(id);   // computed only while on screen
   const err = useShinyOutputError(id);
   const status = useShinyOutputStatus(id);
-  const h = height ?? v?.height ?? 320;
+  // the server's height wins (it knows how many categories there are); the page's is the default
+  const h = v?.height ?? height ?? 320;
   if (err?.message) return <div className="tw-output-note" id={id}>{err.message}</div>;
   return (
     <div id={id} className={`tw-chart-holder${status === "recalculating" ? " recalculating" : ""}`}>

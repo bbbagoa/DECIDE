@@ -36,8 +36,8 @@ ECharts helpers `dq_hbar()` / `dq_heatmap()` / `dq_compact()`) and
     (`norm_show`), Correct spelling (`correct_name`, suggested from the
     selection); Apply to selected (`btn_apply_norm`) -> confirm dialog -> merge
     + audit; Select all shown (`btn_select_shown`, the rows left by the search),
-    Deselect all, Export; hint (`location_hint`), selection chips
-    (`norm_selection`); table `tab_location_norm` (multiple, 100 rows) and the
+    Deselect all, Export; hint (`location_hint`, JSON: choose a level / level
+    not mapped), selection chips (`norm_selection`, JSON: name + records); table `tab_location_norm` (multiple, 100 rows) and the
     hierarchy treemap `dq_location_treemap` (click zooms, breadcrumb)
   - Missing data: mandatory fields (`mandatory_vars`), geographic level
     (`missing_geo_level`), Apply (`btn_apply_missing`); hint; once applied
@@ -50,7 +50,7 @@ ECharts helpers `dq_hbar()` / `dq_heatmap()` / `dq_compact()`) and
     (`outlier_method`), its threshold slider (`outlier_threshold`, range and
     default per method, none for "Allowed range only"), allowed range
     (`range_min` / `range_max`, remembered per variable, suggested for mapped
-    fields), correction (`outlier_correction_method`), Check (`ol_check`);
+    fields), correction (`outlier_correction_method`) -- redrawn as they change (no Check button: the exception to "settings wait for their button");
     Correct all flagged (`btn_apply_outlier_correction`, gated) -> preview
     dialog (before / after stats, first 8 values, reason) -> Apply + audit;
     range hint, stale-settings note (`ol_stale`); four figures
@@ -59,8 +59,8 @@ ECharts helpers `dq_hbar()` / `dq_heatmap()` / `dq_compact()`) and
     - Distribution: histogram with bounds (red dashed) and allowed range (blue
       dotted); box plots by Admin 1 with the points beyond the whiskers
     - Where they come from: flag rate by Admin 1 and by enumerator
-    - Most extreme values: insights (`outlier_insights`, hosted, with their
-      "Select ..." links -> `ol_pick`), table `ol_table` (multiple, Flag
+    - Most extreme values: insights (`outlier_insights`, JSON, `Insights.tsx`;
+      their "Select ..." links send `ol_pick` = {what, value, n}), table `ol_table` (multiple, Flag
       coloured, Details -> `ol_view` dialog), Select all / Clear, "n selected",
       Correct selected, Set a value (dialog -> preview), Mark as verified
       (dialog with required reason), Export
@@ -99,8 +99,15 @@ ECharts helpers `dq_hbar()` / `dq_heatmap()` / `dq_compact()`) and
 - [x] Enumerators (test data with an enumerator and start / end times):
       figures, the fast enumerator flagged, charts, metrics table
 - [x] Reset to original data (1,505 again)
+- [x] server facts as JSON, drawn by React (07/10/2026): empty states
+      (spelling, location, missing, duplicates, numeric audit), range hints
+      (suggested, inverted), location chips, outlier insights + "Select them"
+      (6 coded 99s selected), enumerator rules + flagged cards + "See their
+      interviews" dialog, workload insights; light and dark
 - [x] no browser error other than shinyreact's log of output messages
-      (validation notes such as "No gaps in these fields.")
+      (validation notes such as "No gaps in these fields.") -- the 07/10 run
+      also logged a deck.gl `onAfterRender` error from the Overview map chunk
+      (not this page)
 
 ## Deliberate divergences
 
@@ -119,9 +126,20 @@ ECharts helpers `dq_hbar()` / `dq_heatmap()` / `dq_compact()`) and
   `outlier_threshold_ui` is gone).
 - Enumerator tab: when no enumerator is mapped, one empty state instead of the
   validation message in every output.
-- Kept hosted (server HTML): empty states and hints, the outlier insights, the
-  enumerator rules / flagged cards / insights, the location selection chips;
-  every dialog (showModal) is Shiny's, the enumerator's records table in its
+- No hosted server HTML left on the page: the hints, empty states, outlier
+  insights, enumerator rules / flagged cards / workload insights and location
+  chips are JSON outputs under their old ids (`dup_hint`, `dq_names_empty`,
+  `location_hint`, `norm_selection`, `range_hint`, `outlier_insights`,
+  `enum_flagged_ui` (now with the rules: `enum_rules` is gone),
+  `enum_speed_insights`). `missing_hint` is gone (the tab reads
+  `missing_results`), `ol_scan_empty` too (the tab reads `input$ol_scan`).
+  Insight cards come from `dq_insight()` (R/utils_dq_health.R). Server-composed
+  sentences (insight subs, enumerator reasons) stay English, as before.
+- Hidden outputs wait: `hc_table`, `missing_kpis`, `outlier_insights`,
+  `enum_flagged_ui`, `enum_speed_insights` are tracked with
+  `useOutputVisibility()` on their section; the cheap state outputs
+  (`dq_meta`, `missing_results`, `dup_has_rows`, `enum_state`, hints) are not.
+- Every dialog (showModal) is Shiny's; the enumerator's records table in its
   dialog stays a DT table.
 - The Shiny UI functions (`mod_dq_ui()`, `dq_*_ui()`) are kept (the legacy
   page cache still builds them) but no longer shown.

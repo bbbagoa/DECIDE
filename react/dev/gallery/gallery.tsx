@@ -47,6 +47,7 @@ function Gallery() {
         { value: "tables", label: "Tables", content: <>
           <Card title="Small table"><DataTable id="tbl" /></Card>
           <Card title="Server table"><DataTable id="big" /></Card>
+          <Card title="Drawn only when shown"><Chart id="c_lazy" height={160} /></Card>
         </> },
       ]} />
       <pre id="state" className="small">{JSON.stringify(state ?? {}, null, 1)}</pre>

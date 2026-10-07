@@ -1,12 +1,14 @@
 // Step 2, the criteria: one table, every yes/no variable with its test and
 // overlap, the Use ticks (inputs rvuse_<variable>) pre-set by the server.
 // Continue (nav_next_screening) sends the ticked ones to the model.
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Grid3x3, Hash, Play, Search, ShieldAlert, TriangleAlert } from "lucide-react";
 import { useShinyOutputValue } from "@/shiny";
-import { ActionButton, HostedUI, NumericInput, SelectInput } from "@/lib/inputs";
+import { ActionButton, NumericInput, SelectInput } from "@/lib/inputs";
 import { Card } from "@/lib/layout";
 import { useVarLabels } from "@/lib/labels";
+import { useOutputVisibility } from "@/lib/visibility";
+import { BlockedNote } from "./facts";
 import { EmptyState } from "@/components/Figures";
 import { VarCalcBulk } from "@/components/VarCalc";
 import { Gate, OrCell, Pending, Show, StepNav, Tip, TipList, UseTick, isNum, ns, pct0, type T } from "./shared";
@@ -16,8 +18,12 @@ export function StepCriteria({ flow, mode, t }: { flow?: Flow; mode: Mode; t: T 
   const crit = useShinyOutputValue<Criteria>(ns("sc_criteria"));
   const [q, setQ] = useState("");
   const nof = mode === "none";
+  // computed only while this step shows (PORTING.md, "Hidden outputs wait")
+  const ref = useRef<HTMLDivElement>(null);
+  useOutputVisibility(ns("sc_criteria"), ref);
+  useOutputVisibility(ns("sc_pmt_numeric"), ref);
   return (
-    <div className="sc-step">
+    <div className="sc-step" ref={ref}>
       <Gate show={!!flow && flow.gates.screening} text={t("Screening compares each variable with the vulnerability framework, so set it first.")}
             btn="back_to_outcome" label={t("Back to Vulnerability Framework")} />
 
@@ -89,7 +95,7 @@ export function StepCriteria({ flow, mode, t }: { flow?: Flow; mode: Mode; t: T 
       </details>
       <details className="sc-details small" onToggle={(e) => { if ((e.target as HTMLDetailsElement).open) window.dispatchEvent(new Event("resize")); }}>
         <summary><strong><ShieldAlert size={14} /> {t("Columns that cannot be criteria")}</strong></summary>
-        <div className="pt-2"><HostedUI id={ns("blocked_note")} /></div>
+        <div className="pt-2"><BlockedNote t={t} /></div>
       </details>
 
       <StepNav back="nav_back_screening" backLabel={t("Back to Vulnerability Framework")} nav={flow?.nav.screening}

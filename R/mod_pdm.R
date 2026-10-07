@@ -326,15 +326,12 @@ mod_pdm_server <- function(id, workspace = NULL, country_office = reactive(NULL)
       if (is.null(df) || !shiny::isTruthy(b) || !b %in% names(df)) return(NULL)
       two_levels(df[[b]])
     })
-    output$benef_level_ui <- renderUI({
+    # The React page draws the radio (input$pdm_benef_level) from these facts
+    # (output$pdm_side); a new column picks its answer as the Shiny page did.
+    observeEvent(benef_levels(), {
       lv <- benef_levels()
-      if (is.null(lv)) return(NULL)
-      if (length(lv) != 2)
-        return(tags$div(class = "small text-danger mb-2", bsicons::bs_icon("exclamation-triangle"), " ",
-                        sprintf("This column has %d different answers; choose one with exactly two (received / not received).", length(lv))))
-      sel <- isolate(input$pdm_benef_level)
-      radioButtons(ns("pdm_benef_level"), "Answer meaning 'received assistance'", choices = value_choices(lv, input$pdm_beneficiary), inline = TRUE,
-                   selected = if (isTRUE(sel %in% lv)) sel else guess_positive_answer(lv))
+      if (length(lv) == 2 && !isTRUE(isolate(input$pdm_benef_level) %in% lv))
+        updateRadioButtons(session, "pdm_benef_level", selected = guess_positive_answer(lv))
     })
     # TRUE = received, FALSE = not, NA = not answered; NULL when the column
     # does not have two answers.
@@ -395,24 +392,24 @@ mod_pdm_server <- function(id, workspace = NULL, country_office = reactive(NULL)
       pop_units(st[, c("unit", "beneficiaries", "non_beneficiaries")])
     })
 
-    # What the eligibility source can do with this PDM file.
-    output$pdm_elig_note <- renderUI({
+    # What the eligibility source can do with this PDM file: list(kind, text)
+    # (kind "warning" or "note"), or NULL.
+    elig_note <- function() {
       src <- input$pdm_elig_source %||% "column"
       if (identical(src, "column")) return(NULL)
       if (identical(src, "scorecard")) {
         sc <- if (is.null(user_setup)) NULL else user_setup$scorecard
-        if (scorecard_is_empty(sc)) return(tags$div(class = "alert alert-warning small", "No scorecard is adopted yet (Targeting Design)."))
+        if (scorecard_is_empty(sc)) return(list(kind = "warning", text = "No scorecard is adopted yet (Targeting Design)."))
         df <- pdm_df()
         # the columns alone say what is missing: nothing is scored here
         miss <- if (is.null(df)) character(0) else pdm_scorecard_eligibility(df[0, , drop = FALSE], sc)$missing
-        return(tags$div(class = if (length(miss)) "alert alert-warning small" else "small text-muted mb-2",
-                        if (length(miss)) paste0("The PDM data lacks: ", paste(miss, collapse = ", "), ".")
-                        else sprintf("%d criteria, eligible when score > %s.", length(sc$items), fmt5(sc$threshold %||% 0))))
+        return(if (length(miss)) list(kind = "warning", text = paste0("The PDM data lacks: ", paste(miss, collapse = ", "), "."))
+               else list(kind = "note", text = sprintf("%d criteria, eligible when score > %s.", length(sc$items), fmt5(sc$threshold %||% 0))))
       }
       rs <- if (is.null(user_setup)) NULL else user_setup$rules
-      if (is.null(rs) || ruleset_is_empty(rs)) return(tags$div(class = "alert alert-warning small", "No eligibility rules are saved yet (Beneficiary Selection)."))
-      tags$div(class = "small text-muted mb-2", ruleset_describe(rs, user_setup))
-    })
+      if (is.null(rs) || ruleset_is_empty(rs)) return(list(kind = "warning", text = "No eligibility rules are saved yet (Beneficiary Selection)."))
+      list(kind = "note", text = paste(ruleset_describe(rs, user_setup), collapse = " "))
+    }
 
     # --- Load -------------------------------------------------------------
     observeEvent(input$pdm_file, {
@@ -680,30 +677,25 @@ mod_pdm_server <- function(id, workspace = NULL, country_office = reactive(NULL)
     # The adopted ranking was built without an outcome indicator; PDM (or
     # verification) data that carry one measure its errors for the first time.
     calib <- reactiveVal(NULL)
-    output$calib_ui <- renderUI({
+    # The tab's facts (output$calib_state, drawn by the React page): what is
+    # adopted, the columns that can hold the outcome, what the data lack, and
+    # the last measure.
+    output$calib_state <- shinyreact::reactive_output({
       sc <- if (is.null(user_setup)) NULL else user_setup$scorecard
-      if (scorecard_is_empty(sc) || !is_ranking(sc))
-        return(empty_state("No vulnerability ranking adopted",
-                           "This tab measures the errors of a ranking built without an outcome indicator (Targeting Design, 'No outcome indicator'). A scorecard built on an outcome already has its design errors.",
-                           icon = "sliders"))
+      if (scorecard_is_empty(sc) || !is_ranking(sc)) return(list(status = "none"))
       df <- pdm_df()
-      if (is.null(df)) return(empty_state("Load PDM or verification data", "Data with a food-security outcome and the ranking's criteria.", icon = "upload"))
-      miss <- pdm_scorecard_eligibility(df, sc)$missing
+      if (is.null(df)) return(list(status = "nodata"))
+      # the columns alone say what is missing
+      miss <- pdm_scorecard_eligibility(df[0, , drop = FALSE], sc)$missing
       cols <- names(df)[vapply(df, function(v) { k <- length(unique(stats::na.omit(v))); k >= 2 && k <= 12 }, logical(1))]
-      tagList(
-        tags$p(class = "small text-muted",
-               "The adopted ranking was built without an outcome, so its inclusion and exclusion errors were unknown. Choose the food-security outcome",
-               " these data carry (CARI, FCS or rCSI class...) and the level that means vulnerable: the ranking is applied to these households and its errors,",
-               " its AUC and the threshold that keeps both errors lowest are measured."),
-        if (length(miss)) tags$div(class = "alert alert-warning small", sprintf("These data lack %d of the ranking's criteria (%s): they cannot be scored.",
-                                                                               length(miss), paste(utils::head(miss, 5), collapse = ", "))),
-        bslib::layout_columns(
-          col_widths = c(5, 4, 3), fill = FALSE,
-          selectizeInput(ns("calib_outcome"), "Outcome in these data", choices = c("Choose a column" = "", cols), width = "100%"),
-          selectInput(ns("calib_pos"), "Level meaning vulnerable", choices = NULL, width = "100%"),
-          tags$div(class = "wfp-inline-action", tags$label(class = "form-label", "\u00a0"),
-                   actionButton(ns("calib_run"), "Measure the errors", icon = icon("play"), class = "btn-primary w-100"))),
-        uiOutput(ns("calib_result")))
+      c0 <- calib()
+      list(status = "ready", missing = I(as.character(miss)), cols = I(cols),
+           result = if (!is.null(c0)) list(
+             auc = c0$auc, n = c0$n, outcome = c0$outcome, pos = c0$pos, threshold = fmt5(c0$threshold),
+             inclusion = c0$current$inclusion_error, exclusion = c0$current$exclusion_error,
+             best = if (!is.na(c0$balanced$threshold)) list(threshold = fmt5(c0$balanced$threshold),
+                                                           inclusion = c0$balanced$inclusion_error,
+                                                           exclusion = c0$balanced$exclusion_error)))
     })
     observeEvent(input$calib_outcome, {
       df <- pdm_df(); req(df, shiny::isTruthy(input$calib_outcome), input$calib_outcome %in% names(df))
@@ -711,6 +703,7 @@ mod_pdm_server <- function(id, workspace = NULL, country_office = reactive(NULL)
       updateSelectInput(session, "calib_pos", choices = lv, selected = guess_positive_level(lv))
     })
     observeEvent(input$calib_run, {
+      req(input$calib_run > 0)   # a React button sends 0 at start
       sc <- user_setup$scorecard; df <- pdm_df()
       need_ok(!scorecard_is_empty(sc) && !is.null(df) && shiny::isTruthy(input$calib_outcome), "Choose the outcome column first.")
       r <- pdm_scorecard_eligibility(df, sc)
@@ -724,30 +717,6 @@ mod_pdm_server <- function(id, workspace = NULL, country_office = reactive(NULL)
                         format(res$n, big.mark = ","), input$calib_outcome, input$calib_pos,
                         100 * res$current$inclusion_error, 100 * res$current$exclusion_error, res$auc))
     })
-    output$calib_result <- renderUI({
-      c0 <- calib(); req(c0)
-      e <- c0$current; b <- c0$balanced
-      pct <- function(v) if (is.na(v)) "n/a" else sprintf("%.1f%%", 100 * v)
-      tagList(
-        bslib::layout_columns(
-          col_widths = c(3, 3, 3, 3), fill = FALSE, class = "wfp-kpi-flat mt-2",
-          bslib::value_box(title = "AUC of the ranking", value = if (is.na(c0$auc)) "n/a" else sprintf("%.3f", c0$auc),
-                           showcase = bsicons::bs_icon("graph-up"), theme = "primary"),
-          bslib::value_box(title = "Inclusion error (adopted threshold)", value = pct(e$inclusion_error),
-                           showcase = bsicons::bs_icon("person-plus"), theme = "warning"),
-          bslib::value_box(title = "Exclusion error (adopted threshold)", value = pct(e$exclusion_error),
-                           showcase = bsicons::bs_icon("person-dash"), theme = "danger"),
-          bslib::value_box(title = "Households measured", value = format(c0$n, big.mark = ","),
-                           showcase = bsicons::bs_icon("people"), theme = "info")),
-        tags$div(class = "small mt-2",
-                 if (is.na(b$threshold)) "No threshold does better than selecting everyone on these data."
-                 else sprintf("The threshold that keeps both errors lowest on these data is %s (inclusion %s, exclusion %s), against %s adopted. Re-adopt the ranking in Targeting Design with it if the data are representative.",
-                              fmt5(b$threshold), pct(b$inclusion_error), pct(b$exclusion_error), fmt5(c0$threshold))),
-        tags$div(class = "small text-muted mt-1",
-                 sprintf("Outcome: %s = %s. An AUC near 0.5 means the ranking does not order households by this outcome: revisit the criteria or the method.",
-                         c0$outcome, c0$pos)))
-    })
-
     output$has_data <- reactive(!is.null(pdm_all()))
     outputOptions(output, "has_data", suspendWhenHidden = FALSE)
 
@@ -826,7 +795,9 @@ mod_pdm_server <- function(id, workspace = NULL, country_office = reactive(NULL)
 
     # Targeting Advisory 2/2025 gives a separate decision table for
     # implementation errors; error_verdict() routes to it by stage.
-    output$pdm_verdict <- renderUI({
+    # The verdict card's facts (components/VerdictCard.tsx draws them), with
+    # the households excluded by design.
+    output$pdm_verdict <- shinyreact::reactive_output({
       m <- results()$metrics
       req(m)
       lower <- (input$tol_lower %||% 5) / 100
@@ -836,22 +807,10 @@ mod_pdm_server <- function(id, workspace = NULL, country_office = reactive(NULL)
                     error = function(e) list(level = "invalid",
                                              interpretation = conditionMessage(e),
                                              action = "Lower the upper tolerance below 50%."))
-      verdict_card(
-        v, stage = "implementation",
-        errors = c(inclusion = m$inclusion_error, exclusion = m$exclusion_error), tolerance = c(lower, upper),
-        tags$div(class = "small mt-2 text-muted",
-                 sprintf("Implementation errors, judged against a %.0f%%-%.0f%% band. ",
-                         100 * lower, 100 * upper),
-                 "These measure whether the criteria were applied correctly on the ground, ",
-                 "not whether the criteria themselves were right -- that is the design error ",
-                 "on the Targeting Design tab."),
-        if (!is.null(ed <- results()$excl_design)) tags$div(
-          class = "small mt-2",
-          tags$strong(sprintf("Excluded by design: %s households (%s of eligible).",
-                              format(ed$n, big.mark = ","), pct(ed$share))),
-          " Eligible but not prioritised for lack of resources: unmet need, left out of the exclusion error."
-        )
-      )
+      ed <- results()$excl_design
+      c(verdict_facts(v, errors = c(inclusion = m$inclusion_error, exclusion = m$exclusion_error),
+                      tolerance = c(lower, upper), stage = "implementation"),
+        list(excl_design = if (!is.null(ed)) list(n = ed$n, share = ed$share)))
     })
 
     output$decisions_ui <- renderUI({
@@ -992,8 +951,17 @@ mod_pdm_server <- function(id, workspace = NULL, country_office = reactive(NULL)
     # hosted; rendered once, kept bound while its step is folded.
     output$pdm_file_ui <- renderUI(fileInput(ns("pdm_file"), NULL, width = "100%", accept = c(".xlsx", ".xls", ".sav", ".dta", ".csv", ".parquet"),
                                              placeholder = "One row per surveyed household"))
-    for (k in c("pdm_file_ui", "benef_level_ui", "pdm_elig_note"))
-      outputOptions(output, k, suspendWhenHidden = FALSE)
+    outputOptions(output, "pdm_file_ui", suspendWhenHidden = FALSE)
+    # The sidebar's small facts: the answers of the beneficiary column (the
+    # radio input$pdm_benef_level) and what the eligibility source can do.
+    output$pdm_side <- shinyreact::reactive_output({
+      lv <- benef_levels()
+      list(benef = if (!is.null(lv)) {
+             ch <- value_choices(lv, input$pdm_beneficiary)
+             list(n = length(lv), choices = lapply(seq_along(ch), function(i) list(value = unname(ch[i]), label = names(ch)[i] %||% unname(ch[i]))))
+           },
+           elig = elig_note())
+    })
     # The facts the page draws: data, sample, match, results, decisions.
     output$pdm_state <- shinyreact::reactive_output({
       df <- pdm_df(); sd <- sample_design(); r <- results(); mt <- ptm_matched()

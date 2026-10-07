@@ -12,14 +12,23 @@ import { useShinyInput, useShinyOutputValue } from "@/shiny";
 import { ActionButton, HostedUI, NumericInput, SelectInput, TextOutput, useServerUpdates } from "@/lib/inputs";
 import { Card, Tabs } from "@/lib/layout";
 import { Chart } from "@/lib/chart";
+import { useOutputVisibility } from "@/lib/visibility";
+import { InsightsList, PmtAccuracyCard, PmtLineNote, StabilityBody, StaleNote, useStale } from "./facts";
 import { ChartHelp, ChartPane, Gate, Show, StepNav, Tip, fmt5, int, isNum, ns, type T } from "./shared";
 import { Kpi } from "./StepFramework";
-import type { Flow, Meta, Mode, Slider, Thresh } from "./types";
+import type { Flow, Meta, Mode, RankingFacts, Slider, Thresh } from "./types";
 
 export function StepThreshold({ flow, meta, mode, t }: { flow?: Flow; meta?: Meta; mode: Mode; t: T }) {
   const th = useShinyOutputValue<Thresh>(ns("sc_threshold"));
   const nof = mode === "none", pmt = mode === "pmt";
   const adopted = !!flow?.nav.threshold.adopted;
+  const stale = useStale();
+  const rk = useShinyOutputValue<RankingFacts>(ns("sc_ranking"));
+  // computed only while shown (PORTING.md, "Hidden outputs wait")
+  const withRef = useRef<HTMLDivElement>(null), noRef = useRef<HTMLDivElement>(null);
+  useOutputVisibility(ns("sc_threshold"), withRef);
+  useOutputVisibility(ns("sc_pmt_accuracy"), withRef);
+  useOutputVisibility(ns("sc_ranking"), noRef);
   return (
     <div className="sc-step">
       <p className="sc-lead">{t("Choosing the eligibility threshold is a programmatic decision, not a mechanical one (Targeting Advisory 3/2025). The curve shows the whole trade-off; the band below is your tolerance for error.")}</p>
@@ -56,10 +65,10 @@ export function StepThreshold({ flow, meta, mode, t }: { flow?: Flow; meta?: Met
           </div>
           <div className="sc-apply-row">
             <ActionButton id={ns("thr_apply")} label={t("Apply")} icon={<CircleCheck size={14} />} variant="primary" size="md" />
-            <HostedUI id={ns("thr_stale")} inline />
+            <StaleNote show={!!stale?.thr}>{t("Threshold or tolerance changed: click Apply to update the errors and charts.")}</StaleNote>
           </div>
           <div className="small text-muted mt-2"><TextOutput id={ns("thr_note")} /></div>
-          <Show when={pmt} className="small mt-1"><HostedUI id={ns("pmt_thr_note")} /></Show>
+          <Show when={pmt} className="small mt-1"><PmtLineNote stale={stale} t={t} /></Show>
         </div>
         <div className="sc-setup-panel sc-rationale">
           <div className="form-label sc-label">{t("Rationale for the band and the threshold")}{" "}
@@ -70,19 +79,20 @@ export function StepThreshold({ flow, meta, mode, t }: { flow?: Flow; meta?: Met
 
       {/* without an outcome: the selection, its consistency and stability */}
       <Show when={nof}>
+        <div ref={noRef} className="sc-stack">
         <div className="sc-kpis sc-kpis-ranking">
           <Kpi label={t("Households selected")} value={<TextOutput id={ns("kpi_selected")} />} tone="info" />
           <Kpi label={<>{t("Internal consistency")} <Tip>{t("Cronbach's alpha of the criteria: how far they measure one thing. Above 0.7 is usually read as consistent; low values are expected when the criteria cover different dimensions of vulnerability on purpose.")}</Tip></>}
                value={<TextOutput id={ns("kpi_alpha")} />} />
           <Card title={t("Stability of the selection")} icon={<Shuffle size={15} />} className="sc-stability"
                 help={<Tip>{t("The design is refitted on 20 resamples of the households; each refit selects the same share of households. The agreement with the design's own selection (Jaccard index) says how much the targeting depends on who happened to be in the data.")}</Tip>}>
-            <HostedUI id={ns("stability_ui")} />
+            <StabilityBody r={rk} t={t} />
           </Card>
         </div>
         <div className="sc-grid-2 sc-top">
           <Card title={t("What the selection concentrates")} icon={<Lightbulb size={15} />}
                 help={<Tip>{t("A household's deprivations are the criteria it meets in the vulnerable direction (an inclusion criterion met, an exclusion criterion not met).")}</Tip>}>
-            <HostedUI id={ns("insights_ui")} />
+            <InsightsList r={rk} t={t} />
           </Card>
           <Card full title={t("Share selected by area")} icon={<MapPin size={15} />} help={<ChartHelp id="cov_area_plot" meta={meta} t={t} />}
                 actions={<div className="sc-card-select"><SelectInput id={ns("cov_area")} choices={[{ value: "", label: t("(none)") }]} value="" clearable={false} /></div>}>
@@ -93,12 +103,14 @@ export function StepThreshold({ flow, meta, mode, t }: { flow?: Flow; meta?: Met
           <Card full title={t("Ranking distribution")} icon={<Sigma size={15} />} help={<ChartHelp id="rank_plot" meta={meta} t={t} />}><Chart id={ns("rank_plot")} height={400} /></Card>
           <Card full title={t("Criteria among selected and other households")} icon={<ClipboardCheck size={15} />} help={<ChartHelp id="sel_prev_plot" meta={meta} t={t} />}><Chart id={ns("sel_prev_plot")} height={400} /></Card>
         </div>
+        </div>
       </Show>
 
       {/* with an outcome: the errors, the matrix and the verdict */}
       <Show when={!nof}>
+        <div ref={withRef} className="sc-stack">
         <div className="small text-muted"><TextOutput id={ns("eval_note")} /></div>
-        <Show when={pmt}><HostedUI id={ns("pmt_accuracy_ui")} /></Show>
+        <Show when={pmt}><PmtAccuracyCard t={t} /></Show>
         <div className="sc-kpis sc-kpis-4">
           <Kpi label={<TextOutput id={ns("kpi_auc_title")} />} value={<TextOutput id={ns("kpi_auc")} />} tone="primary" />
           <Kpi label={pmt ? t("Selected (predicted poor)") : t("Eligible households")} value={<TextOutput id={ns("kpi_elig")} />} tone="info" />
@@ -114,6 +126,7 @@ export function StepThreshold({ flow, meta, mode, t }: { flow?: Flow; meta?: Met
           <Card title={t("Verdict")} icon={<BadgeCheck size={15} />}>
             {th ? <Verdict th={th} t={t} /> : <div className="small text-muted">{t("The verdict follows the errors.")}</div>}
           </Card>
+        </div>
         </div>
       </Show>
 

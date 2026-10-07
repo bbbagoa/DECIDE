@@ -1497,3 +1497,28 @@ is_identification_col <- function(cl) {
     grepl("^(instanceid|deviceid|subscriberid|simserial|start|end|today|username|audit)$", n) ||
     grepl("^(formhub|meta)([_./]|$)", n)
 }
+
+#' What a fitted index says about itself, as facts for the React page
+#'
+#' The same content as index_note() (R/utils_helpers.R), which the Shiny
+#' page drew; the page (StepModel's IndexNote) writes the sentences.
+#' @noRd
+index_note_facts <- function(ix) {
+  n <- function(v) if (is.null(v) || length(v) != 1 || is.na(v)) NA else unname(v)
+  if (identical(ix$type, "pca")) {
+    kmo <- round(n(ix$kmo), 2)
+    word <- if (is.na(kmo)) "not computable" else if (kmo >= .8) "good" else if (kmo >= .7) "middling" else
+      if (kmo >= .6) "mediocre" else if (kmo >= .5) "poor" else "unacceptable"
+    return(list(type = "pca", share = n(ix$share), min_var = n(ix$min_var), axes = n(ix$axes %||% 1),
+                axis_share = I(unname(ix$axis_share %||% numeric(0))), axis_weights = I(unname(ix$axis_weights %||% numeric(0))),
+                kaiser = n(ix$kaiser), kmo = kmo, kmo_word = word, bartlett_p = n(ix$bartlett_p),
+                weak = is.na(kmo) || kmo < .5 || isTRUE(ix$bartlett_p >= .05)))
+  }
+  if (isTRUE(ix$type %in% c("count", "mca", "cluster")))
+    return(list(type = ix$type, alpha = n(ix$alpha), axes = n(ix$axes %||% 1), share = n(ix$share),
+                anchor = anchor_text(ix$anchor), k = n(ix$k),
+                algorithm = if (identical(ix$type, "cluster")) unname(cluster_algorithm_label(ix$algorithm)) else NA,
+                target = I(as.integer(ix$target %||% integer(0))),
+                target_share = if (identical(ix$type, "cluster")) sum(ix$size[ix$target]) else NA))
+  list(type = "lda", mahalanobis = n(ix$mahalanobis))
+}

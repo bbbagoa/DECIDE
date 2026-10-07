@@ -1,17 +1,21 @@
 // Outliers (R/mod_dq_outliers.R): a variable, a method, its threshold and an
-// allowed range, checked on Check; corrections are previewed in the server's
+// allowed range, redrawn as they change; corrections are previewed in the server's
 // dialog before they are written (and logged). input$outlier_tabs is switched
 // by the server when a row of "All numeric variables" is clicked.
+import { useRef } from "react";
 import {
-  BarChart3, Check, ClipboardList, Download, Grid3x3, ListChecks, ListOrdered, MapPin, Pencil, Percent, Ruler, Search, SortDesc,
+  BarChart3, Check, Info, Lightbulb, ClipboardList, Download, Grid3x3, ListChecks, ListOrdered, MapPin, Pencil, Percent, Ruler, Search, SortDesc,
   TriangleAlert, Wand2,
 } from "lucide-react";
-import { useShinyInputValue } from "@/shiny";
-import { ActionButton, DownloadButton, HostedUI, NumericInput, SelectInput, SliderInput, TextOutput } from "@/lib/inputs";
+import { useSetShinyInput, useShinyInputValue, useShinyOutputValue } from "@/shiny";
+import { ActionButton, DownloadButton, NumericInput, SelectInput, SliderInput, TextOutput } from "@/lib/inputs";
 import { Card, Tabs } from "@/lib/layout";
 import { Chart } from "@/lib/chart";
 import { DataTable } from "@/lib/table";
+import { EmptyState } from "@/components/Figures";
+import { useOutputVisibility } from "@/lib/visibility";
 import { Kpis, ns, Note, Toolbar, type T } from "./common";
+import { Insights, type Insight } from "./Insights";
 
 const METHODS = [
   { value: "IQR", label: "IQR (Tukey)" }, { value: "Z", label: "Z-Score (mean/SD)" },
@@ -33,6 +37,13 @@ export function OutliersTab({ t }: { t: T }) {
   const method = useShinyInputValue<string>(ns("outlier_method")) || "IQR";
   const th = THRESHOLD[method];
   const tr = (cs: { value: string; label: string }[]) => cs.map((c) => ({ value: c.value, label: t(c.label) }));
+  const hint = useShinyOutputValue<"inverted" | "tip" | "suggested" | null>(ns("range_hint"));
+  const ins = useShinyOutputValue<{ empty?: { title: string; sub: string }; cards?: Insight[] } | null>(ns("outlier_insights"));
+  const insBox = useRef<HTMLDivElement>(null);
+  useOutputVisibility(ns("outlier_insights"), insBox);
+  // a card's "Select ..." link: the server selects those rows of ol_table
+  const pick = useSetShinyInput<unknown>(ns("ol_pick"), null, { debounceMs: 0, priority: "event" });
+  const scanned = (useShinyInputValue<number>(ns("ol_scan")) ?? 0) > 0;
   return (
     <>
       <Toolbar
@@ -52,11 +63,10 @@ export function OutliersTab({ t }: { t: T }) {
           </div>
         </div>
         <SelectInput id={ns("outlier_correction_method")} label={t("Correction")} choices={tr(CORRECTIONS)} value="cap" />
-        <ActionButton id={ns("ol_check")} label={t("Check")} icon={<Search size={13} />} variant="primary"
-                      title={t("Look for outliers with this variable, method and allowed range")} />
       </Toolbar>
-      <HostedUI id={ns("range_hint")} />
-      <HostedUI id={ns("ol_stale")} />
+      {hint === "inverted" && <div className="tw-dq-hint danger"><TriangleAlert size={14} /> {t("The allowed minimum is above the maximum, so the range is ignored.")}</div>}
+      {hint === "tip" && <div className="tw-dq-hint"><Lightbulb size={14} /> {t("Tip: enter the allowed range for this variable (for example 1 to 30 for a household size). A statistical test only sees what is unusual; the range also catches what is impossible.")}</div>}
+      {hint === "suggested" && <div className="tw-dq-hint"><Info size={14} /> {t("Suggested range for this field; change it if your context differs.")}</div>}
       <Kpis items={[
         { label: t("Values checked"), id: "outlier_total", icon: <ListOrdered size={18} />, tone: "blue" },
         { label: t("Flagged"), id: "outlier_count", subId: "outlier_verified", icon: <TriangleAlert size={18} />, tone: "amber" },
@@ -92,7 +102,10 @@ export function OutliersTab({ t }: { t: T }) {
           value: "flagged", label: t("Most extreme values"), icon: <SortDesc size={14} />,
           content: (
             <>
-              <HostedUI id={ns("outlier_insights")} />
+              <div ref={insBox} className="tw-dq-ol-insights">
+                {ins?.empty ? <EmptyState title={t(ins.empty.title)} sub={t(ins.empty.sub)} />
+                  : <Insights items={ins?.cards ?? []} t={t} onPick={(p) => pick({ what: p.what, value: p.value, n: Math.random() })} />}
+              </div>
               <Card title={t("Flagged values, most extreme first")} icon={<ListChecks size={15} />} full>
                 <div className="tw-dq-cardbar">
                   <ActionButton id={ns("ol_select_all")} label={t("Select all")} variant="outline-secondary" />
@@ -116,7 +129,7 @@ export function OutliersTab({ t }: { t: T }) {
             <Card title={t("Every numeric variable, with the settings above")} icon={<ClipboardList size={15} />} full
                   actions={<ActionButton id={ns("ol_scan")} label={t("Audit all numeric variables")} icon={<Search size={13} />} />}>
               <Note>{t("Checks every numeric column with the detection method and the allowed ranges you entered. Click a row to open that variable.")}</Note>
-              <HostedUI id={ns("ol_scan_empty")} />
+              {!scanned && <EmptyState title={t("Not run yet")} sub={t("Click Audit all numeric variables to check every numeric column at once.")} />}
               <DataTable id={ns("ol_scan_table")} compact />
             </Card>
           ),

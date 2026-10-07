@@ -84,3 +84,12 @@ dq_health <- function(df, setup) {
   }
   do.call(rbind, out)
 }
+
+#' One insight card of a Data Quality tab, as data for the React page
+#'
+#' @param icon A name the page maps to an icon (react/src/pages/dq/Insights.tsx).
+#' @param pick Optional action: list(what, value, label), sent back as input$ol_pick.
+#' @noRd
+dq_insight <- function(icon, label, value = NULL, sub = NULL, pick = NULL) {
+  list(icon = icon, label = label, value = if (is.null(value)) NULL else as.character(value), sub = sub, pick = pick)
+}

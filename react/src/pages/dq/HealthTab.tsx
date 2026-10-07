@@ -1,10 +1,12 @@
 // Health check (R/mod_dq_health.R): one row per check, run on its button;
 // Review sets input$hc_go and the server opens that tab (nav_select).
+import { useRef } from "react";
 import { CircleCheck, CircleMinus, HeartPulse, Play, TriangleAlert } from "lucide-react";
 import { useSetShinyInput, useShinyOutputValue } from "@/shiny";
 import { ActionButton } from "@/lib/inputs";
 import { Card } from "@/lib/layout";
 import { EmptyState } from "@/components/Figures";
+import { useOutputVisibility } from "@/lib/visibility";
 import { ns, type T } from "./common";
 
 type Row = { check: string; tab: string; found: string; status: "ok" | "review" | "na" };
@@ -14,6 +16,8 @@ const ICON = { ok: <CircleCheck size={18} />, review: <TriangleAlert size={18} /
 const PILL = { ok: ["tw-pill-ok", "OK"], review: ["tw-pill-review", "Review"], na: ["tw-pill-na", "Not checked"] } as const;
 
 export function HealthTab({ t }: { t: T }) {
+  const box = useRef<HTMLDivElement>(null);
+  useOutputVisibility(ns("hc_table"), box);
   const res = useShinyOutputValue<Result | null>(ns("hc_table"));
   const go = useSetShinyInput<string | null>(ns("hc_go"), null, { debounceMs: 0, priority: "event" });
   const count = (s: Row["status"]) => res?.rows.filter((r) => r.status === s).length ?? 0;
@@ -23,6 +27,7 @@ export function HealthTab({ t }: { t: T }) {
       <p className="tw-dq-note">
         {t("A quick pass with the rules of each tab. Review opens the tab with the detail and the corrections; the Data quality report (sidebar) records everything.")}
       </p>
+      <div ref={box}>
       {!res ? (
         <EmptyState title={t("Not run yet")} sub={t("Click Run the health check to see what needs attention.")} />
       ) : (
@@ -49,6 +54,7 @@ export function HealthTab({ t }: { t: T }) {
           </div>
         </>
       )}
+      </div>
     </Card>
   );
 }

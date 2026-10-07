@@ -87,3 +87,11 @@
 .tw-mon-suggest svg { color: #d19a00; flex: 0 0 auto; align-self: center; }
 .min-w-0 { min-width: 0; }
 @media (max-width: 1100px) { .tw-mon-report { grid-template-columns: minmax(0, 1fr); } .tw-mon-items { grid-template-columns: minmax(0, 1fr); } }
+
+/* notes above the preview, the verdict, the ranking calibration */
+.tw-cb-note svg { vertical-align: -2px; }
+.tw-mon-calib { display: flex; flex-direction: column; gap: 12px; }
+.tw-mon-calib-row { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 4fr) auto; gap: 12px; align-items: end; }
+.tw-mon-calib-row .tw-field { margin-bottom: 0; }
+.tw-mon-calib-go { white-space: nowrap; }
+@media (max-width: 900px) { .tw-mon-calib-row { grid-template-columns: minmax(0, 1fr); } }

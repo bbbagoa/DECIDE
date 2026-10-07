@@ -4,7 +4,10 @@
 import type { ReactNode } from "react";
 import { ArrowDownCircle, CircleAlert, CircleCheck, Filter, Grid3x3, ListChecks, MapPin } from "lucide-react";
 import { useShinyOutputValue } from "@/shiny";
-import { ActionButton, HostedUI, SelectInput } from "@/lib/inputs";
+import { useEffect, useRef } from "react";
+import { ActionButton, SelectInput } from "@/lib/inputs";
+import { EmptyState } from "@/components/Figures";
+import { recheckVisibility, useOutputVisibility } from "@/lib/visibility";
 import { Card, Tabs } from "@/lib/layout";
 import { Chart } from "@/lib/chart";
 import { DataTable } from "@/lib/table";
@@ -20,6 +23,10 @@ const KPI_STYLE: Record<string, { icon: ReactNode; tone: "green" | "amber" | "cy
 export function MissingTab({ t }: { t: T }) {
   const ready = useShinyOutputValue<boolean>(ns("missing_results"));
   const kpis = useShinyOutputValue<Tile[]>(ns("missing_kpis"));
+  // the figures are computed only while the results show
+  const box = useRef<HTMLDivElement>(null);
+  useOutputVisibility(ns("missing_kpis"), box);
+  useEffect(() => { recheckVisibility(); }, [ready]);
   return (
     <>
       <Toolbar>
@@ -27,9 +34,11 @@ export function MissingTab({ t }: { t: T }) {
         <SelectInput id={ns("missing_geo_level")} label={t("Geographic level")} choices={LEVELS} value="Admin 1" />
         <ActionButton id={ns("btn_apply_missing")} label={t("Apply")} icon={<Filter size={13} />} variant="primary" />
       </Toolbar>
-      <HostedUI id={ns("missing_hint")} />
+      {ready === false && <div className="card tw-card"><div className="card-body">
+        <EmptyState title={t("No missing-data check yet")} sub={t("Pick the fields that must be filled in, choose a geographic level, then click Apply.")} />
+      </div></div>}
       {/* kept mounted (charts measure themselves once shown) */}
-      <div className="d-flex flex-column gap-3" style={{ display: ready ? undefined : "none" }}>
+      <div ref={box} className="d-flex flex-column gap-3" style={{ display: ready ? undefined : "none" }}>
         {kpis && <Kpis items={kpis.map((k) => ({ label: t(k.label), value: k.value, sub: k.sub, ...KPI_STYLE[k.tone] }))} />}
         <Tabs tabs={[
           {

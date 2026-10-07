@@ -80,14 +80,6 @@ dq_missing_server <- function(input, output, session, ns, core) {
 
   has_missing_analysis <- reactive(!is.null(applied_missing$vars) && length(applied_missing$vars) > 0)
 
-  output$missing_hint <- renderUI({
-    if (!has_missing_analysis()) {
-      empty_state("No missing-data check yet",
-                  "Pick the fields that must be filled in, choose a geographic level, then click Apply.",
-                  icon = "clipboard-data")
-    }
-  })
-
   # Headline numbers first, then one view per question: which fields,
   # which combinations, where.
   # Whether a check has run: the React page shows the results layout then

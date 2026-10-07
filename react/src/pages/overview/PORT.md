@@ -3,7 +3,7 @@
 Server: `R/mod_overview.R`; builders' pure functions in `R/utils_overview.R`
 (`gb_echart()`, `ct_frame()`, tested in `tests/testthat/test-overview-builders.R`).
 Client: `OverviewPage.tsx`, `charts.tsx` (ECharts), `Builders.tsx`,
-`overview.css`. Browser check: `react/dev/test_overview.R`.
+`MapView.tsx` + `mapgl.ts` (the map, loaded on demand), `overview.css`. Browser check: `react/dev/test_overview.R`.
 
 ## Behaviour tree
 
@@ -20,7 +20,25 @@ Client: `OverviewPage.tsx`, `charts.tsx` (ECharts), `Builders.tsx`,
 - map card
   - "Colour by": the mapped fields (Vulnerability group first when mapped,
     `map_var`); a field with more than 30 answers is refused with a warning
-  - WebGL points, legend, Esri basemaps, box zoom (kept: the leaflet widget, hosted)
+  - the map (`MapView.tsx`; engine `mapgl.ts`, MapLibre + deck.gl, a chunk
+    loaded the first time the page shows)
+    - points from `map_points` (base64 float32 lon/lat pairs, `map_points_payload()`),
+      colours from `map_colours` (one byte a point + palette + legend,
+      `map_colour_codes()`); both wait while hidden (`useOutputVisibility` on the holder)
+    - new data / filters: the view fits the points (inner 99%, `fit_range()`);
+      a new colour keeps the view; a refused colour (too many options) puts
+      the picker back (`refused`)
+    - legend bottom right: categories with dots ("Not specified" in grey), a
+      number as a ramp with five values
+    - click on a point: `map_click` = list(i, nonce); the server's popup
+      (id, Admin 2 · village, the colour variable and value) comes back as the
+      module message `map_popup`
+    - controls: zoom +/-, box zoom (button, or Shift + drag), zoom to the
+      households, full screen (the map card), metric scale, attribution
+    - basemap switcher (Light, Dark, Terrain (default), Satellite, Satellite
+      (Clarity)); dark mode shows Dark, light mode the base chosen before;
+      satellite 404 tiles replaced by the enlarged image above (`twsat://`)
+    - `map_plot_bounds` (north, south, east, west) on every move, debounced
 - data collection (always in view)
   - title "Data collection", chip "All N households" or
     "Map view: n of N households" + "show all" (`view_all`)
@@ -71,7 +89,8 @@ Client: `OverviewPage.tsx`, `charts.tsx` (ECharts), `Builders.tsx`,
 - [x] households per day, who, vulnerability charts drawn by ECharts, same content
 - [x] sidebar areas cascade, Apply (483 in Ituri) / clear (1,500)
 - [x] report download (HTML, checked separately)
-- [x] map hosted, colour by
+- [x] map: MapLibre + deck.gl canvases, 1,500 points, legend; recolour keeps the view; number ramp; popup on click; follow the map ("Map view: 142 of 1,500"), show all; basemap switch; dark basemap and back
+- [x] 1.5 million households (`TW_BIG=<file> ... test_overview.R`): see "Large data" below
 - [x] chip, follow switch, show all
 - [x] table builder: rows / columns, counts, row % (totals 100%), mean (number picker shows), one-way, chi-square, too many options
 - [x] chart builder: every type, with and without groups (14 combinations), too many options, Axes dialog
@@ -79,6 +98,12 @@ Client: `OverviewPage.tsx`, `charts.tsx` (ECharts), `Builders.tsx`,
 - [ ] French labels of the new builder texts (t() falls back to English until www/translations.json has them)
 
 ## Deliberate divergences
+
+- Map: MapLibre + deck.gl instead of leaflet + leafgl; the basemap is a
+  select on the map (not leaflet's layers menu) and is the client's state
+  (not saved on the server); every popup is built on click (leaflet carried
+  them inline up to 20,000 points); no "Zoom to the households" fit padding
+  of one degree on "show all" (it fits the households like the first view).
 
 - Charts drawn by ECharts (one chart library for the app); hovers say the
   same things.
@@ -96,3 +121,23 @@ Client: `OverviewPage.tsx`, `charts.tsx` (ECharts), `Builders.tsx`,
 - The old renderUI builders (`table_ui`, `chart_ui`, `gb_type_ui`) and
   their plotly chart are gone; `axis_button()` relabelling by
   updateActionButton() replaced by `gb_meta$axes_set`.
+
+## Large data (map)
+
+Measured 2026-10-07 on a synthetic file of 1,500,000 households
+(registration_demo columns resampled, GPS jittered; Parquet, 42 MB):
+
+| | demo (1,500) | 1,500,000 |
+|---|---|---|
+| `map_points` JSON | 16 KB | 16.0 MB (encode 0.18 s + toJSON 0.22 s) |
+| `map_colours` JSON | 2 KB | 2.0 MB (0.12 s categories, 0.21 s number scale) |
+| mapping confirmed -> points drawn (browser) | 1.7 s | 39.6 s (mostly the setup and the page's other figures on 1.5M rows, not the map) |
+
+Recolour, popup, follow the map ("Map view: 865,192 of 1,500,000"), show
+all and basemaps all pass at 1.5M. Panning in the headless test browser runs
+on WARP (CPU WebGL): 60 fps without points, 1 fps with 1.5M outlined points,
+3.3 fps without outlines, so above 200,000 points they are drawn without the
+outline. A real GPU draws 1.5M deck.gl points at full frame rate.
+`ui.js` grew by about 3.5 KB (MapView); MapLibre, deck.gl and the MapLibre
+worker are the chunk `chunks/mapgl-*.js` (2.6 MB, 661 KB gzip), loaded the
+first time the Overview shows.

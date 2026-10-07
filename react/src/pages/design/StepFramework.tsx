@@ -2,11 +2,13 @@
 // vulnerable level, a welfare measure and its poverty line (PMT), or no
 // outcome (a ranking). Nothing counts before Validate (fw_applied() /
 // pmt_applied() on the server).
+import { useRef } from "react";
 import { Banknote, Check, CircleAlert, CircleCheck, CircleX, Compass, MapPin, TriangleAlert } from "lucide-react";
 import { useShinyInputValue, useShinyOutputValue } from "@/shiny";
 import { ActionButton, NumericInput, RadioInput, SelectInput, TextInput } from "@/lib/inputs";
 import { Card } from "@/lib/layout";
 import { Chart } from "@/lib/chart";
+import { useOutputVisibility } from "@/lib/visibility";
 import { ChartHelp, Pending, Show, StepNav, Tip, int, ns, type T } from "./shared";
 import type { Flow, Framework, Meta, Mode } from "./types";
 
@@ -27,8 +29,10 @@ export function StepFramework({ flow, meta, mode, t }: { flow?: Flow; meta?: Met
       <Pending show={kind === "stale"}><TriangleAlert size={14} /> {t(changed)}</Pending>
     </>
   );
+  const ref = useRef<HTMLDivElement>(null);
+  useOutputVisibility(ns("sc_framework"), ref);
   return (
-    <div className="sc-step">
+    <div className="sc-step" ref={ref}>
       <RadioInput id={ns("framework_mode")} choices={MODES(t)} value="outcome" buttons className="sc-modes" size="md" />
 
       {/* no outcome: a ranking */}

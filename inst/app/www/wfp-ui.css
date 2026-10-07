@@ -75,9 +75,9 @@
   --wfp-blue-700: #085a93;
   --wfp-amber: #f7b825;
 
-  --surface: #121826;
-  --surface-2: #0e1422;
-  --surface-3: #1b2333;
+  --surface: #10233b;
+  --surface-2: #0b1a2e;
+  --surface-3: #17304f;
   --border: rgba(255, 255, 255, 0.08);
   --border-strong: rgba(255, 255, 255, 0.16);
   --body-text: #e6ebf2;
@@ -629,7 +629,7 @@ table.dataTable thead th.sorting_desc:after { opacity: 0.35 !important; }
 .shiny-notification-close { color: rgba(238, 242, 247, .55) !important; top: 7px !important; right: 10px !important;
   font-weight: 400 !important; font-size: 16px; }
 .shiny-notification-close:hover { color: #fff !important; }
-[data-bs-theme="dark"] .shiny-notification { background: #2a3446 !important; box-shadow: 0 0 0 1px rgba(255,255,255,.06), 0 6px 18px rgba(0,0,0,.35) !important; }
+[data-bs-theme="dark"] .shiny-notification { background: #1d3a5f !important; box-shadow: 0 0 0 1px rgba(255,255,255,.06), 0 6px 18px rgba(0,0,0,.35) !important; }
 
 /* ==========================================================================
    12. Loader & waiter overlay
@@ -2362,7 +2362,7 @@ table.dataTable tr.dtrg-group td { background: var(--surface-3) !important; font
    step, like an installer log. Dark in both themes, as a terminal. */
 .wfp-wait:has(.wfp-wait-log:not([style*="none"])) { width: min(480px, 92vw); max-width: 480px; }
 .wfp-wait-log { font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace; font-size: .7rem;
-  line-height: 1.5; background: #0e1422; color: #c9d4e3; border-radius: 8px; padding: .5rem .7rem;
+  line-height: 1.5; background: #0b1a2e; color: #c9d4e3; border-radius: 8px; padding: .5rem .7rem;
   border: 1px solid rgba(255, 255, 255, .06); }
 .wfp-wait-log .tw-line { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .wfp-wait-log .tw-line::before { display: inline-block; width: 1.3em; }

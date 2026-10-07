@@ -152,18 +152,11 @@ dq_location_server <- function(input, output, session, ns, core) {
     unique(unname(cols[!is.na(cols)]))
   })
 
-  output$location_hint <- renderUI({
-    if (is.null(norm_level())) return(empty_state("Choose a level", "Pick the level to review, then click Show names.", icon = "signpost-split"))
-    if (length(norm_cols()) == 0) {
-      empty_state(
-        "This level is not mapped",
-        paste0(
-          "No column is mapped to ", norm_level() %||% "this level",
-          ". Map it in Setup, or pick a level your dataset provides."
-        ),
-        icon = "signpost-split"
-      )
-    }
+  # what to say before the names show (React, LocationTab.tsx)
+  output$location_hint <- shinyreact::reactive_output({
+    if (is.null(norm_level())) return(list(state = "none"))
+    if (length(norm_cols()) == 0) return(list(state = "unmapped", level = norm_level()))
+    NULL
   })
 
   norm_data_summary <- reactive({
@@ -199,21 +192,17 @@ dq_location_server <- function(input, output, session, ns, core) {
 
   # What is selected, and a suggested correct spelling: the most common of
   # the selected names (only while the field is empty).
-  output$norm_selection <- renderUI({
+  # drawn by React (LocationTab.tsx): one chip per selected name, its records
+  output$norm_selection <- shinyreact::reactive_output({
     rows <- input$tab_location_norm_rows_selected
     cols <- norm_cols()
-    if (!length(rows) || !length(cols)) {
-      return(tags$div(class = "wfp-norm-bar is-empty small text-muted",
-                      bsicons::bs_icon("hand-index"), " Click the rows to merge, or search and use Select all shown."))
-    }
+    if (!length(rows) || !length(cols)) return(list())
     d <- norm_data_summary()
     rows <- rows[rows >= 1 & rows <= nrow(d)]
     col <- cols[length(cols)]
     nm <- as.character(d[[col]][rows]); n <- d$count[rows]
     agg <- tapply(n, nm, sum); agg <- sort(agg, decreasing = TRUE)
-    tags$div(class = "wfp-norm-bar",
-             tags$strong(sprintf("%d selected", length(agg))),
-             lapply(names(agg), function(x) tags$span(class = "wfp-norm-chip", x, tags$em(agg[[x]]))))
+    lapply(names(agg), function(x) list(name = x, n = unname(agg[[x]])))
   })
   observeEvent(input$tab_location_norm_rows_selected, {
     if (nzchar(trimws(input$correct_name %||% ""))) return()

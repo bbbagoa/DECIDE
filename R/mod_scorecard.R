@@ -554,33 +554,13 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
       validate(need(!is.null(d), "Choose the outcome first."))
       y <- outcome_binary()
       overall <- 100 * mean(y == 1, na.rm = TRUE)
-      o <- ec_area_share(d, overall, W(c("Vulnerable", "Not vulnerable")), W("All areas: %.0f%% vulnerable"))
-      attr(o, "height") <- if (nrow(d) > 8) 440 else 380
-      o
+      ec_area_share(d, overall, W(c("Vulnerable", "Not vulnerable")), W("All areas: %.0f%% vulnerable"))
     })
 
-    # Allowing blocked columns back: the analyst's call, recorded.
-    allow_ui <- function() {
-      ov <- overridable(); al <- intersect(allowed_blocked(), ov)
-      if (!length(ov)) return(NULL)
-      tags$div(
-        class = "mt-3 pt-2 border-top",
-        tags$strong(bsicons::bs_icon("unlock"), " Allow some of them anyway"),
-        tags$p(class = "small text-muted mb-2",
-               "The blocking rules read column names and can be wrong. You decide: an allowed column joins the candidates, and the choice and its reason go to the audit trail and the report."),
-        if (length(al)) tags$div(class = "small mb-2", bsicons::bs_icon("check2-circle", class = "text-success"), " Allowed:",
-                                 tags$ul(class = "mb-0", lapply(al, function(a) tags$li(tags$code(a), " \u2014 ",
-                                   tags$em(if (is.na(allowed_reason()[a])) "no note given" else allowed_reason()[[a]]))))),
-        shinyWidgets::pickerInput(ns("allow_blocked"), NULL, choices = ov, selected = al, multiple = TRUE, width = "100%",
-                                  options = shinyWidgets::pickerOptions(container = "body", liveSearch = TRUE, actionsBox = TRUE,
-                                                                        noneSelectedText = "Choose blocked columns to allow",
-                                                                        selectedTextFormat = "count > 3")),
-        textInput(ns("allow_reason"), tagList("Note (why)", info_tip("A short explanation, recorded for the columns allowed now: it goes to the audit trail and the design report.")),
-                  value = "", width = "100%",
-                  placeholder = "e.g. a household characteristic despite its name; observable by the registration team here"),
-        actionButton(ns("allow_apply"), "Allow as criteria", icon = icon("unlock"), class = "btn-outline-primary btn-sm"))
-    }
+    # Allowing blocked columns back: the analyst's call, recorded (the
+    # picker, note and button are drawn by the page from sc_blocked).
     observeEvent(input$allow_apply, {
+      req(input$allow_apply > 0)   # a React button sends 0 at start
       pick <- intersect(input$allow_blocked %||% character(0), overridable())
       was <- allowed_blocked()
       if (setequal(pick, was)) { showNotification("No change to the allowed columns.", type = "message"); return() }
@@ -598,44 +578,23 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
                                if (length(added)) paste0(": ", paste(added, collapse = ", ")) else ""), type = "message", duration = 6)
     })
 
-    output$blocked_note <- renderUI({
+    # The columns that cannot be criteria, by reason, and those allowed back
+    # (React: StepCriteria's BlockedNote; the stamp resets the picker to the
+    # allowed columns, as the Shiny redraw did).
+    output$sc_blocked <- shinyreact::reactive_output({
       b <- blockers()
-      outcome_blocked <- b[vapply(b, function(x) grepl("Advisory 1/2025", x, fixed = TRUE), logical(1))]
-      unobs <- b[vapply(b, function(x) grepl("Not observable", x, fixed = TRUE), logical(1))]
-      ids <- b[vapply(b, function(x) grepl("identification variable", x, fixed = TRUE), logical(1))]
-      if (!length(outcome_blocked) && !length(unobs) && !length(ids)) return(tags$div(class = "text-muted", "No column is blocked."))
-      al <- intersect(allowed_blocked(), names(b))
-      outcome_blocked <- outcome_blocked[!names(outcome_blocked) %in% al]
-      unobs <- unobs[!names(unobs) %in% al]; ids <- ids[!names(ids) %in% al]
-      cols_line <- function(v) tags$div(class = "small", paste(utils::head(names(v), 25), collapse = ", "), if (length(v) > 25) ", ...")
-      tags$div(
-        class = "alert alert-info mt-2",
-        if (length(outcome_blocked)) tagList(
-          tags$strong(bsicons::bs_icon("shield-exclamation"),
-                      sprintf(" %d column(s) blocked as outcome indicators", length(outcome_blocked))),
-          tags$p(class = "small mb-1 mt-2",
-                 "Outcome indicators reflect a household's current food consumption, which",
-                 " moves with the season and with assistance itself. Targeting on them is",
-                 " reactive rather than preventive, and they cannot then be used to validate",
-                 " the targeting."),
-          cols_line(outcome_blocked)),
-        if (length(unobs)) tagList(
-          tags$strong(class = if (length(outcome_blocked)) "d-block mt-3", bsicons::bs_icon("eye-slash"),
-                      sprintf(" %d column(s) not observable at registration", length(unobs))),
-          tags$p(class = "small mb-1 mt-2",
-                 "Expenditure, prices, coping strategies and their reasons, MEB and transfer values, food consumption,",
-                 " phone numbers and indebtedness cannot be seen or verified by a registration team, so they are not criteria."),
-          cols_line(unobs)),
-        if (length(ids)) tagList(
-          tags$strong(class = if (length(outcome_blocked) || length(unobs)) "d-block mt-3", bsicons::bs_icon("person-vcard"),
-                      sprintf(" %d name or identification column(s)", length(ids))),
-          tags$p(class = "small mb-1 mt-2", "Identifiers, names, phone numbers and form metadata identify a household; they do not describe it."),
-          cols_line(ids)),
-        if (no_outcome()) tags$p(class = "small mb-0 mt-3",
-          "Without an outcome, outcome indicators (FCS, rCSI, CARI...) and what a registration team cannot observe are allowed: they may rank households.",
-          " Remember that a criterion the registration cannot collect cannot be applied in Beneficiary Selection."),
-        allow_ui()
-      )
+      grp <- function(key) b[vapply(b, function(x) grepl(key, x, fixed = TRUE), logical(1))]
+      g <- list(outcome = grp("Advisory 1/2025"), unobs = grp("Not observable"), ids = grp("identification variable"))
+      if (!any(lengths(g))) return(list(none = TRUE))
+      ov <- overridable(); al <- intersect(allowed_blocked(), names(b))
+      groups <- lapply(names(g), function(k) {
+        v <- names(g[[k]]); v <- v[!v %in% al]
+        if (length(v)) list(kind = k, n = length(v), cols = I(utils::head(v, 25)), more = length(v) > 25)
+      })
+      ala <- intersect(allowed_blocked(), ov)
+      list(none = FALSE, nof = no_outcome(), groups = Filter(Negate(is.null), groups), overridable = I(ov),
+           allowed = lapply(ala, function(a) list(col = a, note = if (is.na(allowed_reason()[a])) NA else unname(allowed_reason()[[a]]))),
+           stamp = stamp())
     })
 
     # -----------------------------------------------------------------------
@@ -976,6 +935,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
     }
     # Cluster methods: the profiles to target, then points that reproduce them.
     observeEvent(input$cluster_apply, {
+      req(input$cluster_apply > 0)   # a React button sends 0 at start
       f <- fitted(); need_ok(identical(f$index$type, "cluster"), "Fit a cluster method first.")
       k <- f$index$k
       pick <- which(vapply(seq_len(k), function(j) isTRUE(input[[paste0("tgt_", j)]]), logical(1)))
@@ -1251,66 +1211,24 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
       saved_points(NULL); weight_bump(weight_bump() + 1)
     }, ignoreInit = TRUE)
 
-    # Below the estimates, folded: the per-criterion notes on the fit (missing
-    # answers counted as "no", criteria removed by stepwise), which grow with
-    # the number of criteria.
-    output$fit_details <- renderUI({
-      f <- fitted()
-      if (is.null(f) || (!length(f$filled) && !length(f$dropped))) return(NULL)
-      head <- c(if (length(f$filled)) sprintf("%d criteria had missing answers counted as %s", length(f$filled),
-                                               if (!is.null(f$pmt)) "'no' (numbers as the average)" else "'no'"),
-                if (length(f$dropped)) sprintf("%d removed by stepwise selection", length(f$dropped)))
-      tags$details(
-        class = "wfp-fit-details small text-muted mt-2",
-        tags$summary(bsicons::bs_icon("info-circle"), " Notes on the fit: ", paste(head, collapse = " \u00b7 ")),
-        # Missing criterion answers count as "no", in the model as in the score.
-        if (length(f$filled)) tags$div(
-          class = "small text-muted",
-          bsicons::bs_icon("info-circle"), if (!is.null(f$pmt)) " Missing answers counted as 'no', missing numbers as the average (as in the score): "
-                                           else " Missing answers counted as 'no' (as in the score): ",
-          paste(sprintf("%s (%s)", names(f$filled), format(f$filled, big.mark = ",")), collapse = ", "), "."),
-        if (length(f$dropped)) {
-          tags$div(class = "small text-muted",
-                   bsicons::bs_icon("scissors"),
-                   " Removed by stepwise selection (no information once the others are known): ",
-                   paste(f$dropped, collapse = ", "))
-        }
-      )
-    })
-
-    output$fit_note <- renderUI({
+    # The fit in figures (React: StepModel's FitNote): the tuning and the
+    # number of profiles chosen, the summary line, the index or PMT figures,
+    # a convergence warning, and the per-criterion notes folded below the
+    # estimates (missing answers counted as "no", criteria removed by stepwise).
+    output$sc_fit <- shinyreact::reactive_output({
       f <- fitted()
       if (is.null(f)) return(NULL)
       tn <- f$tuning; kq <- f$index$k_quality
-      tagList(
-        if (!is.null(tn)) tags$div(class = "small text-muted", bsicons::bs_icon("sliders"),
-          sprintf(" Tuned by %d-fold cross-validation on %s training households: %s (cross-validated AUC %.3f). ",
-                  tn$folds, format(tn$n, big.mark = ","), paste(sprintf("%s = %s", names(tn$best), vapply(tn$best, function(v) format(signif(v, 3)), character(1))), collapse = ", "), tn$best_auc),
-          actionLink(ns("show_tuning"), "See the grid")),
-        if (!is.null(kq)) tags$div(class = "small text-muted", bsicons::bs_icon("sliders"),
-          sprintf(" Number of profiles chosen automatically: %d (best silhouette %.2f among 2 to 8).", f$index$k, max(kq$silhouette, na.rm = TRUE))),
-        tags$span(
-          class = "text-muted small",
-          sprintf("%s, fitted on %s households%s; %d criteria kept.",
-                  model_label(f$method),
-                  format(f$n, big.mark = ","),
-                  if (length(split_state()$test))
-                    sprintf(", %s held out for evaluation", format(length(split_state()$test), big.mark = ","))
-                  else "",
-                  nrow(f$weights))
-        ),
-        if (!is.null(f$index)) index_note(f$index),
-        if (!is.null(f$pmt)) pmt_fit_html(f$pmt),
-        if (!f$converged) {
-          tags$div(
-            class = "alert alert-warning mt-2 mb-0",
-            bsicons::bs_icon("exclamation-triangle"),
-            tags$strong(" The model did not converge cleanly."),
-            " Usually one criterion perfectly predicts the outcome (complete separation).",
-            " Its weight is not trustworthy -- drop it in step 3 or set the weight by hand."
-          )
-        }
-      )
+      list(
+        tuning = if (!is.null(tn)) list(folds = tn$folds, n = tn$n, auc = u(tn$best_auc),
+                                        best = paste(sprintf("%s = %s", names(tn$best), vapply(tn$best, function(v) format(signif(v, 3)), character(1))), collapse = ", ")),
+        k_auto = if (!is.null(kq)) list(k = f$index$k, silhouette = u(max(kq$silhouette, na.rm = TRUE))),
+        model = model_label(f$method), n = f$n, held_out = length(split_state()$test), kept = nrow(f$weights),
+        index = if (!is.null(f$index)) index_note_facts(f$index),
+        pmt = if (!is.null(f$pmt)) pmt_fit_figs(f$pmt),
+        converged = isTRUE(f$converged),
+        filled = lapply(names(f$filled), function(k) list(name = k, n = u(f$filled[[k]]))),
+        dropped = I(as.character(f$dropped)), is_pmt = !is.null(f$pmt))
     })
 
     observeEvent(input$apply_points, {
@@ -1328,12 +1246,12 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
                                 paste(sprintf("%s: %s -> %s", f$weights$criterion[ch], fmt5(old[ch]), fmt5(v[ch])), collapse = "; "))
       showNotification("Edited points applied.", type = "message")
     })
-    output$points_stale <- renderUI({
-      f <- fitted(); req(f)
+    # Edited points not applied yet (React: the estimates card's header)
+    points_stale <- reactive({
+      f <- fitted(); if (is.null(f)) return(FALSE)
       w <- current_weights()$weight
       v <- vapply(seq_along(w), function(i) { x <- input[[paste0("w_", i)]]; if (is.null(x) || is.na(x)) w[i] else as.numeric(x) }, numeric(1))
-      if (all(abs(v - w) < 1e-9)) return(NULL)
-      tags$span(class = "small text-warning", bsicons::bs_icon("exclamation-circle"), " Points edited: click Apply points.")
+      !all(abs(v - w) < 1e-9)
     })
     observeEvent(input$reset_weights, {
       req(input$reset_weights > 0)   # a React button sends 0 at start
@@ -1370,6 +1288,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
 
     # The cross-validation grid, best first
     observeEvent(input$show_tuning, {
+      req(input$show_tuning > 0)   # a React button sends 0 at start
       tn <- fitted()$tuning; req(tn)
       tab <- utils::head(tn$table, 12)
       showModal(modalDialog(
@@ -1384,36 +1303,20 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
             class = if (i == 1) "table-active" else NULL,
             lapply(names(tab), function(k) tags$td(class = "num", format(signif(tab[[k]][i], 4)))))))))))
     })
-    # The decision tree's leaves, most vulnerable first
-    output$tree_ui <- renderUI({
-      f <- fitted(); rl <- f$tree_rules
-      if (!identical(f$method, "tree") || is.null(rl) || !nrow(rl)) return(NULL)
+    # More diagnostics (React: StepModel's Diagnostics): the model's diagram
+    # where one is standard (tree, forest plot, network, importance,
+    # dendrogram; switched off in the model settings), as the SVG the design
+    # report draws, and the decision tree's leaves, most vulnerable first.
+    output$sc_diagram <- shinyreact::reactive_output({
+      f <- fitted(); if (is.null(f)) return(NULL)
       nof <- isTRUE(f$unsupervised)
-      bslib::card(full_screen = TRUE,
-        class = "mt-3",
-        bslib::card_header(bsicons::bs_icon("diagram-2"), " Decision tree: the rules",
-                           info_tip(if (nof) "Each row is a leaf of the tree: the answers that lead to it, how many households it holds and the share of them in the targeted profiles. The points of the ranking are the tree's average effects, so it stays additive; the rules show what the tree itself does."
-                                    else "Each row is a leaf of the tree: the answers that lead to it, how many training households it holds and the share of them that is vulnerable. The points of the card are the tree's average effects, so the card stays additive; the rules show what the tree itself does.")),
-        bslib::card_body(
-          tags$div(class = "wfp-model-table-wrap", tags$table(
-          class = "wfp-model-table",
-          tags$thead(tags$tr(tags$th("If the household..."), tags$th(class = "num", "Households"), tags$th(class = "num", if (nof) "In targeted profiles" else "Vulnerable"))),
-          tags$tbody(lapply(seq_len(nrow(rl)), function(i) tags$tr(
-            tags$td(class = "small", rl$rule[i]), tags$td(class = "num", format(rl$households[i], big.mark = ",")),
-            tags$td(class = "num", tags$strong(sprintf("%.0f%%", 100 * rl$share_vulnerable[i]))))))))))
-    })
-    # The model's diagram where one is standard (tree, forest plot, network,
-    # importance, dendrogram); switched off in the model settings
-    output$diagram_ui <- renderUI({
-      f <- fitted(); d <- f$diagram
-      if (is.null(d) || isFALSE(model_params$diagram)) return(NULL)
-      nof <- isTRUE(f$unsupervised)
-      svg <- diagram_svg(d, if (nof) "targeted" else "vulnerable")
-      if (!nzchar(svg)) return(NULL)
-      bslib::card(
-        full_screen = TRUE, class = "mt-3",
-        bslib::card_header(bsicons::bs_icon("diagram-3"), paste0(" ", diagram_title(d$kind)), info_tip(diagram_help(d$kind, nof))),
-        bslib::card_body(HTML(svg)))
+      d <- f$diagram
+      svg <- if (is.null(d) || isFALSE(model_params$diagram)) "" else diagram_svg(d, if (nof) "targeted" else "vulnerable")
+      rl <- f$tree_rules
+      list(nof = nof,
+           diagram = if (nzchar(svg)) list(title = diagram_title(d$kind), help = diagram_help(d$kind, nof), svg = svg),
+           tree = if (identical(f$method, "tree") && !is.null(rl) && nrow(rl))
+             lapply(seq_len(nrow(rl)), function(i) list(rule = rl$rule[i], households = u(rl$households[i]), share = u(rl$share_vulnerable[i]))))
     })
 
     # Scree plot: the variation each axis explains, the axes in the index in
@@ -1521,79 +1424,33 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
       pc <- profile_contrasts(ix$profiles, ix$size, f$n)
       list(ix = ix, pc = pc, top = utils::head(order(-pc$v), 10))
     })
-    output$cluster_ui <- renderUI({
-      pv <- profile_view(); ix <- pv$ix; pc <- pv$pc
+    # (React: StepModel's Profiles; the Target ticks are inputs tgt_<j>, set
+    # back to the targeted profiles each time the table is sent.)
+    output$sc_profiles <- shinyreact::reactive_output({
+      pv <- safe(profile_view()); if (is.null(pv)) return(NULL)
+      ix <- pv$ix; pc <- pv$pc
       k <- ix$k; pr <- ix$profiles; ord <- ix$rank; top <- pv$top
-      pct <- function(v) sprintf("%.0f%%", 100 * v)
-      tint <- function(d) {
-        a <- min(abs(d) / 0.4, 1) * 0.55
-        if (d >= 0) sprintf("background: rgba(10,110,180,%.2f)", a) else sprintf("background: rgba(247,184,37,%.2f)", a)
-      }
-      vmax <- max(pc$v[top], 1e-9)
-      rank_word <- function(r) if (r == 1) "most vulnerable" else if (r == k) "least vulnerable" else sprintf("rank %d of %d", r, k)
       # which answer a criterion's percentage counts ("Yes", "1 - Oui", TRUE...)
       df <- assessment_df()
       counted <- function(cl) {
         x <- df[[cl]]; if (is.null(x)) return(NA_character_)
         if (is.logical(x)) return("TRUE")
         if (is.numeric(x)) return("1")
-        v <- as.character(x); u <- sort(unique(v[!is.na(v) & nzchar(trimws(v))]))
-        if (length(u) != 2) return(NA_character_)
-        lv <- guess_positive_level(u)
+        v <- as.character(x); uu <- sort(unique(v[!is.na(v) & nzchar(trimws(v))]))
+        if (length(uu) != 2) return(NA_character_)
+        lv <- guess_positive_level(uu)
         unname(names(value_choices(lv, cl))[1] %||% lv)
       }
-      head_of <- function(j) tags$th(
-        class = "num wfp-prof-head",
-        checkboxInput(ns(paste0("tgt_", j)), sprintf("Profile %d", j), value = j %in% ix$target),
-        tags$div(class = "small fw-normal", sprintf("%s of households", pct(ix$size[j]))),
-        tags$div(class = paste("small fw-normal", if (match(j, ord) == 1) "text-danger" else "text-muted"), rank_word(match(j, ord))))
-      bslib::card(
-        bslib::card_header(bsicons::bs_icon("people"), sprintf(" %d household profiles", k),
-                           info_tip("Profiles are ordered from the most to the least vulnerable, judged on the anchor-oriented first component. Rows: the ten criteria that separate the profiles most. Each cell is the share of the profile's households giving the answer named under the criterion, tinted blue above the average household and amber below. Tick the profiles to target, then click Target the ticked profiles: the points are refitted to reproduce them.")),
-        bslib::card_body(
-          tags$div(class = "wfp-model-table-wrap wfp-prof-wrap", tags$table(
-            class = "wfp-model-table wfp-prof-table",
-            tags$thead(tags$tr(
-              tags$th("Criterion"),
-              tags$th("Separates", info_tip(paste(
-                "How strongly the criterion tells the profiles apart: Cramer's V of the criterion against profile membership,",
-                "from 0 (every profile has the same share) to 1 (the criterion alone says which profile a household is in).",
-                "Above about 0.3 the criterion is one of the things that define the profiles; below 0.1 it hardly differs between them."))),
-              lapply(ord, head_of),
-              tags$th(class = "num", "All", info_tip("The share among all households, for comparison.")))),
-            tags$tbody(lapply(top, function(i) tags$tr(
-              # the label is written here in full, so the browser's labeller skips the cell (data-tw)
-              tags$td(class = "tw-var wfp-prof-var", `data-tw` = "1",
-                      tags$strong(rownames(pr)[i]),
-                      local({ l <- var_label(rownames(pr)[i]); if (!is.na(l) && nzchar(l)) tags$div(class = "tw-cell-label", l) }),
-                      local({ a <- counted(rownames(pr)[i]); if (!is.na(a)) tags$div(class = "small text-muted", sprintf("%% of households answering \u201c%s\u201d", a)) })),
-              tags$td(style = "min-width: 120px;", tags$div(class = "d-flex align-items-center gap-2",
-                      tags$div(class = "wfp-prof-bar flex-grow-1", tags$span(style = sprintf("width:%.0f%%;background:#0A6EB4", 100 * pc$v[i] / vmax))),
-                      tags$span(class = "small", sprintf("%.2f", pc$v[i])))),
-              lapply(ord, function(j) tags$td(class = "num", style = tint(pc$diff[i, j]), pct(pr[i, j]))),
-              tags$td(class = "num text-muted", pct(pc$overall[i]))))))),
-          tags$div(class = "d-flex justify-content-between align-items-center flex-wrap gap-2 mt-2",
-                   uiOutput(ns("profile_pick_note"), inline = TRUE),
-                   actionButton(ns("cluster_apply"), "Target the ticked profiles", icon = icon("check"), class = "btn-primary btn-sm")),
-          tags$div(class = "small mt-2",
-                   sprintf("Separation of the profiles (silhouette): %s", if (is.na(ix$silhouette %||% NA)) "n/a" else sprintf("%.2f", ix$silhouette)),
-                   if (!is.null(ix$entropy)) sprintf(" \u00b7 classification certainty (entropy): %.2f", ix$entropy),
-                   if (!is.null(ix$bic)) sprintf(" \u00b7 BIC: %s", format(round(ix$bic), big.mark = ",")),
-                   " ", actionLink(ns("profile_quality"), "Compare 2 to 8 profiles")),
-          if (!is.null(ix$fidelity)) tags$div(class = paste("small", if (ix$fidelity < 0.8) "text-warning" else "text-muted"),
-            sprintf("The points reproduce the targeted profiles with an AUC of %.2f%s", ix$fidelity,
-                    if (ix$fidelity < 0.8) ": the profiles are not a straight cut through the criteria; try another number of profiles or method." else "."))))
-    })
-    # What the ticks would target (counting only; nothing is refitted)
-    output$profile_pick_note <- renderUI({
-      pv <- profile_view(); ix <- pv$ix
-      pick <- which(vapply(seq_len(ix$k), function(j) isTRUE(input[[paste0("tgt_", j)]] %||% (j %in% ix$target)), logical(1)))
-      same <- setequal(pick, ix$target)
-      tags$span(class = "small",
-                if (!length(pick)) "No profile ticked." else
-                  sprintf("Ticked: profile%s %s, %.0f%% of households.", if (length(pick) > 1) "s" else "", paste(pick, collapse = ", "),
-                          100 * sum(ix$size[pick])),
-                if (!same && length(pick)) tags$span(class = "text-warning", " Click Target the ticked profiles to apply."))
+      list(k = k, target = I(as.integer(ix$target)),
+           profiles = lapply(seq_along(ord), function(r) list(j = ord[r], size = u(ix$size[ord[r]]), rank = r)),
+           rows = lapply(top, function(i) {
+             cr <- rownames(pr)[i]; l <- var_label(cr)
+             list(criterion = cr, label = if (!is.na(l) && nzchar(l)) l else NA, counted = counted(cr), v = u(pc$v[i]),
+                  cells = lapply(ord, function(j) list(p = u(pr[i, j]), d = u(pc$diff[i, j]))), overall = u(pc$overall[i]))
+           }),
+           vmax = u(max(pc$v[top], 1e-9)),
+           silhouette = u(ix$silhouette %||% NA), entropy = u(ix$entropy %||% NA), bic = u(ix$bic %||% NA),
+           fidelity = u(ix$fidelity %||% NA), stamp = stamp())
     })
     # Households on the first two principal components of the criteria
     # (turned towards the anchor), coloured by profile or by selection.
@@ -1628,6 +1485,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
     })
     # How many profiles? Quality for 2 to 8, on evidence.
     observeEvent(input$profile_quality, {
+      req(input$profile_quality > 0)   # a React button sends 0 at start
       f <- fitted(); need_ok(identical(f$index$type, "cluster"), "Fit a cluster method first.")
       r <- runs()[[current_run()]]
       df <- assessment_df(); wcol <- input$model_weights
@@ -1861,7 +1719,12 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
       req(length(s$eligible) == length(y))
       pmt_accuracy(s$eligible[r], y[r] == 1)
     })
-    output$pmt_accuracy_ui <- renderUI(pmt_accuracy_html(pmt_acc_now(), fitted()$pmt, pmt_cut(fitted()$pmt)))
+    # (React: StepThreshold's PmtAccuracy)
+    output$sc_pmt_accuracy <- shinyreact::reactive_output({
+      a <- safe(pmt_acc_now()); if (is.null(a)) return(NULL)
+      f <- fitted()$pmt
+      pmt_accuracy_figs(a, f, pmt_cut(f))
+    })
 
     # Prevalence split by the outcome: a criterion that is equally common in
     # both groups adds points without separating anyone.
@@ -2178,13 +2041,12 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
               "The tolerance band needs a lower bound below the upper one, and an upper bound below 50%.")
       thr_applied(t); tol_applied(c(lo, up))
     })
-    output$thr_stale <- renderUI({
+    # Threshold or tolerance changed but not applied (React: the Apply row)
+    thr_stale <- reactive({
       t <- suppressWarnings(as.numeric(input$threshold)); a <- thr_applied()
       tol_now <- c(suppressWarnings(as.numeric(input$tol_lower %||% tol_applied()[1])), suppressWarnings(as.numeric(input$tol_upper %||% tol_applied()[2])))
       same_t <- length(t) == 1 && !is.null(a) && isTRUE(all.equal(t, a))
-      if (same_t && isTRUE(all.equal(tol_now, tol_applied()))) return(NULL)
-      tags$span(class = "small text-warning", bsicons::bs_icon("exclamation-circle"),
-                " Threshold or tolerance changed: click Apply to update the errors and charts.")
+      !(same_t && isTRUE(all.equal(tol_now, tol_applied())))
     })
     apply_balanced <- function(announce = TRUE) {
       s <- scored(); y <- outcome_binary(); r <- eval_rows()
@@ -2221,18 +2083,8 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
       a <- fitted()$index$alpha
       if (is.null(a) || is.na(a)) "n/a" else sprintf("%.2f", a)
     })
-    output$stability_ui <- renderUI({
-      st <- stability()
-      tagList(
-        if (is.null(st)) tags$div(class = "small text-muted mb-2", "Refits the design on 20 resamples of the households and compares their selections with this one.")
-        else tags$div(class = "mb-2",
-                      tags$strong(sprintf("%s: %.0f%% agreement", local({ w <- stability_word(st$jaccard); paste0(toupper(substr(w, 1, 1)), substring(w, 2)) }), 100 * st$jaccard)),
-                      tags$div(class = "small text-muted", sprintf("Jaccard index of the selections, median of %d refits (10th-90th percentile %.0f%%-%.0f%%), at %.0f%% of households selected%s.",
-                                                               st$draws, 100 * st$low, 100 * st$high, 100 * st$share,
-                                                               if (is.finite(st$spearman %||% NA)) sprintf("; rank agreement (Spearman) %.2f", st$spearman) else ""))),
-        actionButton(ns("run_stability"), if (is.null(st)) "Check stability" else "Check again", icon = icon("shuffle"), class = "btn-outline-primary btn-sm"))
-    })
     observeEvent(input$run_stability, {
+      req(input$run_stability > 0)   # a React button sends 0 at start
       f <- fitted(); need_ok(isTRUE(f$unsupervised), "Fit a ranking first.")
       r <- runs()[[current_run()]]
       share <- mean(scored()$eligible, na.rm = TRUE)
@@ -2250,18 +2102,15 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
       f <- fitted(); req(isTRUE(f$unsupervised))
       selection_insights(assessment_df(), current_weights(), scored()$eligible)
     })
-    output$insights_ui <- renderUI({
-      si <- sel_insights()
-      if (is.null(si)) return(tags$div(class = "small text-muted", "Set a threshold that selects some households."))
+    # Without an outcome (React: StepThreshold's RankingFacts): the stability
+    # check's result and what the selection concentrates.
+    output$sc_ranking <- shinyreact::reactive_output({
       st <- stability()
-      tags$ul(
-        class = "small mb-0",
-        tags$li(tags$strong(sprintf("%.1f times", si$ratio)), sprintf(" as many deprivations among the selected (%.1f of %d criteria) as among the others (%.1f).",
-                                                                 si$mean_sel, si$n_criteria, si$mean_not)),
-        tags$li(tags$strong(sprintf("%.0f%%", 100 * si$concentration)), sprintf(" of all deprivations are held by the %.0f%% of households selected.", 100 * si$share)),
-        tags$li(if (is.null(st) || is.null(st$spearman)) "Rank agreement across resamples: run the stability check."
-                else tagList(tags$strong(sprintf("%.2f", st$spearman)),
-                             " rank agreement across resamples (Spearman): how far the order of households holds when the data change.")))
+      si <- safe(sel_insights())
+      list(stability = if (!is.null(st)) list(word = stability_word(st$jaccard), jaccard = u(st$jaccard), draws = u(st$draws),
+                                              low = u(st$low), high = u(st$high), share = u(st$share), spearman = u(st$spearman %||% NA)),
+           insights = if (!is.null(si)) list(ratio = u(si$ratio), mean_sel = u(si$mean_sel), mean_not = u(si$mean_not),
+                                             n_criteria = u(si$n_criteria), concentration = u(si$concentration), share = u(si$share)))
     })
     observeEvent(assessment_df(), {
       df <- assessment_df(); req(df)
@@ -2328,12 +2177,13 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
       thr_msg(sprintf("Threshold %s: eligible when predicted welfare per person is at or below the poverty line (%s).", fmt5(t), fmt_money(f$line)))
     }
     observeEvent(input$thr_line, { req(input$thr_line > 0); apply_line() })
-    output$pmt_thr_note <- renderUI({
+    # The notes that a setting waits for its button, and the PMT cut-off in
+    # welfare (cheap; React: the estimates header and the Apply row)
+    output$sc_stale <- shinyreact::reactive_output({
       f <- fitted()$pmt; t <- thr_applied()
-      req(f, is.numeric(t))
-      w <- pmt_predicted_welfare(t, f$intercept)
-      tagList(bsicons::bs_icon("cash-coin"), sprintf(" Eligible when predicted welfare per person is below %s (%.0f%% of the poverty line).",
-                                                     fmt_money(w), 100 * w / f$line))
+      w <- if (!is.null(f) && is.numeric(t)) pmt_predicted_welfare(t, f$intercept)
+      list(points = isTRUE(safe(points_stale())), thr = isTRUE(safe(thr_stale())),
+           pmt_line = if (!is.null(w)) list(welfare = fmt_money(w), pct = u(100 * w / f$line)))
     })
     observeEvent(input$threshold, {
       if (isTRUE(all.equal(input$threshold, thr_pending()))) thr_pending(NULL)

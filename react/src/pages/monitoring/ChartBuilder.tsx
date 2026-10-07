@@ -5,16 +5,18 @@
 // conditionalPanel() are hidden here too, but stay mounted so the server's
 // updateSelectInput() still reaches them.
 import { useEffect, useRef } from "react";
-import { ChartColumn, MoveVertical, Plus, SlidersHorizontal } from "lucide-react";
+import { Calculator, ChartColumn, Info, MoveVertical, Plus, SlidersHorizontal, TriangleAlert } from "lucide-react";
 import { useShinyInputValue, useShinyOutputValue } from "@/shiny";
-import { ActionButton, HostedUI, RadioInput, SelectInput, TextInput, type Choice } from "@/lib/inputs";
+import { ActionButton, RadioInput, SelectInput, TextInput, type Choice } from "@/lib/inputs";
 import { Chart } from "@/lib/chart";
 import { DataTable } from "@/lib/table";
 import { Card, signalShown } from "@/lib/layout";
+import { useOutputVisibility } from "@/lib/visibility";
+import { EmptyState } from "@/components/Figures";
 import { RichText } from "./RichText";
 
 type Meta = { presets: Choice[]; types: Record<string, string>; styles: Record<string, string> };
-type State = { has_data: boolean; too_many: string | null; ready: boolean; axes_set: boolean };
+type State = { has_data: boolean; too_many: string | null; ready: boolean; axes_set: boolean; note: { kind: "warning" | "test"; text: string } | null };
 
 export function ChartBuilder({ prefix, t }: { prefix: string; t: (s: string) => string }) {
   const ns = (x: string) => prefix + x;
@@ -28,10 +30,13 @@ export function ChartBuilder({ prefix, t }: { prefix: string; t: (s: string) => 
   // a preview shown again is told so: Shiny pauses hidden outputs
   const body = useRef<HTMLDivElement>(null);
   useEffect(() => { signalShown(body.current, true); }, [table, ready]);
+  // cb_state aggregates the data: it waits while the builder is hidden
+  const root = useRef<HTMLDivElement>(null);
+  useOutputVisibility(ns("cb_state"), root);
   if (!meta) return null;
   const show = (on: boolean) => (on ? undefined : { display: "none" });
   return (
-    <div className="tw-cb">
+    <div className="tw-cb" ref={root}>
       <Card title={t("Chart")} icon={<SlidersHorizontal size={15} />} className="tw-cb-fields">
         <SelectInput id={ns("preset")} label={t("Ready-made chart")} choices={meta.presets} value="custom" />
         <RadioInput id={ns("display")} label={t("Display as")} buttons value="chart"
@@ -72,8 +77,14 @@ export function ChartBuilder({ prefix, t }: { prefix: string; t: (s: string) => 
 
       <Card title={title.trim() || t("Preview")} icon={<ChartColumn size={15} />} full className="tw-cb-preview">
         <div ref={body}>
-        <HostedUI id={ns("preview_empty")} />
-        <HostedUI id={ns("stat_note")} />
+        {st && (!st.has_data
+          ? <EmptyState title={t("No data yet")} sub={t("Load a dataset above to build charts.")} />
+          : st.too_many
+            ? <div className="small text-warning mb-2 tw-cb-note"><TriangleAlert size={14} /> {st.too_many}</div>
+            : !ready && <div className="small text-muted mb-2">{t("Choose the columns on the left to see the chart.")}</div>)}
+        {st?.note && (st.note.kind === "warning"
+          ? <div className="small text-warning mb-2 tw-cb-note"><Info size={14} /> {t(st.note.text)}</div>
+          : <div className="small text-muted mb-2 tw-cb-note"><Calculator size={14} /> {st.note.text}</div>)}
         <div style={show(!table && ready)}><Chart id={ns("preview")} height={360} /></div>
         <div style={show(table && ready)}><DataTable id={ns("preview_table")} searchable={false} compact /></div>
         </div>

@@ -4,7 +4,8 @@
 // confirmed in the server's dialog and logged.
 import { Copy, Download, Files, ListOrdered, Network, Search, Trash2 } from "lucide-react";
 import { useShinyInputValue, useShinyOutputValue } from "@/shiny";
-import { ActionButton, CheckboxInput, DownloadButton, HostedUI, SelectInput, SliderInput, TextOutput } from "@/lib/inputs";
+import { ActionButton, CheckboxInput, DownloadButton, SelectInput, SliderInput, TextOutput } from "@/lib/inputs";
+import { EmptyState } from "@/components/Figures";
 import { Card } from "@/lib/layout";
 import { DataTable } from "@/lib/table";
 import { Kpis, ns, Note, Toolbar, type T } from "./common";
@@ -12,6 +13,7 @@ import { Kpis, ns, Note, Toolbar, type T } from "./common";
 export function DuplicatesTab({ t }: { t: T }) {
   const fuzzy = useShinyInputValue<boolean>(ns("duplicate_fuzzy"));
   const has = useShinyOutputValue<boolean>(ns("dup_has_rows"));
+  const hint = useShinyOutputValue<{ state: "none" | "clean"; n?: number } | null>(ns("dup_hint"));
   return (
     <>
       <Toolbar>
@@ -30,7 +32,13 @@ export function DuplicatesTab({ t }: { t: T }) {
         { label: t("Duplicate groups"), id: "dup_groups", icon: <Network size={18} />, tone: "cyan" },
         { label: t("Exact copies"), id: "dup_exact", sub: t("identical on every column: safe to remove"), icon: <Files size={18} />, tone: "red" },
       ]} />
-      <HostedUI id={ns("dup_hint")} />
+      {hint?.state === "none" && <div className="card tw-card"><div className="card-body">
+        <EmptyState title={t("No duplicate analysis yet")} sub={t("Choose the columns that identify a record, then click Find duplicates.")} />
+      </div></div>}
+      {hint?.state === "clean" && <div className="card tw-card"><div className="card-body">
+        <EmptyState title={t("No duplicates found")}
+                    sub={`${t("Checked")} ${(hint.n ?? 0).toLocaleString("en-US")} ${t("records on the selected columns.")}`} />
+      </div></div>}
       <div style={{ display: has ? undefined : "none" }}>
         <Card title={t("Duplicate groups")} icon={<Copy size={15} />} full>
           <div className="tw-dq-cardbar">

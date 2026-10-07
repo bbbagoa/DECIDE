@@ -28,10 +28,13 @@ export default defineConfig(({ mode }) => { const gallery = mode === "gallery"; 
   },
   build: {
     outDir: gallery ? "dev/gallery/www" : "../inst/app/react",
-    emptyOutDir: false,
+    // the folder holds only this build: old chunks go
+    emptyOutDir: true,
     cssCodeSplit: false,
     sourcemap: false,
-    lib: { entry: gallery ? "dev/gallery/gallery.tsx" : "src/ui.tsx", formats: ["iife"], name: "TargetWiseUI", fileName: () => "ui.js" },
-    rollupOptions: { output: { assetFileNames: "ui.[ext]" } },
+    lib: { entry: gallery ? "dev/gallery/gallery.tsx" : "src/ui.tsx", formats: ["es"], fileName: () => "ui.js" },
+    // an ES module (shinyreact loads ui.js as type="module"), so heavy
+    // libraries (ECharts, the map) are chunks loaded when first needed
+    rollupOptions: { output: { assetFileNames: "ui.[ext]", chunkFileNames: "chunks/[name]-[hash].js" } },
   },
 };});

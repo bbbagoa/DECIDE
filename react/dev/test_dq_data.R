@@ -15,6 +15,7 @@ write_dq_test_data <- function(file) {
   d$HHHAge[gap] <- NA
   d$HHStatus[gap & stats::runif(nrow(d)) < 0.7] <- ""
   d$HHSize24M[stats::runif(nrow(d)) < 0.03] <- NA
+  d$HHSize[100:105] <- 99   # a "don't know" code: the outlier insights offer to select them
   twice <- d[1:5, ]
   twice$instanceID <- sprintf("reg:dup%02d", 1:5)
   utils::write.csv(rbind(d, twice), file, row.names = FALSE)

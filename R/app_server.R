@@ -96,7 +96,7 @@ app_server <- function(input, output, session) {
   wfp_theme <- function(dark = FALSE) {
     bslib::bs_theme(
       version = 5,
-      bg = if (dark) "#0e1422" else "#ffffff",
+      bg = if (dark) "#0b1a2e" else "#ffffff",
       fg = if (dark) "#e6ebf2" else "#1f2a37",
       primary = "#0A6EB4",
       secondary = "#f7b825",

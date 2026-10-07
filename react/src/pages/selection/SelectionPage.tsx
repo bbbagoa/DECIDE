@@ -2,14 +2,14 @@
 // (R/mod_ben_selection.R). See PORT.md. The server code is the Shiny page's:
 // every input keeps its id and waits for Apply selection (ben_apply); the
 // server sends facts as JSON (ben_meta, ben_pending, selection_note,
-// comp_insights, ben_profile), charts (render_echart) and the beneficiary
+// comp_insights, ben_profile, scorecard_note, quota_summary), charts (render_echart) and the beneficiary
 // list (render_react_table, paged on the server above 5,000 rows). The
 // dialogs (rules, caseload per area, scorecard crosswalk, export) stay the
-// server's; the scorecard file loader, its note and the caseload summary are
-// hosted; the variable calculator is components/VarCalc.
-import { type ReactNode } from "react";
+// server's; the scorecard file loader is hosted; the variable calculator is
+// components/VarCalc.
+import { useRef, type ReactNode } from "react";
 import {
-  ChartBar, CircleCheck, CircleMinus, Download, FileSpreadsheet, FileText, Filter, Info, Layers, List, MapPin,
+  CalendarX, ChartBar, CircleAlert, CircleCheck, CircleMinus, Download, FileSpreadsheet, FileText, Filter, Info, Layers, List, MapPin,
   SlidersHorizontal, User, Users, UsersRound, Venus, X,
 } from "lucide-react";
 import { useShinyInputValue, useShinyOutputError, useShinyOutputValue } from "@/shiny";
@@ -18,6 +18,7 @@ import {
 } from "@/lib/inputs";
 import { Card, Notice, SideActions, SidebarLayout, Steps, Tabs } from "@/lib/layout";
 import { Chart } from "@/lib/chart";
+import { useOutputVisibility } from "@/lib/visibility";
 import { DataTable } from "@/lib/table";
 import { EmptyState } from "@/components/Figures";
 import { VarCalc } from "@/components/VarCalc";
@@ -34,6 +35,11 @@ type Meta = {
 };
 type Note = { label: string; list_produced: boolean; eligible: number; served: number; notes: string[] };
 type Insight = { icon: string; label: string; value: string; sub: string };
+type ScNote = {
+  ready: boolean; n: number; unmapped: number; missing: string[]; ranking: boolean; outcome: string;
+  stale: { months: number; created: string } | null;
+} | null;
+type Quota = { set: boolean; total?: number; count?: string; areas?: number; share?: boolean } | null;
 type ProfileRow = { indicator: string; selected: string; not_selected: string; difference: string; notable: boolean };
 
 const num = (x: number) => Math.round(x).toLocaleString("en-US");
@@ -193,7 +199,7 @@ function Design({ t, meta, gates, approach, pending }: { t: T; meta?: Meta; gate
               <NumericInput id={ns("scorecard_threshold")} label={t("Eligible when score is above")}
                             value={card?.threshold ?? null} min={0} step={0.1} />
             </div>
-            <HostedUI id={ns("scorecard_note")} />
+            <ScorecardNote t={t} />
             <ActionButton id={ns("sc_rematch")} label={t("Match columns")} icon={<Layers size={14} />} className="mt-1" />
           </div>
           {!card && (
@@ -237,7 +243,7 @@ function Design({ t, meta, gates, approach, pending }: { t: T; meta?: Meta; gate
                            choices={[{ value: "admin1", label: "Admin 1" }, { value: "admin2", label: "Admin 2" },
                                      { value: "admin3", label: "Admin 3" }, { value: "admin4", label: "Admin 4" }]} />
               <ActionButton id={ns("quota_open")} label={t("Set the caseload per area...")} icon={<FileSpreadsheet size={14} />} className="w-100 mb-2" />
-              <HostedUI id={ns("quota_summary")} />
+              <QuotaSummary t={t} />
             </div>
             <div className="text-muted small mt-1">
               {t("Most vulnerable first (highest score). Eligible households cut here are excluded by design: reported separately, not counted as exclusion errors.")}
@@ -271,6 +277,48 @@ function Design({ t, meta, gates, approach, pending }: { t: T; meta?: Meta; gate
   );
 }
 
+/** How the card fits this dataset (output$scorecard_note). */
+function ScorecardNote({ t }: { t: T }) {
+  const n = useShinyOutputValue<ScNote>(ns("scorecard_note"));
+  if (!n) return null;
+  return (
+    <div className="tw-sel-scnote">
+      {n.ready ? (
+        <div className="small text-success"><CircleCheck size={14} />{" "}
+          {t("All %d criteria mapped.").replace("%d", String(n.n))}{" "}
+          {n.ranking
+            ? t("A vulnerability ranking built without an outcome indicator: its errors are not measured; calibrate it in Monitoring (PDM).")
+            : <>{t("Outcome")}: {n.outcome}.</>}
+        </div>
+      ) : (
+        <div className="small text-warning"><CircleAlert size={14} />{" "}
+          {t("%1 of %2 criteria are not mapped to this dataset (%3). They score nobody.")
+            .replace("%1", String(n.unmapped)).replace("%2", String(n.n)).replace("%3", n.missing.join(", "))}
+        </div>
+      )}
+      {n.stale && (
+        <div className="small text-warning"><CalendarX size={14} />{" "}
+          {t("Designed %1 months ago (%2). The OGN asks for weights to be reviewed every 2-3 years, annually in dynamic contexts.")
+            .replace("%1", String(n.stale.months)).replace("%2", n.stale.created)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** The caseload in force for this level (output$quota_summary). */
+function QuotaSummary({ t }: { t: T }) {
+  const q = useShinyOutputValue<Quota>(ns("quota_summary"));
+  if (!q) return null;
+  return q.set ? (
+    <div className="small text-muted tw-sel-quota"><CircleCheck size={14} className="text-success" />{" "}
+      {num(q.total ?? 0)} {t(q.count ?? "households")} {t("in")} {q.areas} {t("areas")} ({q.share ? t("by share of the total") : t("per area")}).
+    </div>
+  ) : (
+    <div className="small text-warning tw-sel-quota"><CircleAlert size={14} /> {t("No caseload set for this level yet.")}</div>
+  );
+}
+
 /* ----------------------------------------------------------- composition */
 
 function Composition({ t, meta }: { t: T; meta?: Meta }) {
@@ -279,8 +327,12 @@ function Composition({ t, meta }: { t: T; meta?: Meta }) {
   const rk = meta?.ranking ?? null;
   const mixNote = useShinyOutputError(ns("ben_validation_plot"))?.message;
   const help = (s: string) => <span className="tw-sel-help" title={t(s)} aria-label={t(s)}><Info size={13} /></span>;
+  // the insights and the profile go over the data: they wait while this tab is hidden
+  const ref = useRef<HTMLDivElement>(null);
+  useOutputVisibility(ns("comp_insights"), ref);
+  useOutputVisibility(ns("ben_profile"), ref);
   return (
-    <div className="tw-sel-comp">
+    <div className="tw-sel-comp" ref={ref}>
       {ins?.empty ? <EmptyState title={t("Nobody selected")} sub={t("Apply a selection to see what the list is made of.")} /> : (
         <div className="tw-sel-insights">
           {(ins?.tiles ?? []).map((x) => (

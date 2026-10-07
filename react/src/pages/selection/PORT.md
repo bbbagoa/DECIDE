@@ -33,7 +33,7 @@ Server: `R/mod_ben_selection.R` (logic unchanged). Client: `SelectionPage.tsx`,
     - Score (hybrid, scorecard): with a card: switch "Apply the <scorecard |
       vulnerability ranking> (n criteria)" (`use_scorecard`), threshold
       (`scorecard_threshold`, set to the card's threshold when a new card
-      arrives), mapping note (`scorecard_note`, hosted), Match columns
+      arrives), mapping note (`scorecard_note`, JSON: all mapped / n not mapped, ranking or outcome, card older than 2 years), Match columns
       (`sc_rematch`, crosswalk dialog); without a card (or switched off):
       min / max vulnerability score sliders (`ben_score_min/max`, range from the
       data); file loader (`sc_file`, hosted in `scorecard_ui`) -> crosswalk dialog
@@ -44,7 +44,7 @@ Server: `R/mod_ben_selection.R` (logic unchanged). Client: `SelectionPage.tsx`,
       caseload (`ben_prio_n`) + rationale (`ben_prio_rationale`, required on
       Apply); per area: level (`ben_quota_unit`, mapped levels), "Set the
       caseload per area..." (`quota_open`, the server's dialog with allocation
-      methods, IPC / HNRP figures, rationale), summary (`quota_summary`, hosted)
+      methods, IPC / HNRP figures, rationale), summary (`quota_summary`, JSON: none set / total in n areas)
     - footer: note (or what is not applied yet) + outline Apply selection (clicks `ben_apply`)
   - Composition
     - insight tiles (`comp_insights`): households served, people served,
@@ -69,11 +69,11 @@ Server: `R/mod_ben_selection.R` (logic unchanged). Client: `SelectionPage.tsx`,
 - [x] settings wait for Apply: approach / prioritisation / threshold / caseloads
       noted as not applied, counts unchanged until Apply, note gone after
 - [x] total caseload (300 households): 300 served, 1,200 excluded by design
-- [x] caseload per area dialog: saved, summary shown, applied (120 served)
+- [x] caseload per area dialog: "none set" before, saved, summary shown, applied (120 served)
 - [x] rules dialog opens
 - [x] Composition: insight tiles, area chart, mix chart (or its line), profile table
 - [x] vulnerability ranking loaded from a file through the crosswalk: switch
-      label, threshold from the card, ranking chart
+      label, mapping note, threshold from the card, ranking chart
 - [x] list: rows, Details dialog, next page (server-paged at 6,140 rows with TW_BIG=1)
 - [x] Excel export: Summary, Selected (300 rows), By_area, Excluded_by_design;
       Audit_trail only when opted in; per-area zip (3 workbooks)
@@ -83,10 +83,12 @@ Server: `R/mod_ben_selection.R` (logic unchanged). Client: `SelectionPage.tsx`,
 
 ## Deliberate divergences
 
-- Server facts as JSON: `selection_note`, `comp_insights`, `ben_profile` became
+- Server facts as JSON: `selection_note`, `comp_insights`, `ben_profile`, `scorecard_note`, `quota_summary` became
   `shinyreact::reactive_output()`; new `ben_meta` (approaches, card, ranking)
   and `ben_pending` (the not-applied note, which the Shiny page did not have).
   `ranking_comp` (renderUI) is gone: the client shows the ranking charts from `ben_meta`.
+- Hidden outputs wait: `comp_insights` and `ben_profile` use `useOutputVisibility()` on the Composition tab;
+  `ben_meta`, `ben_pending`, `selection_note`, `scorecard_note`, `quota_summary` are cheap and always computed.
 - `scorecard_ui` now hosts only the file loader; the card switch, threshold and
   Match columns are React. A new card resets the threshold input to the card's
   threshold (the Shiny page kept the previous input value).

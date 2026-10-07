@@ -12,7 +12,12 @@
 .tw-select-actions .btn-link { font-size: .72rem; text-decoration: none; }
 .tw-select__menu { background: var(--bs-body-bg) !important; color: var(--bs-body-color); border: 1px solid var(--bs-border-color); box-shadow: 0 8px 24px rgba(0, 0, 0, .14) !important; font-size: .85rem; }
 .tw-select__option--is-focused { background: rgba(10, 110, 180, .08) !important; }
-.tw-select__option--is-selected { background: var(--wfp-blue, #0A6EB4) !important; color: #fff !important; }
+/* a chosen option keeps its look; a tick on the right says it is chosen */
+.tw-select__option { position: relative; padding-right: 2rem !important; }
+.tw-select__option--is-selected { background: transparent !important; color: var(--bs-body-color) !important; font-weight: 500; }
+.tw-select__option--is-selected.tw-select__option--is-focused { background: rgba(10, 110, 180, .08) !important; }
+.tw-select__option--is-selected::after { content: ""; position: absolute; right: .75rem; top: 50%; width: .4rem; height: .75rem; margin-top: -.45rem;
+  border: solid var(--wfp-blue, #0A6EB4); border-width: 0 2px 2px 0; transform: rotate(45deg); }
 .tw-select__group-heading { font-size: .7rem !important; text-transform: uppercase; letter-spacing: .03em; }
 .tw-select__control { background: var(--bs-body-bg) !important; font-size: .85rem; }
 .tw-select__control--is-focused { border-color: var(--wfp-blue, #0A6EB4) !important; box-shadow: 0 0 0 .15rem rgba(10, 110, 180, .18) !important; }
@@ -20,10 +25,11 @@
 .tw-select__multi-value { background: rgba(10, 110, 180, .14) !important; }
 .tw-opt { display: flex; flex-direction: column; line-height: 1.2; }
 .tw-opt-label { font-size: .72rem; font-style: italic; color: var(--wfp-blue, #0A6EB4); font-weight: 400; }
-.tw-select__option--is-selected .tw-opt-label { color: #fff; }
 .tw-select__placeholder { color: var(--bs-secondary-color) !important; }
 /* the typing box sits over the chosen value: never paint it (app styles give inputs a background) */
 .tw-select__input-container input, .tw-select__input { background: transparent !important; box-shadow: none !important; border: 0 !important; padding: 0 !important; }
+/* ...and out of sight until the select is focused, so it never covers the first letter */
+.tw-select__control:not(.tw-select__control--is-focused) .tw-select__input-container { opacity: 0; }
 .tw-slider-dual { position: relative; height: 1.5rem; }
 .tw-slider-dual input { position: absolute; inset: 0; pointer-events: none; background: transparent; }
 .tw-slider-dual input::-webkit-slider-thumb { pointer-events: auto; }
@@ -109,3 +115,19 @@
   .tw-side { max-height: 45vh; border-right: 0; border-bottom: 1px solid var(--bs-border-color); }
   .tw-side-toggle { display: none; }
 }
+
+/* Dark mode is navy throughout: Bootstrap's own dark greys point at the
+   app's navy tokens (www/wfp-ui.css), so React surfaces match the rest. */
+:root[data-bs-theme="dark"] {
+  --bs-body-bg: var(--surface); --bs-body-bg-rgb: 16, 35, 59;
+  --bs-secondary-bg: var(--surface-3); --bs-secondary-bg-rgb: 23, 48, 79;
+  --bs-tertiary-bg: #142a45; --bs-tertiary-bg-rgb: 20, 42, 69;
+  --bs-border-color: rgba(255, 255, 255, .10); --bs-border-color-translucent: rgba(255, 255, 255, .10);
+  --bs-body-color: var(--body-text); --bs-secondary-color: var(--text-muted);
+  --bs-card-bg: var(--surface);
+}
+:root[data-bs-theme="dark"] body, :root[data-bs-theme="dark"] .tw-app { background-color: var(--surface-2) !important; }
+:root[data-bs-theme="dark"] .card, :root[data-bs-theme="dark"] .tw-side, :root[data-bs-theme="dark"] .modal-content,
+:root[data-bs-theme="dark"] .tw-select__control, :root[data-bs-theme="dark"] .tw-select__menu,
+:root[data-bs-theme="dark"] .form-control, :root[data-bs-theme="dark"] .form-select { background-color: var(--surface) !important; }
+:root[data-bs-theme="dark"] .tw-table thead th { background: var(--surface-3); }

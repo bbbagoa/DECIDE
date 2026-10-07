@@ -256,22 +256,13 @@ dq_outliers_server <- function(input, output, session, ns, core) {
     if (!anyNA(a) && a[1] > a[2]) c(NA_real_, NA_real_) else a
   })
 
-  output$range_hint <- renderUI({
+  # which hint goes under the allowed range (React, OutliersTab.tsx)
+  output$range_hint <- shinyreact::reactive_output({
     a <- c(num_or_na(input$range_min), num_or_na(input$range_max))
-    if (!anyNA(a) && a[1] > a[2]) {
-      return(tags$div(class = "small text-danger mt-n2", bsicons::bs_icon("exclamation-triangle"),
-                      " The allowed minimum is above the maximum, so the range is ignored."))
-    }
-    if (all(is.na(a))) {
-      return(tags$div(class = "small text-muted mt-n2", bsicons::bs_icon("lightbulb"),
-                      " Tip: enter the allowed range for this variable (for example 1 to 30 for a household size). ",
-                      "A statistical test only sees what is unusual; the range also catches what is impossible."))
-    }
+    if (!anyNA(a) && a[1] > a[2]) return("inverted")
+    if (all(is.na(a))) return("tip")
     key <- mapped_keys()[input$outlier_var %||% ""]
-    if (isTRUE(!is.na(key)) && identical(a, suggested_range(key))) {
-      return(tags$div(class = "small text-muted mt-n2", bsicons::bs_icon("info-circle"),
-                      " Suggested range for this field; change it if your context differs."))
-    }
+    if (isTRUE(!is.na(key)) && identical(a, suggested_range(key))) return("suggested")
     NULL
   })
 
@@ -291,25 +282,22 @@ dq_outliers_server <- function(input, output, session, ns, core) {
     input$outlier_threshold
   })
 
-  # The check runs on Check: choosing the variable, the method, the
-  # sensitivity or the range computes nothing by itself.
+  # An exception to "settings wait for their button": the Outliers tab redraws
+  # as soon as the variable, the method, the sensitivity or the range changes
+  # (after a short pause, so dragging the slider does not recompute each step).
+  # ol_applied() stays the one value everything reads, so a restored session or
+  # a row picked in "All numeric variables" set it the same way.
   ol_applied <- reactiveVal(NULL)
   ol_now <- function() list(var = input$outlier_var %||% "", method = input$outlier_method %||% "IQR",
                             threshold = if (identical(input$outlier_method, "none")) NA_real_ else (input$outlier_threshold %||% NA_real_),
                             allowed = allowed())
-  observeEvent(input$ol_check, {
-    req(input$ol_check > 0)   # a React button sends 0 at start
-    need_ok(shiny::isTruthy(input$outlier_var), "Choose the variable to check.")
-    ol_applied(ol_now())
+  ol_live <- debounce(reactive(ol_now()), 400)
+  observe({
+    a <- ol_live()
+    req(shiny::isTruthy(a$var))
+    if (!identical(a, isolate(ol_applied()))) ol_applied(a)
   })
-  output$ol_stale <- renderUI({
-    a <- ol_applied()
-    if (is.null(a)) return(tags$div(class = "small text-muted mt-1", bsicons::bs_icon("info-circle"),
-                                    " Choose the variable, the method and the allowed range, then click Check."))
-    if (!identical(a, ol_now())) return(tags$div(class = "small text-warning mt-1", bsicons::bs_icon("exclamation-circle"),
-                                                 " The settings changed: click Check to apply them."))
-    NULL
-  })
+  output$ol_stale <- renderUI(NULL)
   outlier_info <- reactive({
     df <- dq_filtered_data()
     a <- ol_applied(); req(a)
@@ -438,28 +426,20 @@ dq_outliers_server <- function(input, output, session, ns, core) {
     out[order(-abs(rz)), , drop = FALSE]
   })
 
-  insight <- function(icon_name, label, value, sub = NULL, action = NULL) {
-    tags$div(class = "wfp-insight",
-             tags$div(class = "wfp-insight-label", bsicons::bs_icon(icon_name), " ", label),
-             if (!is.null(value)) tags$div(class = "wfp-insight-value", value),
-             if (!is.null(sub)) tags$div(class = "wfp-insight-sub", sub),
-             action)
-  }
-  pick_btn <- function(what, value, label) tags$button(
-    type = "button", class = "btn btn-link btn-sm p-0 mt-1",
-    onclick = sprintf("Shiny.setInputValue('%s', {what: '%s', value: %s, n: Math.random()})",
-                      ns("ol_pick"), what, jsonlite::toJSON(value, auto_unbox = TRUE)),
-    label)
+  insight <- dq_insight
+  # a "Select ..." link: React sends input$ol_pick = list(what, value, n)
+  pick_btn <- function(what, value, label) list(what = what, value = value, label = label)
 
-  output$outlier_insights <- renderUI({
+  # drawn by React (OutliersTab.tsx -> Insights.tsx): the cards and their
+  # "Select ..." links, which set input$ol_pick
+  output$outlier_insights <- shinyreact::reactive_output({
     info <- outlier_info()
     df <- dq_filtered_data()
     n <- length(info$idx)
     if (!n) {
-      return(empty_state("No flagged values",
-                         if (info$n_verified) sprintf("Every value is inside the limits; %d flagged value(s) were checked and kept.", info$n_verified)
-                         else "Every value is inside the limits.",
-                         icon = "check2-circle"))
+      return(list(empty = list(title = "No flagged values",
+                               sub = if (info$n_verified) sprintf("Every value is inside the limits; %d flagged value(s) were checked and kept.", info$n_verified)
+                                     else "Every value is inside the limits.")))
     }
     v <- info$vals[info$idx]
     r <- info$reason[info$idx]
@@ -518,7 +498,7 @@ dq_outliers_server <- function(input, output, session, ns, core) {
            else "Open the most extreme with Details. Correct what is wrong, and mark what you confirmed as verified so it stops being flagged."
     cards <- c(cards, list(insight("signpost", "Suggested next step", NULL, nxt)))
 
-    tags$div(class = "wfp-insights", cards)
+    list(cards = Filter(Negate(is.null), cards))
   })
 
   # drawn by React (OutliersTab.tsx); the Details buttons set input$ol_view
@@ -815,13 +795,6 @@ dq_outliers_server <- function(input, output, session, ns, core) {
     if (shiny::isTruthy(input$outlier_var)) rg[[input$outlier_var]] <- allowed()
     labels <- stats::setNames(unname(OUTLIER_FIELD_LABELS[mk]), names(mk))
     numeric_audit(df, cols, input$outlier_method %||% "IQR", threshold(), rg, labels)
-  })
-
-  output$ol_scan_empty <- renderUI({
-    if (!isTRUE(input$ol_scan > 0)) {
-      empty_state("Not run yet", "Click Audit all numeric variables to check every numeric column at once.",
-                  icon = "clipboard-data")
-    }
   })
 
   output$ol_scan_table <- render_react_table({

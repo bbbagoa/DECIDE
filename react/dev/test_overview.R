@@ -1,7 +1,9 @@
-# Browser check of the React Overview (react/src/pages/overview/): ECharts
-# charts, the table and chart builders.
+# Browser check of the React Overview (react/src/pages/overview/): the map
+# (MapLibre + deck.gl), ECharts charts, the table and chart builders.
 # From the package root, after `cd react && npm run build`:
 #   NOT_CRAN=true Rscript react/dev/test_overview.R
+# With TW_BIG=<a registration file> (e.g. 1.5 million rows, registration_demo
+# columns), only the map is checked, with timings.
 # Prints PASS / FAIL lines; screenshots go to TW_SHOTS (or tempdir()).
 source("react/dev/e2e.R")
 app <- tw_launch()
@@ -30,11 +32,77 @@ real_errors <- function() { e <- tw_errors(app); e[!(startsWith(e, "Error for ")
 ns <- function(x) paste0("overview_1-", x)
 plot_note <- function() txt(sprintf("#%s.tw-output-note", ns("gb_plot")))
 
+big <- Sys.getenv("TW_BIG")
 tw_go(app, "import_panel")
 try(app$wait_for_js("!!document.querySelector('#file_import_1-file_in.shiny-bound-input')", timeout = 60000))
-tw_load_registration(app)
+# time from the mapping confirmed (data loaded) to the points drawn, in the browser
+app$run_js("window.__t0=null; window.__tDrawn=null; document.addEventListener('click', function(e){ if (e.target.closest && e.target.closest('#setup_1-review_confirm')) window.__t0=performance.now(); }, true); (function poll(){var h=document.querySelector('.tw-map-holder'); if(h && +h.dataset.points>0 && window.__t0){window.__tDrawn=performance.now()-window.__t0;} else setTimeout(poll,20);})();")
+t_load <- system.time(if (nzchar(big)) tw_load_registration(app, big) else tw_load_registration(app))[["elapsed"]]
 go("Overview")
 ok(js("document.querySelector('.tw-rov').offsetWidth > 0"), "the Overview shows")
+
+# ---- The map (MapLibre basemap, deck.gl points)
+M <- "document.querySelector('.tw-map-gl').twMap"
+try(app$wait_for_js("+document.querySelector('.tw-map-holder').dataset.points > 0", timeout = 300000))
+n_pts <- js("+document.querySelector('.tw-map-holder').dataset.points")
+cat(sprintf("TIME import + setup (test driver) %.1fs; mapping confirmed -> points drawn %.2fs
+", t_load, js("window.__tDrawn || NaN") / 1000))
+ok(n_pts > 1000, paste("map points drawn:", n_pts))
+ok(js("document.querySelectorAll('.tw-map-gl canvas').length >= 2 && !!document.querySelector('.tw-map-gl .maplibregl-canvas')"), "MapLibre and deck.gl canvases")
+ok(nzchar(txt(".tw-map-legend")), paste("legend:", substr(txt(".tw-map-legend"), 1, 80)))
+tw_shot(app, "ov_map")
+view <- function() js(sprintf("(function(){var m=%s.map, c=m.getCenter(); return [c.lng, c.lat, m.getZoom()].map(v=>+v.toFixed(5)).join(',')})()", M))
+sel_map <- function(sel, v) {
+  app$run_js(sprintf("var s=document.querySelector('%s'); Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype,'value').set.call(s,'%s'); s.dispatchEvent(new Event('change',{bubbles:true}))", sel, v))
+  Sys.sleep(2); tw_idle(app)
+}
+# zoom in a little, then recolour: the view stays
+app$run_js(sprintf("%s.map.jumpTo({zoom: %s.map.getZoom() + 1})", M, M)); Sys.sleep(1.5); tw_idle(app)
+v0 <- view(); lg0 <- txt(".tw-map-legend")
+sel_map(".tw-rov-map .wfp-map-toolbar select", "HHHSex")
+ok(grepl("HHHSex", txt(".tw-map-legend")) && !identical(lg0, txt(".tw-map-legend")), paste("recoloured:", substr(txt(".tw-map-legend"), 1, 60)))
+ok(identical(view(), v0), paste("recolour keeps the view:", v0, "->", view()))
+sel_map(".tw-rov-map .wfp-map-toolbar select", "Scoring_total")
+ok(js("!!document.querySelector('.tw-map-ramp')"), "a number: colour ramp legend")
+tw_shot(app, "ov_map_numeric")
+# a click on a point: the server's popup
+pt <- js(sprintf("(function(){var t=%s, r=t.map.getCanvas().getBoundingClientRect(), best=null, bd=1e9; for (var i=0;i<Math.min(3000,t.n);i++){var p=t.screen(i); if(!p) continue; var d=Math.hypot(p.x-(r.left+r.width/2),p.y-(r.top+r.height/2)); if(d<bd){bd=d;best=p;}} return best})()", M))
+cdp <- app$get_chromote_session()
+for (ty in c("mouseMoved", "mousePressed", "mouseReleased"))
+  cdp$Input$dispatchMouseEvent(type = ty, x = pt$x, y = pt$y, button = "left", clickCount = if (ty == "mouseMoved") 0 else 1)
+try(app$wait_for_js("!!document.querySelector('.maplibregl-popup .wfp-map-pop')", timeout = 15000))
+ok(grepl("reg:", txt(".maplibregl-popup .wfp-map-pop")), paste("popup on click:", txt(".maplibregl-popup .wfp-map-pop")))
+tw_shot(app, "ov_map_popup")
+# follow the map: zoomed in, the figures describe the households in view
+app$run_js("document.querySelector('.tw-ov-follow input').click()"); Sys.sleep(1)
+app$run_js(sprintf("%s.map.jumpTo({zoom: %s.map.getZoom() + 2})", M, M)); Sys.sleep(3); tw_idle(app)
+chip <- txt(".tw-ov-chip")
+ok(grepl("Map view:", chip), paste("follow the map:", chip))
+tw_shot(app, "ov_map_follow")
+app$run_js("document.querySelector('.tw-ov-chip a').click()"); Sys.sleep(3); tw_idle(app)
+ok(grepl("^All", trimws(txt(".tw-ov-chip"))), paste("show all:", txt(".tw-ov-chip")))
+# basemaps
+src <- function() js(sprintf("%s.map.getStyle().sources.b0.tiles[0]", M))
+sel_map(".tw-map-base", "Satellite"); Sys.sleep(2)
+ok(grepl("World_Imagery", src()), paste("basemap switch:", src()))
+tw_shot(app, "ov_map_satellite")
+app$run_js("document.querySelector('.tw-mode-btn').click()"); Sys.sleep(3)
+ok(grepl("Dark_Gray", src()), paste("dark mode, dark basemap:", src()))
+tw_shot(app, "ov_map_dark")
+app$run_js("document.querySelector('.tw-mode-btn').click()"); Sys.sleep(2)
+ok(grepl("World_Imagery", src()), paste("light again: back to the chosen basemap:", src()))
+sel_map(".tw-map-base", "Terrain")
+# responsiveness: frames per second while panning and zooming (3 s)
+app$run_js(sprintf("window.__fps=null; (function(){var m=%s.map, frames=0, t0=performance.now(), worst=0, last=t0; function f(){var t=performance.now(); worst=Math.max(worst,t-last); last=t; frames++; if(t-t0<3000) requestAnimationFrame(f); else window.__fps=[frames/((t-t0)/1000), worst];} requestAnimationFrame(f); m.panBy([300,0],{duration:1000}); setTimeout(()=>m.panBy([-300,150],{duration:1000}),1000); setTimeout(()=>m.zoomIn({duration:800}),2000);})()", M))
+Sys.sleep(4)
+fps <- js("window.__fps")
+cat(sprintf("PAN %.0f frames/s, longest frame %.0f ms (headless Chrome)
+", fps[[1]], fps[[2]]))
+if (nzchar(big)) {
+  e <- real_errors()
+  ok(!length(e), paste("browser errors:", paste(head(e, 3), collapse = " | ")))
+  quit(save = "no")
+}
 ok(js("!document.querySelector('.recharts-wrapper, .recharts-surface')"), "no Recharts left")
 ok(canvases(".tw-ov-daily") == 1, "households per day drawn (ECharts)")
 ok(canvases(".tw-rov-sec.open") >= 3, paste("who is in the data: charts drawn:", canvases(".tw-rov-sec.open")))

@@ -7,14 +7,15 @@ import {
   ArrowRight, BarChart3, ChevronDown, Download, Play, RotateCcw, SlidersHorizontal, Table2, Trash2, Trophy,
 } from "lucide-react";
 import { useShinyInputValue, useShinyOutputValue } from "@/shiny";
-import { ActionButton, DownloadButton, HostedUI, SelectInput, TextOutput } from "@/lib/inputs";
+import { ActionButton, DownloadButton, SelectInput, TextOutput } from "@/lib/inputs";
 import { Card, signalShown } from "@/lib/layout";
-import { Chart } from "@/lib/chart";
+import { useOutputVisibility } from "@/lib/visibility";
 import { EmptyState } from "@/components/Figures";
 import {
   ChartCard, ChartHelp, DirBadge, Gate, KeepDialog, OrCell, PLegend, PPill, Show, StepNav, Tip, TipList, isNum, ns, sendEvent,
   useRowInput, type T,
 } from "./shared";
+import { DiagramCards, FitDetails, FitNote, ProfilesCard, StaleNote, useStale } from "./facts";
 import type { Comparison, EstRow, Estimates, Flow, Meta, Mode, Run } from "./types";
 
 const STEPWISE = (t: T) => [
@@ -29,9 +30,12 @@ export function StepModel({ flow, meta, mode, t }: { flow?: Flow; meta?: Meta; m
   const nof = mode === "none", pmt = mode === "pmt";
   const gear = !nof || !!meta?.axes.includes(method) || !!meta?.clusters.includes(method);
   const fit = flow?.fit;
+  // computed only while this step shows (PORTING.md, "Hidden outputs wait")
+  const ref = useRef<HTMLDivElement>(null);
+  for (const id of ["sc_estimates", "sc_comparison", "sc_fit", "sc_profiles"]) useOutputVisibility(ns(id), ref); // eslint-disable-line
 
   return (
-    <div className="sc-step">
+    <div className="sc-step" ref={ref}>
       <p className="sc-lead">{t("Fit a model on the retained criteria and turn it into points. Adjust any weight where local knowledge says the model is wrong -- the reference analysis does exactly this.")}</p>
       <Gate show={!!flow && flow.gates.weights} text={t("Weights come from a model fitted on the chosen criteria, so choose them first.")}
             btn="back_to_criteria" label={t("Back to Criteria")} />
@@ -109,14 +113,14 @@ export function StepModel({ flow, meta, mode, t }: { flow?: Flow; meta?: Meta; m
         <TextOutput id={ns("model_note")} /> <TextOutput id={ns("scheme_note")} />{" "}
         <Show as="span" when={!!flow?.scheme_apply}><ActionButton id={ns("scheme_apply")} label={t("Apply this scheme to the fitted model")} link /></Show>
       </div>
-      <HostedUI id={ns("fit_note")} />
+      <FitNote t={t} />
 
       <RunsOnly t={t} show={!!fit && !fit.runs_inline} />
 
       {/* clusters: the profiles to target first (with their own Shiny controls) */}
-      <HostedUI id={ns("cluster_ui")} className="sc-cluster" />
+      <ProfilesCard t={t} />
       <Estimates t={t} />
-      <HostedUI id={ns("fit_details")} />
+      <FitDetails t={t} />
       <ComparisonView meta={meta} t={t} />
 
       <Diagnostics fit={fit ?? null} meta={meta} t={t} />
@@ -146,10 +150,11 @@ function ModelTip({ t }: { t: T }) {
 
 function Estimates({ t }: { t: T }) {
   const est = useShinyOutputValue<Estimates>(ns("sc_estimates"));
+  const stale = useStale();
   return (
     <Card title={t("Model estimates")} icon={<Table2 size={15} />} className="sc-est-card"
           actions={<>
-            <HostedUI id={ns("points_stale")} inline />
+            <StaleNote show={!!stale?.points}>{t("Points edited: click Apply points.")}</StaleNote>
             <ActionButton id={ns("apply_points")} label={t("Apply points")} icon={<ArrowRight size={13} />} variant="primary" />
             <ActionButton id={ns("reset_weights")} label={t("Reset to model values")} icon={<RotateCcw size={13} />} variant="outline-secondary" />
             <DownloadButton id={ns("dl_model_tables2")} label={t("Export (Excel)")} icon={<Download size={13} />} />
@@ -417,6 +422,7 @@ function Diagnostics({ fit, meta, t }: { fit: Flow["fit"]; meta?: Meta; t: T }) 
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => { if (open) signalShown(ref.current, true); }, [open, fit?.method, fit?.index]);
+  useOutputVisibility(ns("sc_diagram"), ref);
   if (!fit) return null;
   const im = fit.index, C = (id: string, title: string, h = 480) => <ChartCard key={id} id={id} title={title} height={h} meta={meta} t={t} />;
   let charts: ReactNode;
@@ -454,8 +460,7 @@ function Diagnostics({ fit, meta, t }: { fit: Flow["fit"]; meta?: Meta; t: T }) 
         <ChevronDown size={15} className="sc-more-chev" />
       </button>
       <div ref={ref} className="sc-more-body" style={{ display: open ? undefined : "none" }}>
-        <HostedUI id={ns("diagram_ui")} className="sc-diagram" />
-        <HostedUI id={ns("tree_ui")} />
+        <DiagramCards t={t} />
         {charts}
       </div>
     </section>

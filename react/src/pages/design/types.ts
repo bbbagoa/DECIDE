@@ -81,3 +81,54 @@ export type Thresh = {
   verdict: { level: string; interpretation: string; action: string };
   words: Record<"vuln" | "notvuln" | "incl" | "excl" | "card" | "elig" | "notelig" | "axis_row" | "axis_col" | "incl_mean" | "excl_mean", string>;
 };
+
+/* facts that replaced the server-built HTML (facts.tsx) */
+
+export type Blocked =
+  | { none: true }
+  | {
+    none: false; nof: boolean; stamp: number; overridable: string[];
+    groups: { kind: "outcome" | "unobs" | "ids"; n: number; cols: string[]; more: boolean }[];
+    allowed: { col: string; note: string | null }[];
+  };
+
+/** A figure: `sub` may hold %s, replaced by `arg` */
+export type Fig = { title: string; value: string; sub: string | null; tip: string | null; arg: string | null };
+
+export type IndexFacts =
+  | { type: "pca"; share: number | null; min_var: number | null; axes: number; axis_share: number[]; axis_weights: number[];
+      kaiser: number | null; kmo: number | null; kmo_word: string; bartlett_p: number | null; weak: boolean }
+  | { type: "count" | "mca" | "cluster"; alpha: number | null; axes: number; share: number | null; anchor: string; k: number | null;
+      algorithm: string | null; target: number[]; target_share: number | null }
+  | { type: "lda"; mahalanobis: number | null };
+
+export type FitFacts = {
+  tuning: { folds: number; n: number; auc: number; best: string } | null;
+  k_auto: { k: number; silhouette: number } | null;
+  model: string; n: number; held_out: number; kept: number;
+  index: IndexFacts | null;
+  pmt: { figs: Fig[]; nonpositive: number; under: string | null } | null;
+  converged: boolean; filled: { name: string; n: number }[]; dropped: string[]; is_pmt: boolean;
+};
+
+export type Profiles = {
+  k: number; target: number[]; stamp: number; vmax: number;
+  profiles: { j: number; size: number; rank: number }[];
+  rows: { criterion: string; label: string | null; counted: string | null; v: number; cells: { p: number; d: number }[]; overall: number }[];
+  silhouette: number | null; entropy: number | null; bic: number | null; fidelity: number | null;
+};
+
+export type DiagramFacts = {
+  nof: boolean;
+  diagram: { title: string; help: string; svg: string } | null;
+  tree: { rule: string; households: number; share: number }[] | null;
+};
+
+export type Stale = { points: boolean; thr: boolean; pmt_line: { welfare: string; pct: number } | null };
+
+export type RankingFacts = {
+  stability: { word: string; jaccard: number; draws: number; low: number; high: number; share: number; spearman: number | null } | null;
+  insights: { ratio: number; mean_sel: number; mean_not: number; n_criteria: number; concentration: number; share: number } | null;
+};
+
+export type PmtAccuracy = { welfare: string; pct_line: number; n: number; figs: Fig[] };

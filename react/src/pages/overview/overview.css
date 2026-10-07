@@ -8,3 +8,32 @@
 .tw-ob-var { color: var(--wfp-blue, #0A6EB4); }
 .tw-ob-note { font-size: .74rem; color: var(--bs-secondary-color); min-height: 1em; }
 .tw-ob .tw-dt td:first-child, .tw-ob .tw-dt th:first-child { font-weight: 500; }
+
+/* The Overview map (MapView.tsx: MapLibre basemaps, deck.gl points) */
+.tw-map-holder { position: relative; flex: 1 1 auto; min-height: 320px; }
+.tw-map-holder > .tw-map-gl { position: absolute; inset: 0; background: var(--surface-3, #eef1f4); font-family: inherit; }
+.tw-map-gl .maplibregl-ctrl-group button { width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; color: #333; }
+.tw-map-gl .tw-boxzoom-btn.active { background: #0A6EB4; color: #fff; }
+.tw-map-box { position: absolute; border: 1.5px dashed #0A6EB4; background: rgba(10, 110, 180, .08); pointer-events: none; z-index: 2; }
+.tw-map-base { position: absolute; top: 10px; right: 10px; width: auto !important; min-width: 0 !important; z-index: 3;
+  font-size: .78rem; padding-block: .2rem; box-shadow: 0 1px 4px rgba(0, 0, 0, .18); }
+.tw-map-note { position: absolute; top: 50px; left: 50%; transform: translateX(-50%); z-index: 3; max-width: 80%;
+  background: var(--bs-body-bg); color: var(--bs-secondary-color); font-size: .8rem; padding: .4rem .7rem; border-radius: 6px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, .18); }
+.tw-map-legend { position: absolute; right: 10px; bottom: 26px; z-index: 3; max-height: 55%; overflow: auto; min-width: 120px; max-width: 220px;
+  background: color-mix(in srgb, var(--bs-body-bg) 88%, transparent); color: var(--bs-body-color); font-size: .74rem;
+  padding: .45rem .6rem; border-radius: 6px; box-shadow: 0 1px 4px rgba(0, 0, 0, .18); }
+.tw-map-legend-title { font-weight: 600; margin-bottom: .25rem; overflow-wrap: anywhere; }
+.tw-map-legend-row { display: flex; align-items: center; gap: .4rem; line-height: 1.5; }
+.tw-map-legend-row i { flex: 0 0 auto; width: 11px; height: 11px; border-radius: 50%; border: 1px solid rgba(128, 128, 128, .5); }
+.tw-map-ramp { height: 10px; border-radius: 3px; min-width: 150px; }
+.tw-map-ramp-labels { display: flex; justify-content: space-between; gap: .4rem; color: var(--bs-secondary-color); }
+.tw-map-gl .maplibregl-popup { z-index: 5; }
+.tw-map-popup .maplibregl-popup-content { padding: .5rem .7rem; border-radius: 8px; font-family: inherit; }
+.tw-rov-map:fullscreen { border-radius: 0; }
+
+/* MapLibre's controls in dark mode: navy, with light icons */
+:root[data-bs-theme="dark"] .maplibregl-ctrl-group { background: var(--surface, #10233b); box-shadow: 0 0 0 1px rgba(255, 255, 255, .12); }
+:root[data-bs-theme="dark"] .maplibregl-ctrl-group button + button { border-top-color: rgba(255, 255, 255, .12); }
+:root[data-bs-theme="dark"] .maplibregl-ctrl-group button .maplibregl-ctrl-icon { filter: invert(1) hue-rotate(180deg); }
+:root[data-bs-theme="dark"] .maplibregl-ctrl-scale { background: rgba(16, 35, 59, .75); color: #e6ebf2; border-color: #e6ebf2; }

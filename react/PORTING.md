@@ -131,6 +131,25 @@ the card (the server's `CHART_HELP` entry, e.g. as a `title` tooltip on an
 info icon). The chart-help test (`tests/testthat/test-chart-help.R`) reads
 R code; keep `chart_help(id)` references valid or update the test.
 
+## Hidden outputs wait (performance)
+
+Shiny pauses an output while it is hidden (`suspendWhenHidden`, the default),
+and computes it when it shows. React outputs report it: `Chart` and
+`DataTable` do it themselves (`src/lib/visibility.ts`). A JSON output
+(`reactive_output()`) that is costly to compute must say where it is drawn:
+`const ref = useRef<HTMLDivElement>(null); useOutputVisibility(ns("ov_profile"), ref);`
+on the section that shows it. Cheap state outputs (step status, metadata a
+page needs to lay itself out) need nothing. `suspendWhenHidden = FALSE` on
+an output keeps it computing while hidden: only for what must exist before
+it is seen (file inputs, downloads in folded sections).
+
+## Code loaded on demand
+
+`ui.js` is an ES module; heavy libraries are separate chunks loaded the
+first time they are needed (`import()`): ECharts (`src/lib/echarts-core.ts`:
+register a new chart type or component there, or it will not draw) and the
+map. Do not import a heavy library statically from a page.
+
 ## Conventions (from AGENTS.md, still true)
 
 - One `btn-primary` per view; the rest outline. Destructive: `outline-danger`.

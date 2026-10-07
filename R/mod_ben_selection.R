@@ -487,14 +487,14 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
                                                         paste(over, collapse = ", ")) else ""),
                        type = if (length(over)) "warning" else "message", duration = if (length(over)) 10 else 5)
     })
-    output$quota_summary <- renderUI({
+    # The caseload in force for this level (drawn by the React page): NULL when none.
+    output$quota_summary <- shinyreact::reactive_output({
       plan <- quota_plan()
       if (is.null(plan) || !identical(plan$unit, input$ben_quota_unit) || !identical(plan$count %||% "households", count_unit()))
-        return(tags$div(class = "small text-warning", bsicons::bs_icon("exclamation-circle"), " No caseload set for this level yet."))
+        return(list(set = FALSE))
       k <- unlist(plan$caseload)
-      tags$div(class = "small text-muted", bsicons::bs_icon("check-circle-fill", class = "text-success"),
-               sprintf(" %s %s in %d areas (%s).", format(sum(k), big.mark = ","), plan$count %||% "households", sum(k > 0),
-                       if (identical(plan$kind, "share")) "by share of the total" else "per area"))
+      list(set = TRUE, total = sum(k), count = plan$count %||% "households", areas = sum(k > 0),
+           share = identical(plan$kind, "share"))
     })
 
     # The whole registration data stays as it is; this module works on the
@@ -1164,34 +1164,19 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
       )
     })
 
-    output$scorecard_note <- renderUI({
+    # How the card fits this dataset (drawn by the React page): criteria
+    # mapped, the ones that score nobody, the card's age.
+    output$scorecard_note <- shinyreact::reactive_output({
       sc <- user_setup$scorecard
       df <- uploaded_df()
       if (scorecard_is_empty(sc) || is.null(df)) return(NULL)
       r <- scorecard_readiness(sc, df)
       age <- scorecard_age_months(sc)
-      stale <- if (isTRUE(age > 24)) tags$div(
-        class = "small text-warning",
-        bsicons::bs_icon("calendar-x"),
-        sprintf(" Designed %d months ago (%s). The OGN asks for weights to be reviewed every 2-3 years, annually in dynamic contexts.",
-                round(age), sc$created)
-      )
-      if (r$ready) {
-        return(tagList(tags$div(
-          class = "small text-success",
-          bsicons::bs_icon("check-circle-fill"),
-          if (is_ranking(sc)) sprintf(" All %d criteria mapped. A vulnerability ranking built without an outcome indicator: its errors are not measured; calibrate it in Monitoring (PDM).", r$n)
-          else sprintf(" All %d criteria mapped. Outcome: %s.", r$n, sc$outcome %||% "not recorded")
-        ), stale))
-      }
       # An unmapped criterion scores nobody, which would quietly shrink every
       # household's score without ever looking like an error.
-      tagList(tags$div(
-        class = "small text-warning",
-        bsicons::bs_icon("exclamation-triangle-fill"),
-        sprintf(" %d of %d criteria are not mapped to this dataset (%s). They score nobody.",
-                r$unmapped, r$n, paste(utils::head(r$missing, 3), collapse = ", "))
-      ), stale)
+      list(ready = isTRUE(r$ready), n = r$n, unmapped = r$unmapped, missing = I(utils::head(as.character(r$missing), 3)),
+           ranking = is_ranking(sc), outcome = sc$outcome %||% "not recorded",
+           stale = if (isTRUE(age > 24)) list(months = round(age), created = as.character(sc$created)))
     })
 
     output$rules_summary <- renderText({
@@ -1457,7 +1442,9 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
         sz <- as_number(df[[hs]])
         cards <- c(cards, list(tile("person", "People served",
           sprintf("%.1f%%", 100 * sum(sz[sel], na.rm = TRUE) / sum(sz, na.rm = TRUE)),
-          sprintf("Average household: %.1f people selected, %.1f not selected", mean(sz[sel], na.rm = TRUE), mean(sz[!sel], na.rm = TRUE)))))
+          # (no household left out: no average for them)
+          if (any(!sel & !is.na(sz))) sprintf("Average household: %.1f people selected, %.1f not selected", mean(sz[sel], na.rm = TRUE), mean(sz[!sel], na.rm = TRUE))
+          else sprintf("Average household: %.1f people", mean(sz[sel], na.rm = TRUE)))))
       }
       sx <- col_of("hhh_sex")
       if (!is.null(sx)) {

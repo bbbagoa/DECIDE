@@ -288,12 +288,17 @@ ec_heat <- function(xcats, ycats, z, tip_fmt = "%s<br>%s: <b>%.0f%%</b> meet it"
 ec_area_share <- function(d, overall, labels = c("Vulnerable", "Not vulnerable"), overall_label = "All areas: %.0f%% vulnerable") {
   hov <- function(k, lab) sprintf("<b>%s</b><br>%s: %.0f%% (%s of %s households)", ec_esc(d$area), ec_esc(lab), 100 * k / d$households,
                                   format(k, big.mark = ","), format(d$households, big.mark = ","))
-  lab <- list(show = TRUE, position = "inside", formatter = "fn:pctv", color = "#ffffff", fontSize = 10)
+  # every area shown: past 15 the areas run down the side, one row each, and
+  # the chart grows with them (no zoom slider)
+  n <- nrow(d)
+  horizontal <- n > 15
+  lab <- list(show = n <= 40, position = "inside", formatter = "fn:pctv", color = "#ffffff", fontSize = if (n > 25) 9 else 10)
+  ref <- if (horizontal) list(xAxis = overall) else list(yAxis = overall)
   o <- ec_bars(d$area, list(
     list(name = labels[1], values = round(100 * d$share, 1), color = "#c5192d", tips = hov(d$vulnerable, labels[1]), label = lab,
-         markLine = ec_markline(list(list(yAxis = overall)), sprintf(overall_label, overall), dotted = TRUE)),
+         markLine = ec_markline(list(ref), sprintf(overall_label, overall), dotted = TRUE)),
     list(name = labels[2], values = round(100 * (1 - d$share), 1), color = "#3f7e44", tips = hov(d$households - d$vulnerable, labels[2]), label = lab)),
-    value_name = "Households (%)", pct = TRUE, stack = TRUE)
-  if (nrow(d) > 30) o$dataZoom <- list(list(type = "slider", xAxisIndex = 0, startValue = 0, endValue = 29, height = 16, bottom = 4))
+    value_name = "Households (%)", pct = TRUE, stack = TRUE, horizontal = horizontal)
+  attr(o, "height") <- if (horizontal) max(440, 22 * n + 90) else if (n > 8) 440 else 380
   o
 }

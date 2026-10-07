@@ -33,7 +33,6 @@ Imports:
     htmltools,
     httr,
     jsonlite,
-    leafgl,
     later,
     leaflet,
     lubridate,

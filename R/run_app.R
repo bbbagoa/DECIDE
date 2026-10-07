@@ -13,7 +13,6 @@
 #' @import golem
 #' @import haven
 #' @import htmltools
-#' @import leafgl
 #' @import leaflet
 #' @import lubridate
 #' @import openxlsx

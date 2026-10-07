@@ -329,70 +329,54 @@ fmt_money <- function(x) {
   format(signif(x, 3), big.mark = ",", scientific = FALSE, trim = TRUE)
 }
 
-#' The fit of a PMT in a few figures, under the model settings
+#' The fit of a PMT in a few figures (Targeting Design, step 3)
+#'
+#' Each figure: title, value, sub (a line under it, `%s` replaced by `arg`)
+#' and tip, in English; the page translates them.
 #' @noRd
-pmt_fit_html <- function(p) {
+pmt_fit_figs <- function(p) {
   pct <- function(v) if (is.null(v) || is.na(v)) "n/a" else sprintf("%.1f%%", 100 * v)
   r2 <- function(v) if (is.null(v) || is.na(v)) "n/a" else sprintf("%.2f", v)
   where <- if (isTRUE(p$held_out)) "held-out households" else "training households (no hold-out)"
-  tags$div(
-    class = "wfp-pmt-fit mt-2",
-    tags$div(
-      class = "d-flex flex-wrap gap-4",
-      pmt_fig("R\u00b2 (training)", r2(p$r2), sprintf("adjusted %s", r2(p$adj_r2)),
-              "Share of the variance of log welfare per person the proxies explain. PMTs usually reach 0.3 to 0.6; above 0.6 on survey data is rare."),
-      pmt_fig("R\u00b2 (held out)", r2(p$r2_test), "households the model never saw",
-              "The honest figure: a large drop from the training R\u00b2 means the model learnt noise (too many proxies for the sample)."),
-      if (is.finite(p$r2_model_test %||% NA)) pmt_fig("R\u00b2 of the model itself", r2(p$r2_model_test), "held out, before the card averages it",
-              "A machine-learning PMT predicts with interactions; the card keeps each proxy's average effect. The gap between the two R\u00b2 is what the additive card gives up."),
-      pmt_fig("Prediction error (RMSE)", sprintf("%.2f", p$rmse %||% NA), "log points, evaluation households",
-              "Root mean squared error of predicted log welfare. 0.45 means a typical household is predicted about 45% above or below its measured welfare."),
-      pmt_fig("Poverty rate (headcount)", pct(p$headcount), sprintf("line %s per person", fmt_money(p$line))),
-      pmt_fig("Leakage / under-coverage", sprintf("%s / %s", pct(p$inclusion_error), pct(p$exclusion_error)), paste("at the line,", where),
-              "Inclusion error (leakage): non-poor households among those selected. Exclusion error (under-coverage): poor households not selected. Step 4 shows them for any cut-off, with the other PMT accuracy measures."),
-      if (identical(p$method, "pmt_qr")) pmt_fig("Quantile", sprintf("%.2f", p$tau), "the poverty rate of the training households"),
-      if (is.finite(p$lambda %||% NA)) pmt_fig("Penalty (\u03bb)", format(signif(p$lambda, 3)), "chosen by 5-fold cross-validation")),
-    if (p$n_nonpositive > 0) tags$div(class = "small text-muted mt-1", bsicons::bs_icon("info-circle"),
-      sprintf(" %s households with zero or negative welfare were left out of the fit (they cannot be logged).", format(p$n_nonpositive, big.mark = ","))),
-    if (is.finite(p$exclusion_error) && p$exclusion_error > 0.4) tags$div(
-      class = "alert alert-warning small mt-2 mb-0", bsicons::bs_icon("exclamation-triangle"),
-      sprintf(" Under-coverage of %s: that share of poor households is predicted above the line. This is common for PMTs (Brown, Ravallion & van de Walle 2018 find 40-60%% at typical coverage). ", pct(p$exclusion_error)),
-      "Consider the quantile regression, a cut-off above the line (step 4), better proxies, or combining the PMT with community validation."))
+  figs <- list(
+    pmt_fig("R\u00b2 (training)", r2(p$r2), "adjusted %s",
+            "Share of the variance of log welfare per person the proxies explain. PMTs usually reach 0.3 to 0.6; above 0.6 on survey data is rare.", r2(p$adj_r2)),
+    pmt_fig("R\u00b2 (held out)", r2(p$r2_test), "households the model never saw",
+            "The honest figure: a large drop from the training R\u00b2 means the model learnt noise (too many proxies for the sample)."),
+    if (is.finite(p$r2_model_test %||% NA)) pmt_fig("R\u00b2 of the model itself", r2(p$r2_model_test), "held out, before the card averages it",
+            "A machine-learning PMT predicts with interactions; the card keeps each proxy's average effect. The gap between the two R\u00b2 is what the additive card gives up."),
+    pmt_fig("Prediction error (RMSE)", sprintf("%.2f", p$rmse %||% NA), "log points, evaluation households",
+            "Root mean squared error of predicted log welfare. 0.45 means a typical household is predicted about 45% above or below its measured welfare."),
+    pmt_fig("Poverty rate (headcount)", pct(p$headcount), "line %s per person", NULL, fmt_money(p$line)),
+    pmt_fig("Leakage / under-coverage", sprintf("%s / %s", pct(p$inclusion_error), pct(p$exclusion_error)), "at the line, %s",
+            "Inclusion error (leakage): non-poor households among those selected. Exclusion error (under-coverage): poor households not selected. Step 4 shows them for any cut-off, with the other PMT accuracy measures.", where),
+    if (identical(p$method, "pmt_qr")) pmt_fig("Quantile", sprintf("%.2f", p$tau), "the poverty rate of the training households"),
+    if (is.finite(p$lambda %||% NA)) pmt_fig("Penalty (\u03bb)", format(signif(p$lambda, 3)), "chosen by 5-fold cross-validation"))
+  list(figs = Filter(Negate(is.null), figs), nonpositive = p$n_nonpositive %||% 0,
+       under = if (is.finite(p$exclusion_error) && p$exclusion_error > 0.4) pct(p$exclusion_error))
 }
 
-pmt_fig <- function(title, value, sub = NULL, tip = NULL) tags$div(
-  class = "wfp-pmt-fig",
-  tags$div(class = "small text-muted", title, if (!is.null(tip)) info_tip(tip)),
-  tags$div(class = "fs-5 fw-bold", value),
-  if (!is.null(sub)) tags$div(class = "small text-muted", sub))
+pmt_fig <- function(title, value, sub = NULL, tip = NULL, arg = NULL) list(title = title, value = value, sub = sub, tip = tip, arg = arg)
 
 #' The PMT accuracy measures at the current cut-off (threshold step)
 #' @noRd
-pmt_accuracy_html <- function(a, f, cut) {
+pmt_accuracy_figs <- function(a, f, cut) {
   pct <- function(v) if (is.null(v) || is.na(v)) "n/a" else sprintf("%.1f%%", 100 * v)
   w <- exp(cut)
-  bslib::card(
-    class = "mb-3",
-    bslib::card_header(bsicons::bs_icon("bullseye"), " PMT targeting accuracy at this cut-off"),
-    bslib::card_body(
-      tags$div(class = "small text-muted mb-2",
-               sprintf("Selected when predicted welfare per person is below %s (%.0f%% of the poverty line); %s evaluation households.",
-                       fmt_money(w), 100 * w / f$line, format(a$n, big.mark = ","))),
-      tags$div(
-        class = "d-flex flex-wrap gap-4",
-        pmt_fig("Leakage", pct(a$inclusion_error), "inclusion error: non-poor among the selected",
-                "Share of the households selected who are not poor (measured welfare above the line)."),
-        pmt_fig("Under-coverage", pct(a$exclusion_error), "exclusion error: poor not selected",
-                "Share of the poor households the PMT leaves out."),
-        pmt_fig("Coverage of the poor", pct(a$coverage_poor), sprintf("non-poor covered: %s", pct(a$coverage_nonpoor))),
-        pmt_fig("Targeting accuracy", pct(a$accuracy), "households classified correctly",
-                "Poor and selected, or non-poor and not selected, over all households."),
-        pmt_fig("Targeting differential", if (is.na(a$differential)) "n/a" else sprintf("%.2f", a$differential),
-                "coverage of the poor minus the non-poor",
-                "Ravallion (2000): 1 is perfect targeting, 0 no better than chance, negative worse than chance."),
-        pmt_fig("CGH indicator", if (is.na(a$cgh)) "n/a" else sprintf("%.2f", a$cgh), "1 = random selection",
-                "Coady, Grosh & Hoddinott (2004): the share of beneficiaries who are poor divided by the poverty rate. Above 1 the PMT does better than random; with equal transfers it is the share of the budget reaching the poor over their population share."),
-        pmt_fig("Selected", pct(a$selected), sprintf("poverty rate %s", pct(a$headcount))))))
+  list(welfare = fmt_money(w), pct_line = 100 * w / f$line, n = a$n, figs = list(
+    pmt_fig("Leakage", pct(a$inclusion_error), "inclusion error: non-poor among the selected",
+            "Share of the households selected who are not poor (measured welfare above the line)."),
+    pmt_fig("Under-coverage", pct(a$exclusion_error), "exclusion error: poor not selected",
+            "Share of the poor households the PMT leaves out."),
+    pmt_fig("Coverage of the poor", pct(a$coverage_poor), "non-poor covered: %s", NULL, pct(a$coverage_nonpoor)),
+    pmt_fig("Targeting accuracy", pct(a$accuracy), "households classified correctly",
+            "Poor and selected, or non-poor and not selected, over all households."),
+    pmt_fig("Targeting differential", if (is.na(a$differential)) "n/a" else sprintf("%.2f", a$differential),
+            "coverage of the poor minus the non-poor",
+            "Ravallion (2000): 1 is perfect targeting, 0 no better than chance, negative worse than chance."),
+    pmt_fig("CGH indicator", if (is.na(a$cgh)) "n/a" else sprintf("%.2f", a$cgh), "1 = random selection",
+            "Coady, Grosh & Hoddinott (2004): the share of beneficiaries who are poor divided by the poverty rate. Above 1 the PMT does better than random; with equal transfers it is the share of the budget reaching the poor over their population share."),
+    pmt_fig("Selected", pct(a$selected), "poverty rate %s", NULL, pct(a$headcount))))
 }
 
 #' The PMT model comparison as a table; the best held-out R-squared marked

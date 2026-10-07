@@ -1,8 +1,10 @@
 // Overview (overview_panel), the module overview_1. See react/PORT.md.
 // The server sends facts (ov_meta, ov_view, ov_ready, ov_collection,
-// ov_profile, ov_vuln); the map and the report download are the module's own
-// outputs, hosted; the two builders are drawn here (Builders.tsx).
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+// ov_profile, ov_vuln); the map is drawn here from map_points / map_colours
+// (MapView.tsx, MapLibre + deck.gl loaded on demand); the report download is
+// hosted; the two builders are drawn here (Builders.tsx).
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useOutputVisibility } from "@/lib/visibility";
 import Select from "react-select";
 import { Activity, Download, Filter, Globe2, X, ZoomIn } from "lucide-react";
 import {
@@ -11,6 +13,7 @@ import {
 import { EmptyState, Tiles, type Tile } from "@/components/Figures";
 import { CrossChart, DailyChart, GroupsChart, ShareChart } from "./charts";
 import { ChartBuilder, TableBuilder } from "./Builders";
+import { MapView } from "./MapView";
 import "./overview.css";
 
 const NS = "overview_1-";
@@ -76,11 +79,16 @@ function Overview({ meta, active, t }: { meta: Meta; active: boolean; t: (s: str
   useEffect(() => { if (!mapVar && meta.map_default) setMapVar(meta.map_default); }, [meta.map_default]); // eslint-disable-line
   const [follow, setFollow] = useShinyInput<boolean>(ns("view_follow"), false);
   const showAll = useShinyButton(ns("view_all"));
+  const mapCard = useRef<HTMLDivElement>(null);
+  const [fitSignal, setFitSignal] = useState(0);
   const view = useShinyOutputValue<{ label: string; zoomed: boolean }>(ns("ov_view"));
   const ready = useShinyOutputValue<{ off: { feature: string; detail: string }[] }>(ns("ov_ready"));
 
   // ---- figures
   const coll = useShinyOutputValue<Collection>(ns("ov_collection"));
+  // the figures are computed only while on screen (the page or its section shown)
+  const collRef = useRef<HTMLDivElement>(null);
+  useOutputVisibility(ns("ov_collection"), collRef);
   const collStatus = useShinyOutputStatus(ns("ov_collection"));
   const [byArea, setByArea] = useState(true);   // display only
   const profile = useShinyOutputValue<Profile>(ns("ov_profile"));
@@ -134,7 +142,7 @@ function Overview({ meta, active, t }: { meta: Meta; active: boolean; t: (s: str
       </aside>
 
       {/* map */}
-      <div className="card tw-rov-map">
+      <div className="card tw-rov-map" ref={mapCard}>
         <div className="wfp-map-toolbar">
           <div className="d-flex align-items-center gap-2">
             <span className="wfp-map-toolbar-label">{t("Colour by")}</span>
@@ -143,18 +151,19 @@ function Overview({ meta, active, t }: { meta: Meta; active: boolean; t: (s: str
             </select>
           </div>
         </div>
-        <ShinyOutput id={ns("map_plot")} className="leaflet html-widget html-widget-output tw-rov-map-body" />
+        <MapView ns={ns} t={t} card={mapCard} fitSignal={fitSignal}
+                 onColourCol={(c) => { if (c && c !== mapVar) setMapVar(c); }} />
       </div>
 
       {/* figures */}
       <div className="tw-rov-right">
-        <div className={"card tw-rov-collection" + (collStatus === "recalculating" ? " recalculating" : "")}>
+        <div ref={collRef} className={"card tw-rov-collection" + (collStatus === "recalculating" ? " recalculating" : "")}>
           <div className="tw-ov-head">
             <span className="tw-ov-title"><Activity size={14} /> {t("Data collection")}</span>
             {view && (
               <span className={"tw-ov-chip" + (view.zoomed ? " zoomed" : "")}>
                 {view.zoomed ? <ZoomIn size={12} /> : <Globe2 size={12} />} {view.label}
-                {view.zoomed && <a href="#" className="ms-1" onClick={(e) => { e.preventDefault(); setFollow(false); showAll(); }}>{t("show all")}</a>}
+                {view.zoomed && <a href="#" className="ms-1" onClick={(e) => { e.preventDefault(); setFollow(false); showAll(); setFitSignal((k) => k + 1); }}>{t("show all")}</a>}
               </span>
             )}
             <label className="form-check form-switch tw-ov-follow ms-auto mb-0"
@@ -187,7 +196,7 @@ function Overview({ meta, active, t }: { meta: Meta; active: boolean; t: (s: str
         </div>
 
         <div className="tw-rov-sections">
-          <Section id="who" title={t("Who is in the data")} open={open} setOpen={setOpen}>
+          <Section id="who" title={t("Who is in the data")} open={open} setOpen={setOpen} watch={ns("ov_profile")}>
             {!profile ? null : profile.empty
               ? <EmptyState title={t("No household characteristic is mapped")}
                             sub={t("Map the head's sex and age, household size, children under 5, residence status... in Variable Definition & Setup.")} />
@@ -200,7 +209,7 @@ function Overview({ meta, active, t }: { meta: Meta; active: boolean; t: (s: str
                   </div>
                 </>}
           </Section>
-          <Section id="vuln" title={t("Vulnerability")} open={open} setOpen={setOpen}>
+          <Section id="vuln" title={t("Vulnerability")} open={open} setOpen={setOpen} watch={ns("ov_vuln")}>
             {!vuln ? null : vuln.empty
               ? <EmptyState title={t("No vulnerability variable is mapped")}
                             sub={t("Map a vulnerability score, vulnerability groups or eligibility in Variable Definition & Setup, or build a scorecard in Targeting Design.")} />
@@ -236,16 +245,20 @@ function Overview({ meta, active, t }: { meta: Meta; active: boolean; t: (s: str
 }
 
 /** One of the folding sections: one open at a time, all kept mounted. */
-function Section({ id, title, open, setOpen, children }: {
+function Section({ id, title, open, setOpen, children, watch }: {
   id: string; title: string; open: string; setOpen: (v: string) => void; children: ReactNode;
+  /** the JSON output drawn inside: computed only while the section is open */
+  watch?: string;
 }) {
   const isOpen = open === id;
+  const body = useRef<HTMLDivElement>(null);
+  useOutputVisibility(watch ?? "", body);
   return (
     <div className={"tw-rov-sec" + (isOpen ? " open" : "")}>
       <button type="button" className="tw-rov-sec-head" aria-expanded={isOpen} onClick={() => setOpen(isOpen ? "" : id)}>
         <span>{title}</span><span className="tw-rov-chev" aria-hidden>{isOpen ? "⌃" : "⌄"}</span>
       </button>
-      <div className="tw-rov-sec-body" style={{ display: isOpen ? "block" : "none" }}>{children}</div>
+      <div ref={body} className="tw-rov-sec-body" style={{ display: isOpen ? "block" : "none" }}>{children}</div>
     </div>
   );
 }

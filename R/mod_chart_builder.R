@@ -166,23 +166,7 @@ mod_chart_builder_server <- function(id, data, source, dataset_name = reactive("
     observeEvent(input$ax_reset, { axes(list(ymin = NA_real_, ymax = NA_real_)); removeModal() })
     observe(updateActionButton(session, "axes", label = if (any(is.finite(unlist(axes())))) "Axes (set)" else "Axes"))
 
-    output$stat_note <- renderUI({
-      sp <- spec()
-      pn <- if (!identical(input$display, "table")) chart_pie_note(sp)
-      if (!is.null(pn)) return(tags$div(class = "small text-warning mb-2", bsicons::bs_icon("info-circle"), " ", pn))
-      if (!identical(sp$type, "crosstab")) return(NULL)
-      if (!nzchar(sp$group %||% "")) return(tags$div(class = "small text-warning mb-2", "Choose the column variable in 'Split by'."))
-      d <- agg(); req(d)
-      tags$div(class = "small text-muted mb-2", bsicons::bs_icon("calculator"), " ", crosstab_test_text(crosstab_test(d)))
-    })
-
     output$preview_title <- renderText(if (nzchar(input$title %||% "")) input$title else "Preview")
-    output$preview_empty <- renderUI({
-      if (is.null(data())) return(empty_state("No data yet", "Load a dataset above to build charts.", icon = "cloud-upload"))
-      if (!is.null(too_many())) return(tags$div(class = "small text-warning mb-2", bsicons::bs_icon("exclamation-circle"), " ", too_many()))
-      if (is.null(agg())) return(tags$div(class = "small text-muted mb-2", "Choose the columns on the left to see the chart."))
-      NULL
-    })
     output$preview <- render_echart({
       d <- agg(); req(d, nrow(d) > 0)
       chart_echart_option(d, spec())
@@ -201,10 +185,21 @@ mod_chart_builder_server <- function(id, data, source, dataset_name = reactive("
                   list(value = k, label = pr[[g]][[k]]$label, group = g))), recursive = FALSE))
       list(presets = opts, types = as.list(chart_types()), styles = as.list(chart_styles()))
     })
+    # A note above the preview: why a pie may mislead, the crosstab's test.
+    # list(kind = "warning" | "test", text), or NULL.
+    stat_note <- function(d) {
+      sp <- spec()
+      pn <- if (!identical(input$display, "table")) chart_pie_note(sp)
+      if (!is.null(pn)) return(list(kind = "warning", text = pn))
+      if (!identical(sp$type, "crosstab")) return(NULL)
+      if (!nzchar(sp$group %||% "")) return(list(kind = "warning", text = "Choose the column variable in 'Split by'."))
+      if (is.null(d)) return(NULL)
+      list(kind = "test", text = crosstab_test_text(crosstab_test(d)))
+    }
     output$cb_state <- shinyreact::reactive_output({
       d <- agg()
       list(has_data = !is.null(data()), too_many = too_many(), ready = !is.null(d) && nrow(d) > 0,
-           axes_set = any(is.finite(unlist(axes()))))
+           axes_set = any(is.finite(unlist(axes()))), note = stat_note(d))
     })
     # the comment editor (www/richtext.js) is drawn by React and bound by Shiny
 

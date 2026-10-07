@@ -2,13 +2,15 @@
 // on Check names; a record is edited or deleted in the server's dialogs.
 import { Download, Pencil, Search, SpellCheck, Trash2 } from "lucide-react";
 import { useShinyOutputValue } from "@/shiny";
-import { ActionButton, DownloadButton, HostedUI, SelectInput } from "@/lib/inputs";
+import { ActionButton, DownloadButton, SelectInput } from "@/lib/inputs";
+import { EmptyState } from "@/components/Figures";
 import { Card } from "@/lib/layout";
 import { DataTable } from "@/lib/table";
 import { ns, Toolbar, type T } from "./common";
 
 export function SpellingTab({ t }: { t: T }) {
   const m = useShinyOutputValue<{ n: number; total: number; pct: number }>(ns("dq_names_metric"));
+  const empty = useShinyOutputValue<"pick" | "clean" | null>(ns("dq_names_empty"));
   return (
     <>
       <Toolbar
@@ -27,7 +29,12 @@ export function SpellingTab({ t }: { t: T }) {
           </div>
         )}
       </Toolbar>
-      <HostedUI id={ns("dq_names_empty")} />
+      {empty && <div className="card tw-card tw-dq-names-empty"><div className="card-body">
+        {empty === "pick"
+          ? <EmptyState title={t("Pick the name columns to audit")}
+                        sub={t("Choose the columns holding names (head of household, alternates) above, then click Check names: records with missing or suspicious names are listed here.")} />
+          : <EmptyState title={t("No suspicious names")} sub={t("Every record has a plausible name in the columns picked.")} />}
+      </div></div>}
       {/* kept mounted (its selection is an input); shown when there is something to list */}
       <div style={{ display: m && m.n > 0 ? undefined : "none" }}>
         <Card title={t("Records with missing or suspicious names")} icon={<SpellCheck size={15} />} full>

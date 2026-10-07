@@ -113,17 +113,11 @@ dq_spelling_server <- function(input, output, session, ns, core) {
 
   # Before a column is picked (or when every name is fine): say so, instead of
   # a blank tab. The actions wait for something to act on.
-  output$dq_names_empty <- renderUI({
-    if (!length(name_cols())) {
-      return(empty_state("Pick the name columns to audit",
-                         "Choose the columns holding names (head of household, alternates) above, then click Check names: records with missing or suspicious names are listed here.",
-                         icon = "spellcheck"))
-    }
+  # React (SpellingTab.tsx) draws the matching empty state: "pick" or "clean"
+  output$dq_names_empty <- shinyreact::reactive_output({
+    if (!length(name_cols())) return("pick")
     bad <- tryCatch(bad_data_reactive(), error = function(e) NULL)
-    if (is.data.frame(bad) && !nrow(bad)) {
-      return(empty_state("No suspicious names", "Every record has a plausible name in the columns picked.", icon = "check2-circle"))
-    }
-    NULL
+    if (is.data.frame(bad) && !nrow(bad)) "clean" else NULL
   })
   observe({
     picked <- length(name_cols()) > 0

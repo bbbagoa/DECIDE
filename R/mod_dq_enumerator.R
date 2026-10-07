@@ -101,36 +101,18 @@ dq_enumerator_server <- function(input, output, session, ns, core) {
     enumerator_metrics(dq_filtered_data(), user_setup)
   })
 
-  output$enum_rules <- renderUI({
+  # The rules and the flagged enumerators, as data: React (EnumeratorTab.tsx)
+  # draws the cards; "See their interviews" sets input$enum_open.
+  output$enum_flagged_ui <- shinyreact::reactive_output({
     m <- enum_metrics(); req(m)
     th <- attr(m, "thresholds")
-    fmt <- function(x, d = 1) if (is.na(x)) "n/a" else format(round(x, d), nsmall = d)
-    tags$span(bsicons::bs_icon("info-circle"), " Flagged against the other enumerators: average interview under ",
-              fmt(th$dur_lo), " or over ", fmt(th$dur_hi), " min (outside the IQR fences), missing answers over ",
-              fmt(100 * th$miss_hi), "% (mean + 2 SD)",
-              if (!is.na(th$day_hi)) paste0(", or more than ", fmt(th$day_hi, 0), " interviews in one day") else "", ".")
-  })
-
-  output$enum_flagged_ui <- renderUI({
-    m <- enum_metrics(); req(m)
+    fmt <- function(x, d = 1) if (is.null(x) || is.na(x)) NULL else format(round(x, d), nsmall = d)
     f <- m[m$flag == "Review", , drop = FALSE]
-    if (!nrow(f)) {
-      return(empty_state("No enumerator flagged", "Everyone's speed, completeness and daily load are in line with the team.",
-                         icon = "check2-circle"))
-    }
-    tags$div(class = "wfp-enum-grid", lapply(seq_len(nrow(f)), function(i) {
-      id <- as.character(f$enumerator_id[i])
-      tags$div(
-        class = "wfp-insight",
-        tags$div(class = "d-flex align-items-center gap-2",
-                 tags$strong(id),
-                 tags$span(class = "small text-muted ms-auto", format(round(f$interviews[i]), big.mark = ","), " interviews")),
-        tags$ul(class = "wfp-enum-reasons", lapply(strsplit(f$reasons[i], "; ", fixed = TRUE)[[1]], tags$li)),
-        tags$button(type = "button", class = "btn btn-link btn-sm p-0",
-                    onclick = sprintf("Shiny.setInputValue('%s', %s, {priority: 'event'})", ns("enum_open"),
-                                      jsonlite::toJSON(id, auto_unbox = TRUE)),
-                    "See their interviews"))
-    }))
+    list(rules = list(dur_lo = fmt(th$dur_lo) %||% "n/a", dur_hi = fmt(th$dur_hi) %||% "n/a",
+                      miss_hi = fmt(100 * th$miss_hi) %||% "n/a", day_hi = fmt(th$day_hi, 0)),
+         flagged = lapply(seq_len(nrow(f)), function(i) list(
+           id = as.character(f$enumerator_id[i]), interviews = round(f$interviews[i]),
+           reasons = as.list(strsplit(f$reasons[i], "; ", fixed = TRUE)[[1]]))))
   })
 
   observeEvent(input$enum_open, {
@@ -187,7 +169,8 @@ dq_enumerator_server <- function(input, output, session, ns, core) {
     d[d$Freq > 0, , drop = FALSE]
   })
 
-  output$enum_speed_insights <- renderUI({
+  # drawn by React (EnumeratorTab.tsx), one card per fact
+  output$enum_speed_insights <- shinyreact::reactive_output({
     m <- enum_metrics(); req(m, nrow(m) > 0)
     th <- attr(m, "thresholds") %||% list()
     tiles <- list()
@@ -196,7 +179,7 @@ dq_enumerator_server <- function(input, output, session, ns, core) {
     top <- max(1, ceiling(0.2 * length(iv)))
     share <- sum(iv[seq_len(top)]) / max(1, sum(iv))
     busiest <- m[which.max(m$interviews), ]
-    tiles[[length(tiles) + 1]] <- ben_insight("people", "Workload balance",
+    tiles[[length(tiles) + 1]] <- dq_insight("people", "Workload balance",
       sprintf("%.0f%%", 100 * share),
       sprintf("of interviews by the busiest %d of %d enumerators. Busiest: %s (%s; median %s).", top, length(iv),
               busiest$enumerator_id, format(round(busiest$interviews), big.mark = ","),
@@ -206,7 +189,7 @@ dq_enumerator_server <- function(input, output, session, ns, core) {
     if (length(dur)) {
       short <- if (is.na(th$dur_lo %||% NA)) 0 else sum(dur < th$dur_lo)
       long <- if (is.na(th$dur_hi %||% NA)) 0 else sum(dur > th$dur_hi)
-      tiles[[length(tiles) + 1]] <- ben_insight("stopwatch", "Interview length",
+      tiles[[length(tiles) + 1]] <- dq_insight("stopwatch", "Interview length",
         sprintf("%.0f min", stats::median(dur)),
         if (is.na(th$dur_lo %||% NA)) "team median (too few enumerators to set a usual range)"
         else sprintf("team median. %d usually shorter than %.0f min, %d longer than %.0f min.", short, th$dur_lo, long, th$dur_hi))
@@ -214,20 +197,20 @@ dq_enumerator_server <- function(input, output, session, ns, core) {
     pd <- enum_per_day()
     if (!is.null(pd) && nrow(pd)) {
       b <- pd[which.max(pd$Freq), ]
-      tiles[[length(tiles) + 1]] <- ben_insight("calendar-event", "Busiest day",
+      tiles[[length(tiles) + 1]] <- dq_insight("calendar-event", "Busiest day",
         sprintf("%d interviews", b$Freq),
         sprintf("by %s on %s%s.", b$enumerator_id, b$day,
                 if (is.na(th$day_hi %||% NA)) "" else sprintf(" (the team's usual maximum is %.0f)", th$day_hi)))
       pace <- stats::aggregate(pd$Freq, list(pd$enumerator_id), stats::median)$x
-      tiles[[length(tiles) + 1]] <- ben_insight("speedometer2", "Daily pace",
+      tiles[[length(tiles) + 1]] <- dq_insight("speedometer2", "Daily pace",
         sprintf("%.1f / day", stats::median(pace)),
         sprintf("median interviews per working day per enumerator, over %d days of fieldwork.", length(unique(pd$day))))
     }
     worst <- m[which.max(m$missingness_rate), ]
-    tiles[[length(tiles) + 1]] <- ben_insight("ui-checks", "Empty answers",
+    tiles[[length(tiles) + 1]] <- dq_insight("ui-checks", "Empty answers",
       sprintf("%.1f%%", 100 * stats::weighted.mean(m$missingness_rate, m$interviews, na.rm = TRUE)),
       sprintf("of fields left empty on average. Highest: %s (%.1f%%).", worst$enumerator_id, 100 * worst$missingness_rate))
-    tags$div(class = "wfp-insights", tiles)
+    tiles
   })
 
   # A dashed vertical line with a small label, for the charts below.

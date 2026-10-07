@@ -571,6 +571,23 @@ verdict_card <- function(v, ..., animate = TRUE, errors = NULL, tolerance = NULL
   )
 }
 
+#' The verdict card's facts, for the React client (components/VerdictCard.tsx)
+#'
+#' What `verdict_card()` draws, as a list sent as JSON: the level (good /
+#' review / redesign / unknown), whether the tolerance was invalid, the
+#' Advisory's wording, the two errors and the tolerance band.
+#' @inheritParams verdict_card
+#' @noRd
+verdict_facts <- function(v, errors = NULL, tolerance = NULL, stage = "design") {
+  num <- function(x) if (is.null(x) || !length(x) || is.na(x)) NULL else unname(as.numeric(x))
+  list(level = if (isTRUE(v$level %in% c("good", "review", "redesign"))) v$level else "unknown",
+       invalid = identical(v$level, "invalid"), stage = stage,
+       interpretation = v$interpretation %||% "", action = v$action %||% "",
+       inclusion = if (length(errors)) num(errors[["inclusion"]]),
+       exclusion = if (length(errors)) num(errors[["exclusion"]]),
+       lower = if (length(tolerance) == 2) tolerance[1], upper = if (length(tolerance) == 2) tolerance[2])
+}
+
 #' Countries with a WFP country office, offered in the country office picker
 #'
 #' Free text is accepted too (a regional bureau, a sub-office).

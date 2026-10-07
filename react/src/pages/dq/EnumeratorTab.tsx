@@ -1,14 +1,65 @@
 // Enumerator Performance (R/mod_dq_enumerator.R): each enumerator against the
 // team (speed, empty answers, daily load), flagged with the reason in words.
 // "See their interviews" and Details open the server's dialogs.
-import { BarChart3, ClipboardCheck, Download, Flag, Table2, UserRoundCheck, Users } from "lucide-react";
-import { useShinyOutputValue } from "@/shiny";
-import { DownloadButton, HostedUI } from "@/lib/inputs";
+import { useRef } from "react";
+import { BarChart3, ClipboardCheck, Download, Flag, Info, Table2, UserRoundCheck, Users } from "lucide-react";
+import { useSetShinyInput, useShinyOutputValue } from "@/shiny";
+import { DownloadButton } from "@/lib/inputs";
+import { useOutputVisibility } from "@/lib/visibility";
 import { EmptyState } from "@/components/Figures";
 import { Card, Tabs } from "@/lib/layout";
 import { Chart } from "@/lib/chart";
 import { DataTable } from "@/lib/table";
 import { Kpis, ns, Note, type T } from "./common";
+import { Insights, type Insight } from "./Insights";
+
+type Flagged = {
+  rules: { dur_lo: string; dur_hi: string; miss_hi: string; day_hi: string | null };
+  flagged: { id: string; interviews: number; reasons: string[] }[];
+};
+
+/** The rules, then one card per flagged enumerator; "See their interviews" sets input$enum_open (server dialog). */
+function FlaggedCards({ t }: { t: T }) {
+  const box = useRef<HTMLDivElement>(null);
+  useOutputVisibility(ns("enum_flagged_ui"), box);
+  const f = useShinyOutputValue<Flagged | null>(ns("enum_flagged_ui"));
+  const open = useSetShinyInput<string | null>(ns("enum_open"), null, { debounceMs: 0, priority: "event" });
+  const r = f?.rules;
+  return (
+    <div ref={box} className="d-flex flex-column gap-2">
+      <div className="tw-dq-cardbar">
+        <div className="tw-dq-rules">
+          {r && <><Info size={14} /><span>
+            {t("Flagged against the other enumerators: average interview under")} {r.dur_lo} {t("or over")} {r.dur_hi} {t("min (outside the IQR fences), missing answers over")} {r.miss_hi}% {t("(mean + 2 SD)")}
+            {r.day_hi ? <>, {t("or more than")} {r.day_hi} {t("interviews in one day")}</> : null}.
+          </span></>}
+        </div>
+        <DownloadButton id={ns("enum_flag_download")} label={t("Export flagged")} icon={<Download size={13} />} variant="outline-secondary" />
+      </div>
+      {f && !f.flagged.length && (
+        <EmptyState title={t("No enumerator flagged")} sub={t("Everyone's speed, completeness and daily load are in line with the team.")} />
+      )}
+      {f && f.flagged.length > 0 && (
+        <div className="tw-dq-enum-grid">
+          {f.flagged.map((e) => (
+            <div key={e.id} className="tw-dq-insight tw-dq-enum-card">
+              <div className="tw-dq-enum-head"><strong>{e.id}</strong><small>{e.interviews.toLocaleString("en-US")} {t("interviews")}</small></div>
+              <ul className="tw-dq-enum-reasons">{e.reasons.map((x) => <li key={x}>{x}</li>)}</ul>
+              <button type="button" className="btn btn-link p-0 tw-link align-self-start" onClick={() => open(e.id)}>{t("See their interviews")}</button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SpeedInsights({ t }: { t: T }) {
+  const box = useRef<HTMLDivElement>(null);
+  useOutputVisibility(ns("enum_speed_insights"), box);
+  const items = useShinyOutputValue<Insight[] | null>(ns("enum_speed_insights"));
+  return <div ref={box}><Insights items={items ?? []} t={t} /></div>;
+}
 
 export function EnumeratorTab({ t }: { t: T }) {
   const st = useShinyOutputValue<{ mapped: boolean }>(ns("enum_state"));
@@ -33,20 +84,14 @@ export function EnumeratorTab({ t }: { t: T }) {
         {
           value: "flagged", label: t("Flagged enumerators"), icon: <Flag size={14} />,
           content: (
-            <>
-              <div className="tw-dq-cardbar">
-                <HostedUI id={ns("enum_rules")} className="small text-muted flex-grow-1" />
-                <DownloadButton id={ns("enum_flag_download")} label={t("Export flagged")} icon={<Download size={13} />} variant="outline-secondary" />
-              </div>
-              <HostedUI id={ns("enum_flagged_ui")} />
-            </>
+            <FlaggedCards t={t} />
           ),
         },
         {
           value: "speed", label: t("Workload and speed"), icon: <BarChart3 size={14} />,
           content: (
             <>
-              <HostedUI id={ns("enum_speed_insights")} />
+              <SpeedInsights t={t} />
               <div className="tw-grid-2">
                 <Card title={t("Interviews by enumerator")} full>
                   <Note>{t("Red: flagged for review. Dashed line: the team median.")}</Note>

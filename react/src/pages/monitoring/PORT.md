@@ -14,20 +14,23 @@ community-process presets). Browser check: `NOT_CRAN=true Rscript react/dev/test
   - 1. Survey data: kind (Baseline / PDM, note follows it), file (hosted `pdm_file_ui`), MODA (`ModaImport`), status from `pdm_state$data`.
   - Areas covered (`AreaScope`, module `monitoring_1-pdm-scope`).
   - 2. Selected households: from the sample list (ID column, match line from `pdm_state$match`) or a column
-    (hosted `benef_level_ui` radio); prioritised column; area column.
-  - 3. Who was eligible: column / scorecard / rules; hosted `pdm_elig_note`.
+    (the answer meaning received: `RadioInput` `pdm_benef_level`, choices from `pdm_side$benef`, the answer picked by the server's
+    `updateRadioButtons()` when the column changes); prioritised column; area column.
+  - 3. Who was eligible: column / scorecard / rules; note from `pdm_side$elig` (warning or note).
   - 4. Weighting: design / population (overall numbers, or per area -> editable table) / column / none.
   - Actions: Compute (`pdm_run`, the one primary), Export (Excel, gated).
   - Main: population table (`pop_table`, editable last two columns), empty states, tabs `pdm_tabs`:
-    errors (KPIs, how computed, decision by area, tolerance inputs, hosted verdict card with the excluded by design),
-    details (confusion table, error decomposition chart, coverage by area), calibrate (hosted `calib_ui`),
+    errors (KPIs, how computed, decision by area, tolerance inputs, verdict card `components/VerdictCard.tsx` from
+    `pdm_verdict` = `verdict_facts()`, with the excluded by design),
+    details (confusion table, error decomposition chart, coverage by area), calibrate (from `calib_state`: no ranking /
+    no data empty states, outcome `calib_outcome`, level `calib_pos` filled by the server, Measure `calib_run`, KPIs, best threshold),
     explore (chart builder).
 - **2. Targeting process** (ProcessTab.tsx): datasets step (hosted `pm_file_ui`, dataset picker, remove, MODA,
   chips from `mon_state$datasets`), areas covered (`AreaScope`); chart builder on the picked dataset.
 - **Chart builder** (ChartBuilder.tsx): presets / display / type / style + Axes dialog (Shiny modal) / By /
   date + period / number / out of / split / percentages / only where + values; live preview (`preview`,
   `render_echart(chart_echart_option())`) or table (`preview_table`); title, comment (rich text), Add to report.
-  Choices from `cb_meta`, state from `cb_state`.
+  Choices from `cb_meta`, state from `cb_state` (empty state, too many options, pie note, crosstab test in `note`).
 - **3. Monitoring report** (ReportTab.tsx): template (pick, Draft, Export JSON, Delete, Import file hosted
   `tpl_import_ui`, rounds line), Context / Key findings / Recommendations (rich text, Shiny inputs), include
   PDM, report check (`report_check` -> Shiny modal or `tw-mon-download` -> hidden `report` link), save as
@@ -47,8 +50,12 @@ community-process presets). Browser check: `NOT_CRAN=true Rscript react/dev/test
 - [x] item comment and context text reach the report; report check modal; HTML report downloads
 - [x] save as template, template selected after save, exported as JSON
 - [x] light and dark screenshots; no browser error from this page
+- [x] answer meaning received: React radio, two answers, one picked by the server; eligibility note (no scorecard)
+- [x] verdict card (React): status, two errors, follows the tolerance
+- [x] builder notes: pie note, crosstab chi-square; empty state before a dataset
+- [x] calibration: empty state without a ranking; with a ranking adopted in Selection, outcome, level filled, Measure: AUC, errors, best threshold
 - [ ] sample draw from a real selection (needs Beneficiary Selection applied; covered by tests/testthat/test-ptm.R)
-- [ ] MODA import and the calibration tab with an adopted ranking (server unchanged; not driven in the browser)
+- [ ] MODA import (server unchanged; not driven in the browser)
 
 ## Deliberate divergences
 
@@ -56,6 +63,12 @@ community-process presets). Browser check: `NOT_CRAN=true Rscript react/dev/test
   JSON facts (`pdm_state`, `mon_state`, `cb_state`) instead of server HTML; the renderUI outputs they
   replaced (`ptm_status`, `pdm_file_status`, `ptm_match`, `pdm_hint`, `pdm_results`, `decisions_ui`,
   `pm_status`, `rounds_note`, `items_ui`, `kind_note`) are kept on the server, unbound.
+- No server HTML left but the file inputs: `benef_level_ui`, `pdm_elig_note`, `calib_ui` / `calib_result` (now `pdm_side`,
+  `calib_state`), the chart builder's `preview_empty` / `stat_note` (now in `cb_state`) are gone; `pdm_verdict` is JSON
+  (`verdict_facts()` beside `verdict_card()`, which Design and the reports keep).
+- Hidden outputs wait: `pdm_state` (marker in the sidebar's actions), `cb_state` (the builder), `pdm_verdict`, `calib_state`
+  use `useOutputVisibility()`; `mon_state` and `pdm_side` are cheap and always computed.
+- `calib_run` now needs `input$calib_run > 0` (React buttons send 0).
 - The rich text editors are drawn in React with the same markup (www/richtext.js listens on the document);
   editors with an id are bound with `Shiny.bindAll()`, so `update_rich_text()` still reaches them.
 - Drag and drop is native HTML5 in React (www/sortable.js not used); the order still goes to `input$item_order`.

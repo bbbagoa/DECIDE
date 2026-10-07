@@ -6,6 +6,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Search } from "lucide-react";
 import { useVarLabels } from "./labels";
+import { useOutputVisibility } from "./visibility";
 import { useSetShinyInput, useShinyMessageHandler, useShinyOutputError, useShinyOutputValue, useShinyOutputStatus } from "@/shiny";
 
 type Style = { cell?: { bg?: string; color?: string }; map?: Record<string, { bg?: string; color?: string }>; breaks?: number[]; colors?: string[]; text?: string[]; bar?: string };
@@ -74,6 +75,7 @@ export function DataTable({ id, height, className, toolbar, searchable = true, c
   id: string; height?: number | string; className?: string; toolbar?: ReactNode; searchable?: boolean; compact?: boolean;
 }) {
   const data = useShinyOutputValue<TablePayload>(id);
+  useOutputVisibility(id);   // computed only while on screen
   const status = useShinyOutputStatus(id);
   const err = useShinyOutputError(id);
   const setSelected = useSetShinyInput<number[] | null>(`${id}_rows_selected`, null, { debounceMs: 0, type: "tw.num" });
