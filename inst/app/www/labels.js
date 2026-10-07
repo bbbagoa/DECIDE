@@ -157,6 +157,9 @@
       labels = m.labels || {};
       known = {};
       (m.cols || []).forEach(function (c) { known[c] = true; });
+      // the React pages read the same dictionary (react/src/lib/labels.ts)
+      window.twLabels = { labels: labels, known: known };
+      document.dispatchEvent(new CustomEvent("tw-labels"));
       soon(document);
     });
   });

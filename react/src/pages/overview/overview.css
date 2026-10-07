@@ -1,0 +1,10 @@
+/* The Overview's builders (Builders.tsx) */
+.tw-ob { display: flex; flex-direction: column; gap: .4rem; min-width: 0; }
+.tw-ob-controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0 10px; align-items: end; }
+.tw-ob-controls .tw-field { margin-bottom: .5rem; }
+.tw-ob-bar { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+.tw-ob-caption { font-size: .78rem; color: var(--bs-secondary-color); }
+.tw-ob-caption b { color: var(--bs-body-color); font-weight: 600; }
+.tw-ob-var { color: var(--wfp-blue, #0A6EB4); }
+.tw-ob-note { font-size: .74rem; color: var(--bs-secondary-color); min-height: 1em; }
+.tw-ob .tw-dt td:first-child, .tw-ob .tw-dt th:first-child { font-weight: 500; }

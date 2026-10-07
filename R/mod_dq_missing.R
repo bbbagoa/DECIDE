@@ -90,60 +90,9 @@ dq_missing_server <- function(input, output, session, ns, core) {
 
   # Headline numbers first, then one view per question: which fields,
   # which combinations, where.
-  output$missing_results <- renderUI({
-    req(has_missing_analysis())
-    tagList(
-      uiOutput(ns("missing_kpis")),
-      bslib::navset_underline(
-        bslib::nav_panel(
-          title = tagList(bsicons::bs_icon("list-check"), " By field"),
-          bslib::layout_columns(
-            class = "mt-3",
-            bslib::card(
-              full_screen = TRUE,
-              bslib::card_header("Completeness by field"),
-              plotly::plotlyOutput(ns("plot_field_completeness"), height = "360px")
-            ),
-            bslib::card(
-              full_screen = TRUE,
-              bslib::card_header("Column health"),
-              DT::DTOutput(ns("tab_col_health"), fill = FALSE)
-            ),
-            col_widths = c(7, 5)
-          )
-        ),
-        bslib::nav_panel(
-          title = tagList(bsicons::bs_icon("grid-3x3-gap"), " Patterns"),
-          bslib::card(
-            class = "mt-3", full_screen = TRUE,
-            bslib::card_header("Which fields go missing together"),
-            plotly::plotlyOutput(ns("plot_missing_upset"), height = "460px")
-          )
-        ),
-        bslib::nav_panel(
-          title = tagList(bsicons::bs_icon("geo-alt"), " By location"),
-          bslib::card(
-            class = "mt-3", full_screen = TRUE,
-            bslib::card_header("Gap rate by location"),
-            plotly::plotlyOutput(ns("plot_geo_missing_bars"), height = "420px")
-          ),
-          bslib::layout_columns(
-            bslib::card(
-              full_screen = TRUE,
-              bslib::card_header("Categorical fields by location"),
-              plotly::plotlyOutput(ns("plot_missing_qualitative"), height = "420px")
-            ),
-            bslib::card(
-              full_screen = TRUE,
-              bslib::card_header("Numeric fields by location"),
-              plotly::plotlyOutput(ns("plot_missing_quantitative"), height = "420px")
-            ),
-            col_widths = c(6, 6)
-          )
-        )
-      )
-    )
-  })
+  # Whether a check has run: the React page shows the results layout then
+  # (react/src/pages/dq/MissingTab.tsx).
+  output$missing_results <- shinyreact::reactive_output(isTRUE(has_missing_analysis()))
 
   # Missing cells per checked field (NA, "" or "NULL").
   field_health <- reactive({
@@ -157,7 +106,7 @@ dq_missing_server <- function(input, output, session, ns, core) {
                stringsAsFactors = FALSE)
   })
 
-  output$missing_kpis <- renderUI({
+  output$missing_kpis <- shinyreact::reactive_output({
     h <- field_health()
     g <- tryCatch(shared_gap_analysis(), error = function(e) NULL)
     n <- nrow(dq_filtered_data())
@@ -165,36 +114,25 @@ dq_missing_server <- function(input, output, session, ns, core) {
       x <- dq_filtered_data()[[v]]; is.na(x) | as.character(x) %in% c("", "NULL")
     }, logical(n))) > 0) else sum(g$is_incomplete)
     worst <- h[which.min(h$completeness), , drop = FALSE]
-    bslib::layout_columns(
-      class = "mt-3",
-      col_widths = c(3, 3, 3, 3),
-      bslib::value_box(title = "Complete records", value = if (n) sprintf("%.1f%%", 100 * (1 - gap_n / n)) else "\u2014",
-                       showcase = bsicons::bs_icon("check2-circle"), theme = "success"),
-      bslib::value_box(title = "Records with a gap", value = format(gap_n, big.mark = ","),
-                       showcase = bsicons::bs_icon("exclamation-circle"), theme = "warning"),
-      bslib::value_box(title = "Fields below 95%", value = sprintf("%d of %d", sum(h$completeness < 95, na.rm = TRUE), nrow(h)),
-                       showcase = bsicons::bs_icon("list-check"), theme = "info"),
-      bslib::value_box(title = "Least complete field",
-                       value = if (nrow(worst)) sprintf("%s \u00b7 %.1f%%", worst$field, worst$completeness) else "\u2014",
-                       showcase = bsicons::bs_icon("arrow-down-circle"), theme = "danger")
-    )
+    list(
+      list(label = "Complete records", value = if (n) sprintf("%.1f%%", 100 * (1 - gap_n / n)) else "—",
+           sub = sprintf("of %s records", format(n, big.mark = ",")), tone = "ok"),
+      list(label = "Records with a gap", value = format(gap_n, big.mark = ","), sub = "at least one checked field empty", tone = "warn"),
+      list(label = "Fields below 95%", value = sprintf("%d of %d", sum(h$completeness < 95, na.rm = TRUE), nrow(h)),
+           sub = "completeness under the OK band", tone = "info"),
+      list(label = "Least complete field", value = if (nrow(worst)) sprintf("%.1f%%", worst$completeness) else "—",
+           sub = if (nrow(worst)) worst$field else "", tone = "bad"))
   })
 
-  output$plot_field_completeness <- render_wfp_plotly({
+  output$plot_field_completeness <- render_echart({
     h <- field_health(); req(nrow(h) > 0)
-    h <- h[order(h$completeness, decreasing = TRUE), , drop = FALSE]
-    h$field <- factor(h$field, levels = h$field)
-    h$status <- factor(h$status, levels = c("OK", "Review", "At risk"))
-    plotly::plot_ly(h, x = ~completeness, y = ~field, color = ~status, type = "bar", orientation = "h",
-                    colors = c("#3f7e44", "#d08a00", "#c5192d"),
-                    text = ~sprintf("%.1f%%", completeness), textposition = "outside", cliponaxis = FALSE,
-                    customdata = ~missing,
-                    hovertemplate = "%{y}: %{x:.1f}% complete<br>%{customdata} empty cells<extra></extra>") |>
-      plotly::layout(xaxis = list(title = "Completeness (%)", range = c(0, 108)),
-                     yaxis = list(title = "", automargin = TRUE), bargap = 0.35,
-                     shapes = list(list(type = "line", x0 = 95, x1 = 95, y0 = 0, y1 = 1, yref = "paper",
-                                        line = list(color = "rgba(128,128,128,.6)", dash = "dot"))),
-                     legend = list(orientation = "h", x = 0, y = 1.08, xanchor = "left", yanchor = "bottom"))
+    h <- h[order(h$completeness), , drop = FALSE]
+    band_col <- c(OK = "#3f7e44", Review = "#d08a00", `At risk` = "#c5192d")
+    dq_hbar(h$field, h$completeness, color = unname(band_col[h$status]),
+            tips = sprintf("<b>%s</b><br>%.1f%% complete<br>%s empty cells", htmltools::htmlEscape(h$field), h$completeness,
+                           format(h$missing, big.mark = ",")),
+            x_name = "Completeness (%)", x_min = 0, x_max = 100, bar_labels = "fn:dec1",
+            lines = list(list(x = 95, label = "95%", color = "#5b6b7c")))
   })
 
   #### --------------------- Missing Data Panel
@@ -204,7 +142,7 @@ dq_missing_server <- function(input, output, session, ns, core) {
   #  This calculates how many NA or empty values exist
   # in every column of your filtered dataset.
 
-  output$tab_col_health <- DT::renderDT({
+  output$tab_col_health <- render_react_table({
     req(dq_filtered_data(), applied_missing$vars)
     df <- dq_filtered_data() # Initial filtered data
     total_n <- nrow(df) # Total Rows in the dataset
@@ -214,21 +152,15 @@ dq_missing_server <- function(input, output, session, ns, core) {
     })
 
     # Fast vectorized missingness check
-    health <- data.frame(
+    data.frame(
       Variable = target_cols,
       Missing_Count = as.numeric(unname(missing_counts)),
       stringsAsFactors = FALSE
     ) |>
       dplyr::mutate(
-        # total_n is 0 when the filters leave no rows; without the guard every
-        # Completeness cell rendered "NaN%".
-        Completeness = if (total_n > 0) {
-          round((1 - (Missing_Count / total_n)) * 100, 1)
-        } else {
-          NA_real_
-        },
-        # D2: status bands turn the table from display into actionability.
-        # >=95% OK (green), 90-95% Review (amber), <90% At risk (red).
+        # total_n is 0 when the filters leave no rows (no NaN%)
+        Completeness = if (total_n > 0) round((1 - (Missing_Count / total_n)) * 100, 1) else NA_real_,
+        # status bands: >=95% OK (green), 90-95% Review (amber), <90% At risk (red)
         Status = dplyr::case_when(
           is.na(Completeness)        ~ "Review",
           Completeness >= 95         ~ "OK",
@@ -237,32 +169,14 @@ dq_missing_server <- function(input, output, session, ns, core) {
         )
       ) |>
       dplyr::arrange(dplyr::desc(Missing_Count))
-
-    tw_datatable(
-      health,
-      colnames = c("Variable", "Empty Cells", "Completeness (%)", "Status"),
-      options = list(pageLength = 20, dom = 'tip'),
-      rownames = FALSE
-    ) |>
-      # This adds the % without changing the underlying numeric data
-      DT::formatString(columns = "Completeness", suffix = "%") |>
-      DT::formatStyle(0, target = 'row', lineHeight = '50%') |>
-      # Color-band the Completeness cell and the Status badge
-      # The band backgrounds are fixed pale tints in both themes, so the text
-      # colour has to be pinned dark too -- inheriting the theme's near-white ink
-      # made these cells unreadable in dark mode.
-      DT::formatStyle(
-        "Completeness",
-        backgroundColor = DT::styleInterval(c(90, 95), c("#f8d7da", "#fff3cd", "#d4edda")),
-        color = DT::styleInterval(c(90, 95), c("#842029", "#664d03", "#0f5132"))
-      ) |>
-      DT::formatStyle(
-        "Status",
-        backgroundColor = DT::styleEqual(c("OK", "Review", "At risk"), c("#d4edda", "#fff3cd", "#f8d7da")),
-        color = DT::styleEqual(c("OK", "Review", "At risk"), c("#0f5132", "#664d03", "#842029")),
-        fontWeight = "bold"
-      )
-  })
+  }, page_size = 20,
+  labels = list(Missing_Count = "Empty cells", Completeness = "Completeness (%)"),
+  formats = list(Missing_Count = "int", Completeness = "dec1"),
+  # pale bands with dark text pinned (they stay pale in dark mode)
+  styles = list(
+    Completeness = list(breaks = c(90, 95), colors = c("#f8d7da", "#fff3cd", "#d4edda"), text = c("#842029", "#664d03", "#0f5132")),
+    Status = list(map = list(OK = list(bg = "#d4edda", color = "#0f5132"), Review = list(bg = "#fff3cd", color = "#664d03"),
+                             `At risk` = list(bg = "#f8d7da", color = "#842029")))))
 
   # Part B: The "Incomplete"
   # Household ListThis reactive finds the rows where any of
@@ -270,6 +184,7 @@ dq_missing_server <- function(input, output, session, ns, core) {
 
   # Apply missing-data analysis selections
   observeEvent(input$btn_apply_missing, {
+    req(input$btn_apply_missing > 0)   # a React button sends 0 at start
     waiter::waiter_show(
       html = waiter_content("Analysing missing data\u2026"),
       color = "rgba(10, 30, 50, 0.65)"
@@ -298,7 +213,7 @@ dq_missing_server <- function(input, output, session, ns, core) {
 
   # -------- Missiing Overlap Bar Charts
 
-  output$plot_missing_qualitative <- render_wfp_plotly({
+  output$plot_missing_qualitative <- render_echart({
     req(dq_filtered_data(), applied_missing$vars, applied_missing$geo_level)
     df <- dq_filtered_data()
 
@@ -314,11 +229,9 @@ dq_missing_server <- function(input, output, session, ns, core) {
     real_geo_col <- user_setup[[geo_key]]
 
     # Safety Check: If no qualitative variables are chosen, exit gracefully
-    req(length(qual_vars) > 0, !is.null(real_geo_col))
+    req(!is.null(real_geo_col))
     qual_vars <- setdiff(qual_vars, real_geo_col)
-    if (length(qual_vars) == 0) {
-      return(NULL)
-    }
+    validate(need(length(qual_vars) > 0, "No categorical field among the fields checked."))
 
     # 2. Reshape and compute percentages
     sub_df <- df |>
@@ -346,30 +259,15 @@ dq_missing_server <- function(input, output, session, ns, core) {
       dplyr::mutate(perc_missing = round((missing_n / total) * 100, 1)) |>
       dplyr::filter(missing_n > 0)
 
-    req(nrow(geo_stats) > 0)
+    validate(need(nrow(geo_stats) > 0, "No gaps in these fields."))
 
-    gg_qual <- ggplot2::ggplot(
-      geo_stats,
-      ggplot2::aes(x = perc_missing, y = reorder(Location, perc_missing))
-    ) +
-      ggplot2::geom_col(fill = "#0A6EB4", alpha = 0.8) +
-      ggplot2::facet_wrap(~Variable, scales = "free_y") +
-      ggplot2::theme_minimal() +
-      ggplot2::labs(x = "% Gaps (Categorical)", y = NULL) +
-      ggplot2::theme(
-        strip.text = ggplot2::element_text(color = "#0A6EB4", face = "bold")
-      )
-
-    plotly::ggplotly(gg_qual, height = 400) |>
-      plotly::layout(
-        paper_bgcolor = 'rgba(0,0,0,0)',
-        plot_bgcolor = 'rgba(0,0,0,0)'
-      )
+    # locations by fields, the share of gaps in each cell
+    dq_missing_heat(geo_stats, "perc_missing", "% of answers empty", "%")
   })
 
   ### ---------------- Quantiytative plot
 
-  output$plot_missing_quantitative <- render_wfp_plotly({
+  output$plot_missing_quantitative <- render_echart({
     req(dq_filtered_data(), applied_missing$vars, applied_missing$geo_level)
     df <- dq_filtered_data()
 
@@ -382,7 +280,8 @@ dq_missing_server <- function(input, output, session, ns, core) {
     real_geo_col <- user_setup[[geo_key]]
 
     # Safety Check: If no numeric variables are chosen, exit gracefully
-    req(length(quant_vars) > 0, !is.null(real_geo_col))
+    req(!is.null(real_geo_col))
+    validate(need(length(quant_vars) > 0, "No numeric field among the fields checked."))
 
     # 2. Reshape and calculate missing metrics
     sub_df <- df |>
@@ -405,31 +304,10 @@ dq_missing_server <- function(input, output, session, ns, core) {
       dplyr::summarise(missing_n = sum(Is_Missing), .groups = "drop") |>
       dplyr::filter(missing_n > 0)
 
-    req(nrow(geo_stats) > 0)
+    validate(need(nrow(geo_stats) > 0, "No gaps in these fields."))
 
-    # 3. Render as a Dot Plot (highly readable for numeric scale comparisons)
-    gg_quant <- ggplot2::ggplot(
-      geo_stats,
-      ggplot2::aes(
-        x = missing_n,
-        y = reorder(Location, missing_n),
-        color = Variable
-      )
-    ) +
-      ggplot2::geom_segment(
-        ggplot2::aes(x = 0, xend = missing_n, yend = Location),
-        color = "grey50"
-      ) +
-      ggplot2::geom_point(size = 3) +
-      ggplot2::scale_color_brewer(palette = "Oranges") + # Vibrant contrast color
-      ggplot2::theme_minimal() +
-      ggplot2::labs(x = "Total Volume of Missing Records", y = NULL)
-
-    plotly::ggplotly(gg_quant, height = 400) |>
-      plotly::layout(
-        paper_bgcolor = 'rgba(0,0,0,0)',
-        plot_bgcolor = 'rgba(0,0,0,0)'
-      )
+    # locations by fields, the number of empty answers in each cell
+    dq_missing_heat(geo_stats, "missing_n", "empty answers", " empty")
   })
 
   ## ------------------------ Nice upset graph
@@ -475,7 +353,8 @@ dq_missing_server <- function(input, output, session, ns, core) {
     )
   })
 
-  output$plot_missing_upset <- render_wfp_plotly({
+  output$plot_missing_upset <- render_echart({
+    validate(need(length(applied_missing$vars) >= 2, "Check at least two fields to see which go missing together."))
     gap_data <- shared_gap_analysis()
     req(gap_data)
 
@@ -523,137 +402,15 @@ dq_missing_server <- function(input, output, session, ns, core) {
       dplyr::arrange(dplyr::desc(count)) |>
       dplyr::slice_head(n = 15)
 
-    req(nrow(combo_counts) > 0)
-
-    # Re-create the compressed string identity ONLY for the top 8 rows (trivial data scale)
-    combo_counts$combo <- apply(combo_counts[pillars], 1, paste, collapse = "-")
-
-    plot_data <- data.frame(
-      combo = rep(combo_counts$combo, each = length(pillars)),
-      Intersection = rep(
-        paste0("Set ", 1:nrow(combo_counts)),
-        each = length(pillars)
-      ),
-      Variable = rep(pillars, times = nrow(combo_counts)),
-      Count = rep(combo_counts$count, each = length(pillars)),
-      stringsAsFactors = FALSE
-    )
-
-    plot_data$Is_In_Set <- sapply(1:nrow(plot_data), function(i) {
-      vec <- as.integer(strsplit(plot_data$combo[i], "-")[[1]])
-      var_idx <- which(pillars == plot_data$Variable[i])
-      return(vec[var_idx] == 1)
-    })
-
-    # --- STEP 4: GENERATE INTEGRATED PLOTLY CANVAS WITH DOMAINS ---
-
-    set_labels <- paste0("Set ", seq_len(nrow(combo_counts)))
-
-    plotly::plot_ly(type = "scatter", mode = "none") |>
-      # 1. Top: vertical bars, one per missingness pattern
-      plotly::add_trace(
-        data = combo_counts,
-        x = set_labels,
-        y = ~count,
-        type = "bar",
-        marker = list(color = "#0A6EB4"),
-        hovertemplate = "%{y:,} records<extra></extra>",
-        showlegend = FALSE,
-        xaxis = "x",
-        yaxis = "y"
-      ) |>
-      # 2. Bottom-left: total missing per field, growing towards the matrix
-      plotly::add_trace(
-        data = set_sizes,
-        x = ~Total_Missing,
-        y = ~Variable,
-        type = "bar",
-        orientation = "h",
-        marker = list(color = "#26bde2"),
-        hovertemplate = "%{y}: %{x:,} missing<extra></extra>",
-        showlegend = FALSE,
-        xaxis = "x2",
-        yaxis = "y2"
-      ) |>
-      # 3. Bottom-right: the combination matrix
-      plotly::add_trace(
-        data = plot_data,
-        x = ~Intersection,
-        y = ~Variable,
-        type = "scatter",
-        mode = "markers",
-        marker = list(
-          size = 10,
-          color = ~ ifelse(Is_In_Set, "#0A6EB4", "rgba(128,128,128,0.22)"),
-          line = list(width = 0)
-        ),
-        hoverinfo = "skip",
-        showlegend = FALSE,
-        xaxis = "x3",
-        yaxis = "y3"
-      ) |>
-      # --- STEP 5: MANUALLY ASSIGN THE AXIS GRID POSITIONS ---
-      # Four quadrants share one canvas. The left column (0 - 0.16) holds the
-      # per-field bars, the right column (0.28 - 1) the pattern bars and matrix;
-      # the 0.16-0.28 gutter is where the field names and the top axis ticks go,
-      # so nothing overlaps. Colors/fonts come from wfp_plotly().
-      plotly::layout(
-        # Top-right: pattern bars
-        xaxis = list(
-          visible = FALSE,
-          domain = c(0.28, 1),
-          type = "category",
-          categoryorder = "array",
-          categoryarray = set_labels
-        ),
-        yaxis = list(
-          title = NULL,
-          domain = c(0.56, 1),
-          gridcolor = "rgba(128,128,128,0.2)",
-          zeroline = FALSE
-        ),
-
-        # Bottom-left: per-field totals (reversed so bars end next to the matrix)
-        xaxis2 = list(
-          title = list(text = "Missing per field", standoff = 8),
-          autorange = "reversed",
-          domain = c(0, 0.16),
-          gridcolor = "rgba(128,128,128,0.2)",
-          zeroline = FALSE,
-          side = "bottom"
-        ),
-        yaxis2 = list(
-          showgrid = FALSE,
-          domain = c(0, 0.46),
-          type = "category",
-          categoryorder = "array",
-          categoryarray = as.character(pillars)
-        ),
-
-        # Bottom-right: the matrix, locked to both neighbours
-        xaxis3 = list(
-          title = list(text = "Missingness patterns, most frequent first", standoff = 8),
-          domain = c(0.28, 1),
-          type = "category",
-          showticklabels = FALSE,
-          showgrid = FALSE,
-          zeroline = FALSE,
-          matches = "x"
-        ),
-        yaxis3 = list(
-          visible = FALSE,
-          domain = c(0, 0.46),
-          type = "category",
-          matches = "y2"
-        ),
-        margin = list(t = 10, b = 40, l = 130, r = 16)
-      )
+    validate(need(nrow(combo_counts) > 0, "No record misses any of these fields."))
+    dq_upset_option(combo_counts, pillars, set_sizes)
   })
 
   ## ------------------- Lolipop Graph of missings per location
   # ---------------------------------------------------------------------------------
 
-  output$plot_geo_missing_bars <- render_wfp_plotly({
+  output$plot_geo_missing_bars <- render_echart({
+    validate(need(length(applied_missing$vars) >= 2, "Check at least two fields to compare the locations."))
     # 1. Pull the pre-calculated data bundle from memory
     gap_data <- shared_gap_analysis()
     req(gap_data, applied_missing$geo_level)
@@ -703,56 +460,88 @@ dq_missing_server <- function(input, output, session, ns, core) {
       dplyr::arrange(dplyr::desc(.data$Incompleteness_Rate)) |>
       dplyr::slice_head(n = 50)
 
-    req(nrow(geo_summary) > 0)
+    validate(need(nrow(geo_summary) > 0, "No location has a gap."))
 
-    # 4. Render the Lollipop
-    plotly::plot_ly(
-      data = geo_summary,
-      x = ~Incompleteness_Rate,
-      y = ~ reorder(Location, Incompleteness_Rate),
-      type = "scatter",
-      mode = "markers",
-      marker = list(
-        color = "#cb4b16",
-        size = 10,
-        line = list(width = 1, color = "#cb4c165b")
-      ),
-      error_x = list(
-        type = "data",
-        array = geo_summary$Incompleteness_Rate,
-        symmetric = FALSE,
-        arrayminus = rep(0, nrow(geo_summary)),
-        color = "rgba(128,128,128,0.35)",
-        thickness = 1.5,
-        width = 0
-      ),
-      hoverinfo = "text",
-      hovertext = ~Hover_Text,
-      height = 600
-    ) |>
-      plotly::layout(
-        title = list(
-          text = paste(
-            "Data Gaps Analysis by",
-            applied_missing$geo_level,
-            " : Showing first 50 locations"
-          ),
-          font = list(color = "#0A6EB4", size = 12),
-          x = 0.15, # Left-aligned with the chart elements
-          y = 1
-        ),
-        paper_bgcolor = "rgba(0,0,0,0)",
-        plot_bgcolor = "rgba(0,0,0,0)",
-        xaxis = list(
-          title = "% Households with Gaps",
-          autorange = TRUE,
-          range = c(0, 100),
-          gridcolor = "rgba(128,128,128,0.2)",
-          side = "bottom"
-        ),
-        yaxis = list(title = "", showgrid = FALSE, type = "category"),
-        margin = list(t = 10, b = 40, l = 120, r = 10)
-      )
-
+    # 4. The gap rate by location, highest first
+    dq_hbar(geo_summary$Location, geo_summary$Incompleteness_Rate, color = "#c5192d",
+            tips = sprintf("<b>%s</b><br>%.1f%% of households with a gap<br>%s / %s households", htmltools::htmlEscape(geo_summary$Location),
+                           geo_summary$Incompleteness_Rate, format(round(geo_summary$Weighted_Gapped), big.mark = ","),
+                           format(round(geo_summary$Weighted_Total), big.mark = ",")),
+            x_name = "% households with gaps", x_min = 0, x_max = 100, bar_labels = "fn:dec1")
   })
+}
+
+#' Locations by fields: the gaps of each field in each location, as a heatmap
+#' (the 40 locations with the most gaps)
+#' @param st data.frame(Location, Variable, <value>).
+#' @noRd
+dq_missing_heat <- function(st, value, name, suffix) {
+  loc <- tapply(st[[value]], st$Location, sum)
+  loc <- names(sort(loc, decreasing = TRUE))[seq_len(min(40, length(loc)))]
+  vars <- sort(unique(st$Variable))
+  z <- matrix(0, length(loc), length(vars))
+  hit <- st$Location %in% loc
+  z[cbind(match(st$Location[hit], loc), match(st$Variable[hit], vars))] <- st[[value]][hit]
+  dq_heatmap(vars, loc, z, name = name, tip_suffix = suffix, label_fmt = "fn:hmap")
+}
+
+#' Which fields go missing together (an UpSet chart): bars of the most frequent
+#' patterns on top, the fields' totals bottom left, the patterns' matrix bottom
+#' right
+#' @param combos One row per pattern: a 0/1 column per field, `count`.
+#' @param pillars The fields, in order. @param sizes data.frame(Variable, Total_Missing).
+#' @noRd
+dq_upset_option <- function(combos, pillars, sizes) {
+  sets <- paste0("Set ", seq_len(nrow(combos)))
+  esc <- function(x) htmltools::htmlEscape(as.character(x))
+  members <- vapply(seq_len(nrow(combos)), function(i) paste(esc(pillars[unlist(combos[i, pillars]) == 1]), collapse = ", "), "")
+  dots <- list()
+  for (i in seq_along(sets)) for (j in seq_along(pillars)) {
+    on <- combos[[pillars[j]]][i] == 1
+    dots[[length(dots) + 1]] <- list(value = list(i - 1, j - 1), symbolSize = if (on) 11 else 7,
+                                     itemStyle = list(color = if (on) "#0A6EB4" else "rgba(128,128,128,0.25)"),
+                                     tip = sprintf("<b>%s</b>: %s", sets[i], members[i]))
+  }
+  # the lines joining the fields of a pattern
+  links <- lapply(seq_along(sets), function(i) {
+    on <- which(unlist(combos[i, pillars]) == 1) - 1
+    if (length(on) < 2) return(NULL)
+    list(list(coord = list(i - 1, min(on))), list(coord = list(i - 1, max(on))))
+  })
+  links <- Filter(Negate(is.null), links)
+  dot_series <- list(type = "scatter", xAxisIndex = 2, yAxisIndex = 2, data = dots, z = 3)
+  if (length(links)) dot_series$markLine <- list(silent = TRUE, symbol = "none", label = list(show = FALSE),
+                                                 lineStyle = list(color = "#0A6EB4", width = 2, type = "solid"), data = links)
+  o <- list(
+    tooltip = list(trigger = "item", formatter = "fn:tip"),
+    grid = list(
+      list(left = "30%", right = 16, top = 12, height = "46%"),
+      list(left = 16, width = "14%", top = "62%", bottom = 36),
+      list(left = "30%", right = 16, top = "62%", bottom = 36)),
+    xAxis = list(
+      list(gridIndex = 0, type = "category", data = I(sets), axisLabel = list(show = FALSE), axisTick = list(show = FALSE)),
+      list(gridIndex = 1, type = "value", inverse = TRUE, name = "Missing per field", nameLocation = "middle", nameGap = 22,
+           axisLabel = list(fontSize = 9, hideOverlap = TRUE)),
+      list(gridIndex = 2, type = "category", data = I(sets), name = "Missingness patterns, most frequent first",
+           nameLocation = "middle", nameGap = 22, axisLabel = list(show = FALSE), axisTick = list(show = FALSE),
+           axisLine = list(show = FALSE))),
+    yAxis = list(
+      list(gridIndex = 0, type = "value", name = "Records", axisLabel = list(formatter = "fn:num")),
+      list(gridIndex = 1, type = "category", data = I(pillars), inverse = TRUE, position = "right",
+           axisLabel = list(interval = 0, margin = 10, width = 130, overflow = "truncate"), axisTick = list(show = FALSE)),
+      list(gridIndex = 2, type = "category", data = I(pillars), inverse = TRUE, axisLabel = list(show = FALSE),
+           axisTick = list(show = FALSE), axisLine = list(show = FALSE), splitLine = list(show = TRUE))),
+    series = list(
+      list(type = "bar", xAxisIndex = 0, yAxisIndex = 0, barMaxWidth = 28, itemStyle = list(color = "#0A6EB4"),
+           label = list(show = TRUE, position = "top", fontSize = 10, formatter = "fn:num", color = "#8a96a3", textBorderWidth = 0),
+           data = lapply(seq_along(sets), function(i) list(value = combos$count[i],
+             tip = sprintf("<b>%s</b>: %s records<br>%s", sets[i], format(combos$count[i], big.mark = ","), members[i])))),
+      list(type = "bar", xAxisIndex = 1, yAxisIndex = 1, barMaxWidth = 14, itemStyle = list(color = "#26bde2"),
+           data = lapply(seq_along(pillars), function(j) {
+             v <- sizes$Total_Missing[match(pillars[j], sizes$Variable)]
+             list(value = v, tip = sprintf("<b>%s</b>: %s missing", esc(pillars[j]), format(v, big.mark = ",")))
+           })),
+      dot_series))
+  attr(o, "height") <- max(420, 200 + 30 * length(pillars))
+  o
 }

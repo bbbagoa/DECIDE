@@ -232,7 +232,11 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
       use_scorecard = TRUE, sc_threshold = NULL
     )
     # A new card brings its own threshold.
-    observeEvent(scorecard_fingerprint(user_setup$scorecard), applied$sc_threshold <- NULL, ignoreInit = TRUE)
+    observeEvent(scorecard_fingerprint(user_setup$scorecard), {
+      applied$sc_threshold <- NULL
+      sc <- user_setup$scorecard
+      if (!scorecard_is_empty(sc)) updateNumericInput(session, "scorecard_threshold", value = as.numeric(sc$threshold %||% 0))
+    }, ignoreInit = TRUE)
 
     # --- Caseload per area ------------------------------------------------------
     # list(unit, kind ("households" | "share"), total, values (named, as typed),
@@ -329,6 +333,7 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
                                                 format(total, big.mark = ","), unit_word(), what, quota_label(input$ben_quota_unit)))
     })
     observeEvent(input$quota_open, {
+      req(input$quota_open > 0)  # React buttons send an initial 0
       a <- quota_areas()
       need_ok(!is.null(a) && nrow(a) > 0, sprintf("Map %s in the variable setup first.", quota_label(input$ben_quota_unit)))
       plan <- quota_plan()
@@ -601,6 +606,7 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
                     data = full_df)
 
     observeEvent(input$ben_apply, {
+      req(input$ben_apply > 0)  # React buttons send an initial 0
       waiter::waiter_show(
         html = waiter_content("Applying the selection\u2026"),
         color = "rgba(10, 30, 50, 0.65)"
@@ -642,6 +648,7 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
     })
 
     observeEvent(input$ben_clear, {
+      req(input$ben_clear > 0)  # React buttons send an initial 0
       waiter::waiter_show(
         html = waiter_content("Clearing the selection\u2026"),
         color = "rgba(10, 30, 50, 0.65)"
@@ -858,6 +865,7 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
     }
 
     observeEvent(input$btn_rules, {
+      req(input$btn_rules > 0)  # React buttons send an initial 0
       rules_draft(active_ruleset())
       showModal(modalDialog(
         title = tags$div(bsicons::bs_icon("funnel"), " Eligibility rules"),
@@ -1008,6 +1016,7 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
 
     # Re-matching an already-adopted card against the current data.
     observeEvent(input$sc_rematch, {
+      req(input$sc_rematch > 0)  # React buttons send an initial 0
       sc <- user_setup$scorecard
       if (scorecard_is_empty(sc)) {
         showNotification("No scorecard in use yet.", type = "warning")
@@ -1143,42 +1152,15 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
       }
     })
 
+    # The React page draws the card's controls (use_scorecard,
+    # scorecard_threshold, sc_rematch, from output$ben_meta); only the file
+    # loader stays a Shiny input.
     output$scorecard_ui <- renderUI({
-      sc <- user_setup$scorecard
-      loader <- tags$div(
+      tags$div(
         class = "wfp-inline-file mt-1",
         fileInput(ns("sc_file"), label = NULL, accept = c(".xlsx", ".json"),
                   buttonLabel = "Load a scorecard or ranking", placeholder = "exported from Targeting Design (.xlsx)",
                   width = "100%")
-      )
-      if (scorecard_is_empty(sc)) {
-        return(tagList(
-          tags$div(
-            class = "small text-muted",
-            bsicons::bs_icon("card-checklist"),
-            " No scorecard or vulnerability ranking in use. Build one under ", tags$strong("Targeting Design"),
-            " (with an outcome indicator, or without one for a ranking) and adopt it, or load one exported from there."
-          ),
-          loader
-        ))
-      }
-      tagList(
-        checkboxInput(ns("use_scorecard"),
-                      sprintf("Apply the %s (%d criteria)", card_word(sc), length(sc$items)),
-                      value = isolate(input$use_scorecard) %||% TRUE),
-        conditionalPanel(
-          condition = sprintf("input['%s']", ns("use_scorecard")),
-          numericInput(ns("scorecard_threshold"), "Eligible when score is above",
-                       value = isolate(input$scorecard_threshold) %||% (sc$threshold %||% 0),
-                       min = 0, step = 0.1, width = "100%")
-        ),
-        uiOutput(ns("scorecard_note")),
-        tags$div(
-          class = "d-flex gap-2 mt-1",
-          actionButton(ns("sc_rematch"), "Match columns", icon = icon("diagram-project"),
-                       class = "btn-outline-primary btn-sm flex-fill")
-        ),
-        loader
       )
     })
 
@@ -1291,24 +1273,69 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
       df[which(selection()$prioritized), , drop = FALSE]
     })
 
-    output$selection_note <- renderUI({
-      s <- selection(); req(s)
+    # --- what the React page reads (react/src/pages/selection/) ---------------
+    # Facts as JSON; the client draws them. Each comes from the reactives the
+    # Shiny page used, so the two cannot disagree.
+    sel_or_null <- function() tryCatch(selection(), error = function(e) NULL)
+    fmt_n <- function(x) format(x, big.mark = ",", scientific = FALSE, trim = TRUE)
+
+    # The approaches (which steps each uses), the card in use, the ranking charts.
+    output$ben_meta <- shinyreact::reactive_output({
+      a <- targeting_approaches()
+      sc <- user_setup$scorecard
+      card <- if (!scorecard_is_empty(sc)) list(word = card_word(sc), n = length(sc$items),
+                                                threshold = as.numeric(sc$threshold %||% 0), fp = scorecard_fingerprint(sc))
+      list(ready = !is.null(full_df()) && shiny::isTruthy(user_setup$unique_id),
+           approaches = lapply(names(a), function(k) list(value = k, label = a[[k]]$label, description = a[[k]]$description,
+                                                          gates = I(a[[k]]$gates), list = !isFALSE(a[[k]]$list))),
+           card = card,
+           ranking = if (isTRUE(applied$use_scorecard) && !is.null(card) && is_ranking(sc))
+             list(profiles = !is.null(sc$ranking$profiles)))
+    })
+
+    # Settings wait for Apply: what differs from the applied selection.
+    output$ben_pending <- shinyreact::reactive_output({
+      if (is.null(full_df())) return(list(pending = I(character(0))))
+      chr_same <- function(a, b) setequal(as.character(a %||% character(0)), as.character(b %||% character(0)))
+      num_same <- function(a, b) {
+        a <- suppressWarnings(as.numeric(a %||% NA))[1]; b <- suppressWarnings(as.numeric(b %||% NA))[1]
+        (is.na(a) && is.na(b)) || isTRUE(abs(a - b) < 1e-9)
+      }
+      ap <- input$ben_approach %||% "hybrid"
+      gates <- targeting_approaches()[[ap]]$gates %||% character(0)
+      what <- character(0)
+      if (!all(vapply(c("admin1", "admin2", "admin3"), function(k) chr_same(input[[paste0("ben_", k)]], applied[[k]]), TRUE)))
+        what <- c(what, "areas covered")
+      if (!identical(ap, applied$approach) || (identical(ap, "hybrid") && !identical(input$ben_combine %||% "both", applied$combine)))
+        what <- c(what, "approach")
+      if ("score" %in% gates) {
+        sc <- user_setup$scorecard; card <- !scorecard_is_empty(sc)
+        use <- card && !isFALSE(input$use_scorecard)
+        changed <- if (card && use != isTRUE(applied$use_scorecard)) TRUE
+                   else if (use) !num_same(input$scorecard_threshold, applied$sc_threshold %||% sc$threshold %||% 0)
+                   else !num_same(input$ben_score_min, applied$score_min) || !num_same(input$ben_score_max, applied$score_max)
+        if (changed) what <- c(what, "score")
+      }
+      if ("community" %in% gates && (!identical(input$ben_comm_col %||% "", applied$comm_col %||% "") ||
+                                     !chr_same(input$ben_comm_vals, applied$comm_vals)))
+        what <- c(what, "community decision")
+      if (!identical(ap, "self")) {
+        mode <- input$ben_prio_mode %||% "none"
+        changed <- !identical(mode, applied$prio_mode) ||
+          (identical(mode, "caseload") && (!num_same(input$ben_prio_n, applied$prio_n) || !identical(count_unit(), applied$prio_count))) ||
+          (identical(mode, "per_unit") && (!identical(input$ben_quota_unit, applied$quota_unit) ||
+                                           !identical(count_unit(), applied$prio_count) ||
+                                           !identical(quota_plan(), applied$quota_plan)))
+        if (changed) what <- c(what, "prioritisation")
+      }
+      list(pending = I(what))
+    })
+
+    output$selection_note <- shinyreact::reactive_output({
+      s <- sel_or_null(); if (is.null(s)) return(NULL)
       a <- targeting_approaches()[[applied$approach]]
-      n_el <- sum(s$eligible); n_pr <- sum(s$prioritized)
-      fmt <- function(x) format(x, big.mark = ",")
-      # One HTML string: inline tags as separate children pick up whitespace
-      # before the punctuation.
-      body <- if (!s$list_produced) "no household list is produced." else paste0(
-        fmt(n_el), " eligible by design",
-        if (n_pr < n_el) sprintf(", %s prioritised, <strong>%s excluded by design</strong> (unmet need, not an exclusion error)",
-                                 fmt(n_pr), fmt(n_el - n_pr)),
-        ".")
-      tags$div(
-        class = "small mt-2",
-        tags$div(HTML(paste0("<strong>", htmltools::htmlEscape(a$label), "</strong>: ", body))),
-        if (s$list_produced) lapply(s$notes, function(x) tags$div(
-          class = "text-warning", bsicons::bs_icon("exclamation-triangle-fill"), " ", x))
-      )
+      list(label = a$label, list_produced = isTRUE(s$list_produced), eligible = sum(s$eligible),
+           served = sum(s$prioritized), notes = I(as.character(unlist(s$notes))))
     })
 
     output$ben_total <- renderText({
@@ -1335,32 +1362,39 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
 
     # What the selected list is made of: its eligibility and vulnerability
     # group mix, as shares of the selected households.
-    output$ben_validation_plot <- render_wfp_plotly({
+    output$ben_validation_plot <- render_echart({
       df <- selected_data(); req(df, nrow(df) > 0)
+      keys <- c(Eligibility = "eligibility", `Vulnerability group` = "v_groups")
       parts <- list()
-      for (k in c(Eligibility = "eligibility", `Vulnerability group` = "v_groups")) {
-        col <- user_setup[[k]]
+      for (nm in names(keys)) {
+        col <- user_setup[[keys[[nm]]]]
         if (shiny::isTruthy(col) && col %in% names(df)) {
           tb <- table(as.character(df[[col]]), useNA = "no")
-          parts[[length(parts) + 1]] <- data.frame(criterion = names(which(c(Eligibility = "eligibility", `Vulnerability group` = "v_groups") == k)),
-                                                   category = names(tb), n = as.integer(tb), stringsAsFactors = FALSE)
+          if (length(tb)) parts[[length(parts) + 1]] <- data.frame(criterion = nm, category = names(tb), n = as.integer(tb), stringsAsFactors = FALSE)
         }
       }
       validate(need(length(parts) > 0, "Map eligibility or vulnerability groups to see what the selection is made of."))
       d <- do.call(rbind, parts)
       d$pct <- 100 * d$n / nrow(df)
-      d$label <- paste0(d$category, "  \u00b7  ", d$criterion)
-      d <- d[order(d$criterion, d$n), , drop = FALSE]
-      d$label <- factor(d$label, levels = d$label)
-      plotly::plot_ly(d, x = ~n, y = ~label, color = ~criterion, type = "bar", orientation = "h",
-                      colors = c("#0A6EB4", "#f7b825"),
-                      text = ~sprintf("%s (%.0f%%)", format(n, big.mark = ","), pct), textposition = "outside",
-                      cliponaxis = FALSE,
-                      hovertemplate = "%{y}<br>%{x:,} households<extra></extra>") |>
-        plotly::layout(xaxis = list(title = "Selected households", rangemode = "tozero"),
-                       yaxis = list(title = "", automargin = TRUE),
-                       bargap = 0.35, margin = list(r = 60),
-                       legend = list(orientation = "h", x = 0, y = 1.08, xanchor = "left", yanchor = "bottom"))
+      d <- d[order(d$criterion, -d$n), , drop = FALSE]
+      labs <- paste0(d$category, "  \u00b7  ", d$criterion)
+      crit <- unique(d$criterion)
+      colour <- c(Eligibility = "#0A6EB4", `Vulnerability group` = "#f7b825")
+      series <- lapply(crit, function(k) list(
+        type = "bar", name = k, stack = "s", barMaxWidth = 22, itemStyle = list(color = colour[[k]]),
+        data = lapply(seq_len(nrow(d)), function(i) if (d$criterion[i] != k) "-" else list(
+          value = d$n[i],
+          tip = sprintf("%s<br><b>%s</b> households (%.0f%%)", htmltools::htmlEscape(labs[i]), fmt_n(d$n[i]), d$pct[i]),
+          label = list(show = TRUE, position = "right", fontSize = 10, formatter = sprintf("%s (%.0f%%)", fmt_n(d$n[i]), d$pct[i]))))))
+      opt <- list(
+        legend = list(show = length(crit) > 1, top = 0, left = 0),
+        grid = list(left = 8, right = 76, top = if (length(crit) > 1) 30 else 8, bottom = 28, containLabel = TRUE),
+        tooltip = list(trigger = "item", formatter = "fn:tip"),
+        xAxis = list(type = "value", name = "Selected households", nameLocation = "middle", nameGap = 26),
+        yAxis = list(type = "category", data = labs, inverse = TRUE),
+        series = series)
+      attr(opt, "height") <- max(300, min(560, 70 + 26 * nrow(d)))
+      opt
     })
 
     # --- composition insights ------------------------------------------------
@@ -1370,101 +1404,98 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
       if (!is.na(cl) && nzchar(cl) && !is.null(df) && cl %in% names(df)) cl else NULL
     }
 
-    # What an adopted vulnerability ranking says about the selection.
-    output$ranking_comp <- renderUI({
-      sc <- user_setup$scorecard
-      if (!isTRUE(applied$use_scorecard) || scorecard_is_empty(sc) || !is_ranking(sc)) return(NULL)
-      bslib::layout_columns(
-        col_widths = if (is.null(sc$ranking$profiles)) c(12) else c(6, 6),
-        bslib::card(full_screen = TRUE,
-                    bslib::card_header(bsicons::bs_icon("stack"), " Share selected by number of deprivations",
-                                       info_tip("Deprivations: the ranking's criteria a household meets in the vulnerable direction. The selection should rise with them.")),
-                    bslib::card_body(plotly::plotlyOutput(ns("rank_dep_plot"), height = "320px"))),
-        if (!is.null(sc$ranking$profiles))
-          bslib::card(full_screen = TRUE,
-                      bslib::card_header(bsicons::bs_icon("people"), " Selected households by ranking profile",
-                                         info_tip("Each registration household joins the ranking profile closest to its answers. The targeted profiles (marked) should be selected most.")),
-                      bslib::card_body(plotly::plotlyOutput(ns("rank_prof_plot"), height = "320px"))))
-    })
+    # An adopted vulnerability ranking: the client shows its two charts when
+    # output$ben_meta says one is in use.
     ranking_view <- reactive({
       sc <- user_setup$scorecard; df <- uploaded_df(); s <- selection()
       req(is_ranking(sc), df, length(s$prioritized) == nrow(df))
       list(dep = ranking_deprivations(df, sc), prof = ranking_profile_assign(df, sc), served = s$prioritized, sc = sc)
     })
-    output$rank_dep_plot <- render_wfp_plotly({
+    pct_axis <- function(name) list(type = "value", min = 0, max = 100,  # the card title names the axis
+                                    axisLabel = list(formatter = "{value}%"))
+    output$rank_dep_plot <- render_echart({
       v <- ranking_view(); ok <- !is.na(v$dep); req(any(ok))
-      d <- stats::aggregate(list(p = v$served[ok]), list(k = v$dep[ok]), function(x) c(n = length(x), p = mean(x)))
-      d <- data.frame(k = d$k, n = d$p[, "n"], p = 100 * d$p[, "p"])
-      plotly::plot_ly(d, x = ~k, y = ~p, type = "bar", marker = list(color = "#0A6EB4"), customdata = ~n,
-                      hovertemplate = "%{x} deprivations<br>%{y:.0f}% selected (of %{customdata} households)<extra></extra>") |>
-        plotly::layout(xaxis = list(title = "Deprivations", dtick = 1), yaxis = list(title = "% selected", range = c(0, 100), ticksuffix = "%"))
-    })
-    output$rank_prof_plot <- render_wfp_plotly({
+      k <- sort(unique(v$dep[ok]))
+      n <- as.numeric(table(factor(v$dep[ok], levels = k)))
+      p <- 100 * as.numeric(tapply(v$served[ok], factor(v$dep[ok], levels = k), mean))
+      list(tooltip = list(trigger = "item", formatter = "fn:tip"),
+           grid = list(left = 8, right = 16, top = 16, bottom = 28, containLabel = TRUE),
+           xAxis = list(type = "category", data = as.character(k), name = "Deprivations", nameLocation = "middle", nameGap = 26),
+           yAxis = pct_axis("% selected"),
+           series = list(list(type = "bar", barMaxWidth = 40, itemStyle = list(color = "#0A6EB4"),
+                              data = lapply(seq_along(k), function(i) list(value = round(p[i], 1),
+                                tip = sprintf("%s deprivations<br><b>%.0f%%</b> selected (of %s households)", k[i], p[i], fmt_n(n[i])))))))
+    }, height = 320)
+    output$rank_prof_plot <- render_echart({
       v <- ranking_view(); req(!is.null(v$prof))
       k <- ncol(v$sc$ranking$profiles)
-      d <- data.frame(profile = seq_len(k))
-      d$n <- vapply(d$profile, function(j) sum(v$prof == j), numeric(1))
-      d$p <- vapply(d$profile, function(j) if (d$n[j] > 0) 100 * mean(v$served[v$prof == j]) else 0, numeric(1))
-      d$lab <- paste0("Profile ", d$profile, ifelse(d$profile %in% v$sc$ranking$target, " (targeted)", ""))
-      plotly::plot_ly(d, x = ~lab, y = ~p, type = "bar",
-                      marker = list(color = ifelse(d$profile %in% v$sc$ranking$target, "#c5192d", "#8a96a3")), customdata = ~n,
-                      hovertemplate = "%{x}<br>%{y:.0f}% selected (of %{customdata} households)<extra></extra>") |>
-        plotly::layout(xaxis = list(title = ""), yaxis = list(title = "% selected", range = c(0, 100), ticksuffix = "%"))
-    })
+      n <- vapply(seq_len(k), function(j) sum(v$prof == j, na.rm = TRUE), numeric(1))
+      p <- vapply(seq_len(k), function(j) if (n[j] > 0) 100 * mean(v$served[which(v$prof == j)]) else 0, numeric(1))
+      tg <- seq_len(k) %in% v$sc$ranking$target
+      lab <- paste0("Profile ", seq_len(k), ifelse(tg, " (targeted)", ""))
+      list(tooltip = list(trigger = "item", formatter = "fn:tip"),
+           grid = list(left = 8, right = 16, top = 16, bottom = 8, containLabel = TRUE),
+           xAxis = list(type = "category", data = lab, axisLabel = list(interval = 0, hideOverlap = TRUE)),
+           yAxis = pct_axis("% selected"),
+           series = list(list(type = "bar", barMaxWidth = 40,
+                              data = lapply(seq_len(k), function(i) list(value = round(p[i], 1),
+                                itemStyle = list(color = if (tg[i]) "#c5192d" else "#8a96a3"),
+                                tip = sprintf("%s<br><b>%.0f%%</b> selected (of %s households)", lab[i], p[i], fmt_n(n[i])))))))
+    }, height = 320)
 
-    output$comp_insights <- renderUI({
-      s <- selection(); df <- uploaded_df(); req(s, df)
+    output$comp_insights <- shinyreact::reactive_output({
+      s <- sel_or_null(); df <- uploaded_df()
+      if (is.null(s) || is.null(df)) return(NULL)
       sel <- s$prioritized
       n_sel <- sum(sel)
-      if (!n_sel) return(empty_state("Nobody selected", "Apply a selection to see what the list is made of.", icon = "people"))
-      cards <- list(ben_insight("people", "Households served",
-                                sprintf("%.1f%%", 100 * n_sel / nrow(df)),
-                                sprintf("%s of %s households", format(n_sel, big.mark = ","), format(nrow(df), big.mark = ","))))
+      if (!n_sel) return(list(empty = TRUE, tiles = list()))
+      tile <- function(icon, label, value, sub = "") list(icon = icon, label = label, value = as.character(value), sub = sub)
+      cards <- list(tile("people", "Households served", sprintf("%.1f%%", 100 * n_sel / nrow(df)),
+                         sprintf("%s of %s households", fmt_n(n_sel), fmt_n(nrow(df)))))
       hs <- col_of("hh_size")
       if (!is.null(hs)) {
         sz <- as_number(df[[hs]])
-        cards <- c(cards, list(ben_insight("person-lines-fill", "People served",
+        cards <- c(cards, list(tile("person", "People served",
           sprintf("%.1f%%", 100 * sum(sz[sel], na.rm = TRUE) / sum(sz, na.rm = TRUE)),
-          sprintf("Average household: %.1f people selected, %.1f not selected",
-                  mean(sz[sel], na.rm = TRUE), mean(sz[!sel], na.rm = TRUE)))))
+          sprintf("Average household: %.1f people selected, %.1f not selected", mean(sz[sel], na.rm = TRUE), mean(sz[!sel], na.rm = TRUE)))))
       }
       sx <- col_of("hhh_sex")
       if (!is.null(sx)) {
         fem <- is_female(df[[sx]])
-        if (any(fem)) cards <- c(cards, list(ben_insight("gender-female", "Female-headed households",
-          sprintf("%.0f%% of the selected", 100 * mean(fem[sel])),
-          sprintf("against %.0f%% of all households", 100 * mean(fem)))))
+        if (any(fem)) cards <- c(cards, list(tile("female", "Female-headed households",
+          sprintf("%.0f%% of the selected", 100 * mean(fem[sel])), sprintf("against %.0f%% of all households", 100 * mean(fem)))))
       }
       cut <- sum(s$eligible & !sel)
-      if (cut) cards <- c(cards, list(ben_insight("dash-circle", "Unmet need",
-        format(cut, big.mark = ","), "eligible households not served for lack of resources (excluded by design)")))
+      if (cut) cards <- c(cards, list(tile("cut", "Unmet need", fmt_n(cut),
+        "eligible households not served for lack of resources (excluded by design)")))
       a1 <- col_of("admin1")
       if (!is.null(a1)) {
         u <- as.character(df[[a1]])
         none <- setdiff(unique(u[s$eligible]), unique(u[sel]))
-        if (length(none)) cards <- c(cards, list(ben_insight("geo-alt", "Areas with eligible households, nobody served",
+        if (length(none)) cards <- c(cards, list(tile("area", "Areas with eligible households, nobody served",
           length(none), paste(utils::head(none, 5), collapse = ", "))))
       }
-      tags$div(class = "wfp-insights", cards)
+      list(empty = FALSE, tiles = cards)
     })
 
-    output$ben_area_plot <- render_wfp_plotly({
+    output$ben_area_plot <- render_echart({
       s <- selection(); df <- uploaded_df(); req(s, df)
       a <- col_of("admin1")
       validate(need(!is.null(a), "Map Admin 1 to see the selection by area."))
-      status <- ifelse(s$prioritized, "Served", ifelse(s$eligible, "Excluded by design", "Not eligible"))
-      d <- as.data.frame(table(area = as.character(df[[a]]), status = status), stringsAsFactors = FALSE)
-      tot <- tapply(d$Freq * (d$status != "Not eligible"), d$area, sum)
-      top <- utils::head(names(sort(tot, decreasing = TRUE)), 25)
-      d <- d[d$area %in% top, , drop = FALSE]
-      d$area <- factor(d$area, levels = rev(top))
-      d$status <- factor(d$status, levels = c("Served", "Excluded by design", "Not eligible"))
-      plotly::plot_ly(d, x = ~Freq, y = ~area, color = ~status, type = "bar", orientation = "h",
-                      # plotly's colour list takes hex or names, not rgba().
-                      colors = c("#0A6EB4", "#f7b825", "#b8c0ca"),
-                      hovertemplate = "%{y}: %{x:,} households<extra></extra>") |>
-        plotly::layout(barmode = "stack", xaxis = list(title = "Households"), yaxis = list(title = "", automargin = TRUE),
-                       legend = list(orientation = "h", x = 0, y = 1.08, xanchor = "left", yanchor = "bottom"))
+      colour <- c(Served = "#0A6EB4", `Excluded by design` = "#f7b825", `Not eligible` = "#b8c0ca")
+      status <- factor(ifelse(s$prioritized, "Served", ifelse(s$eligible, "Excluded by design", "Not eligible")), levels = names(colour))
+      m <- table(as.character(df[[a]]), status)
+      top <- utils::head(names(sort(m[, "Served"] + m[, "Excluded by design"], decreasing = TRUE)), 25)
+      opt <- list(
+        legend = list(top = 0, left = 0),
+        tooltip = list(trigger = "axis", axisPointer = list(type = "shadow")),
+        grid = list(left = 8, right = 16, top = 30, bottom = 28, containLabel = TRUE),
+        xAxis = list(type = "value", name = "Households", nameLocation = "middle", nameGap = 26),
+        yAxis = list(type = "category", data = top, inverse = TRUE),
+        series = lapply(names(colour), function(k) list(type = "bar", name = k, stack = "s", barMaxWidth = 22,
+                                                       itemStyle = list(color = colour[[k]]), data = as.numeric(m[top, k]))))
+      attr(opt, "height") <- max(300, min(640, 70 + 24 * length(top)))
+      opt
     })
 
     current_profile <- function(df, sel) {
@@ -1476,30 +1507,23 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
       selection_profile(df, unlist(cols), keys, sel)
     }
 
-    output$ben_profile <- renderUI({
-      s <- selection(); df <- uploaded_df(); req(s, df)
+    output$ben_profile <- shinyreact::reactive_output({
+      s <- sel_or_null(); df <- uploaded_df()
+      if (is.null(s) || is.null(df)) return(NULL)
       sel <- s$prioritized
-      if (!any(sel) || all(sel)) return(tags$div(class = "small text-muted", "Needs both selected and non-selected households."))
+      if (!any(sel) || all(sel)) return(list(message = "Needs both selected and non-selected households."))
       p <- current_profile(df, sel)
-      if (is.null(p)) return(tags$div(class = "small text-muted", "Map household variables (size, age, sex...) to compare the groups."))
-      tagList(
-        tags$div(class = "wfp-model-table-wrap", tags$table(
-          class = "wfp-model-table",
-          tags$thead(tags$tr(tags$th("Indicator"), tags$th(class = "num", "Selected"), tags$th(class = "num", "Not selected"),
-                             tags$th(class = "num", "Difference"))),
-          tags$tbody(lapply(seq_len(nrow(p)), function(i) tags$tr(
-            tags$td(p$indicator[i]), tags$td(class = "num", p$selected[i]), tags$td(class = "num", p$not_selected[i]),
-            tags$td(class = "num", style = if (isTRUE(p$notable[i])) "font-weight:600;color:var(--wfp-blue)" else NULL,
-                    p$difference[i])))))),
-        tags$div(class = "small text-muted mt-1",
-                 "Means for numbers, shares for categories. Bold: a gap of 10 points or 20% or more, where the selection tells the groups apart."))
+      if (is.null(p)) return(list(message = "Map household variables (size, age, sex...) to compare the groups."))
+      list(rows = lapply(seq_len(nrow(p)), function(i) as.list(p[i, , drop = FALSE])))
     })
 
-    # Identification columns only; everything else is behind Details.
-    output$ben_table <- DT::renderDT({
+    # Identification columns only; everything else is behind Details. Paged by
+    # the server above 5,000 rows.
+    output$ben_table <- render_react_table({
       req(selected_data())
       record_table(selected_data(), user_setup, session$ns, "ben_view")
-    })
+    }, html = "Details", empty = "Nobody selected.")
+
 
     observeEvent(input$ben_view, {
       showModal(record_detail_modal(
@@ -1514,6 +1538,7 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
     # -----------------------------------------------------------------------
     export_cols <- reactiveVal(NULL)
     observeEvent(input$export_open, {
+      req(input$export_open > 0)  # React buttons send an initial 0
       df <- uploaded_df(); need_ok(!is.null(df), "Load the registration data and map its variables first.")
       cols <- names(df)
       # Identification and the mapped fields first, the rest after.

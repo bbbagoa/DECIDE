@@ -239,8 +239,9 @@ dq_outliers_server <- function(input, output, session, ns, core) {
     v <- input$outlier_var
     req(nzchar(v %||% ""))
     rg <- ranges()[[v]] %||% suggested_range(mapped_keys()[v])
-    updateNumericInput(session, "range_min", value = rg[1])
-    updateNumericInput(session, "range_max", value = rg[2])
+    # "" empties the React field (an NA would arrive as the text "NA")
+    updateNumericInput(session, "range_min", value = if (is.na(rg[1])) "" else rg[1])
+    updateNumericInput(session, "range_max", value = if (is.na(rg[2])) "" else rg[2])
   })
   observeEvent(list(input$range_min, input$range_max), {
     v <- input$outlier_var
@@ -280,17 +281,9 @@ dq_outliers_server <- function(input, output, session, ns, core) {
   #   IQR -> Tukey multiplier (default 1.5)
   #   Z   -> number of SDs     (default 3.0)
   #   MAD -> modified-Z multiplier (default 3.5, the standard Iglewicz-Hoaglin cut-off)
-  output$outlier_threshold_ui <- renderUI({
-    m <- input$outlier_method
-    if (identical(m, "none")) return(NULL)
-    cfg <- switch(m,
-      "IQR" = list(label = "IQR Multiplier:", min = 1, max = 5, value = 1.5, step = 0.5),
-      "Z"   = list(label = "Standard Deviations:", min = 1, max = 6, value = 3.0, step = 0.5),
-      list(label = "Modified-Z Multiplier:", min = 1, max = 6, value = 3.5, step = 0.5) # MAD
-    )
-    sliderInput(ns("outlier_threshold"), cfg$label,
-                min = cfg$min, max = cfg$max, value = cfg$value, step = cfg$step)
-  })
+  # The method's threshold slider is drawn by React (OutliersTab.tsx), with the
+  # same ranges and defaults: IQR multiplier 1-5 (1.5), SDs 1-6 (3), modified-Z
+  # multiplier 1-6 (3.5, the Iglewicz-Hoaglin cut-off); none for "Allowed range only".
 
   threshold <- reactive({
     if (identical(input$outlier_method, "none")) return(NA_real_)
@@ -305,6 +298,7 @@ dq_outliers_server <- function(input, output, session, ns, core) {
                             threshold = if (identical(input$outlier_method, "none")) NA_real_ else (input$outlier_threshold %||% NA_real_),
                             allowed = allowed())
   observeEvent(input$ol_check, {
+    req(input$ol_check > 0)   # a React button sends 0 at start
     need_ok(shiny::isTruthy(input$outlier_var), "Choose the variable to check.")
     ol_applied(ol_now())
   })
@@ -371,33 +365,22 @@ dq_outliers_server <- function(input, output, session, ns, core) {
   })
 
   # --- charts --------------------------------------------------------------------
-  output$plot_outlier_hist <- render_wfp_plotly({
+  output$plot_outlier_hist <- render_echart({
     info <- outlier_info()
     v <- info$vals[!is.na(info$vals)]
     req(length(v))
-    vline <- function(x, color, dash) list(type = "line", x0 = x, x1 = x, yref = "paper", y0 = 0, y1 = 1,
-                                           line = list(color = color, dash = dash, width = 1.5))
-    shapes <- c(
-      lapply(info$bounds[is.finite(info$bounds)], vline, color = "#c5192d", dash = "dash"),
-      lapply(info$allowed[!is.na(info$allowed)], vline, color = "#0A6EB4", dash = "dot")
-    )
-    plotly::plot_ly(x = v, type = "histogram", marker = list(color = "rgba(10,110,180,0.55)"),
-                    hovertemplate = "%{x}: %{y:,} households<extra></extra>") |>
-      plotly::layout(xaxis = list(title = info$var_col), yaxis = list(title = "Households"),
-                     shapes = shapes, showlegend = FALSE, bargap = 0.05)
+    dq_hist_option(v, info$var_col, bounds = info$bounds[is.finite(info$bounds)], allowed = info$allowed[!is.na(info$allowed)])
   })
 
-  output$plot_outlier_box <- render_wfp_plotly({
+  output$plot_outlier_box <- render_echart({
     info <- outlier_info()
-    req(shiny::isTruthy(user_setup$admin1))
+    validate(need(shiny::isTruthy(user_setup$admin1), "Map Admin 1 to compare the areas."))
     df <- dq_filtered_data()
     req(user_setup$admin1 %in% names(df))
     d <- data.frame(admin = as.character(df[[user_setup$admin1]]), value = info$vals, stringsAsFactors = FALSE)
     d <- d[!is.na(d$value) & !is.na(d$admin), , drop = FALSE]
     req(nrow(d) > 0)
-    plotly::plot_ly(d, x = ~admin, y = ~value, type = "box", marker = list(color = "#0A6EB4", size = 4),
-                    line = list(color = "#0A6EB4"), fillcolor = "rgba(10,110,180,0.15)") |>
-      plotly::layout(xaxis = list(title = ""), yaxis = list(title = info$var_col), showlegend = FALSE)
+    dq_box_option(d$admin, d$value, info$var_col)
   })
 
   # Flag rate per group, among the households that answered.
@@ -412,22 +395,22 @@ dq_outliers_server <- function(input, output, session, ns, core) {
       dplyr::mutate(rate = .data$flagged / .data$total * 100) |>
       dplyr::arrange(dplyr::desc(.data$rate)) |>
       dplyr::slice_head(n = 20)
-    if (nrow(tab) == 0) return(plotly::plot_ly() |> plotly::layout(title = empty_msg))
-    plotly::plot_ly(tab, x = ~rate, y = ~reorder(g, rate), type = "bar", marker = list(color = color),
-                    customdata = ~flagged, text = ~total,
-                    hovertemplate = "%{y}: %{x:.1f}% (%{customdata} of %{text})<extra></extra>") |>
-      plotly::layout(xaxis = list(title = "Flagged (%)"), yaxis = list(title = ""), margin = list(l = 120))
+    validate(need(nrow(tab) > 0, empty_msg))
+    dq_hbar(tab$g, round(tab$rate, 1), color = color,
+            tips = sprintf("<b>%s</b><br>%.1f%% flagged (%s of %s)", htmltools::htmlEscape(tab$g), tab$rate,
+                           format(tab$flagged, big.mark = ","), format(tab$total, big.mark = ",")),
+            x_name = "Flagged (%)", x_min = 0, bar_labels = "fn:dec1")
   }
 
-  output$plot_outlier_admin_rates <- render_wfp_plotly({
-    req(shiny::isTruthy(user_setup$admin1))
+  output$plot_outlier_admin_rates <- render_echart({
+    validate(need(shiny::isTruthy(user_setup$admin1), "Map Admin 1 to see where the flags come from."))
     df <- dq_filtered_data()
     req(user_setup$admin1 %in% names(df))
     rate_plot(df[[user_setup$admin1]], "#f7b825", "No admin-level data to display")
   })
 
-  output$plot_outlier_enum_rates <- render_wfp_plotly({
-    req(shiny::isTruthy(user_setup$enumerator_id))
+  output$plot_outlier_enum_rates <- render_echart({
+    validate(need(shiny::isTruthy(user_setup$enumerator_id), "Map the enumerator to see who the flags come from."))
     df <- dq_filtered_data()
     req(user_setup$enumerator_id %in% names(df))
     rate_plot(df[[user_setup$enumerator_id]], "#0A6EB4", "No enumerator data to display")
@@ -538,7 +521,10 @@ dq_outliers_server <- function(input, output, session, ns, core) {
     tags$div(class = "wfp-insights", cards)
   })
 
-  output$ol_table <- DT::renderDT({
+  # drawn by React (OutliersTab.tsx); the Details buttons set input$ol_view
+  flag_cols <- list(map = list(`Below allowed minimum` = list(color = "#c5192d"), `Above allowed maximum` = list(color = "#c5192d"),
+                               `Statistically low` = list(color = "#b07800"), `Statistically high` = list(color = "#b07800")))
+  output$ol_table <- render_react_table({
     d <- flagged_df()
     req(d)
     info <- isolate(outlier_info())
@@ -546,18 +532,9 @@ dq_outliers_server <- function(input, output, session, ns, core) {
     keys <- if (!is.null(info$uid_col)) as.character(df[[info$uid_col]][d$.idx]) else as.character(d$.idx)
     show <- d[, setdiff(names(d), ".idx"), drop = FALSE]
     show$Details <- record_detail_buttons(keys, ns("ol_view"))
-    tw_datatable(
-      show, rownames = FALSE, selection = "multiple", class = "compact stripe hover",
-      escape = setdiff(names(show), "Details"),
-      options = list(pageLength = 15, scrollX = TRUE,
-                     columnDefs = list(list(orderable = FALSE, searchable = FALSE, targets = ncol(show) - 1L)))
-    ) |>
-      DT::formatStyle("Flag", fontWeight = "600",
-                      color = DT::styleEqual(c("Below allowed minimum", "Above allowed maximum",
-                                               "Statistically low", "Statistically high"),
-                                             c("#c5192d", "#c5192d", "#b07800", "#b07800")))
-  })
-  ol_proxy <- DT::dataTableProxy("ol_table", session = session)
+    show
+  }, page_size = 15, selection = "multiple", html = "Details", styles = list(Flag = flag_cols),
+  formats = list(`Robust z` = "dec1", `Times the median` = "dec1"))
 
   selected_rows <- reactive({
     d <- flagged_df()
@@ -570,10 +547,11 @@ dq_outliers_server <- function(input, output, session, ns, core) {
   })
 
   observeEvent(input$ol_select_all, {
+    req(input$ol_select_all > 0)
     d <- flagged_df(); need_ok(!is.null(d), "Nothing is flagged for this variable.")
-    DT::selectRows(ol_proxy, seq_len(nrow(d)))
+    react_table_select("ol_table", seq_len(nrow(d)))
   })
-  observeEvent(input$ol_select_none, DT::selectRows(ol_proxy, NULL))
+  observeEvent(input$ol_select_none, { req(input$ol_select_none > 0); react_table_select("ol_table", NULL) })
   observeEvent(input$ol_pick, {
     d <- flagged_df(); need_ok(!is.null(d), "Nothing is flagged for this variable.")
     p <- input$ol_pick
@@ -583,7 +561,7 @@ dq_outliers_server <- function(input, output, session, ns, core) {
       enum = which(as.character(df[[user_setup$enumerator_id]][d$.idx]) == p$value),
       admin = which(as.character(df[[user_setup$admin1]][d$.idx]) == p$value),
       integer(0))
-    DT::selectRows(ol_proxy, hit)
+    react_table_select("ol_table", hit)
     showNotification(sprintf("%d value(s) selected.", length(hit)), type = "message", duration = 3)
   })
 
@@ -730,16 +708,19 @@ dq_outliers_server <- function(input, output, session, ns, core) {
   })
 
   observeEvent(input$btn_apply_outlier_correction, {
+    req(input$btn_apply_outlier_correction > 0)   # a React button sends 0 at start
     info <- outlier_info()
     if (!length(info$idx)) { showNotification("Nothing is flagged.", type = "message"); return() }
     start_correction(info$idx, input$outlier_correction_method)
   })
   observeEvent(input$ol_correct_sel, {
+    req(input$ol_correct_sel > 0)   # a React button sends 0 at start
     rows <- selected_rows()
     if (!length(rows)) { showNotification("Select rows in the table first.", type = "warning"); return() }
     start_correction(rows, input$outlier_correction_method)
   })
   observeEvent(input$ol_set_value, {
+    req(input$ol_set_value > 0)   # a React button sends 0 at start
     rows <- selected_rows()
     if (!length(rows)) { showNotification("Select the rows to set first.", type = "warning"); return() }
     showModal(modalDialog(
@@ -796,6 +777,7 @@ dq_outliers_server <- function(input, output, session, ns, core) {
 
   # Checked and true: logged, and no longer flagged (read back by verified_uids()).
   observeEvent(input$ol_verify, {
+    req(input$ol_verify > 0)   # a React button sends 0 at start
     rows <- selected_rows()
     if (!length(rows)) { showNotification("Select the values you checked first.", type = "warning"); return() }
     showModal(modalDialog(
@@ -821,6 +803,7 @@ dq_outliers_server <- function(input, output, session, ns, core) {
 
   # --- every numeric variable at once -----------------------------------------
   scan <- eventReactive(input$ol_scan, {
+    req(input$ol_scan > 0)   # a React button sends 0 at start
     waiter::waiter_show(html = waiter_content("Checking every numeric variable..."), color = "rgba(10, 30, 50, 0.65)")
     on.exit(waiter::waiter_hide(), add = TRUE)
     df <- dq_filtered_data()
@@ -835,23 +818,21 @@ dq_outliers_server <- function(input, output, session, ns, core) {
   })
 
   output$ol_scan_empty <- renderUI({
-    if (input$ol_scan == 0) {
+    if (!isTRUE(input$ol_scan > 0)) {
       empty_state("Not run yet", "Click Audit all numeric variables to check every numeric column at once.",
                   icon = "clipboard-data")
     }
   })
 
-  output$ol_scan_table <- DT::renderDT({
+  output$ol_scan_table <- render_react_table({
     s <- scan()
     req(s, nrow(s) > 0)
     names(s) <- c("Variable", "Mapped as", "Answered", "Missing (%)", "Min", "Median", "Max",
                   "Allowed range", "Flagged", "Flagged (%)")
-    tw_datatable(s, rownames = FALSE, selection = "single", class = "compact stripe hover",
-                  options = list(pageLength = 15, scrollX = TRUE)) |>
-      DT::formatRound(c("Min", "Median", "Max"), digits = 2) |>
-      DT::formatStyle("Flagged (%)", background = DT::styleColorBar(c(0, max(s[["Flagged (%)"]], 1)), "rgba(197,25,45,0.25)"),
-                      backgroundSize = "100% 70%", backgroundRepeat = "no-repeat", backgroundPosition = "center")
-  })
+    s
+  }, page_size = 15, selection = "single",
+  formats = list(Answered = "int", Min = "dec2", Median = "dec2", Max = "dec2", Flagged = "int"),
+  styles = list(`Flagged (%)` = list(bar = "#c5192d")))
 
   observeEvent(input$ol_scan_table_rows_selected, {
     s <- scan()
@@ -881,4 +862,51 @@ outlier_default_var <- function(cols, mk, setup) {
   avoid <- unlist(lapply(c("lon", "lat", "weight", "unique_id"), function(k) as.character(setup[[k]] %||% "")[1]))
   rest <- cols[!cols %in% avoid & !grepl("(^|_)(lon|lat|long|longitude|latitude|gps|x|y|weight|wgt|id|uuid|index)($|_)", tolower(cols))]
   c(rest, cols)[1]
+}
+
+#' A histogram with the statistical bounds (red dashed) and the allowed range
+#' (blue dotted) as lines
+#' @noRd
+dq_hist_option <- function(v, name, bounds = numeric(0), allowed = numeric(0)) {
+  whole <- all(v == round(v)) && diff(range(v)) <= 60
+  h <- graphics::hist(v, breaks = if (whole) seq(min(v) - 0.5, max(v) + 0.5, 1) else "Sturges", plot = FALSE)
+  tip <- sprintf("%s to %s: <b>%s</b> households", format(signif(h$breaks[-length(h$breaks)], 4)),
+                 format(signif(h$breaks[-1], 4)), format(h$counts, big.mark = ","))
+  if (whole) tip <- sprintf("%s: <b>%s</b> households", format(h$mids), format(h$counts, big.mark = ","))
+  ml <- c(lapply(bounds, function(x) list(xAxis = x, lineStyle = list(color = "#c5192d", type = "dashed", width = 1.5),
+                                          label = list(formatter = format(signif(x, 4)), color = "#c5192d", fontSize = 10))),
+          lapply(allowed, function(x) list(xAxis = x, lineStyle = list(color = "#0A6EB4", type = "dotted", width = 2),
+                                           label = list(formatter = format(signif(x, 4)), color = "#0A6EB4", fontSize = 10))))
+  # the axis takes in the lines; round ends, so its labels stay plain numbers
+  lo <- floor(min(c(h$breaks, bounds, allowed))); hi <- ceiling(max(c(h$breaks, bounds, allowed)))
+  s <- list(type = "bar", barWidth = "96%", itemStyle = list(color = "rgba(10,110,180,0.6)"),
+            data = lapply(seq_along(h$mids), function(i) list(value = list(h$mids[i], h$counts[i]), tip = tip[i])))
+  if (length(ml)) s$markLine <- list(silent = TRUE, symbol = "none", data = ml)
+  list(grid = list(left = 8, right = 16, top = 34, bottom = 8, containLabel = TRUE),
+       tooltip = list(trigger = "item", formatter = "fn:tip"),
+       xAxis = list(type = "value", name = name, nameLocation = "middle", nameGap = 26, min = lo, max = hi,
+                    axisLabel = list(formatter = if (hi - lo < 20) "fn:dec1" else "fn:num", hideOverlap = TRUE)),
+       yAxis = list(type = "value", name = "Households", axisLabel = list(formatter = "fn:num")),
+       series = list(s))
+}
+
+#' Box plots of a variable by area (at most 30 areas, the largest), the values
+#' beyond the whiskers as points (at most 2,000)
+#' @noRd
+dq_box_option <- function(g, v, name) {
+  n <- sort(table(g), decreasing = TRUE)
+  keep <- sort(names(n)[seq_len(min(30, length(n)))])
+  st <- lapply(keep, function(k) grDevices::boxplot.stats(v[g == k]))
+  out <- do.call(rbind, lapply(seq_along(keep), function(i) if (length(st[[i]]$out)) data.frame(i = i - 1, y = st[[i]]$out)))
+  if (!is.null(out) && nrow(out) > 2000) out <- out[order(-abs(out$y))[seq_len(2000)], , drop = FALSE]
+  list(grid = list(left = 8, right = 16, top = 34, bottom = 8, containLabel = TRUE),
+       tooltip = list(trigger = "item"),
+       xAxis = list(type = "category", data = I(keep), axisLabel = list(interval = 0, rotate = if (length(keep) > 6) 35 else 0,
+                                                                         width = 110, overflow = "truncate")),
+       yAxis = list(type = "value", name = name, scale = TRUE),
+       series = list(
+         list(type = "boxplot", name = name, data = lapply(st, function(x) x$stats),
+              itemStyle = list(color = "rgba(10,110,180,0.15)", borderColor = "#0A6EB4")),
+         list(type = "scatter", name = "Beyond the whiskers", symbolSize = 5, itemStyle = list(color = "#c5192d", opacity = 0.6),
+              data = if (is.null(out)) list() else lapply(seq_len(nrow(out)), function(k) list(out$i[k], out$y[k])))))
 }

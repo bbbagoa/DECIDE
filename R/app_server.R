@@ -10,6 +10,9 @@ app_server <- function(input, output, session) {
   # work in memory where the server allows it; www/busy.js also sends a
   # keep-alive every 30 s so an idle page is not taken for a closed one.
   session$allowReconnect(TRUE)
+  # The React shell hosts the pages not ported yet (R/utils_react.R).
+  render_legacy_pages(output)
+  tw_nav_state(output, session)
 
   # The audit trail, shared by every phase.
   modification_log <- reactiveVal(
@@ -279,17 +282,10 @@ app_server <- function(input, output, session) {
   # Monitoring on PDM data, both loaded inside their own tabs, so gating them
   # on a registration import nobody has done yet would be wrong -- a country
   # office designing a scorecard has no registration list yet.
-  observe({
-    bslib::nav_hide("main_nav", target = "overview_panel")
-    bslib::nav_hide("main_nav", target = "dq_panel")
-    bslib::nav_hide("main_nav", target = "spot_panel")
-    bslib::nav_hide("main_nav", target = "ben_panel")
-  })
+  observe(tw_nav("hide", c("overview_panel", "dq_panel", "spot_panel", "ben_panel")))
 
-  # Landing-page shortcuts into each phase.
-  observeEvent(input$go_design, bslib::nav_select("main_nav", "scorecard_panel"))
-  observeEvent(input$go_import, bslib::nav_select("main_nav", "import_panel"))
-  observeEvent(input$go_monitor, bslib::nav_select("main_nav", "pdm_panel"))
+  # Landing-page shortcuts into each phase (R/mod_welcome.R).
+  mod_welcome_server(input, output, session)
 
   # 2. Watch for the 'Validation' signal from your setup module
   # Every confirmed setup (not only the first) goes on the record, and the
@@ -298,10 +294,7 @@ app_server <- function(input, output, session) {
     req(setup_result$saved() > 0)
 
     # REVEAL the panels
-    bslib::nav_show("main_nav", target = "overview_panel")
-    bslib::nav_show("main_nav", target = "dq_panel")
-    bslib::nav_show("main_nav", target = "spot_panel")
-    bslib::nav_show("main_nav", target = "ben_panel")
+    tw_nav("show", c("overview_panel", "dq_panel", "spot_panel", "ben_panel"))
 
     keys <- setup_keys()
     mapped <- vapply(keys, function(k) as.character(user_setup[[k]] %||% "")[1], character(1))
@@ -337,7 +330,7 @@ app_server <- function(input, output, session) {
     if (!is.null(o) && length(plan)) original_df(apply_setup_plan(o, user_setup$source_map %||% list(), plan)$df)
 
     # JUMP to the Overview automatically
-    bslib::nav_select("main_nav", selected = "overview_panel")
+    tw_nav("select", "overview_panel")
 
     showNotification("Variables mapped. The analysis tabs are now open.", type = "message")
   })

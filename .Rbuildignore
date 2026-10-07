@@ -24,3 +24,4 @@
 ^rsconnect$
 ^TargetWise\.Rcheck$
 ^TargetWise_.*\.tar\.gz$
+^react$

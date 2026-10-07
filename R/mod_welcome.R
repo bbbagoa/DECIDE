@@ -256,3 +256,15 @@ mod_import_panel_ui <- function(tr = function(x) x) {
     )
   )
 }
+
+#' Welcome page server: the three shortcuts into each phase, and the release
+#' facts the React page shows (react/src/pages/welcome/)
+#' @noRd
+mod_welcome_server <- function(input, output, session) {
+  # React buttons send an initial 0: only a click moves
+  observeEvent(input$go_design, { req(input$go_design > 0); tw_nav("select", "scorecard_panel") })
+  observeEvent(input$go_import, { req(input$go_import > 0); tw_nav("select", "import_panel") })
+  observeEvent(input$go_monitor, { req(input$go_monitor > 0); tw_nav("select", "pdm_panel") })
+  output$welcome_meta <- shinyreact::reactive_output(list(
+    version = tryCatch(as.character(utils::packageVersion("TargetWise")), error = function(e) "development")))
+}

@@ -21,3 +21,5 @@ data/
 *.sav
 *.dta
 *.rds
+react/dev/gallery/www/
+react/.build-lock/

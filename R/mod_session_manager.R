@@ -164,15 +164,12 @@ mod_session_manager_server <- function(
         # The registration-data pages open only when the session carries that
         # data (a design-only session waits for the registration round).
         if (!is.null(saved$uploaded_df)) {
-          bslib::nav_show("main_nav", target = "overview_panel", session = parent_session)
-          bslib::nav_show("main_nav", target = "dq_panel", session = parent_session)
-          bslib::nav_show("main_nav", target = "spot_panel", session = parent_session)
-          bslib::nav_show("main_nav", target = "ben_panel", session = parent_session)
+          tw_nav("show", c("overview_panel", "dq_panel", "spot_panel", "ben_panel"), session = parent_session)
         }
         # Back to the page the user was on.
         pg <- saved$ui$main_nav
         if (shiny::isTruthy(pg) && (!is.null(saved$uploaded_df) || !pg %in% c("overview_panel", "dq_panel", "spot_panel", "ben_panel"))) {
-          bslib::nav_select("main_nav", pg, session = parent_session)
+          tw_nav("select", pg, session = parent_session)
         }
       }
       shown <- if (kind == "all") label else sprintf("%s (%s)", label, kind_label(kind))
@@ -271,6 +268,8 @@ mod_session_manager_server <- function(
       })
       showNotification(paste("Session", name, "deleted."), type = "message")
     })
+    # Its holder is an empty element in the navbar: render it even so.
+    outputOptions(output, "restore_modal_container", suspendWhenHidden = FALSE)
 
     # -------------------------------------------------------------------------
     # 2. Session control menu
@@ -321,7 +320,15 @@ mod_session_manager_server <- function(
       )
     })
 
+    # The React toolbar (react/src/components/SessionToolbar.tsx) draws the
+    # same buttons; it needs to know only whether Refresh MODA applies.
+    output$toolbar <- shinyreact::reactive_output({
+      cred <- moda_credentials()
+      list(moda = is.list(cred) && isTruthy(cred$form_id))
+    })
+
     observeEvent(input$btn_sync_moda, {
+      req(input$btn_sync_moda > 0)   # the React toolbar sends an initial 0
       cred <- moda_credentials()
       if (isTruthy(cred$token)) { sync_trigger(Sys.time()); return() }
       # A restored session has no key: use the one entered earlier in this session.
@@ -386,7 +393,7 @@ mod_session_manager_server <- function(
                if (page_kind %in% have && length(have) > 1) " Untick the parts you do not want to save now.")
       ))
     }
-    observeEvent(input$btn_save_session, show_save_dialog())
+    observeEvent(input$btn_save_session, { req(input$btn_save_session > 0); show_save_dialog() })
 
     # Save everything under `name`; FALSE (with a notice) when there is
     # nothing to save or no name.
@@ -454,6 +461,7 @@ mod_session_manager_server <- function(
     # Save this session, then start an empty one. The page reloads, which
     # resets every module; the saved session stays under Load.
     observeEvent(input$btn_new_session, {
+      req(input$btn_new_session > 0)   # the React toolbar sends an initial 0
       has_work <- !is.null(uploaded_df()) || length(workspace_snapshot(workspace)) > 0
       showModal(modalDialog(
         title = tagList(icon("file-circle-plus"), " Start a fresh session"),
@@ -480,6 +488,7 @@ mod_session_manager_server <- function(
     observeEvent(input$btn_new_nosave, start_fresh())
 
     observeEvent(input$btn_load_session, {
+      req(input$btn_load_session > 0)   # the React toolbar sends an initial 0
       sessions <- list_saved_sessions(who)
       if (nrow(sessions) == 0) {
         showNotification("No saved sessions found.", type = "warning")
@@ -505,6 +514,7 @@ mod_session_manager_server <- function(
     })
 
     observeEvent(input$btn_clear_session, {
+      req(input$btn_clear_session > 0)   # the React toolbar sends an initial 0
       sessions <- list_saved_sessions(who)
       if (nrow(sessions) == 0) {
         showNotification("No saved sessions to clear.", type = "warning")

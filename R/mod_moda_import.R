@@ -519,6 +519,7 @@ mod_moda_import_server <- function(id, summary = TRUE) {
     })
 
     observeEvent(input$btn_open_moda, {
+      req(input$btn_open_moda > 0)   # React buttons send an initial 0
       showModal(modalDialog(
         title = "Import from a data collection server",
         size = "m",

@@ -218,8 +218,9 @@ mod_var_calc_server <- function(id, get_data, set_data, log = NULL, phase = "Sel
            };"))
       ))
     }
-    observeEvent(input$open, open_modal("condition"))
-    observeEvent(input$open_bulk, open_modal("bulk"))
+    # React buttons send an initial 0: only a click opens the dialog
+    observeEvent(input$open, { req(input$open > 0); open_modal("condition") })
+    observeEvent(input$open_bulk, { req(input$open_bulk > 0); open_modal("bulk") })
     optimal <- function() identical(input$type, "bulk") && identical(input$bulk_method, "optimal") && !is.null(get_outcome())
 
     # Every column that could become a yes/no criterion.

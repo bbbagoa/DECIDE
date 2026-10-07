@@ -68,6 +68,8 @@
 
 // Show or hide an input with its label (area levels that are not mapped)
 Shiny.addCustomMessageHandler('tw-input-visible', function(m) {
+  // React inputs (react/src/lib/inputs.tsx) listen for it too
+  document.dispatchEvent(new CustomEvent('tw-input-visible', { detail: m }));
   var go = function() {
     var el = document.getElementById(m.id); if (!el) return false;
     var c = el.closest('.shiny-input-container') || el.closest('.form-group') || el;

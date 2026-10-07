@@ -173,7 +173,8 @@ dq_duplicates_server <- function(input, output, session, ns, core) {
   output$dup_groups <- kpi("dup_groups")
   output$dup_exact  <- kpi("exact")
 
-  output$dup_has_rows <- reactive({
+  # read by the React page (DuplicatesTab.tsx) to show the groups card
+  output$dup_has_rows <- shinyreact::reactive_output({
     a <- analysis_or_null()
     !is.null(a) && nrow(a$dup_df) > 0
   })
@@ -197,7 +198,9 @@ dq_duplicates_server <- function(input, output, session, ns, core) {
     else paste(p, collapse = ", ")
   }, character(1), USE.NAMES = FALSE)
 
-  output$dq_duplicate_table <- DT::renderDT({
+  # drawn by React (DuplicatesTab.tsx): one band per group (the Group
+  # column), the Compare and Details buttons set input$dup_compare / dup_view
+  output$dq_duplicate_table <- render_react_table({
     a <- analysis_or_null()
     req(a, nrow(a$dup_df) > 0)
     d <- a$dup_df
@@ -217,21 +220,10 @@ dq_duplicates_server <- function(input, output, session, ns, core) {
       ns("dup_compare"), d$.dup_group)
     # Row position, not the id: the id itself may be what is duplicated.
     out$Details <- record_detail_buttons(seq_len(nrow(d)), ns("dup_view"))
-    n <- ncol(out)
-    tw_datatable(
-      out, rownames = FALSE, selection = "multiple", class = "compact hover",
-      escape = setdiff(names(out), c("Compare", "Details")),
-      extensions = "RowGroup",
-      options = list(
-        pageLength = 25, scrollX = TRUE, ordering = FALSE,
-        rowGroup = list(dataSrc = 0),
-        columnDefs = list(list(visible = FALSE, targets = 0),
-                          list(searchable = FALSE, targets = c(n - 2L, n - 1L))))
-    ) |>
-      DT::formatStyle("Copy", color = "#c5192d", fontWeight = "600") |>
-      DT::formatStyle("Differs in", color = "#b07800")
-  })
-  dup_proxy <- DT::dataTableProxy("dq_duplicate_table", session = session)
+    out
+  }, page_size = 25, selection = "multiple", group = "Group", html = c("Compare", "Details"),
+  styles = list(Copy = list(map = list(`Exact copy` = list(color = "#c5192d"))),
+                `Differs in` = list(cell = list(bg = "#fdeec4", color = "#7a5b00"))))
 
   selected <- reactive(input$dq_duplicate_table_rows_selected %||% integer(0))
   output$dup_selected_n <- renderText({
@@ -246,16 +238,18 @@ dq_duplicates_server <- function(input, output, session, ns, core) {
   })
 
   observeEvent(input$dup_sel_extra, {
+    req(input$dup_sel_extra > 0)   # a React button sends 0 at start
     a <- analysis_or_null(); need_ok(!is.null(a), "Click Find duplicates first.")
-    DT::selectRows(dup_proxy, which(duplicated(a$dup_df$.dup_group)))
+    react_table_select("dq_duplicate_table", which(duplicated(a$dup_df$.dup_group)))
   })
   observeEvent(input$dup_sel_exact, {
+    req(input$dup_sel_exact > 0)
     a <- analysis_or_null(); need_ok(!is.null(a), "Click Find duplicates first.")
     hit <- which(a$dup_df$.exact)
-    DT::selectRows(dup_proxy, hit)
+    react_table_select("dq_duplicate_table", hit)
     if (!length(hit)) showNotification("No exact copies: every duplicate differs somewhere.", type = "message")
   })
-  observeEvent(input$dup_sel_none, DT::selectRows(dup_proxy, NULL))
+  observeEvent(input$dup_sel_none, { req(input$dup_sel_none > 0); react_table_select("dq_duplicate_table", NULL) })
 
   observeEvent(input$dup_view, {
     a <- analysis_or_null(); req(a)
@@ -338,6 +332,7 @@ dq_duplicates_server <- function(input, output, session, ns, core) {
   }
 
   observeEvent(input$dup_delete, {
+    req(input$dup_delete > 0)
     rows <- selected()
     if (!length(rows)) { showNotification("Select the records to delete first.", type = "warning"); return() }
     a <- analysis_or_null(); req(a)

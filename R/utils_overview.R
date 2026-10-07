@@ -569,3 +569,318 @@ too_many_options <- function(x, name) {
   sprintf("Too many options for %s (%s different answers): it cannot be shown clearly. Choose a variable with at most %d answers.",
           name, format(n, big.mark = ","), MAX_OPTIONS)
 }
+
+# ---- Chart builder as ECharts (the React Overview) ---------------------------
+
+#' Chart builder colours (WFP token hexes)
+#' @noRd
+GB_COLS <- c("#0A6EB4", "#f7b825", "#3f7e44", "#c5192d", "#26bde2", "#8a96a3", "#5b6b7c", "#e67e22")
+
+#' At most this many points drawn in a scatter (the correlation and the trend
+#' use every household)
+#' @noRd
+GB_MAX_POINTS <- 20000L
+
+#' A colour with an alpha, as rgba()
+#' @noRd
+gb_tint <- function(hex, a) { v <- grDevices::col2rgb(hex); sprintf("rgba(%d,%d,%d,%.2f)", v[1], v[2], v[3], a) }
+
+#' Five numbers of a box plot (whiskers at the last values within 1.5 IQR)
+#' @noRd
+gb_five <- function(y) {
+  q <- stats::quantile(y, c(.25, .5, .75), names = FALSE); iqr <- q[3] - q[1]
+  inr <- y[y >= q[1] - 1.5 * iqr & y <= q[3] + 1.5 * iqr]
+  c(min(inr), q[1], q[2], q[3], max(inr))
+}
+
+#' The chart builder's chart as an ECharts option
+#'
+#' One or two variables, optionally grouped by a third; the chart follows
+#' their kinds (`ov_var_kind()`) and `type` (`ov_chart_types()`). Box plots
+#' come from five numbers computed here and scatters draw at most
+#' `GB_MAX_POINTS` points, so the browser never gets every household.
+#' @param axes list(ymin, ymax, xmin, xmax), NA = automatic.
+#' @param lab Labels a column name.
+#' @return list(option, note, auto = list(x, y)) (auto: the data's own ranges,
+#'   for the Axes dialog).
+#' @noRd
+gb_echart <- function(df, x, y = NULL, g = NULL, type = NULL, axes = list(), lab = function(z) z,
+                      max_points = GB_MAX_POINTS) {
+  n <- nrow(df)
+  kx <- ov_var_kind(df[[x]]); ky <- if (is.null(y)) "none" else ov_var_kind(df[[y]])
+  types <- ov_chart_types(kx, ky)
+  type <- if (isTRUE(type %in% types)) type else unname(types[1])
+  fin <- function(v) { v <- suppressWarnings(as.numeric(v)); if (length(v) == 1 && is.finite(v)) v else NULL }
+  ymin <- fin(axes$ymin); ymax <- fin(axes$ymax); xmin <- fin(axes$xmin); xmax <- fin(axes$xmax)
+  as_cat <- function(col, k = 12) ov_categories(df[[col]], rep(1, n), max_levels = k)
+  num <- function(col) as_number(df[[col]])
+  gf <- if (is.null(g)) NULL else as_cat(g, 6)
+  pal <- function(f) stats::setNames(rep_len(GB_COLS, nlevels(f)), levels(f))
+  keep <- function(...) { ok <- Reduce(`&`, lapply(list(...), function(z) !is.na(z))); if (!is.null(gf)) ok <- ok & !is.na(gf); which(ok) }
+  esc <- function(z) htmltools::htmlEscape(as.character(z))
+  fmt <- function(v) vapply(signif(v, 3), function(z) format(z, big.mark = ",", scientific = FALSE, trim = TRUE), "")
+  cnt <- function(v) format(v, big.mark = ",")
+  legend <- !is.null(gf)
+  vaxis <- function(name, lo = ymin, hi = ymax, scale = TRUE) c(list(type = "value", name = name, nameLocation = "end",
+                                                                       nameTextStyle = list(align = "left"), scale = scale),
+                                                    if (!is.null(lo)) list(min = lo), if (!is.null(hi)) list(max = hi))
+  caxis <- function(cats, name) list(type = "category", data = I(as.character(cats)), name = name, nameLocation = "middle",
+                                     nameGap = 28, axisLabel = list(interval = 0, hideOverlap = TRUE))
+  done <- function(opt, note, auto = list(x = NULL, y = NULL), show_legend = legend) {
+    opt$grid <- opt$grid %||% list(left = 12, right = 18, top = 30, bottom = if (show_legend) 56 else 34, containLabel = TRUE)
+    if (show_legend) opt$legend <- list(bottom = 0, type = "scroll")
+    opt$tooltip <- opt$tooltip %||% list(trigger = "item", formatter = "fn:tip")
+    list(option = opt, note = note, auto = auto)
+  }
+  boxes <- function(yv, cat, grp) {
+    cat <- droplevels(as.factor(cat)); grp <- if (is.null(grp)) NULL else droplevels(as.factor(grp))
+    lv <- if (is.null(grp)) "" else levels(grp)
+    series <- lapply(lv, function(l) {
+      col <- if (nzchar(l)) pal(gf)[[l]] else GB_COLS[1]
+      data <- lapply(levels(cat), function(cl) {
+        k <- which(cat == cl & (if (is.null(grp)) TRUE else grp == l))
+        if (!length(k)) return("-")
+        f <- gb_five(yv[k])
+        list(value = round(f, 6), tip = sprintf("<b>%s%s</b><br>median %s (%s to %s)<br>whiskers %s to %s<br>mean %s, %s households",
+                                                 esc(cl), if (nzchar(l)) paste0(" \u00b7 ", esc(l)) else "", fmt(f[3]), fmt(f[2]), fmt(f[4]),
+                                                 fmt(f[1]), fmt(f[5]), fmt(mean(yv[k])), cnt(length(k))))
+      })
+      list(type = "boxplot", name = if (nzchar(l)) l else "Households", data = data, boxWidth = c(14, 46),
+           itemStyle = list(color = gb_tint(col, 0.16), borderColor = col, borderWidth = 1.4))
+    })
+    list(cats = levels(cat), series = series)
+  }
+
+  # ---- one number
+  if (ky == "none" && kx == "num") {
+    xv <- num(x); i <- keep(xv)
+    note <- sprintf("%s households; mean %.1f, median %.1f", cnt(length(i)), mean(xv[i]), stats::median(xv[i]))
+    if (type == "hist") {
+      j <- i
+      if (!is.null(xmin)) j <- j[xv[j] >= xmin]
+      if (!is.null(xmax)) j <- j[xv[j] <= xmax]
+      if (!length(j)) j <- i
+      br <- graphics::hist(xv[j], breaks = 30, plot = FALSE)$breaks
+      bins <- cut(xv[j], br, include.lowest = TRUE)
+      cats <- fmt((br[-1] + br[-length(br)]) / 2)
+      rng <- sprintf("%s to %s", fmt(br[-length(br)]), fmt(br[-1]))
+      lv <- if (is.null(gf)) "Households" else levels(droplevels(gf[j]))
+      series <- lapply(lv, function(l) {
+        k <- if (is.null(gf)) seq_along(j) else which(gf[j] == l)
+        h <- as.numeric(table(bins[k]))
+        col <- if (is.null(gf)) GB_COLS[1] else pal(gf)[[l]]
+        list(type = "bar", name = l, barGap = "-100%", barCategoryGap = "4%",
+             itemStyle = list(color = if (is.null(gf)) col else gb_tint(col, 0.55)),
+             data = lapply(seq_along(h), function(b) list(value = h[b], tip = sprintf("%s%s<br><b>%s</b> households",
+                                                                                   if (is.null(gf)) "" else paste0(esc(l), ": "), rng[b], cnt(h[b])))))
+      })
+      mx <- max(vapply(series, function(s) max(vapply(s$data, function(d) d$value, 0)), 0))
+      return(done(list(xAxis = caxis(cats, lab(x)), yAxis = vaxis("Households", scale = FALSE), series = series), note,
+                  list(x = range(xv[i]), y = c(0, mx))))
+    }
+    b <- boxes(xv[i], if (!is.null(gf)) gf[i] else factor(rep(lab(x), length(i))), NULL)
+    return(done(list(xAxis = caxis(b$cats, ""), yAxis = vaxis(lab(x)), series = b$series), note,
+                list(x = NULL, y = range(xv[i])), show_legend = FALSE))
+  }
+
+  # ---- one category
+  if (ky == "none") {
+    xc <- as_cat(x); i <- keep(xc)
+    gg <- if (is.null(gf)) factor(rep("All", length(i))) else droplevels(gf[i])
+    tab <- table(droplevels(xc[i]), gg)
+    val <- if (type == "bars") sweep(tab, 2, pmax(colSums(tab), 1), "/") * 100 else tab
+    series <- lapply(colnames(tab), function(l) {
+      col <- if (is.null(gf)) GB_COLS[1] else pal(gf)[[l]]
+      list(type = "bar", name = if (is.null(gf)) "Households" else l, itemStyle = list(color = col), barMaxWidth = 46,
+           label = if (is.null(gf)) list(show = TRUE, position = "top", fontSize = 10, textBorderWidth = 0, formatter = if (type == "bars") "{c}%" else "{c}"),
+           data = lapply(rownames(tab), function(r) list(value = round(val[r, l], 1),
+             tip = sprintf("<b>%s</b>%s<br>%s households%s", esc(r), if (is.null(gf)) "" else paste0(" \u00b7 ", esc(l)), cnt(tab[r, l]),
+                           if (type == "bars") sprintf(" (%.1f%%)", val[r, l]) else ""))))
+    })
+    return(done(list(xAxis = caxis(rownames(tab), lab(x)), yAxis = vaxis(if (type == "bars") "% of households" else "Households", scale = FALSE),
+                     series = series), sprintf("%s households", cnt(length(i))), list(x = NULL, y = c(0, max(val)))))
+  }
+
+  # ---- two numbers
+  if (kx == "num" && ky == "num") {
+    xv <- num(x); yv <- num(y); i <- keep(xv, yv)
+    grp <- if (is.null(gf)) factor(rep("All", n)) else gf
+    lvs <- levels(droplevels(grp[i]))
+    notes <- character(0); series <- list(); names_shown <- character(0)
+    for (l in lvs) {
+      j <- i[grp[i] == l]; col <- if (is.null(gf)) GB_COLS[1] else pal(gf)[[l]]
+      rtxt <- ov_cor_text(xv[j], yv[j]); notes <- c(notes, if (is.null(gf)) rtxt else sprintf("%s: %s", l, rtxt))
+      nm <- if (is.null(gf)) "Households" else sprintf("%s (r = %s)", l, sub("^r = ([-0-9.]+).*", "\\1", rtxt))
+      cap <- ceiling(max_points / length(lvs))
+      jp <- if (length(j) > cap) sort(sample(j, cap)) else j
+      series[[length(series) + 1]] <- list(type = "scatter", name = nm, symbolSize = 6, large = length(jp) > 5000,
+                                           itemStyle = list(color = col, opacity = 0.55),
+                                           data = unname(cbind(signif(xv[jp], 6), signif(yv[jp], 6))))
+      names_shown <- c(names_shown, nm)
+      if (type == "scatter_trend" && length(j) >= 3 && stats::var(xv[j]) > 0) {
+        cf <- stats::coef(stats::lm(yv[j] ~ xv[j])); xs <- range(xv[j])
+        series[[length(series) + 1]] <- list(type = "line", name = paste(l, "trend"), showSymbol = FALSE, silent = TRUE,
+                                             lineStyle = list(color = col, width = 2), itemStyle = list(color = col),
+                                             tooltip = list(show = FALSE),
+                                             data = unname(cbind(xs, cf[1] + cf[2] * xs)))
+      }
+    }
+    opt <- list(xAxis = c(vaxis(lab(x), xmin, xmax)[-c(3, 4)], list(nameLocation = "middle", nameGap = 28)),
+                yAxis = vaxis(lab(y)), series = series,
+                tooltip = list(trigger = "item"))
+    out <- done(opt, paste(notes, collapse = " \u00b7 "), list(x = range(xv[i]), y = range(yv[i])))
+    if (legend) out$option$legend$data <- I(names_shown)
+    return(out)
+  }
+
+  # ---- a category and a number
+  if (xor(kx == "num", ky == "num")) {
+    ccol <- if (kx == "cat") x else y; ncol <- if (kx == "num") x else y
+    cx <- as_cat(ccol); yv <- num(ncol); i <- keep(cx, yv)
+    note <- sprintf("%s households", cnt(length(i)))
+    if (type == "mean") {
+      # the mean and its 95% interval: a mark at the mean, whiskers to the interval
+      cats <- levels(droplevels(cx[i]))
+      lv <- if (is.null(gf)) "" else levels(droplevels(gf[i]))
+      lo <- Inf; hi <- -Inf
+      series <- lapply(lv, function(l) {
+        col <- if (nzchar(l)) pal(gf)[[l]] else GB_COLS[1]
+        data <- lapply(cats, function(cl) {
+          k <- i[cx[i] == cl & (if (nzchar(l)) gf[i] == l else TRUE)]
+          if (!length(k)) return("-")
+          m <- mean(yv[k]); ci <- if (length(k) > 1) 1.96 * stats::sd(yv[k]) / sqrt(length(k)) else 0
+          lo <<- min(lo, m - ci); hi <<- max(hi, m + ci)
+          list(value = signif(c(m - ci, m, m, m, m + ci), 6),
+               tip = sprintf("<b>%s%s</b><br>Mean %s \u00b1 %s<br>%s households", esc(cl), if (nzchar(l)) paste0(" \u00b7 ", esc(l)) else "",
+                             fmt(m), if (length(k) > 1) fmt(ci) else "-", cnt(length(k))))
+        })
+        list(type = "boxplot", name = if (nzchar(l)) l else "Mean", data = data, boxWidth = c(16, 40),
+             itemStyle = list(color = gb_tint(col, 0.16), borderColor = col, borderWidth = 2))
+      })
+      return(done(list(xAxis = caxis(cats, lab(ccol)), yAxis = vaxis(paste("Mean of", lab(ncol), "(95% interval)")), series = series),
+                  note, list(x = NULL, y = c(min(0, lo), hi))))
+    }
+    if (type == "box") {
+      b <- boxes(yv[i], cx[i], if (is.null(gf)) NULL else gf[i])
+      return(done(list(xAxis = caxis(b$cats, lab(ccol)), yAxis = vaxis(lab(ncol)), series = b$series), note, list(x = NULL, y = range(yv[i]))))
+    }
+    # violins: the density of each category drawn as stacked horizontal bars
+    # (a transparent bar to the left edge, then the width), on bins of the
+    # number; a sample on large data
+    iv <- if (length(i) > max_points) sort(sample(i, max_points)) else i
+    lo <- ymin %||% min(yv[iv]); hi <- ymax %||% max(yv[iv])
+    if (!(hi > lo)) hi <- lo + 1
+    nb <- 48
+    edges <- seq(lo, hi, length.out = nb + 1); mids <- (edges[-1] + edges[-(nb + 1)]) / 2
+    cats <- levels(droplevels(cx[iv]))
+    lv <- if (is.null(gf)) "" else levels(droplevels(gf[iv]))
+    G <- length(lv); slot <- 0.9 / G
+    series <- list()
+    for (ci in seq_along(cats)) for (gi in seq_along(lv)) {
+      l <- lv[gi]
+      k <- iv[cx[iv] == cats[ci] & (if (nzchar(l)) gf[iv] == l else TRUE)]
+      if (length(k) < 2) next
+      vals <- yv[k]
+      col <- if (nzchar(l)) pal(gf)[[l]] else GB_COLS[1]
+      d <- if (stats::sd(vals) > 0) stats::approx(stats::density(vals), xout = mids, rule = 2)$y else as.numeric(abs(mids - vals[1]) == min(abs(mids - vals[1])))
+      d[mids < min(vals) | mids > max(vals)] <- 0
+      hw <- if (max(d) > 0) d / max(d) * slot * 0.48 else d
+      centre <- ci + (gi - (G + 1) / 2) * slot
+      q <- stats::quantile(vals, c(.25, .5, .75), names = FALSE)
+      tip <- sprintf("<b>%s%s</b><br>median %s (%s to %s)<br>%s households", esc(cats[ci]), if (nzchar(l)) paste0(" \u00b7 ", esc(l)) else "",
+                     fmt(q[2]), fmt(q[1]), fmt(q[3]), cnt(length(k)))
+      stk <- sprintf("v%d_%d", ci, gi)
+      series[[length(series) + 1]] <- list(type = "bar", stack = stk, silent = TRUE, barGap = "-100%", barCategoryGap = 0,
+                                           itemStyle = list(color = "transparent"), tooltip = list(show = FALSE),
+                                           data = round(centre - hw, 4))
+      series[[length(series) + 1]] <- list(type = "bar", stack = stk, name = if (nzchar(l)) l else "Households", barGap = "-100%",
+                                           barCategoryGap = 0, itemStyle = list(color = gb_tint(col, 0.45)),
+                                           data = lapply(hw, function(h) list(value = round(2 * h, 4), tip = tip)))
+    }
+    opt <- list(
+      grid = list(left = 12, right = 18, top = 30, bottom = if (legend) 56 else 34, containLabel = TRUE),
+      xAxis = list(list(type = "value", min = 0.5, max = length(cats) + 0.5, show = FALSE),
+                   list(type = "category", data = I(cats), position = "bottom", name = lab(ccol), nameLocation = "middle", nameGap = 28,
+                        axisTick = list(show = FALSE), axisLabel = list(interval = 0, hideOverlap = TRUE))),
+      yAxis = list(type = "category", data = I(fmt(mids)), name = lab(ncol), nameLocation = "end", nameTextStyle = list(align = "left"),
+                   axisTick = list(show = FALSE), axisLabel = list(hideOverlap = TRUE)),
+      series = series)
+    out <- done(opt, note, list(x = NULL, y = range(yv[iv])))
+    if (legend) out$option$legend$data <- I(lv)
+    return(out)
+  }
+
+  # ---- two categories: bars, one panel per group
+  xc <- as_cat(x); yc <- as_cat(y, 8); i <- keep(xc, yc)
+  note <- sprintf("%s households \u00b7 colours: %s", cnt(length(i)), lab(y))
+  ycols <- pal(yc)
+  xs <- levels(droplevels(xc[i])); ys <- levels(droplevels(yc[i]))
+  ytitle <- if (type == "stack100") "% of households" else "Households"
+  panel <- function(j, p) {
+    tab <- table(factor(xc[j], levels = xs), factor(yc[j], levels = ys))
+    val <- if (type == "stack100") sweep(tab, 1, pmax(rowSums(tab), 1), "/") * 100 else tab
+    lapply(ys, function(l) list(
+      type = "bar", name = l, stack = if (type == "dodge") NULL else paste0("s", p), xAxisIndex = p - 1, yAxisIndex = p - 1,
+      itemStyle = list(color = ycols[[l]]), barMaxWidth = 46,
+      data = lapply(xs, function(r) list(value = round(val[r, l], 1), tip = sprintf("<b>%s</b><br>%s: %s households%s", esc(r), esc(l), cnt(tab[r, l]),
+                                                                                     if (type == "stack100") sprintf(" (%.1f%%)", val[r, l]) else "")))))
+  }
+  tab <- table(xc[i], yc[i])
+  ytop <- if (type == "stack100") 100 else if (type == "dodge") max(tab) else max(rowSums(tab))
+  auto <- list(x = NULL, y = c(0, ytop))
+  if (is.null(gf)) {
+    opt <- list(xAxis = caxis(xs, lab(x)), yAxis = vaxis(ytitle, scale = FALSE), series = panel(i, 1))
+    out <- done(opt, note, auto, show_legend = TRUE)
+    out$option$legend$data <- I(ys)
+    return(out)
+  }
+  lvs <- levels(droplevels(gf[i])); np <- length(lvs); nc <- min(3, np); nr <- ceiling(np / nc)
+  ph <- 230; top0 <- 30; gap <- 46; height <- top0 + nr * (ph + gap) + 30
+  grids <- list(); xa <- list(); ya <- list(); titles <- list(); series <- list()
+  for (p in seq_len(np)) {
+    r <- (p - 1) %/% nc; cc <- (p - 1) %% nc
+    left <- sprintf("%.1f%%", 2 + cc * 98 / nc); width <- sprintf("%.1f%%", 98 / nc - 4)
+    top <- top0 + r * (ph + gap)
+    grids[[p]] <- list(left = left, width = width, top = top + 26, height = ph - 46, containLabel = TRUE)
+    titles[[p]] <- list(text = lvs[p], left = left, top = top, textStyle = list(fontSize = 11, fontWeight = 600))
+    xa[[p]] <- c(caxis(xs, ""), list(gridIndex = p - 1))
+    ya[[p]] <- c(vaxis("", ymin %||% 0, ymax %||% ytop), list(gridIndex = p - 1))
+    series <- c(series, panel(i[gf[i] == lvs[p]], p))
+  }
+  opt <- list(title = titles, grid = grids, xAxis = xa, yAxis = ya, series = series,
+              legend = list(bottom = 0, type = "scroll", data = I(ys)), tooltip = list(trigger = "item", formatter = "fn:tip"))
+  note <- paste0(note, " \u00b7 bars: ", tolower(ytitle), " \u00b7 one panel per ", lab(g))
+  attr(opt, "height") <- height + 30
+  list(option = opt, note = note, auto = auto)
+}
+
+#' The table builder's cross-tab as a data frame for render_react_table()
+#'
+#' The row categories, then one column per column category and the total
+#' (keys c1, c2, ...; their headers in `labels`). Percentages as shares 0-1.
+#' @return list(data, labels, formats, styles, what, n, chi) or NULL
+#' @noRd
+ct_frame <- function(ct, row_label, what) {
+  tab <- ct$table; stat <- ct$stat
+  pct <- stat %in% c("row", "col", "total")
+  v <- if (pct) tab / 100 else tab
+  keys <- paste0("c", seq_len(ncol(v)))
+  out <- data.frame(row = rownames(v), stringsAsFactors = FALSE, check.names = FALSE)
+  for (j in seq_len(ncol(v))) out[[keys[j]]] <- unname(v[, j])
+  labels <- c(list(row = row_label), stats::setNames(as.list(colnames(v)), keys))
+  f <- switch(stat, n = , sum = "int", mean = "num", "pct1")
+  body <- v[-nrow(v), if (ncol(v) == 1) 1 else -ncol(v), drop = FALSE]
+  rng <- range(body, na.rm = TRUE)
+  styles <- list()
+  if (all(is.finite(rng)) && diff(rng) > 0) {
+    # a light-to-blue scale on the cells (not the totals); dark text pinned,
+    # so it reads in light and dark mode
+    br <- rng[1] + diff(rng) * c(.2, .4, .6, .8)
+    st <- list(breaks = br, colors = c("#f2f7fb", "#dcebf6", "#bdd9ef", "#94c1e4", "#68a7d8"),
+               text = rep("#1f2a37", 5))
+    body_keys <- if (ncol(v) == 1) keys else keys[-length(keys)]
+    styles <- stats::setNames(rep(list(st), length(body_keys)), body_keys)
+  }
+  list(data = out, labels = labels, formats = stats::setNames(rep(list(f), length(keys)), keys), styles = styles,
+       what = what, n = ct$n, chi = ct$chi)
+}

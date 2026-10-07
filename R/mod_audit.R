@@ -64,7 +64,8 @@ mod_audit_server <- function(id, modification_log) {
       dat[order(dat$timestamp, decreasing = TRUE), , drop = FALSE]
     })
 
-    output$tab_mod_log <- DT::renderDT({
+    # drawn by React (react/src/pages/audit/): same table, same input$phase
+    output$tab_mod_log <- render_react_table({
       dat <- shown()
       # The Phase column says it already: the action without its "Phase: ".
       dat$action <- sub("^(Design|Selection|Monitoring|Session): ", "", dat$action)
@@ -76,7 +77,7 @@ mod_audit_server <- function(id, modification_log) {
       tw_datatable(dat, options = list(pageLength = 15, scrollX = TRUE,
                                         language = list(emptyTable = "Nothing logged yet.")),
                     rownames = FALSE)
-    })
+    }, empty = "Nothing logged yet.")
 
     output$download_full_log <- download_handler(
       filename = function() {

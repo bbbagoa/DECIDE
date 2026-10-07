@@ -345,10 +345,21 @@ devtools::test()                  # unit and app tests (testthat, shinytest2)
 devtools::check()                 # R CMD check
 ```
 
-Layout: a standard **golem** package.
+Layout: a standard **golem** package with a **React client** (Posit's [shinyreact](https://posit-dev.github.io/shinyreact/)). The R server is unchanged in kind (modules, reactives, observers); the pages are React components in `react/`, built once into `inst/app/react/ui.js`, which ships in the package, so installing or running TargetWise never needs Node. Only changing the interface does:
+
+```sh
+cd react
+npm install          # once
+npm run build        # rebuilds inst/app/react/ui.js + ui.css
+npm run typecheck
+```
+
+`shinyreact` is installed from GitHub (`Remotes:` in DESCRIPTION, handled by `remotes`/`pak`); the offline installer must bundle it. How a page is built, and the toolkit every page uses, are in `react/PORTING.md`.
 
 ```
 R/            modules (mod_*.R) and pure, unit-tested helpers (utils_*.R)
+react/        the React client: src/pages (one folder per page), src/lib (inputs, tables, charts, layout), dev (browser checks)
+inst/app/react  the built client (ui.js, ui.css)
 inst/app/www  stylesheets (wfp-ui.css holds the design tokens), scripts, logos, translations
 inst/extdata  demo datasets
 tests/        testthat suite, including shinytest2 app tests

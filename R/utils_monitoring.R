@@ -566,3 +566,59 @@ chart_pie_note <- function(spec) {
   if (shiny::isTruthy(spec$group)) return("A pie or donut shows one series: the split is added up. Use bars to compare the groups.")
   NULL
 }
+
+#' The chart builder's preview as an ECharts option (the React page,
+#' `render_echart()`): the same styles as the plotly preview (bars, columns,
+#' line, area, pie, donut), the split as series, the value axis from the Axes
+#' dialog.
+#' @noRd
+chart_echart_option <- function(d, spec) {
+  st <- chart_style(spec)
+  whole <- all(abs(d$value - round(d$value)) < 1e-9, na.rm = TRUE)
+  fmt <- if (whole) "fn:num" else "fn:dec1"
+  if (st %in% c("pie", "donut")) {
+    pd <- chart_pie_data(d)
+    donut <- identical(st, "donut")
+    top <- which.max(pd$n)
+    out <- list(
+      tooltip = list(trigger = "item"),
+      legend = list(type = "scroll", bottom = 0),
+      series = list(list(type = "pie", radius = if (donut) c("58%", "74%") else c("0%", "72%"), center = c("50%", "46%"),
+                         label = list(show = !donut, formatter = "{d}%"),
+                         data = lapply(seq_len(nrow(pd)), function(i) list(name = as.character(pd$category[i]), value = pd$n[i])))))
+    # a donut says its largest share in the middle
+    if (donut && length(top)) out$title <- list(
+      text = sprintf("%.0f%%", 100 * pd$n[top] / sum(pd$n)), subtext = substr(as.character(pd$category[top]), 1, 22),
+      left = "center", top = "38%", textStyle = list(fontSize = 22), subtextStyle = list(fontSize = 11))
+    return(out)
+  }
+  cats <- unique(as.character(d$x))
+  groups <- unique(as.character(d$group))
+  grp <- length(groups) > 1
+  stack <- grp && chart_stacks(spec) && st %in% c("bar", "column")
+  line <- st %in% c("line", "area")
+  series <- lapply(groups, function(g) {
+    s <- d[as.character(d$group) == g, , drop = FALSE]
+    v <- s$value[match(cats, as.character(s$x))]
+    # NULL fields left out: JSON would send them as {} (a truthy stack)
+    Filter(Negate(is.null), list(type = if (line) "line" else "bar", name = if (grp) g else chart_value_label(spec),
+         stack = if (stack) "s", areaStyle = if (identical(st, "area")) list(opacity = 0.25),
+         label = if (!line && !stack) list(show = TRUE, position = if (identical(st, "bar")) "right" else "top", formatter = fmt, fontSize = 10),
+         data = lapply(v, function(z) if (is.na(z)) "-" else z)))
+  })
+  r <- chart_axis_range(d, spec)
+  val <- Filter(Negate(is.null), list(type = "value", name = chart_value_label(spec), nameLocation = "middle", nameGap = if (identical(st, "bar")) 26 else 44,
+              min = if (!is.null(r)) r[1], max = if (!is.null(r)) r[2]))
+  cat_ax <- list(type = "category", data = cats, axisLabel = list(hideOverlap = TRUE, interval = if (length(cats) <= 30) 0 else "auto"))
+  out <- list(tooltip = list(trigger = "axis", axisPointer = list(type = "shadow")),
+              legend = list(show = grp, top = 0, type = "scroll"),
+              grid = list(left = 8, right = 24, top = if (grp) 34 else 16, bottom = 8, containLabel = TRUE),
+              series = series)
+  if (identical(st, "bar")) {
+    cat_ax$inverse <- TRUE   # the first (largest) category on top
+    out$xAxis <- val; out$yAxis <- cat_ax
+  } else {
+    out$xAxis <- cat_ax; out$yAxis <- val
+  }
+  out
+}

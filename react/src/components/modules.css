@@ -1,0 +1,23 @@
+/* Shared module components: FileImport, AreaScope (tokens only, light and dark) */
+
+/* File import: Shiny's fileInput inside a drop zone */
+.tw-fileimport { min-width: 0; }
+.tw-dropzone { position: relative; display: flex; align-items: center; gap: .6rem; padding: .55rem .7rem; border: 1.5px dashed var(--bs-border-color);
+  border-radius: 10px; background: rgba(10, 110, 180, .03); transition: border-color .15s, background .15s; }
+.tw-dropzone:hover, .tw-dropzone:has(.shiny-file-input-over) { border-color: var(--wfp-blue, #0A6EB4); background: rgba(10, 110, 180, .07); }
+.tw-dropzone-icon { flex: 0 0 auto; color: var(--wfp-blue, #0A6EB4); }
+.tw-dropzone-input { flex: 1 1 auto; min-width: 0; }
+.tw-dropzone-input .form-group, .tw-dropzone-input .shiny-input-container { margin: 0 !important; width: 100% !important; }
+.tw-dropzone-input .input-group { flex-wrap: nowrap; }
+.tw-dropzone-input .progress { margin: .4rem 0 0 !important; height: 6px; }
+.tw-dropzone-input .progress-bar { font-size: 0; }
+.tw-file-ok { display: flex; align-items: center; gap: .4rem; margin-top: .45rem; font-size: .8rem; color: var(--bs-secondary-color); }
+.tw-file-ok svg { color: #3f7e44; flex: 0 0 auto; }
+
+/* Areas covered */
+.tw-scope { display: flex; flex-direction: column; gap: .2rem; }
+.tw-scope-head { display: flex; align-items: center; gap: .35rem; font-weight: 600; font-size: .85rem; margin-bottom: .35rem; }
+.tw-scope-head svg { color: var(--wfp-blue, #0A6EB4); }
+.tw-scope-tip { display: inline-flex; color: var(--bs-secondary-color); cursor: help; }
+.tw-scope-level + .tw-scope-level { border-top: 1px solid var(--bs-border-color); padding-top: .5rem; }
+.tw-scope-values { margin-top: -.35rem; }

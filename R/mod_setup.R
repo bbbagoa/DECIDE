@@ -141,6 +141,7 @@ mod_setup_server <- function(id, r_data, parent_session, trigger_open = reactive
     }
 
     observeEvent(input$open_modal, {
+      req(input$open_modal > 0)   # React buttons send an initial 0
       show_setup_modal()
     })
 
@@ -477,9 +478,20 @@ mod_setup_server <- function(id, r_data, parent_session, trigger_open = reactive
       pending_df <<- NULL; pending(NULL)
       removeModal()
       waiter_log("open the Overview: KPIs, map and profiles")
-      bslib::nav_select(id = "main_nav", selected = "overview_panel", session = parent_session)
+      tw_nav("select", "overview_panel", session = parent_session)
       is_ready(TRUE)
       saved_n(saved_n() + 1)
+    })
+
+    # What the React import page shows beside its setup button
+    # (react/src/pages/import/): the data in memory and whether it is mapped.
+    output$state <- shinyreact::reactive_output({
+      df <- r_data()
+      if (is.null(df)) return(list(loaded = FALSE))
+      keys <- setup_keys()
+      mapped <- vapply(keys, function(k) shiny::isTruthy(settings[[k]]), logical(1))
+      list(loaded = TRUE, rows = nrow(df), cols = ncol(df), source = settings$data_source %||% "",
+           mapped = isTRUE(mapped[["unique_id"]]), fields = sum(mapped))
     })
 
     return(

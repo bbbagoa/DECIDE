@@ -111,12 +111,8 @@ mod_dq_server <- function(id, uploaded_df, user_setup, modification_log, origina
       all_dates <- as.Date(uploaded_df()[[user_setup$date]])
       d_min <- min(all_dates, na.rm = TRUE)
       d_max <- max(all_dates, na.rm = TRUE)
-      shinyWidgets::updateAirDateInput(
-        session,
-        "dq_filter_date",
-        value = c(d_min, d_max),
-        options = list(minDate = d_min, maxDate = d_max)
-      )
+      # the React date range (its bounds come with output$dq_meta)
+      updateDateRangeInput(session, "dq_filter_date", start = d_min, end = d_max)
       applied_dq_filters$date <- c(d_min, d_max)
     }
 
@@ -145,6 +141,7 @@ mod_dq_server <- function(id, uploaded_df, user_setup, modification_log, origina
 
   # --- Apply DQ Filters ---
   observeEvent(input$btn_apply_dq_filters, {
+    req(input$btn_apply_dq_filters > 0)   # a React button sends 0 at start
     waiter::waiter_show(
       html = waiter_content("Filtering the data-quality view\u2026"),
       color = "rgba(10, 30, 50, 0.65)"
@@ -160,6 +157,7 @@ mod_dq_server <- function(id, uploaded_df, user_setup, modification_log, origina
 
   # --- Clear DQ Filters ---
   observeEvent(input$btn_clear_dq_filters, {
+    req(input$btn_clear_dq_filters > 0)
     waiter::waiter_show(
       html = waiter_content("Clearing the filters\u2026"),
       color = "rgba(10, 30, 50, 0.65)"
@@ -171,7 +169,7 @@ mod_dq_server <- function(id, uploaded_df, user_setup, modification_log, origina
     }
     if (shiny::isTruthy(user_setup$date)) {
       all_dates <- as.Date(uploaded_df()[[user_setup$date]])
-      shinyWidgets::updateAirDateInput(session, "dq_filter_date", value = c(min(all_dates, na.rm = TRUE), max(all_dates, na.rm = TRUE)))
+      updateDateRangeInput(session, "dq_filter_date", start = min(all_dates, na.rm = TRUE), end = max(all_dates, na.rm = TRUE))
     }
     applied_dq_filters$admin1 <- NULL
     applied_dq_filters$admin2 <- NULL
@@ -208,6 +206,15 @@ mod_dq_server <- function(id, uploaded_df, user_setup, modification_log, origina
   output$dq_filtered_rows <- renderText({
     req(dq_filtered_data())
     paste(format(nrow(dq_filtered_data()), big.mark = ","), "filtered records")
+  })
+
+  # What the React page needs to draw the sidebar (react/src/pages/dq/):
+  # the interview date range, when a date is mapped.
+  output$dq_meta <- shinyreact::reactive_output({
+    df <- uploaded_df(); if (is.null(df)) return(NULL)
+    d <- if (shiny::isTruthy(user_setup$date) && user_setup$date %in% names(df)) {
+      x <- suppressWarnings(as.Date(df[[user_setup$date]])); if (any(!is.na(x))) format(range(x, na.rm = TRUE)) } else NULL
+    list(dates = if (is.null(d)) NULL else I(d))
   })
 
   # --------------- Filter End
@@ -277,6 +284,7 @@ mod_dq_server <- function(id, uploaded_df, user_setup, modification_log, origina
 
   # Reset to original imported data
   observeEvent(input$btn_reset_data, {
+    req(input$btn_reset_data > 0)
     if (is.null(original_df()) || is.null(original_df)) {
       showNotification("No original data available to reset to.", type = "warning")
       return()
@@ -323,4 +331,90 @@ mod_dq_server <- function(id, uploaded_df, user_setup, modification_log, origina
   })
 
   })
+}
+
+# ---------------------------------------------------------------------------
+# ECharts options shared by the Data Quality charts (render_echart(),
+# react/src/pages/dq/). Colours carry meaning only; the rest is the theme's.
+# ---------------------------------------------------------------------------
+
+#' Horizontal bars, first category on top
+#' @param cats,values Categories and their values, in display order.
+#' @param color One colour or one per bar.
+#' @param tips Hover text per bar (HTML; escape user text).
+#' @param lines Reference lines: list(list(x =, label =, color =)).
+#' @param band c(lo, hi): a shaded band (the usual range).
+#' @param value_fmt Formatter of the value axis ("fn:pct", "fn:num"...).
+#' @param bar_labels Show the values at the end of the bars, with this formatter.
+#' @noRd
+dq_hbar <- function(cats, values, color = "#0A6EB4", tips = NULL, x_name = NULL, lines = NULL, band = NULL,
+                    x_min = NULL, x_max = NULL, value_fmt = NULL, bar_labels = NULL, max_height = 900) {
+  n <- length(cats)
+  col <- rep_len(color, n)
+  data <- lapply(seq_len(n), function(i) c(list(value = if (is.na(values[i])) "-" else values[i], itemStyle = list(color = col[i])),
+                                           if (!is.null(tips)) list(tip = tips[i])))
+  s <- list(type = "bar", data = data, barMaxWidth = 18,
+            label = if (!is.null(bar_labels)) list(show = TRUE, position = "right", formatter = bar_labels, fontSize = 10,
+                                                   color = "#8a96a3", textBorderWidth = 0))
+  ml <- lapply(lines, function(l) list(xAxis = l$x, lineStyle = list(color = l$color %||% "#5b6b7c", type = "dashed", width = 1.5),
+                                       label = list(show = TRUE, formatter = l$label, position = "start", color = l$color %||% "#5b6b7c", fontSize = 10)))
+  if (length(ml)) s$markLine <- list(silent = TRUE, symbol = "none", data = ml)
+  if (length(band) == 2 && all(is.finite(band))) {
+    s$markArea <- list(silent = TRUE, itemStyle = list(color = "rgba(63,126,68,0.10)"),
+                       data = list(list(list(xAxis = band[1]), list(xAxis = band[2]))))
+  }
+  o <- list(
+    grid = list(left = 8, right = if (is.null(bar_labels)) 24 else 48, top = if (length(lines)) 24 else 8, bottom = 8, containLabel = TRUE),
+    tooltip = list(trigger = "item", formatter = if (!is.null(tips)) "fn:tip"),
+    xAxis = list(type = "value", name = x_name, nameLocation = "middle", nameGap = 26, min = x_min, max = x_max,
+                 axisLabel = if (!is.null(value_fmt)) list(formatter = value_fmt)),
+    yAxis = list(type = "category", data = I(as.character(cats)), inverse = TRUE,
+                 axisLabel = list(interval = 0, width = 150, overflow = "truncate")),
+    series = list(s))
+  o <- dq_compact(o)
+  attr(o, "height") <- min(max_height, max(220, 22 * n + 70))
+  o
+}
+
+#' A heatmap: rows by columns, a value per cell (0 shown pale)
+#' @param x,y Column and row categories (display order, first row on top).
+#' @param z Matrix length(y) x length(x).
+#' @param label_fmt Cell label formatter, or NULL for none.
+#' @noRd
+dq_heatmap <- function(x, y, z, name = "", tip_suffix = "", label_fmt = NULL, max_height = 900) {
+  d <- list()
+  for (i in seq_along(y)) for (j in seq_along(x)) {
+    v <- z[i, j]
+    d[[length(d) + 1]] <- list(value = list(j - 1, i - 1, if (is.na(v)) "-" else v),
+                               tip = sprintf("%s<br>%s: <b>%s</b>%s", htmltools::htmlEscape(y[i]), htmltools::htmlEscape(x[j]),
+                                             if (is.na(v)) "-" else format(round(v, 1), big.mark = ","), tip_suffix))
+  }
+  hi <- max(c(z, 1), na.rm = TRUE)
+  o <- list(
+    grid = list(left = 8, right = 16, top = 8, bottom = 52, containLabel = TRUE),
+    tooltip = list(trigger = "item", formatter = "fn:tip"),
+    xAxis = list(type = "category", data = I(as.character(x)), splitArea = list(show = FALSE),
+                 axisLabel = list(interval = 0, rotate = if (length(x) > 6) 40 else 0, width = 120, overflow = "truncate")),
+    yAxis = list(type = "category", data = I(as.character(y)), inverse = TRUE,
+                 axisLabel = list(interval = 0, width = 150, overflow = "truncate")),
+    visualMap = list(min = 0, max = hi, calculable = TRUE, orient = "horizontal", left = "center", bottom = 0,
+                     itemHeight = 120, itemWidth = 10, text = list(format(round(hi), big.mark = ","), "0"),
+                     inRange = list(color = c("#eef5fb", "#7fb3d5", "#0A6EB4"))),
+    series = list(list(type = "heatmap", name = name, data = d,
+                       label = list(show = !is.null(label_fmt) && length(d) <= 300, formatter = label_fmt, fontSize = 10),
+                       itemStyle = list(borderColor = "rgba(128,128,128,0.15)", borderWidth = 1))))
+  o <- dq_compact(o)
+  attr(o, "height") <- min(max_height, max(240, 24 * length(y) + 110))
+  o
+}
+
+#' An ECharts option without its NULL entries (unset, not null)
+#' @noRd
+dq_compact <- function(x) {
+  if (!is.list(x) || inherits(x, "AsIs")) return(x)
+  x <- x[!vapply(x, is.null, logical(1))]
+  if (!length(x)) return(x)
+  y <- lapply(x, dq_compact)
+  names(y) <- names(x)
+  y
 }

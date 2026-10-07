@@ -25,6 +25,7 @@ dq_health_server <- function(input, output, session, ns, core) {
 
   hc <- reactiveVal(NULL)
   observeEvent(input$hc_run, {
+    req(input$hc_run > 0)   # a React button sends 0 at start
     df <- dq_filtered_data()
     need_ok(!is.null(df) && nrow(df) > 0, "Load and map the data first.")
     res <- tryCatch(dq_health(df, if (shiny::is.reactivevalues(user_setup)) shiny::reactiveValuesToList(user_setup) else user_setup),
@@ -35,28 +36,13 @@ dq_health_server <- function(input, output, session, ns, core) {
   # a Review button opens its tab
   observeEvent(input$hc_go, bslib::nav_select("dq_tabs", input$hc_go, session = session))
 
-  output$hc_table <- renderUI({
+  # The result as data: the React page draws the table and its Review
+  # buttons (react/src/pages/dq/HealthTab.tsx), which set input$hc_go.
+  output$hc_table <- shinyreact::reactive_output({
     h <- hc()
-    if (is.null(h)) return(empty_state("Not run yet", "Click Run the health check to see what needs attention.", "heart-pulse"))
+    if (is.null(h)) return(NULL)
     r <- h$res
-    pill <- function(st) switch(st,
-      ok = tags$span(class = "tw-pill tw-pill-ok", "OK"),
-      review = tags$span(class = "tw-pill tw-pill-review", "Review"),
-      tags$span(class = "tw-pill tw-pill-na", "Not checked"))
-    tagList(
-      tags$div(class = "wfp-model-table-wrap", tags$table(
-        class = "wfp-model-table",
-        tags$thead(tags$tr(tags$th("Check"), tags$th("What was found"), tags$th("Status"), tags$th(""))),
-        tags$tbody(lapply(seq_len(nrow(r)), function(i) tags$tr(
-          tags$td(tags$strong(r$check[i])),
-          tags$td(r$found[i]),
-          tags$td(pill(r$status[i])),
-          tags$td(class = "text-end",
-                  tags$button(type = "button",
-                              class = paste("btn btn-sm", if (identical(r$status[i], "review")) "btn-outline-primary" else "btn-outline-secondary"),
-                              onclick = sprintf("Shiny.setInputValue('%s', '%s', {priority:'event'})", ns("hc_go"), r$tab[i]),
-                              "Review"))))))),
-      tags$div(class = "small text-muted mt-2",
-               sprintf("Checked on %s records, %s. Run it again after corrections.", format(h$n, big.mark = ","), h$at)))
+    list(rows = lapply(seq_len(nrow(r)), function(i) as.list(r[i, c("check", "tab", "found", "status")])),
+         n = h$n, at = h$at)
   })
 }

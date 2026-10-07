@@ -157,21 +157,24 @@ mod_overview_server <- function(id, uploaded_df, user_setup) {
 
   # --- Apply Filters ---
   observeEvent(input$btn_apply_filters, {
+    req(input$btn_apply_filters > 0)   # a React button sends 0 at start
     waiter::waiter_show(
       html = waiter_content("Filtering the overview\u2026"),
       color = "rgba(10, 30, 50, 0.65)"
     )
     on.exit(waiter::waiter_hide(), add = TRUE)
 
-    applied_filters$admin1 <- input$filter_admin1
-    applied_filters$admin2 <- input$filter_admin2
-    applied_filters$admin3 <- input$filter_admin3
-    applied_filters$date <- input$filter_date
+    # from React: picks as a JSON list, dates as "YYYY-MM-DD" text
+    applied_filters$admin1 <- as.character(unlist(input$filter_admin1))
+    applied_filters$admin2 <- as.character(unlist(input$filter_admin2))
+    applied_filters$admin3 <- as.character(unlist(input$filter_admin3))
+    applied_filters$date <- tryCatch(as.Date(unlist(input$filter_date)), error = function(e) NULL)
     showNotification("Filters applied.", type = "message")
   })
 
   # --- Clear Filters ---
   observeEvent(input$btn_clear_filters, {
+    req(input$btn_clear_filters > 0)
     waiter::waiter_show(
       html = waiter_content("Clearing the filters\u2026"),
       color = "rgba(10, 30, 50, 0.65)"
@@ -541,6 +544,7 @@ mod_overview_server <- function(id, uploaded_df, user_setup) {
               if (zoomed) actionLink(ns("view_all"), "show all", class = "ms-1"))
   })
   observeEvent(input$view_all, {
+    req(input$view_all > 0)
     bslib::update_switch("view_follow", value = FALSE, session = session)
     pts <- map_points(); xr <- fit_range(pts$lng); yr <- fit_range(pts$lat)
     leaflet::leafletProxy("map_plot", session) |> leaflet::fitBounds(xr[1] - 1, yr[1] - 1, xr[2] + 1, yr[2] + 1)
@@ -733,112 +737,54 @@ mod_overview_server <- function(id, uploaded_df, user_setup) {
       length(u) > 2 && mean(!is.na(z)) > 0.95 }, logical(1))]
     list(ch = ch, all = all, nums = nums)
   })
-  pick <- function(id, label, choices, selected) selectizeInput(ns(id), label, choices = choices, selected = selected, width = "100%", multiple = FALSE)
-
-  output$table_ui <- renderUI({
-    ec <- explore_cols(); ch <- ec$ch; all <- ec$all; nums <- ec$nums
-    if (length(all) < 1) return(empty_state("No column to tabulate", NULL, "table"))
-    tagList(
-      tags$div(class = "tw-ct-controls",
-        pick("ct_row", "Rows", ch, all[1]),
-        pick("ct_col", "Columns", c(`(none: one-way table)` = "", ch), if (length(all) > 1) all[2] else ""),
-        selectInput(ns("ct_stat"), "Cells", width = "100%", selectize = FALSE,
-                    choices = c("Households" = "n", "Row %" = "row", "Column %" = "col", "Total %" = "total",
-                                "Mean of a number" = "mean", "Sum of a number" = "sum")),
-        conditionalPanel(sprintf("['mean','sum'].indexOf(input['%s']) >= 0", ns("ct_stat")),
-                         pick("ct_value", "Number", if (length(nums)) nums else c("(no numeric column)" = ""), nums[1]))),
-      uiOutput(ns("ct_table")))
+  # The builders are drawn by React (react/src/pages/overview/Builders.tsx):
+  # the columns they offer, as JSON
+  output$ov_explore <- shinyreact::reactive_output({
+    ec <- tryCatch(explore_cols(), error = function(e) NULL)
+    if (is.null(ec)) return(NULL)
+    choices <- unlist(lapply(names(ec$ch), function(grp) lapply(unlist(ec$ch[[grp]], use.names = FALSE), function(v)
+      list(value = v, label = v, group = grp))), recursive = FALSE)
+    list(choices = choices, all = I(ec$all), nums = I(ec$nums))
   })
 
-  output$chart_ui <- renderUI({
-    ec <- explore_cols(); ch <- ec$ch; all <- ec$all
-    if (length(all) < 1) return(empty_state("No column to chart", NULL, "bar-chart-line"))
-    tagList(
-      tags$div(class = "tw-ct-controls",
-        pick("gb_x", "Variable", ch, all[1]),
-        pick("gb_y", "Against", c(`(none)` = "", ch), ""),
-        pick("gb_group", "Grouped by", c(`(none)` = "", ch), ""),
-        uiOutput(ns("gb_type_ui"))),
-      tags$div(class = "mb-2", axis_button(ns("gb_axes"))),
-      plotly::plotlyOutput(ns("gb_plot"), height = "360px"),
-      tags$div(class = "tw-ct-note", textOutput(ns("gb_note"), inline = TRUE)))
-  })
-
-  # the table follows the fields as they change (builders are the exception
-  # to "settings wait for their button")
-  output$ct_table <- renderUI({
+  # ---- Table builder: the table follows the fields as they change (builders
+  # are the exception to "settings wait for their button")
+  ct_result <- reactive({
     p <- list(row = input$ct_row, col = input$ct_col, stat = input$ct_stat, value = input$ct_value)
-    if (!shiny::isTruthy(p$row)) return(tags$div(class = "small text-muted mt-2", "Choose the rows, the columns and the cells to see the table."))
-    df <- view_data(); req(df, p$row, p$row %in% names(df))
+    shiny::validate(shiny::need(shiny::isTruthy(p$row), "Choose the rows, the columns and the cells to see the table."))
+    df <- view_data(); req(df, p$row %in% names(df))
     stat <- p$stat %||% "n"
     col <- if (shiny::isTruthy(p$col) && p$col %in% names(df) && p$col != p$row) p$col else NULL
     for (k in c(p$row, col)) if (ov_var_kind(df[[k]]) == "cat") shiny::validate(shiny::need(is.null(too_many_options(df[[k]], col_label(k))), too_many_options(df[[k]], col_label(k))))
     if (stat %in% c("mean", "sum")) shiny::validate(shiny::need(shiny::isTruthy(p$value) && p$value %in% names(df), "Choose the number to average or sum."))
     ct <- contingency(df, p$row, col, NULL, stat, p$value)
-    tab <- ct$table
-    shiny::validate(shiny::need(nrow(tab) > 1, "No household has an answer for these variables."))
-    fmt <- function(v) if (is.na(v)) "" else switch(stat, n = , sum = format(round(v), big.mark = ","), mean = format(signif(v, 3), big.mark = ","),
-                                                     sprintf("%.1f%%", v))
-    body <- tab[-nrow(tab), if (is.null(col)) 1 else -ncol(tab), drop = FALSE]
-    rng <- range(body, na.rm = TRUE); if (!all(is.finite(rng)) || diff(rng) == 0) rng <- c(0, max(1, rng[2], na.rm = TRUE))
-    shade <- function(v, margin) if (margin || is.na(v)) NULL else sprintf("background: rgba(10, 110, 180, %.3f)", 0.04 + 0.42 * (v - rng[1]) / diff(rng))
+    shiny::validate(shiny::need(nrow(ct$table) > 1, "No household has an answer for these variables."))
     what <- switch(stat, n = "Households", row = "Share of each row (%)", col = "Share of each column (%)", total = "Share of all households (%)",
                    mean = sprintf("Mean of %s", col_label(p$value)), sum = sprintf("Sum of %s", col_label(p$value)))
-    nr <- nrow(tab); nc <- ncol(tab)
-    tags$div(class = "tw-ct",
-      tags$div(class = "tw-ct-caption", tags$strong(what), sprintf(" \u00b7 %s households", format(ct$n, big.mark = ","))),
-      tags$div(class = "tw-ct-wrap", tags$table(class = "tw-ct-table",
-        tags$thead(
-          if (!is.null(col)) tags$tr(tags$th(class = "tw-ct-corner", ""), tags$th(colspan = nc, class = "tw-ct-colvar", col_label(col))),
-          tags$tr(tags$th(class = "tw-ct-rowvar", col_label(p$row)),
-                  lapply(seq_len(nc), function(j) tags$th(class = if (colnames(tab)[j] == "Total") "tw-ct-margin num" else "num", colnames(tab)[j])))),
-        tags$tbody(lapply(seq_len(nr), function(i) tags$tr(class = if (i == nr) "tw-ct-total" else NULL,
-          tags$th(rownames(tab)[i]),
-          lapply(seq_len(nc), function(j) { m <- i == nr || colnames(tab)[j] == "Total"
-            tags$td(class = paste("num", if (m) "tw-ct-margin"), style = shade(tab[i, j], m), fmt(tab[i, j])) })))))),
-      if (is.finite(ct$chi)) tags$div(class = "tw-ct-note",
-        sprintf("Chi-square test of independence: p %s%s.",
-                if (ct$chi < 0.001) "< 0.001" else sprintf("= %.3f", ct$chi),
-                if (ct$chi < 0.05) " (the two variables are related)" else " (no evidence of a relation)")))
+    out <- ct_frame(ct, col_label(p$row), what)
+    out$col_label <- if (is.null(col)) "" else col_label(col)
+    out
+  })
+  # render_react_table() with the formats and shading of this table (its
+  # columns change with the variables chosen)
+  output$ct_table <- shiny::createRenderFunction(function() ct_result(), function(value, session, name, ...) {
+    if (is.null(value)) return(NULL)
+    spec <- react_table_spec(value$data, page_size = 50, labels = value$labels)
+    react_table_payload(spec, session$input[[paste0(name, "_state")]], formats = value$formats, styles = value$styles,
+                        empty = "No household has an answer for these variables.")
+  })
+  output$ct_info <- shinyreact::reactive_output({
+    r <- tryCatch(ct_result(), error = function(e) NULL); if (is.null(r)) return(NULL)
+    list(what = r$what, n = format(r$n, big.mark = ","), col_label = r$col_label,
+         chi = if (is.finite(r$chi)) sprintf("Chi-square test of independence: p %s%s.",
+                                             if (r$chi < 0.001) "< 0.001" else sprintf("= %.3f", r$chi),
+                                             if (r$chi < 0.05) " (the two variables are related)" else " (no evidence of a relation)"))
   })
 
-  # Chart builder: one or two variables, optionally grouped by a third; the
-  # chart follows their types (numbers: scatter and correlation; a number and
-  # a category: box plots, means or violins; two categories: stacked bars).
-  GB_MAX_POINTS <- 20000
-  # Box plots from their five numbers, computed here: sending every household
-  # to the browser made them slow on large data
-  box_plot <- function(yv, cat, grp, pal) {
-    cat <- droplevels(as.factor(cat))
-    grp <- if (is.null(grp)) NULL else droplevels(as.factor(grp))
-    key <- if (is.null(grp)) list(cat) else list(cat, grp)
-    st <- do.call(rbind, lapply(split(seq_along(yv), key, drop = TRUE), function(k) {
-      q <- stats::quantile(yv[k], c(.25, .5, .75), names = FALSE); iqr <- q[3] - q[1]
-      inr <- yv[k][yv[k] >= q[1] - 1.5 * iqr & yv[k] <= q[3] + 1.5 * iqr]
-      data.frame(c = as.character(cat[k[1]]), g = if (is.null(grp)) "" else as.character(grp[k[1]]), q1 = q[1], med = q[2], q3 = q[3],
-                 lf = min(inr), uf = max(inr), mean = mean(yv[k]), n = length(k), stringsAsFactors = FALSE)
-    }))
-    # Clean by design: a light fill in the line's colour, thin lines, the
-    # median as the one strong mark, short whiskers, no mean line (the note
-    # and the hover give the mean), slim boxes with air between them.
-    p <- plotly::plot_ly()
-    for (lv in unique(st$g)) {
-      s <- st[st$g == lv, , drop = FALSE]
-      col <- if (nzchar(lv)) pal(grp)[[lv]] else GB_COLS[1]
-      p <- plotly::add_trace(p, type = "box", x = factor(s$c, levels = levels(cat)), q1 = s$q1, median = s$med, q3 = s$q3,
-                             lowerfence = s$lf, upperfence = s$uf, name = if (nzchar(lv)) lv else "Households",
-                             fillcolor = tint(col, 0.16), line = list(color = col, width = 1.4), whiskerwidth = 0.35,
-                             marker = list(color = col), boxpoints = FALSE, legendgroup = lv)
-    }
-    n_box <- length(unique(st$c))
-    plotly::layout(p, boxmode = "group", boxgap = if (n_box == 1) 0.75 else 0.35, boxgroupgap = 0.18,
-                   xaxis = list(showgrid = FALSE, zeroline = FALSE, showline = TRUE, linecolor = "rgba(128,128,128,0.35)"),
-                   yaxis = list(zeroline = FALSE, gridcolor = "rgba(128,128,128,0.15)"))
-  }
-  GB_COLS <- c("#0A6EB4", "#f7b825", "#3f7e44", "#c5192d", "#26bde2", "#8a96a3", "#5b6b7c", "#e67e22")
-  # one look for box plots, means and violins: a light fill in the line's colour
-  tint <- function(hex, a) { v <- grDevices::col2rgb(hex); sprintf("rgba(%d,%d,%d,%.2f)", v[1], v[2], v[3], a) }
-  # The chart follows the fields as they change: the one exception to
+  # ---- Chart builder: one or two variables, optionally grouped by a third;
+  # the chart follows their types (numbers: scatter and correlation; a number
+  # and a category: box plots, means or violins; two categories: stacked
+  # bars) and follows the fields as they change, the one exception to
   # "settings wait for their button" (a chart is what the choice is for).
   gb_vars <- reactive({
     df <- view_data(); x <- input$gb_x
@@ -847,170 +793,32 @@ mod_overview_server <- function(id, uploaded_df, user_setup) {
     g <- if (shiny::isTruthy(input$gb_group) && input$gb_group %in% names(df) && !input$gb_group %in% c(x, y)) input$gb_group
     list(df = df, x = x, y = y, g = g, kx = ov_var_kind(df[[x]]), ky = if (is.null(y)) "none" else ov_var_kind(df[[y]]))
   })
-  # the chart types the chosen variables allow (one column each is looked at)
-  output$gb_type_ui <- renderUI({
-    df <- filtered_data(); x <- input$gb_x; req(df, shiny::isTruthy(x), x %in% names(df))
-    y <- if (shiny::isTruthy(input$gb_y) && input$gb_y %in% names(df) && input$gb_y != x) input$gb_y
-    ch <- ov_chart_types(ov_var_kind(df[[x]]), if (is.null(y)) "none" else ov_var_kind(df[[y]])); cur <- isolate(input$gb_type)
-    selectInput(ns("gb_type"), "Chart", choices = ch, selected = if (isTRUE(cur %in% ch)) cur else unname(ch[1]), selectize = FALSE, width = "100%")
+  # the chart types the chosen variables allow, and whether the axes are set
+  output$gb_meta <- shinyreact::reactive_output({
+    v <- tryCatch(gb_vars(), error = function(e) NULL)
+    ch <- if (is.null(v)) character(0) else ov_chart_types(v$kx, v$ky)
+    list(types = lapply(seq_along(ch), function(i) list(value = unname(ch[i]), label = names(ch)[i])),
+         axes_set = any(is.finite(unlist(gb_axes()))))
   })
   gb_note <- reactiveVal("")
   output$gb_note <- renderText(gb_note())
-  output$gb_plot <- render_wfp_plotly({
-    v <- gb_vars(); df <- v$df; n <- nrow(df)
+  output$gb_plot <- render_echart({
+    v <- gb_vars(); df <- v$df
     for (k in c(v$x, v$y, v$g)) {
       if (ov_var_kind(df[[k]]) != "cat") next
       msg <- too_many_options(df[[k]], col_label(k))
       shiny::validate(shiny::need(is.null(msg), msg))
     }
-    types <- ov_chart_types(v$kx, v$ky)
-    type <- if (isTRUE(input$gb_type %in% types)) input$gb_type else unname(types[1])
-    as_cat <- function(col, k = 12) { f <- ov_categories(df[[col]], rep(1, n), max_levels = k); f }
-    num <- function(col) as_number(df[[col]])
-    g <- if (is.null(v$g)) NULL else as_cat(v$g, 6)
-    lab <- function(col) col_label(col)
-    pal <- function(f) stats::setNames(rep_len(GB_COLS, nlevels(f)), levels(f))
-    base_layout <- function(p, xt, yt, legend = !is.null(g), xr = NULL, yr = NULL) {
-      gb_auto(list(x = xr, y = yr))
-      plotly::layout(p,
-      xaxis = c(list(title = list(text = xt, font = list(size = 11)), tickfont = list(size = 10), automargin = TRUE),
-                axis_bounds(gb_axes()$xmin, gb_axes()$xmax, xr)),
-      yaxis = c(list(title = list(text = yt, font = list(size = 11)), tickfont = list(size = 10), automargin = TRUE),
-                axis_bounds(gb_axes()$ymin, gb_axes()$ymax, yr)),
-      showlegend = legend, legend = list(orientation = "h", y = -0.22, font = list(size = 10), title = list(text = if (!is.null(v$g)) lab(v$g) else "")),
-      margin = list(l = 8, r = 8, t = 8, b = 8))
-    }
-    keep <- function(...) { ok <- Reduce(`&`, lapply(list(...), function(z) !is.na(z))); if (!is.null(g)) ok <- ok & !is.na(g); which(ok) }
-
-    # one variable
-    if (v$ky == "none" && v$kx == "num") {
-      x <- num(v$x); i <- keep(x)
-      gb_note(sprintf("%s households; mean %.1f, median %.1f", format(length(i), big.mark = ","), mean(x[i]), stats::median(x[i])))
-      p <- if (type == "hist") {
-        if (is.null(g)) plotly::plot_ly(x = x[i], type = "histogram", marker = list(color = GB_COLS[1]), nbinsx = 30)
-        else plotly::plot_ly(x = x[i], color = g[i], colors = pal(g), type = "histogram", alpha = 0.6, nbinsx = 30) |> plotly::layout(barmode = "overlay")
-      } else box_plot(x[i], if (!is.null(g)) g[i] else factor(rep(lab(v$x), length(i))), NULL, pal)
-      if (type == "hist") return(base_layout(p, lab(v$x), "Households", xr = range(x[i]),
-                                             yr = c(0, max(graphics::hist(x[i], breaks = 30, plot = FALSE)$counts))))
-      return(base_layout(p, "", lab(v$x), yr = range(x[i])))
-    }
-    if (v$ky == "none") {
-      x <- as_cat(v$x); i <- keep(x)
-      d <- as.data.frame(table(x = x[i], g = if (is.null(g)) rep("All", length(i)) else g[i]), stringsAsFactors = FALSE)
-      d <- d[d$Freq > 0 | TRUE, , drop = FALSE]
-      if (type == "bars") d$val <- ave(d$Freq, d$g, FUN = function(z) 100 * z / sum(z)) else d$val <- d$Freq
-      gb_note(sprintf("%s households", format(length(i), big.mark = ",")))
-      p <- if (is.null(g)) plotly::plot_ly(d, x = ~x, y = ~val, type = "bar", marker = list(color = GB_COLS[1]),
-                                           text = ~if (type == "bars") sprintf("%.0f%%", val) else format(val, big.mark = ","), textposition = "outside", cliponaxis = FALSE)
-           else plotly::plot_ly(d, x = ~x, y = ~val, color = ~g, colors = pal(g), type = "bar") |> plotly::layout(barmode = "group")
-      return(base_layout(p, lab(v$x), if (type == "bars") "% of households" else "Households", yr = c(0, max(d$val))))
-    }
-    # two numbers
-    if (v$kx == "num" && v$ky == "num") {
-      x <- num(v$x); y <- num(v$y); i <- keep(x, y)
-      grp <- if (is.null(g)) factor(rep("All", n)) else g
-      p <- plotly::plot_ly()
-      notes <- character(0)
-      for (lv in levels(droplevels(grp[i]))) {
-        j <- i[grp[i] == lv]; col <- if (is.null(g)) GB_COLS[1] else pal(g)[[lv]]
-        rtxt <- ov_cor_text(x[j], y[j]); notes <- c(notes, if (is.null(g)) rtxt else sprintf("%s: %s", lv, rtxt))
-        nm <- if (is.null(g)) "Households" else sprintf("%s (r = %s)", lv, sub("^r = ([-0-9.]+).*", "\\1", rtxt))
-        # at most GB_MAX_POINTS points drawn (WebGL); r and the trend use every household
-        jp <- if (length(j) > GB_MAX_POINTS / nlevels(grp)) sort(sample(j, ceiling(GB_MAX_POINTS / nlevels(grp)))) else j
-        p <- plotly::add_trace(p, x = x[jp], y = y[jp], type = "scattergl", mode = "markers", name = nm, legendgroup = lv,
-                               marker = list(color = col, opacity = 0.55, size = 6),
-                               hovertemplate = paste0(lab(v$x), ": %{x}<br>", lab(v$y), ": %{y}<extra>", lv, "</extra>"))
-        if (type == "scatter_trend" && length(j) >= 3 && stats::var(x[j]) > 0) {
-          fit <- stats::lm(y[j] ~ x[j]); xs <- range(x[j])
-          p <- plotly::add_lines(p, x = xs, y = stats::coef(fit)[1] + stats::coef(fit)[2] * xs, name = paste(lv, "trend"), legendgroup = lv,
-                                 showlegend = FALSE, line = list(color = col, width = 2), hoverinfo = "skip")
-        }
-      }
-      gb_note(paste(notes, collapse = " \u00b7 "))
-      return(base_layout(p, lab(v$x), lab(v$y), xr = range(x[i]), yr = range(y[i])))
-    }
-    # a category and a number
-    if (xor(v$kx == "num", v$ky == "num")) {
-      ccol <- if (v$kx == "cat") v$x else v$y; ncol <- if (v$kx == "num") v$x else v$y
-      cx <- as_cat(ccol); y <- num(ncol); i <- keep(cx, y)
-      gb_note(sprintf("%s households", format(length(i), big.mark = ",")))
-      if (type == "mean") {
-        grp <- if (is.null(g)) factor(rep("All", n)) else g
-        d <- do.call(rbind, lapply(split(i, list(cx[i], grp[i]), drop = TRUE), function(j) {
-          m <- mean(y[j]); se <- if (length(j) > 1) stats::sd(y[j]) / sqrt(length(j)) else NA
-          data.frame(c = as.character(cx[j[1]]), g = as.character(grp[j[1]]), m = m, ci = 1.96 * se, n = length(j))
-        }))
-        d$c <- factor(d$c, levels = levels(cx))
-        p <- plotly::plot_ly()
-        for (lv in unique(d$g)) {
-          s <- d[d$g == lv, , drop = FALSE]
-          col <- if (is.null(g)) GB_COLS[1] else pal(g)[[lv]]
-          p <- plotly::add_bars(p, x = s$c, y = s$m, name = if (is.null(g)) "Mean" else lv, legendgroup = lv,
-                                marker = list(color = tint(col, 0.16), line = list(color = col, width = 1.4)),
-                                error_y = list(type = "data", array = s$ci, color = col, thickness = 1.2, width = 4),
-                                # the hover reads its words from hovertext (customdata did not reach the template)
-                                hovertext = sprintf("%s%s<br>Mean %s \u00b1 %s<br>%s households", s$c,
-                                                    if (is.null(g)) "" else paste0(" \u00b7 ", lv), fmt5(signif(s$m, 3)),
-                                                    ifelse(is.na(s$ci), "-", fmt5(signif(s$ci, 2))), format(s$n, big.mark = ",")),
-                                hovertemplate = "%{hovertext}<extra></extra>")
-        }
-        p <- plotly::layout(p, barmode = "group", bargap = 0.35, bargroupgap = 0.18, xaxis = list(showgrid = FALSE, zeroline = FALSE))
-        return(base_layout(p, lab(ccol), paste("Mean of", lab(ncol), "(95% interval)"),
-                           yr = c(min(0, d$m - d$ci, na.rm = TRUE), max(d$m + d$ci, d$m, na.rm = TRUE))))
-      }
-      if (type == "box") return(base_layout(box_plot(y[i], cx[i], if (is.null(g)) NULL else g[i], pal), lab(ccol), lab(ncol), yr = range(y[i])))
-      # a violin needs the values: drawn from a sample on large data
-      iv <- if (length(i) > GB_MAX_POINTS) sort(sample(i, GB_MAX_POINTS)) else i
-      p <- plotly::plot_ly()
-      gv <- if (is.null(g)) factor(rep("Households", length(iv))) else droplevels(g[iv])
-      for (lv in levels(gv)) {
-        k <- iv[gv == lv]
-        col <- if (is.null(g)) GB_COLS[1] else pal(g)[[lv]]
-        p <- plotly::add_trace(p, type = "violin", x = cx[k], y = y[k], name = lv, legendgroup = lv,
-                               fillcolor = tint(col, 0.16), line = list(color = col, width = 1.4), points = FALSE,
-                               box = list(visible = TRUE, width = 0.18, fillcolor = tint(col, 0.35), line = list(color = col, width = 1)),
-                               meanline = list(visible = FALSE), spanmode = "hard")
-      }
-      p <- plotly::layout(p, violinmode = "group", violingap = 0.3, violingroupgap = 0.15,
-                          xaxis = list(showgrid = FALSE, zeroline = FALSE), yaxis = list(zeroline = FALSE))
-      return(base_layout(p, lab(ccol), lab(ncol), yr = range(y[iv])))
-    }
-    # two categories: bars, one panel per group
-    x <- as_cat(v$x); y <- as_cat(v$y, 8); i <- keep(x, y)
-    gb_note(sprintf("%s households", format(length(i), big.mark = ",")))
-    ycols <- pal(y)
-    panel <- function(j, show) {
-      d <- as.data.frame(table(x = x[j], y = y[j]), stringsAsFactors = FALSE)
-      d$val <- if (type == "stack100") ave(d$Freq, d$x, FUN = function(z) if (sum(z)) 100 * z / sum(z) else 0) else d$Freq
-      pp <- plotly::plot_ly()
-      for (lv in levels(y)) {
-        s <- d[d$y == lv, , drop = FALSE]
-        pp <- plotly::add_bars(pp, x = s$x, y = s$val, name = lv, legendgroup = lv, showlegend = show, marker = list(color = ycols[[lv]]),
-                               hovertemplate = paste0("%{x}<br>", lv, ": ", if (type == "stack100") "%{y:.1f}%" else "%{y:,}", "<extra></extra>"))
-      }
-      plotly::layout(pp, barmode = if (type == "dodge") "group" else "stack")
-    }
-    ytitle <- if (type == "stack100") "% of households" else "Households"
-    tab <- table(x[i], y[i])
-    yr2 <- c(0, if (type == "stack100") 100 else if (type == "dodge") max(tab) else max(rowSums(tab)))
-    if (is.null(g)) {
-      p <- panel(i, TRUE)
-      return(base_layout(p, lab(v$x), ytitle, legend = TRUE, yr = yr2) |> plotly::layout(legend = list(title = list(text = lab(v$y)))))
-    }
-    gb_auto(list(x = NULL, y = yr2))
-    lvs <- levels(droplevels(g[i]))
-    panels <- lapply(seq_along(lvs), function(k) panel(i[g[i] == lvs[k]], k == 1) |>
-                       plotly::layout(annotations = list(list(text = lvs[k], x = 0.5, y = 1.06, xref = "paper", yref = "paper", showarrow = FALSE, font = list(size = 11)))))
-    p <- plotly::subplot(panels, nrows = ceiling(length(lvs) / 3), shareY = TRUE, titleX = FALSE, margin = 0.04)
-    plotly::layout(p, showlegend = TRUE, legend = list(orientation = "h", y = -0.15, font = list(size = 10), title = list(text = lab(v$y))),
-                   margin = list(l = 8, r = 8, t = 24, b = 8),
-                   yaxis = c(list(title = list(text = ytitle, font = list(size = 11))), axis_bounds(gb_axes()$ymin, gb_axes()$ymax, yr2)))
-  })
+    r <- gb_echart(df, v$x, v$y, v$g, input$gb_type, gb_axes(), col_label)
+    gb_note(r$note); gb_auto(r$auto)
+    r$option
+  }, height = 380)
   # the axes, set in the Axes dialog (NA = automatic); gb_auto is the chart's
   # own range, shown in the dialog
   gb_axes <- reactiveVal(list(ymin = NA_real_, ymax = NA_real_, xmin = NA_real_, xmax = NA_real_))
   gb_auto <- reactiveVal(NULL)
   observeEvent(input$gb_axes, {
+    req(input$gb_axes > 0)   # a React button sends 0 at start
     a <- gb_auto()
     r <- function(v) if (is.null(v)) "categories" else sprintf("%s to %s", fmt5(signif(v[1], 3)), fmt5(signif(v[2], 3)))
     hint <- if (!is.null(a)) sprintf("Automatic now: Y %s; X %s.", r(a$y), r(a$x))
@@ -1018,9 +826,64 @@ mod_overview_server <- function(id, uploaded_df, user_setup) {
   })
   observeEvent(input$gbax_apply, { gb_axes(axis_read(input, "gbax_")); removeModal() })
   observeEvent(input$gbax_reset, { gb_axes(list(ymin = NA_real_, ymax = NA_real_, xmin = NA_real_, xmax = NA_real_)); removeModal() })
-  observe(updateActionButton(session, "gb_axes", label = if (any(is.finite(unlist(gb_axes())))) "Axes (set)" else "Axes"))
 
   ## ---------------------- What these data do not allow (one quiet line)
+
+  ### ----------------- The React Overview (shinyreact): the same figures as JSON
+  # ---------------------------------------------------------------------------
+  # Facts only; the client draws them (react/src/pages/overview/). Each comes
+  # from the reactive the Shiny page uses, so the two cannot disagree.
+  rows <- function(d) if (is.null(d) || !nrow(d)) list() else lapply(seq_len(nrow(d)), function(i) as.list(d[i, , drop = FALSE]))
+  tiles_json <- function(tl) lapply(tl, function(t) list(label = t$label, value = t$value, sub = t$sub %||% "",
+                                                        icon = t$icon %||% "", share = t$share %||% NA))
+  output$ov_meta <- shinyreact::reactive_output({
+    df <- uploaded_df(); if (is.null(df) || !shiny::isTruthy(user_setup$unique_id)) return(NULL)
+    lv <- Filter(function(k) { cl <- user_setup[[k]]; shiny::isTruthy(cl) && cl %in% names(df) }, c("admin1", "admin2", "admin3"))
+    cols <- vapply(lv, function(k) as.character(user_setup[[k]])[1], "")
+    areas <- if (length(cols)) unique(as.data.frame(lapply(df[cols], as.character), stringsAsFactors = FALSE)) else data.frame()
+    d <- if (shiny::isTruthy(user_setup$date) && user_setup$date %in% names(df)) {
+      x <- as.Date(df[[user_setup$date]]); if (any(!is.na(x))) format(range(x, na.rm = TRUE)) } else NULL
+    mv <- tryCatch(map_var_choices(), error = function(e) character(0))
+    list(levels = I(unname(lv)), level_cols = as.list(cols),
+         areas = lapply(seq_along(cols), function(j) I(areas[[j]])),
+         dates = if (is.null(d)) NULL else I(d),
+         map_vars = lapply(seq_along(mv), function(i) list(label = names(mv)[i], value = unname(mv[i]))),
+         map_default = if (shiny::isTruthy(user_setup$v_groups) && user_setup$v_groups %in% mv) user_setup$v_groups else unname(mv[1]) %||% "")
+  })
+  output$ov_view <- shinyreact::reactive_output({
+    if (is.null(tryCatch(filtered_data(), error = function(e) NULL))) return(NULL)
+    list(label = view_label(), zoomed = !is.null(view_rows()))
+  })
+  output$ov_ready <- shinyreact::reactive_output({
+    if (!shiny::isTruthy(user_setup$unique_id)) return(list(off = list()))
+    rd <- data_readiness(ov_setup())
+    off <- rd[rd$status == "Not available" & rd$area %in% c("Overview", "Selection"), , drop = FALSE]
+    list(off = lapply(seq_len(nrow(off)), function(i) list(feature = off$feature[i], detail = off$detail[i])))
+  })
+  output$ov_collection <- shinyreact::reactive_output({
+    cl <- tryCatch(collection(), error = function(e) NULL); if (is.null(cl)) return(NULL)
+    a1 <- ov_col(user_setup, filtered_data(), "admin1")
+    list(tiles = tiles_json(cl$tiles), daily = rows(if (is.null(cl$daily)) NULL else transform(cl$daily, day = format(day))),
+         by_area = !is.null(cl$area_label),
+         areas = I(sort(unique(c(if (!is.null(a1)) as.character(filtered_data()[[a1]]), "Other areas", "(no area)")))))
+  })
+  output$ov_profile <- shinyreact::reactive_output({
+    pr <- tryCatch(profile(), error = function(e) NULL); if (is.null(pr)) return(list(empty = TRUE))
+    keys <- intersect(PROFILE_CHARTS, names(pr$charts))
+    list(empty = FALSE, tiles = tiles_json(pr$tiles),
+         charts = lapply(keys, function(k) { ch <- pr$charts[[k]]; list(key = k, title = ch$title, kind = ch$kind, data = rows(ch$data)) }))
+  })
+  output$ov_vuln <- shinyreact::reactive_output({
+    a <- tryCatch(vuln_all(), error = function(e) NULL); if (is.null(a)) return(list(empty = TRUE))
+    v <- a$base
+    g <- v$groups
+    list(empty = FALSE, indicator = v$indicator, available = I(v$available),
+         groups = if (is.null(g)) NULL else rows(transform(g, colour = vapply(seq_len(nrow(g)) / nrow(g), diagram_colour, ""))),
+         score = if (is.null(v$score)) NULL else rows(v$score),
+         cross = lapply(a$by, function(x) list(indicator = x$indicator, label = x$indicator_label,
+                                               pct = !identical(x$indicator, "score"), rows = rows(x$cross),
+                                               overall = if (is.null(x$cross)) NA else ov_wmean(x$cross$value, x$cross$households))))
+  })
 
   output$readiness_strip <- renderUI({
     # from the mapping in use, not the copy saved at setup (older sessions

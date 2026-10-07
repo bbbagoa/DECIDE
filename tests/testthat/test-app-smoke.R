@@ -24,10 +24,24 @@ skip_if_no_app_driver <- function() {
   cm$default_timeout <- 120
 }
 
+# The app the tests drive. From a source checkout (devtools::test()), an app
+# folder that loads this source: an app object would be run by a child process
+# that loads the INSTALLED TargetWise, mixing two versions. Background jobs run
+# inline for the same reason (the worker loads the installed package).
+smoke_app <- function(envir = parent.frame()) {
+  root <- normalizePath(testthat::test_path("..", ".."), winslash = "/", mustWork = FALSE)
+  if (!file.exists(file.path(root, "DESCRIPTION"))) return(shiny::shinyApp(ui = app_ui, server = app_server))
+  dir <- withr::local_tempdir(.local_envir = envir)
+  writeLines(c('Sys.setenv(TARGETWISE_BACKGROUND = "false")',
+               sprintf('pkgload::load_all("%s", quiet = TRUE, export_all = TRUE)', root),
+               "shiny::shinyApp(app_ui, app_server)"), file.path(dir, "app.R"))
+  dir
+}
+
 # The value of an Overview figure (tiles carry their label as data-key)
 tile <- function(app, key) {
-  app$wait_for_js(sprintf("!!document.querySelector('#overview_1-col_tiles .tw-tile[data-key=\"%s\"]')", key), timeout = 60 * 1000)
-  app$get_js(sprintf("document.querySelector('#overview_1-col_tiles .tw-tile[data-key=\"%s\"] .tw-tile-value').textContent", key))
+  app$wait_for_js(sprintf("!!document.querySelector('.tw-rov-collection .tw-tile[data-key=\"%s\"]')", key), timeout = 60 * 1000)
+  app$get_js(sprintf("document.querySelector('.tw-rov-collection .tw-tile[data-key=\"%s\"] .tw-tile-value').textContent", key))
 }
 
 # The mapping the fixture needs. Keys are the setup inputs.
@@ -59,7 +73,7 @@ test_that("the app boots, imports, maps variables and reveals the analysis tabs"
   withr::local_envvar(c(TARGETWISE_SESSION_DIR = store, TARGETWISE_UPDATE_CHECK = "false"))
 
   app <- shinytest2::AppDriver$new(
-    shiny::shinyApp(ui = app_ui, server = app_server),
+    smoke_app(),
     name = "targeting-smoke", height = 1200, width = 1600,
     load_timeout = 240 * 1000, timeout = 30 * 1000
   )
@@ -69,6 +83,8 @@ test_that("the app boots, imports, maps variables and reveals the analysis tabs"
   # Targeting Design and Targeting Monitoring load their own datasets, so they
   # must be reachable from a cold start -- a country office designing a
   # scorecard has no registration list yet.
+  # The React shell starts with them hidden; the server confirms after the
+  # client's handshake (tw_nav_state()).
   # nav_hide() runs in an observe(), so the panels are visible for the instant
   # between the page painting and the first flush. Without this wait the
   # assertion below is a coin flip -- it failed once in a full-suite run and
@@ -156,7 +172,7 @@ test_that("a saved setup profile reapplies to a fresh import of the same form", 
   save_profile(profile_from_settings(mapping, name = "smoke"), user = NULL)
 
   app <- shinytest2::AppDriver$new(
-    shiny::shinyApp(ui = app_ui, server = app_server),
+    smoke_app(parent.frame()),
     name = "targeting-profile", height = 1200, width = 1600,
     load_timeout = 240 * 1000, timeout = 30 * 1000
   )
@@ -195,9 +211,9 @@ visible_errors_everywhere <- function(app) {
     app$run_js(sprintf("document.querySelector('a[data-value=%s]').click()", panel))
     app$wait_for_idle(timeout = 60 * 1000)
     errs <- c(errs, grab())
-    n <- app$get_js(sprintf("document.querySelectorAll('.tab-pane[data-value=%s] .nav-link').length", panel))
+    n <- app$get_js(sprintf("document.querySelectorAll('.tw-page[data-value=%s] .tw-tabs-nav .nav-link').length", panel))
     for (i in seq_len(n) - 1) {
-      app$run_js(sprintf("document.querySelectorAll('.tab-pane[data-value=%s] .nav-link')[%d].click()", panel, i))
+      app$run_js(sprintf("document.querySelectorAll('.tw-page[data-value=%s] .tw-tabs-nav .nav-link')[%d].click()", panel, i))
       app$wait_for_idle(timeout = 60 * 1000)
       errs <- c(errs, grab())
     }
@@ -209,7 +225,7 @@ start_app <- function(name) {
   store <- withr::local_tempdir(.local_envir = parent.frame())
   withr::local_envvar(c(TARGETWISE_SESSION_DIR = store, TARGETWISE_UPDATE_CHECK = "false"), .local_envir = parent.frame())
   app <- shinytest2::AppDriver$new(
-    shiny::shinyApp(ui = app_ui, server = app_server),
+    smoke_app(),
     name = name, height = 1200, width = 1600,
     load_timeout = 240 * 1000, timeout = 30 * 1000
   )
@@ -282,7 +298,7 @@ test_that("the country office's profile is offered on a fresh import", {
                                                                               country_office = "Chad")), name = "chad-round-2")
   save_profile(prof, user = NULL)
   app <- shinytest2::AppDriver$new(
-    shiny::shinyApp(ui = app_ui, server = app_server),
+    smoke_app(),
     name = "targeting-country", height = 1200, width = 1600,
     load_timeout = 240 * 1000, timeout = 30 * 1000
   )

@@ -81,6 +81,7 @@ dq_spelling_server <- function(input, output, session, ns, core) {
   # The columns are checked on Check names: picking them computes nothing.
   name_cols <- reactiveVal(character(0))
   observeEvent(input$dq_names_check, {
+    req(input$dq_names_check > 0)   # a React button sends 0 at start
     need_ok(length(input$dq_name_cols) > 0, "Choose the name columns to audit first.")
     name_cols(input$dq_name_cols)
   })
@@ -135,82 +136,28 @@ dq_spelling_server <- function(input, output, session, ns, core) {
   })
 
   # 2. Reactive table for "Bad Names"
-  output$dq_names_redflags <- DT::renderDT(
-    {
-      req(bad_data_reactive(), name_cols())
-
-      cols <- isolate(name_cols())
-
-      df <- bad_data_reactive()
-      req(nrow(df) > 0)
-
-      # cols <- isolate(name_cols())
-      # df <- isolate(bad_data_reactive())
-      # req(df)
-
-      # Efficiently filter rows where ANY selected column has a "bad name"
-      # We use a 1,000 row limit for the UI, but the scan happens on the 1GB file
-      # Lets call the function find_bad_names
-      bad_rows <- df |>
-        dplyr::select(
-          user_setup$unique_id,
-          # user_setup$admin1,
-          # user_setup$admin2,
-          user_setup$admin3,
-          user_setup$admin4,
-          user_setup$village,
-          user_setup$hhh_sex,
-          cols
-        )
-
-      bad_rows <- isolate(bad_rows)
-      req(nrow(bad_rows) > 0) ## Continue while there is still data
-
-      tw_datatable(
-        bad_rows,
-        # escape = FALSE, # Required to render the HTML button
-        rownames = FALSE,
-        selection = "single", # ALLOWS SELECTING ONE ROW
-        # extensions = 'Buttons',
-        filter = "none",
-        options = list(
-          stateSave = TRUE, # KEY: Remembers search/filters in the browser
-          pageLength = 50,
-          scrollX = TRUE,
-          scrollY = "400px",
-          autoWidth = FALSE,
-          columnDefs = list(list(className = 'dt-nowrap', targets = "_all")),
-          dom = 'frtip'
-        )
-      ) |>
-        DT::formatStyle(0, target = 'row', lineHeight = '50%')
-    },
-    server = TRUE
-  )
+  # drawn by React (react/src/pages/dq/SpellingTab.tsx)
+  output$dq_names_redflags <- render_react_table({
+    req(bad_data_reactive(), name_cols())
+    cols <- isolate(name_cols())
+    df <- bad_data_reactive()
+    req(nrow(df) > 0)
+    # the scan runs on the whole data; the table shows who and where
+    keep <- unique(unlist(lapply(c("unique_id", "admin3", "admin4", "village", "hhh_sex"), function(k) {
+      v <- user_setup[[k]]; if (shiny::isTruthy(v) && v %in% names(df)) v
+    })))
+    df[, unique(c(keep, cols)), drop = FALSE]
+  }, page_size = 50, selection = "single", height = 460)
 
   ## ------ Metric for % of bad names
 
-  output$dq_names_metric <- renderUI({
-    req(dq_filtered_data(), name_cols())
-
-    # Use the same logic we used for the table filter
+  # The count of invalid records, as data (a figure on the React page).
+  output$dq_names_metric <- shinyreact::reactive_output({
+    req(dq_filtered_data(), length(name_cols()) > 0)
     total_records <- nrow(dq_filtered_data())
-
-    # Count rows where ANY selected column has a bad name
-    # For 1GB, we count first to avoid pulling the whole dataframe
-    bad_count <- bad_data_reactive() |>
-      nrow()
-
-    bad_pct <- round((bad_count / total_records) * 100, 1)
-
-    HTML(paste0(
-      "<span style='color:#0A6EB4; font-weight:bold;'>",
-      format(bad_count, big.mark = ","),
-      "</span> ",
-      "(<span style='color:#c5192d;'>",
-      bad_pct,
-      "%</span> of selected)"
-    ))
+    bad_count <- nrow(bad_data_reactive())
+    list(n = bad_count, total = total_records,
+         pct = if (total_records) round(100 * bad_count / total_records, 1) else 0)
   })
 
   ### ----------------- Download Button Logic
@@ -278,6 +225,7 @@ dq_spelling_server <- function(input, output, session, ns, core) {
   }
 
   observeEvent(input$btn_open_edit, {
+    req(input$btn_open_edit > 0)
     uid <- selected_uid()
     need_ok(!is.null(uid), "Select a record in the table first.")
 
@@ -472,6 +420,7 @@ dq_spelling_server <- function(input, output, session, ns, core) {
   ids_for_purge <- reactiveVal(NULL)
 
   observeEvent(input$btn_delete_all_missing, {
+    req(input$btn_delete_all_missing > 0)
     # 1. Get current state
     df <- isolate(uploaded_df())
     filtered_df <- isolate(dq_filtered_data())

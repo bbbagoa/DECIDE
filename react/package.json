@@ -1,0 +1,27 @@
+{
+  "name": "targetwise-ui",
+  "private": true,
+  "version": "1.0.0",
+  "description": "TargetWise React client (shinyreact ui.tsx pattern). Built to inst/app/react/ui.js, which ships in the package.",
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "dev": "vite build --watch",
+    "typecheck": "tsc --noEmit",
+    "gallery": "node scripts/build.mjs --mode gallery"
+  },
+  "dependencies": {
+    "echarts": "^6.1.0",
+    "lucide-react": "^1.52.0",
+    "react-select": "^5.10.2"
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.3"
+  }
+}

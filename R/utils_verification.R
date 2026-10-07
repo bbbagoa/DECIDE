@@ -262,3 +262,34 @@ verification_insights <- function(r, original = NULL, groups = character(0), mat
   }
   list(by_group = by_group, patterns = patterns, households = households, direction = direction)
 }
+
+#' Agreement by field as an ECharts option (the Spot Checking page)
+#'
+#' Worst-agreeing fields at the top; bars coloured by the reading of the
+#' agreement (95% or more, 90-95%, below 90%), dashed lines at 90 and 95.
+#' @param fs `compare_verification()$field_summary`.
+#' @noRd
+verification_field_chart <- function(fs) {
+  fs <- fs[order(fs$agreement_rate), , drop = FALSE]
+  pct <- 100 * fs$agreement_rate
+  col <- ifelse(is.na(pct), "#8a96a3", ifelse(pct >= 95, "#3f7e44", ifelse(pct >= 90, "#f7b825", "#c5192d")))
+  esc <- htmltools::htmlEscape
+  opt <- list(
+    grid = list(left = 8, right = 44, top = 8, bottom = 30, containLabel = TRUE),
+    tooltip = list(trigger = "item", formatter = "fn:tip"),
+    xAxis = list(type = "value", min = 0, max = 100, name = "% agreement", nameLocation = "middle", nameGap = 24),
+    yAxis = list(type = "category", inverse = TRUE, data = I(as.character(fs$variable))),
+    series = list(list(
+      type = "bar", barMaxWidth = 18,
+      data = lapply(seq_len(nrow(fs)), function(i) list(
+        value = if (is.na(pct[i])) "-" else round(pct[i], 1), itemStyle = list(color = col[i]),
+        tip = sprintf("<b>%s</b><br>%s agreement<br>%s of %s answers agree", esc(fs$variable[i]),
+                      if (is.na(pct[i])) "n/a" else sprintf("%.1f%%", pct[i]),
+                      format(fs$agree[i], big.mark = ","), format(fs$compared[i], big.mark = ",")))),
+      label = list(show = TRUE, position = "right", formatter = "{c}%", fontSize = 10, textBorderWidth = 0),
+      markLine = list(silent = TRUE, symbol = "none", label = list(show = FALSE),
+                      lineStyle = list(type = "dashed", color = "#8a96a3"),
+                      data = list(list(xAxis = 90), list(xAxis = 95))))))
+  attr(opt, "height") <- max(240, 26 * nrow(fs) + 70)
+  opt
+}

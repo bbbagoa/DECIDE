@@ -10,10 +10,12 @@
 mod_file_import_ui <- function(id, display = FALSE) {
   ns <- NS(id)
   tagList(
+    # The file input is drawn by the server (output$file_ui), so the React
+    # pages (react/src/components/FileImport.tsx) host the same control.
     tags$div(
       id = ns("file_in_container"),
-      fileInput(ns("file_in"), "Load registration data", width = "100%",
-              accept = c(".xlsx", ".xls", ".sav", ".dta", ".csv", ".parquet"))
+      tags$label(class = "form-label", "Load registration data"),
+      uiOutput(ns("file_ui"))
     ),
     uiOutput(ns("status")), # Shows a success message when loaded
 
@@ -138,10 +140,24 @@ mod_file_import_server <- function(id, display = FALSE){
       raw_df()
     })
 
+    # The control itself, drawn once (a redraw would empty it)
+    output$file_ui <- renderUI(
+      fileInput(ns("file_in"), NULL, width = "100%", buttonLabel = "Browse...",
+                placeholder = "No file selected",
+                accept = c(".xlsx", ".xls", ".sav", ".dta", ".csv", ".parquet")))
+    # drawn even while its page is hidden, so a file can be sent to it at once
+    outputOptions(output, "file_ui", suspendWhenHidden = FALSE)
+
     # 3. Simple feedback for the user
     output$status <- renderUI({
       req(raw_data())
       span(class = "text-success", "File loaded.")
+    })
+    # The same, as facts for the React component
+    output$loaded <- shinyreact::reactive_output({
+      df <- raw_df()
+      if (is.null(df)) return(NULL)
+      list(name = isolate(input$file_in$name) %||% "", rows = nrow(df), cols = ncol(df))
     })
 
     # 4. CRITICAL: Return the reactive object

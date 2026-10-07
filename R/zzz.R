@@ -5,6 +5,8 @@
   if (is.null(getOption("openxlsx.datetimeFormat"))) options(openxlsx.datetimeFormat = "dd/mm/yyyy hh:mm")
   # Which installation this R session loaded, to notice an update made since
   tw_state$built <- tw_build_stamp()
+  # React inputs (react/src/lib/inputs.tsx): vectors as Shiny's own inputs send them
+  tw_register_input_handlers()
   invisible()
 }
 

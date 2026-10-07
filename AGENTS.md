@@ -26,6 +26,7 @@ Key business concepts in the app:
 - **Shiny** for the interactive web application.
 - **Golem** for packaging the Shiny app.
 - **bslib** for Bootstrap 5 / Bootswatch theming.
+- **React client** (branch `shinyreact`): Posit's **shinyreact** (`page_react()`, GitHub only, `Remotes:` in DESCRIPTION) serves a React 19 + TypeScript client from `react/` (Vite, built to `inst/app/react/ui.js` + `ui.css`, committed, so no Node at install or run time). Charts are **Apache ECharts**, selects **react-select**, icons **lucide-react**. See "React client" below.
 
 ### Major R dependencies used in code
 
@@ -116,8 +117,25 @@ The app follows the standard Golem pattern:
 
 1. `app.R` is the deployment entry point. It calls `pkgload::load_all()` and then `run_app()`.
 2. `run_app()` (in `R/run_app.R`) wraps `shinyApp(ui = app_ui, server = app_server)` with `golem::with_golem_options()`.
-3. `app_ui()` builds the UI with `bslib::page_navbar()`.
+3. `app_ui()` serves the React client with `shinyreact::page_react()` (the navbar and every page are React; see "React client").
 4. `app_server()` contains the server logic.
+
+### React client
+
+The server is the Shiny server it always was; only the UI functions (`mod_<x>_ui`) are replaced by React pages. The method and the toolkit are in **`react/PORTING.md`**; read it before touching a page.
+
+- **Shell** (`react/src/App.tsx`): navbar, language, dark mode, session toolbar (`components/SessionToolbar.tsx`). The current page is `input$main_nav`; the server navigates with `tw_nav("select" | "show" | "hide", pages)` (`R/utils_react.R`), which replaces `nav_select()` / `nav_show()` / `nav_hide()` on "main_nav". Hidden pages arrive as the "tw-nav-state" message after the client's `input$tw_client_ready` handshake. Every page stays mounted (state kept between visits) and is told when shown / hidden (`signalShown()`), as Bootstrap tabs did.
+- **Pages**: `react/src/pages/<name>/index.tsx` exports `page` (the page value) and a component; the shell finds them (`import.meta.glob`) and sends their list as `input$tw_ported`; a page not in it is rendered from its Shiny UI into `output$pg_<value>` (`render_legacy_pages()`), so a page can be ported on its own. Each page folder has a `PORT.md` (behaviour tree, checklist, divergences).
+- **Ids are the contract**: every input and output keeps its Shiny id (`<module>-<id>`), so observers, `update*Input()`, `updatePickerInput()`, `nav_select()` on a page's tabs, `gate_button()`, `cascade_pickers()`, session save/restore and the audit trail work unchanged. React inputs receive server updates through a hidden `.shiny-bound-input#<id>` element (`useServerUpdates()` in `src/lib/inputs.tsx`); vectors travel as the input types `tw.chr` / `tw.num` / `tw.date` (`tw_register_input_handlers()`, `.onLoad`), so R gets character / numeric / Date vectors and NULL when empty.
+- **Buttons** (`ActionButton`) count from 0 and are not bound by Shiny (`data-shiny-no-bind-input`, or every click would arrive twice): observers on them start with `req(input$x > 0)`. In shinytest2, click them with `tw_click()` (`react/dev/e2e.R`), not `app$click()`.
+- **Tables**: `render_react_table()` (`R/utils_react_render.R`) replaces `DT::renderDT()` (a data frame or a `tw_datatable()` widget; `formats`, `styles`, `html`, `editable`, `group`; paging / sort / search on the server above 5,000 rows); the React `DataTable` keeps DT's `<id>_rows_selected`, `<id>_rows_all`, `<id>_cell_edit`. `react_table_select()` replaces `DT::selectRows()`.
+- **Charts**: `render_echart()` replaces `render_wfp_plotly()`; it takes an ECharts option (preferred) or converts a plotly chart (`plotly_to_echarts()`). Formatters are names (`"fn:pct"`, `"fn:tip"`, ...); hover text goes in each data item's `tip`. The WFP theme (light / dark) is in `src/lib/chart.tsx`. Design-page options are in `R/utils_scorecard_echarts.R`, monitoring ones in `chart_echart_option()`, Overview builder ones in `gb_echart()`. Plotly remains only inside server dialogs and the HTML reports keep billboarder.
+- **Server facts as JSON**: what a page shows as figures, tiles, lists or step status comes from `shinyreact::reactive_output()` outputs (e.g. `ov_meta`, `sc_flow`, `ben_meta`, `pdm_state`), read with `useShinyOutputValue()`. Rich server HTML that is rarely used stays a `renderUI()` shown with `HostedUI`.
+- **Stays Shiny's**: `showModal()` dialogs (Bootstrap, styled by wfp-ui.css), `fileInput` (hosted inside React drop zones), the leaflet map, `rich_text_input()` where hosted.
+- **Shared components** (`react/src/components/`): `FileImport`, `ModaImport`, `VarCalc` / `VarCalcBulk`, `AreaScope`, `SessionToolbar`, `Figures` (tiles, rings, empty state); each takes the module namespace (`ns="scorecard_1-moda"`).
+- **Labels**: `t("...")` with `www/translations.json` (add the French for every new label); variable labels from the session dictionary via `useVarLabels()` (`www/labels.js` publishes it as `window.twLabels`).
+- **Checks**: `react/dev/gallery/` tests the toolkit (`npm run gallery`, `NOT_CRAN=true Rscript react/dev/gallery/test.R`); `react/dev/test_<page>.R` drive each page in a browser through `react/dev/e2e.R` (`tw_launch()`, `tw_load_registration()`, `tw_go()`, `tw_click()`, `tw_shot()`, `tw_errors()`). They load the package from source; never reinstall for a check.
+- **Build**: `cd react && npm run build` (locked, safe when several builds run), then reload the app. Commit `inst/app/react/` with the source.
 
 ### UI tabs
 

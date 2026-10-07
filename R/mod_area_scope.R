@@ -69,12 +69,14 @@ mod_area_scope_server <- function(id, data, workspace = NULL, key = NULL, log = 
     })
 
     observeEvent(input$apply, {
+      req(input$apply > 0)   # React buttons send an initial 0
       sc <- Filter(function(s) isTruthy(s$col) && length(s$values),
                    lapply(1:2, function(k) list(col = input[[paste0("col", k)]], values = input[[paste0("val", k)]])))
       applied(sc)
       audit_add(log, phase, "Areas covered set", scope_text(sc))
     })
     observeEvent(input$clear, {
+      req(input$clear > 0)
       for (k in 1:2) shinyWidgets::updatePickerInput(session, paste0("val", k), selected = character(0))
       pending(NULL)
       applied(list())

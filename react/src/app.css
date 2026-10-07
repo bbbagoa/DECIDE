@@ -1,0 +1,52 @@
+/* The React shell's layout. Colours, fonts and components come from the app's
+   own stylesheets (wfp-ui.css, custom.css) and the WFP Bootstrap theme, so the
+   React shell and the Shiny pages it hosts look the same. */
+html, body { height: 100%; margin: 0; }
+.tw-app { display: flex; flex-direction: column; height: 100vh; }
+.tw-navbar { flex: 0 0 auto; }
+.tw-navbar .navbar-nav .nav-link { display: inline-flex; align-items: center; gap: .35rem; }
+.tw-navbar .dropdown-item { display: flex; align-items: center; gap: .45rem; }
+.tw-navbar .dropdown-menu { position: absolute; }
+.tw-nav-right .mini-theme-selector select { width: 120px; }
+.tw-mode-btn { color: #fff; border: 0; background: transparent; }
+.tw-mode-btn:hover { background: rgba(255, 255, 255, .12); color: #fff; }
+.tw-main { flex: 1 1 auto; min-height: 0; position: relative; }
+.tw-page { position: absolute; inset: 0; flex-direction: column; overflow: auto; }
+.tw-hosted > * { flex: 1 1 auto; min-height: 0; }
+.recalculating { opacity: .6; transition: opacity 200ms; }
+
+/* ---- Overview (React) ---- */
+.tw-rov { display: grid; grid-template-columns: 290px minmax(0, 1fr) minmax(0, 1fr); gap: 14px; height: 100%; padding: 14px; box-sizing: border-box; }
+.tw-rov-side { display: flex; flex-direction: column; gap: 14px; overflow: auto; background: var(--bs-body-bg); border-right: 1px solid var(--border, rgba(128,128,128,.2)); padding: 4px 14px 14px 0; }
+.tw-rov-step-title { font-weight: 600; font-size: .9rem; margin-bottom: .5rem; }
+.tw-rov-field { display: block; font-size: .8rem; color: var(--bs-secondary-color); margin-bottom: .6rem; }
+.tw-rov-field > span { display: block; margin-bottom: .2rem; }
+.tw-rov-actions { margin-top: auto; }
+.tw-rov-map { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+.tw-rov-map .wfp-map-toolbar select { width: auto; min-width: 200px; }
+.tw-rov-map-body { flex: 1 1 auto; min-height: 0; height: 100% !important; width: 100% !important; }
+.tw-rov-right { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+.tw-rov-collection { padding: 12px 14px; flex: 0 0 auto; }
+.tw-rov-collection .tw-ov-head { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
+.tw-rov-sections { flex: 1 1 auto; min-height: 0; overflow: auto; border: 1px solid var(--border, rgba(128,128,128,.2)); border-radius: var(--card-radius, 12px); background: var(--bs-body-bg); }
+.tw-rov-sec + .tw-rov-sec { border-top: 1px solid var(--border, rgba(128,128,128,.2)); }
+.tw-rov-sec-head { width: 100%; display: flex; justify-content: space-between; align-items: center; background: none; border: 0; padding: .7rem 1rem; font-size: .95rem; color: var(--bs-body-color); }
+.tw-rov-sec-head:hover { background: rgba(128,128,128,.05); }
+.tw-rov-sec-body { padding: 0 1rem 1rem; }
+.tw-seg-r { background: rgba(128,128,128,.12); border-radius: 7px; padding: 2px; gap: 2px; }
+.tw-seg-r .btn { border: 0; border-radius: 5px !important; font-size: .7rem; font-weight: 600; padding: .18rem .55rem; color: var(--bs-secondary-color); background: transparent; }
+.tw-seg-r .btn.active { background: var(--bs-body-bg); color: var(--wfp-blue, #0A6EB4); box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+.tw-select__control { min-height: 34px !important; border-color: var(--border, rgba(128,128,128,.3)) !important; background: var(--bs-body-bg) !important; }
+.tw-select__menu { background: var(--bs-body-bg) !important; color: var(--bs-body-color); }
+.tw-select__single-value, .tw-select__input-container { color: var(--bs-body-color) !important; }
+.tw-select__multi-value { background: rgba(10, 110, 180, .1) !important; }
+
+/* Audit trail and other plain tables */
+.tw-search { position: relative; margin: 0; }
+.tw-search svg { position: absolute; left: 8px; top: 50%; transform: translateY(-50%); opacity: .55; }
+.tw-search input { padding-left: 26px; min-width: 220px; }
+.tw-table-wrap { overflow: auto; max-height: calc(100vh - 260px); border: 1px solid var(--bs-border-color); border-radius: 8px; }
+.tw-table { font-size: .82rem; }
+.tw-table thead th { position: sticky; top: 0; z-index: 1; background: var(--bs-tertiary-bg); cursor: pointer; user-select: none;
+  white-space: nowrap; font-weight: 600; font-size: .75rem; text-transform: uppercase; letter-spacing: .02em; color: var(--bs-secondary-color); }
+.tw-table td { vertical-align: top; max-width: 420px; overflow-wrap: anywhere; }

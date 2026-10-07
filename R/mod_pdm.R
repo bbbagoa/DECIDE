@@ -237,6 +237,7 @@ mod_pdm_server <- function(id, workspace = NULL, country_office = reactive(NULL)
                         selected = isolate(input$ptm_level) %||% (if (length(ch)) unname(ch[1]) else ""))
     })
     observeEvent(input$ptm_draw, {
+      req(input$ptm_draw > 0)   # a React button sends 0 at start
       fr <- tryCatch(if (is.null(selection)) NULL else selection(), error = function(e) NULL)
       need_ok(!is.null(fr) && NROW(fr$df) > 0, "Load and map the registration data, then apply the selection in Beneficiary Selection first.")
       need_ok(any(fr$served %in% TRUE), "The selection serves no household yet: apply it in Beneficiary Selection first.")
@@ -376,18 +377,19 @@ mod_pdm_server <- function(id, workspace = NULL, country_office = reactive(NULL)
         )
       )
     })
-    output$pop_table <- DT::renderDT({
+    output$pop_table <- render_react_table({
       st <- pop_template()
       names(st) <- c("Area", "Beneficiaries surveyed", "Non-beneficiaries surveyed",
                      "Beneficiary households", "Non-beneficiary households")
-      tw_datatable(st, rownames = FALSE, selection = "none",
-                    editable = list(target = "cell", disable = list(columns = 0:2)),
-                    options = list(dom = "t", paging = FALSE, ordering = FALSE))
-    })
+      st
+    }, page_size = 100, editable = c("Beneficiary households", "Non-beneficiary households"),
+    formats = list(`Beneficiaries surveyed` = "int", `Non-beneficiaries surveyed` = "int",
+                   `Beneficiary households` = "int", `Non-beneficiary households` = "int"))
     observeEvent(input$pop_table_cell_edit, {
       e <- input$pop_table_cell_edit
       st <- pop_template()
-      col <- c("beneficiaries", "non_beneficiaries")[e$col - 2]
+      # the React table counts columns from 1 (DT counted from 0): 4 and 5 are editable
+      col <- c("beneficiaries", "non_beneficiaries")[as.integer(e$col) - 3L]
       req(length(col) == 1, !is.na(col))
       st[[col]][e$row] <- suppressWarnings(as.numeric(e$value))
       pop_units(st[, c("unit", "beneficiaries", "non_beneficiaries")])
@@ -485,6 +487,7 @@ mod_pdm_server <- function(id, workspace = NULL, country_office = reactive(NULL)
 
     # --- Compute ----------------------------------------------------------
     observeEvent(input$pdm_run, {
+      req(input$pdm_run > 0)
       df <- pdm_df()
       if (is.null(df)) {
         showNotification("Load a PDM dataset first.", type = "warning")
@@ -884,51 +887,46 @@ mod_pdm_server <- function(id, workspace = NULL, country_office = reactive(NULL)
       paste0(pct(m$precision), " / ", pct(m$recall))
     })
 
-    output$pdm_confusion <- DT::renderDT({
+    output$pdm_confusion <- render_react_table({
       r <- results(); req(r)
-      tw_datatable(r$confusion, rownames = FALSE,
-                    options = list(dom = "t", ordering = FALSE)) |>
-        DT::formatCurrency(c("Beneficiary", "Non-beneficiary"),
-                           currency = "", interval = 3, mark = ",", digits = 0)
-    })
+      r$confusion
+    }, formats = list(Beneficiary = "int", `Non-beneficiary` = "int"))
 
-    output$pdm_plot <- render_wfp_plotly({
+    output$pdm_plot <- render_echart({
       r <- results(); req(r)
       m <- r$metrics
       d <- data.frame(
         metric = c("Implementation inclusion error",
                    "Implementation exclusion error", "Coverage"),
-        value = c(m$inclusion_error, m$exclusion_error, m$coverage_rate) * 100,
+        value = c(m$inclusion_error, m$exclusion_error, m$coverage_rate),
+        colour = c("#c5192d", "#f7b825", "#3f7e44"),
         stringsAsFactors = FALSE
       )
       d <- d[!is.na(d$value), , drop = FALSE]
       req(nrow(d) > 0)
-      plotly::plot_ly(
-        d, x = ~metric, y = ~value, type = "bar",
-        marker = list(color = c("#c5192d", "#f7b825", "#3f7e44")[seq_len(nrow(d))]),
-        hovertemplate = "%{x}: %{y:.1f}%<extra></extra>"
-      ) |>
-        plotly::layout(
-          xaxis = list(title = ""),
-          yaxis = list(title = "%", gridcolor = "rgba(128,128,128,0.2)")
-        )
-    })
+      # the colours carry the meaning: inclusion, exclusion, coverage
+      list(tooltip = list(trigger = "item", formatter = "fn:tip"),
+           grid = list(left = 8, right = 16, top = 24, bottom = 8, containLabel = TRUE),
+           xAxis = list(type = "category", data = d$metric, axisLabel = list(interval = 0, width = 110, overflow = "break")),
+           yAxis = Filter(Negate(is.null), list(type = "value", min = 0, max = if (max(d$value) > 0.8) 1,
+                                                axisLabel = list(formatter = "fn:pct"))),
+           series = list(list(type = "bar", barMaxWidth = 70,
+                              label = list(show = TRUE, position = "top", formatter = "fn:pct1"),
+                              data = lapply(seq_len(nrow(d)), function(i) list(
+                                value = d$value[i], itemStyle = list(color = d$colour[i]),
+                                tip = sprintf("%s: <b>%.1f%%</b>", d$metric[i], 100 * d$value[i]))))))
+    }, height = 300)
 
-    output$pdm_by_unit <- DT::renderDT({
+    output$pdm_by_unit <- render_react_table({
       r <- results(); req(r)
       if (is.null(r$by_unit) || nrow(r$by_unit) == 0) {
-        return(tw_datatable(
-          data.frame(Message = "Pick a breakdown column to see coverage by unit."),
-          rownames = FALSE, options = list(dom = "t")
-        ))
+        return(data.frame(Message = "Pick a breakdown column to see coverage by unit."))
       }
       cov <- r$by_unit
-      cov$coverage <- paste0(round(cov$coverage * 100, 1), "%")
       colnames(cov) <- c(r$unit_col, "Eligible (w)", "Reached (w)", "Coverage")
-      tw_datatable(cov, rownames = FALSE, options = list(pageLength = 15, scrollX = TRUE)) |>
-        DT::formatCurrency(c("Eligible (w)", "Reached (w)"),
-                           currency = "", interval = 3, mark = ",", digits = 0)
-    })
+      cov
+    }, formats = list(`Eligible (w)` = "int", `Reached (w)` = "int", Coverage = "pct1"),
+    styles = list(Coverage = list(bar = "#0A6EB4")))
 
     # --- Export -----------------------------------------------------------
     output$pdm_download <- download_handler(
@@ -988,6 +986,34 @@ mod_pdm_server <- function(id, workspace = NULL, country_office = reactive(NULL)
         save_workbook_readonly(wb, file)
       }
     )
+
+    # --- The React page (react/src/pages/monitoring/) ------------------------
+    # The file input stays Shiny's (it streams the upload), drawn here and
+    # hosted; rendered once, kept bound while its step is folded.
+    output$pdm_file_ui <- renderUI(fileInput(ns("pdm_file"), NULL, width = "100%", accept = c(".xlsx", ".xls", ".sav", ".dta", ".csv", ".parquet"),
+                                             placeholder = "One row per surveyed household"))
+    for (k in c("pdm_file_ui", "benef_level_ui", "pdm_elig_note"))
+      outputOptions(output, k, suspendWhenHidden = FALSE)
+    # The facts the page draws: data, sample, match, results, decisions.
+    output$pdm_state <- shinyreact::reactive_output({
+      df <- pdm_df(); sd <- sample_design(); r <- results(); mt <- ptm_matched()
+      d <- sd$design
+      m <- r$metrics
+      dd <- r$decisions
+      list(
+        data = if (!is.null(pdm_all())) list(source = pdm_source() %||% "Data loaded", rows = NROW(df), cols = NCOL(df)),
+        sample = if (!is.null(sd)) list(drawn_at = sd$drawn_at, n = sum(d$n), selected = sum(d$n[d$group == "selected"]),
+                                        not_selected = sum(d$n[d$group == "not_selected"]), reserve = sum(d$reserve),
+                                        areas = length(unique(d$area))),
+        match = if (!is.null(mt)) list(n = mt$n, of = mt$of),
+        results = if (!is.null(r)) list(
+          kind = r$kind, inclusion = m$inclusion_error, exclusion = m$exclusion_error, coverage = m$coverage_rate,
+          precision = m$precision, recall = m$recall, elig_source = r$elig_source %||% "a PDM column",
+          weighting = r$weighting %||% "none", no_nonbenef = isTRUE(r$no_nonbenef),
+          decisions = if (!is.null(dd) && nrow(dd)) lapply(seq_len(nrow(dd)), function(i) list(
+            area = as.character(dd$area[i]), n_selected = dd$n_selected[i], n_not = dd$n_not[i],
+            inclusion = dd$inclusion_error[i], exclusion = dd$exclusion_error[i], level = dd$level[i], decision = dd$decision[i]))))
+    })
 
     # For the Targeting Monitoring report and the PDM chart builder.
     list(

@@ -122,6 +122,7 @@ dq_location_server <- function(input, output, session, ns, core) {
   # The level is summarised on Show names: picking it computes nothing.
   norm_level <- reactiveVal(NULL)
   observeEvent(input$norm_show, {
+    req(input$norm_show > 0)   # a React button sends 0 at start
     need_ok(shiny::isTruthy(input$norm_col), "Choose the level to review.")
     norm_level(input$norm_col)
   })
@@ -178,25 +179,10 @@ dq_location_server <- function(input, output, session, ns, core) {
   })
 
   # 1. Render the Summary Table
-  output$tab_location_norm <- DT::renderDT(
-    {
-      tw_datatable(
-        norm_data_summary(),
-        selection = "multiple",
-        options = list(
-          stateSave = TRUE, # KEY: Remembers search/filters in the browser
-          pageLength = 100,
-          language = list(search = "", searchPlaceholder = "Search, e.g. kivu"),
-          scrollX = TRUE,
-          scrollY = "500px",
-          autoWidth = FALSE,
-          columnDefs = list(list(className = 'dt-nowrap', targets = "_all")),
-          dom = 'frtip'
-        )
-      )
-    },
-    server = TRUE
-  )
+  # drawn by React (react/src/pages/dq/LocationTab.tsx)
+  output$tab_location_norm <- render_react_table(norm_data_summary(), page_size = 100, selection = "multiple",
+                                                 formats = list(count = "int"), labels = list(count = "Records"),
+                                                 height = 560)
 
   # 2. Batch Update Logic
 
@@ -205,9 +191,10 @@ dq_location_server <- function(input, output, session, ns, core) {
 
   ## ------------- Select every row matching the search box
   observeEvent(input$btn_select_shown, {
+    req(input$btn_select_shown > 0)
     shown <- input$tab_location_norm_rows_all
     if (!length(shown)) return()
-    DT::selectRows(DT::dataTableProxy("tab_location_norm"), union(input$tab_location_norm_rows_selected, shown))
+    react_table_select("tab_location_norm", union(input$tab_location_norm_rows_selected, shown))
   })
 
   # What is selected, and a suggested correct spelling: the most common of
@@ -241,11 +228,8 @@ dq_location_server <- function(input, output, session, ns, core) {
   ## ------------- Deselect
 
   observeEvent(input$btn_clear_selection, {
-    # 'tab_location_norm' should be the ID of your DT output
-    proxy <- DT::dataTableProxy("tab_location_norm")
-
-    # Passing NULL tells the table to clear all highlights
-    DT::selectRows(proxy, NULL)
+    req(input$btn_clear_selection > 0)
+    react_table_select("tab_location_norm", NULL)
 
     # Optional: Show a quick notification at the top
     showNotification(
@@ -257,6 +241,7 @@ dq_location_server <- function(input, output, session, ns, core) {
   ## ------------- Trigger the Merge and Show Modal for confirmation
 
   observeEvent(input$btn_apply_norm, {
+    req(input$btn_apply_norm > 0)
     # 1. Identify what needs to be changed
     selected_rows <- input$tab_location_norm_rows_selected
     need_ok(length(selected_rows) > 0 && shiny::isTruthy(input$correct_name), "Select the names to merge and type the correct name first.")
@@ -425,79 +410,46 @@ dq_location_server <- function(input, output, session, ns, core) {
 
   ## --------- Similarity Tree Map
 
-  output$dq_location_treemap <- render_wfp_plotly({
-    # 1. Get the hierarchical summary
+  output$dq_location_treemap <- render_echart({
     dat <- norm_data_summary()
     req(dat, nrow(dat) > 0)
+    dq_treemap_option(dat)
+  }, height = 560)
+}
 
-    # 2. Identify columns (e.g., Admin 1, Admin 2, Admin 3)
-    # Ensure we only use the columns that exist in the summary
-    cols_present <- setdiff(names(dat), "count")
-    n_levels <- length(cols_present)
-
-    # 3. Initialize the lists for Plotly
-    all_ids <- c()
-    all_labels <- c()
-    all_parents <- c()
-    all_values <- c()
-
-    # 4. Loop through each level to build the hierarchy
-    for (i in 1:n_levels) {
-      # Current level unique path (e.g., "Prov A - Dist B")
-      ids <- apply(dat[, 1:i, drop = FALSE], 1, paste, collapse = " - ")
-
-      # Label is just the name of the current item (e.g., "Dist B")
-      labels <- as.character(dat[[cols_present[i]]])
-
-      # Parent is the path of the level above
-      if (i == 1) {
-        parents <- rep("", nrow(dat)) # Root has no parent
-      } else {
-        parents <- apply(
-          dat[, 1:(i - 1), drop = FALSE],
-          1,
-          paste,
-          collapse = " - "
-        )
-      }
-
-      all_ids <- c(all_ids, ids)
-      all_labels <- c(all_labels, labels)
-      all_parents <- c(all_parents, parents)
-      all_values <- c(all_values, dat$count)
-    }
-
-    # 5. Remove Duplicate IDs (Crucial: multiple villages share the same Admin 1 parent)
-    # We aggregate the values so parents get the sum of their children
-    final_df <- data.frame(
-      ids = all_ids,
-      labels = all_labels,
-      parents = all_parents,
-      values = all_values,
-      stringsAsFactors = FALSE
-    ) |>
-      dplyr::group_by(ids, labels, parents) |>
-      dplyr::summarise(values = sum(values), .groups = "drop") |>
-      dplyr::mutate(level = stringr::str_count(ids, " - "))
-
-    # 6. Final Plot
-    plotly::plot_ly(
-      data = final_df,
-      type = "treemap",
-      ids = ~ids,
-      labels = ~labels,
-      parents = ~parents,
-      values = ~values,
-      # color = ~level,
-      # colors = "Blues",
-      branchvalues = "total",
-      # Token blues rather than the stock "Mint" scale (see AGENTS.md > chart colors)
-      marker = list(colorscale = list(c(0, "#cfe3f3"), c(1, "#0A6EB4"))),
-      textinfo = "label+value"
-    ) |>
-      plotly::layout(
-        autosize = TRUE,
-        margin = list(t = 0, l = 0, r = 0, b = 0)
+#' The location hierarchy as an ECharts treemap: each level nests in the one
+#' above, sized by the number of records (react/src/pages/dq/LocationTab.tsx)
+#' @param dat One row per combination of the levels, with `count`.
+#' @noRd
+dq_treemap_option <- function(dat) {
+  lv <- setdiff(names(dat), "count")
+  node <- function(d, k) {
+    if (k > length(lv)) return(NULL)
+    key <- as.character(d[[lv[k]]]); key[is.na(key)] <- "(missing)"
+    lapply(split(seq_len(nrow(d)), factor(key, levels = unique(key))), function(i) {
+      kids <- node(d[i, , drop = FALSE], k + 1)
+      c(list(name = key[i[1]], value = sum(d$count[i])), if (length(kids)) list(children = unname(kids)))
+    }) |> unname()
+  }
+  dq_compact(list(
+    tooltip = list(trigger = "item"),
+    series = list(list(
+      type = "treemap", name = "All records", data = node(dat, 1), roam = FALSE, nodeClick = "zoomToNode",
+      top = 4, left = 0, right = 0, bottom = 28, leafDepth = if (length(lv) > 1) 2 else NULL,
+      breadcrumb = list(show = TRUE, bottom = 0, height = 20),
+      label = list(show = TRUE, formatter = "{b}
+{c}", fontSize = 11),
+      upperLabel = list(show = TRUE, height = 18, color = "#fff", fontSize = 11),
+      itemStyle = list(borderColor = "rgba(255,255,255,0.6)", borderWidth = 1, gapWidth = 1),
+      # a level's colours go to its children: the root colours the top level,
+      # each top-level place shades its own children
+      levels = list(
+        list(color = I(c("#0A6EB4", "#26bde2", "#3f7e44", "#f7b825", "#5b6b7c", "#7fb3d5", "#c5192d", "#8a96a3")),
+             itemStyle = list(borderWidth = 0, gapWidth = 3)),
+        list(colorSaturation = I(c(0.35, 0.65)), itemStyle = list(gapWidth = 2, borderWidth = 2, borderColor = "rgba(255,255,255,0.35)"),
+             upperLabel = list(show = TRUE)),
+        list(colorSaturation = I(c(0.3, 0.6)), itemStyle = list(gapWidth = 1, borderColorSaturation = 0.6))
       )
-  })
+    ))
+  ))
 }

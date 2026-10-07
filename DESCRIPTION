@@ -47,6 +47,7 @@ Imports:
     shiny,
     shiny.i18n,
     shinycssloaders,
+    shinyreact,
     shinyWidgets,
     sodium,
     stringdist,
@@ -71,3 +72,5 @@ BugReports: https://github.com/bbbagoa/TargetWise/issues
 Config/roxygen2/version: 8.1.0
 Encoding: UTF-8
 LazyData: true
+Remotes:
+    posit-dev/shinyreact/pkg-r

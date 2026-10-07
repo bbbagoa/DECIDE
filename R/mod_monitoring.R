@@ -148,6 +148,7 @@ mod_monitoring_server <- function(id, workspace = NULL, country_office = reactiv
       take_pm(as.data.frame(df), pm_moda$label() %||% sprintf("MODA form %s", pm_moda$credentials()$form_id %||% ""))
     })
     observeEvent(input$pm_remove, {
+      req(input$pm_remove > 0)   # a React button sends 0 at start
       ds <- datasets(); need_ok(length(ds) > 0 && shiny::isTruthy(input$pm_active), "No dataset to remove.")
       ds[[input$pm_active]] <- NULL; datasets(ds)
       updateSelectInput(session, "pm_active", choices = names(ds), selected = if (length(ds)) names(ds)[1] else character(0))
@@ -160,7 +161,7 @@ mod_monitoring_server <- function(id, workspace = NULL, country_office = reactiv
     })
     active_pm <- reactive({ ds <- datasets(); if (shiny::isTruthy(input$pm_active)) ds[[input$pm_active]] else NULL })
 
-    mod_chart_builder_server("pdm_charts", data = pdm$df, source = "pdm", add_item = add_item,
+    mod_chart_builder_server("pdm_charts", data = pdm$df, source = "pdm", add_item = add_item, presets = "PDM",
                              dataset_name = reactive({
                                a <- pdm$areas()
                                paste0(pdm$name(), if (!identical(a, "All areas")) paste0(" (", a, ")") else "")
@@ -171,7 +172,8 @@ mod_monitoring_server <- function(id, workspace = NULL, country_office = reactiv
                              dataset_name = reactive({
                                a <- pm_scope$text()
                                paste0(input$pm_active %||% "", if (!identical(a, "All areas")) paste0(" (", a, ")") else "")
-                             }), add_item = add_item)
+                             }), add_item = add_item,
+                             presets = c("Complaints and feedback (CFM)", "Community process"))
 
     observe(gate_button("pm_remove", length(datasets()) > 0, "No dataset loaded yet."))
 
@@ -220,6 +222,7 @@ mod_monitoring_server <- function(id, workspace = NULL, country_office = reactiv
                        type = "message", duration = 10)
     }
     observeEvent(input$tpl_apply, {
+      req(input$tpl_apply > 0)
       need_ok(nzchar(input$tpl %||% ""), "Pick a template first.")
       if (!length(items())) return(apply_template("replace"))
       showModal(modalDialog(
@@ -233,6 +236,7 @@ mod_monitoring_server <- function(id, workspace = NULL, country_office = reactiv
     observeEvent(input$tpl_replace, apply_template("replace"))
 
     observeEvent(input$tpl_save, {
+      req(input$tpl_save > 0)
       need_ok(length(items()) > 0, "Add charts to the report first: the template keeps them (without the data).")
       cur <- sub("^saved:", "", input$tpl %||% "")
       showModal(modalDialog(
@@ -261,7 +265,8 @@ mod_monitoring_server <- function(id, workspace = NULL, country_office = reactiv
       saved_templates(sv)
       tryCatch(app_setting_set("monitoring_templates", sv, who), error = function(e) NULL)
       removeModal()
-      updateSelectInput(session, "tpl", selected = paste0("saved:", nm))
+      # after the choices observer has sent the new list (it keeps the old pick)
+      after_flush(session, function() updateSelectInput(session, "tpl", selected = paste0("saved:", nm)))
       audit_add(modification_log, "Monitoring", "Report saved as a template", sprintf("%s, round %s", nm, rd))
       showNotification(sprintf("Saved '%s' with the figures of %s.", nm, rd), type = "message")
     })
@@ -288,12 +293,14 @@ mod_monitoring_server <- function(id, workspace = NULL, country_office = reactiv
       sv[[nm]] <- t
       saved_templates(sv)
       tryCatch(app_setting_set("monitoring_templates", sv, who), error = function(e) NULL)
-      updateSelectInput(session, "tpl", selected = paste0("saved:", nm))
+      # after the choices observer has sent the new list (it keeps the old pick)
+      after_flush(session, function() updateSelectInput(session, "tpl", selected = paste0("saved:", nm)))
       audit_add(modification_log, "Monitoring", "Template imported", sprintf("%s (%d charts, %d rounds)", nm, length(t$items), length(t$rounds)))
       showNotification(sprintf("Template '%s' imported: %d charts, %d earlier round%s. Load this round's data, then click Draft.",
                                nm, length(t$items), length(t$rounds), if (length(t$rounds) == 1) "" else "s"), type = "message", duration = 10)
     })
     observeEvent(input$tpl_delete, {
+      req(input$tpl_delete > 0)
       sel <- input$tpl %||% ""
       need_ok(startsWith(sel, "saved:"), "Pick one of your saved templates to delete (the ready-made ones stay).")
       sv <- saved_templates(); sv[[sub("^saved:", "", sel)]] <- NULL
@@ -409,6 +416,7 @@ mod_monitoring_server <- function(id, workspace = NULL, country_office = reactiv
                                             stage = "implementation"), error = function(e) NULL))
     }
     observeEvent(input$report_check, {
+      req(input$report_check > 0)
       w <- monitoring_checks(items(), report_pdm(checks = TRUE),
                              c(context = input$context %||% "", findings = input$findings %||% "",
                                recommendations = input$recommendations %||% ""),
@@ -443,6 +451,33 @@ mod_monitoring_server <- function(id, workspace = NULL, country_office = reactiv
     )
     # The link is hidden: it must still be ready when clicked.
     outputOptions(output, "report", suspendWhenHidden = FALSE)
+
+    # --- The React page (react/src/pages/monitoring/) --------------------------
+    # The file inputs stay Shiny's (they stream the upload), drawn here and
+    # hosted; rendered once and kept bound while their section is folded.
+    output$pm_file_ui <- renderUI(fileInput(ns("pm_file"), NULL, width = "100%", placeholder = "Load a dataset",
+                                            accept = c(".xlsx", ".xls", ".sav", ".dta", ".csv", ".parquet")))
+    output$tpl_import_ui <- renderUI(fileInput(ns("tpl_import"), NULL, accept = ".json", width = "100%", buttonLabel = "Import...",
+                                               placeholder = "A template file (.json)"))
+    for (k in c("pm_file_ui", "tpl_import_ui"))
+      outputOptions(output, k, suspendWhenHidden = FALSE)
+    # The facts the page draws: the datasets, the earlier rounds, the report's items.
+    output$mon_state <- shinyreact::reactive_output({
+      ds <- datasets(); r <- previous_rounds(); its <- items()
+      last <- if (length(r)) r[[length(r)]]
+      list(
+        datasets = lapply(names(ds), function(n) list(name = n, rows = nrow(ds[[n]]))),
+        rounds = if (!is.null(last)) sprintf("Compared with %s (%s)%s.", last$label, fmt_date(last$date),
+                                             if (length(r) > 1) sprintf(" and %d earlier round%s", length(r) - 1, if (length(r) > 2) "s" else "") else ""),
+        redraw = redraw(),
+        items = lapply(its, function(it) list(
+          id = it$id, title = it$title, half = identical(it$width, "half"),
+          source = if (identical(it$source, "pdm")) pdm$kind() else "Targeting process", dataset = it$dataset %||% "",
+          display = if (identical(it$display, "table")) "table" else "chart",
+          comment = rich_html(it$comment %||% "", empty = ""),
+          # the suggestion, unless the comment already says it
+          caption = if (nzchar(it$caption %||% "") && !grepl(it$caption, rich_text(it$comment %||% ""), fixed = TRUE)) it$caption else "")))
+    })
 
     # --- saved with the session ------------------------------------------------------
     workspace_register(workspace, "monitoring",

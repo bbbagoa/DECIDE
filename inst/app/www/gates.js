@@ -35,6 +35,9 @@
     if (window.Shiny && Shiny.notifications) Shiny.notifications.show({ html: $("<span>").text(msg).html(), type: "warning", duration: 5000 });
   }, true);
 
+  // React buttons (react/src/lib/inputs.tsx) re-apply their gate after each render
+  window.twGates = { apply: apply };
+
   $(function () {
     Shiny.addCustomMessageHandler("tw-gate", function (m) { gates[m.id] = m; apply(m.id); });
   });

@@ -274,6 +274,8 @@ mod_spot_checking_server <- function(id, uploaded_df, user_setup, workspace = NU
     })
 
     observeEvent(list(input$sc_apply, input$sc_draw), ignoreInit = TRUE, {
+      # React buttons send 0 at start
+      req(sum(unlist(input$sc_apply), unlist(input$sc_draw)) > 0)
       waiter::waiter_show(
         html = waiter_content("Drawing the spot-check sample\u2026"),
         color = "rgba(10, 30, 50, 0.65)"
@@ -294,6 +296,7 @@ mod_spot_checking_server <- function(id, uploaded_df, user_setup, workspace = NU
     })
 
     observeEvent(input$sc_clear, {
+      req(input$sc_clear > 0)
       waiter::waiter_show(
         html = waiter_content("Clearing the sample\u2026"),
         color = "rgba(10, 30, 50, 0.65)"
@@ -408,7 +411,7 @@ mod_spot_checking_server <- function(id, uploaded_df, user_setup, workspace = NU
       if (!n) "\u2014" else sprintf("%.1f%%", 100 * nrow(sampled_data()) / n)
     })
 
-    observeEvent(input$sc_go_verify, bslib::nav_select("sc_tabs", "verify", session = session))
+    observeEvent(input$sc_go_verify, { req(input$sc_go_verify > 0); bslib::nav_select("sc_tabs", "verify", session = session) })
 
     output$sc_sample_n <- renderText({
       need_ok(!is.null(tryCatch(sampled_data(), error = function(e) NULL)), "Draw the spot-check sample first.")
@@ -422,10 +425,10 @@ mod_spot_checking_server <- function(id, uploaded_df, user_setup, workspace = NU
     })
 
     # Identification columns only; everything else is behind Details.
-    output$spot_table <- DT::renderDT({
+    output$spot_table <- render_react_table({
       req(sampled_data())
       record_table(sampled_data(), user_setup, session$ns, "spot_view")
-    })
+    }, html = "Details", labels = list(Details = ""), empty = "No household in the sample: widen the areas or the search, then draw again.")
 
     observeEvent(input$spot_view, {
       showModal(record_detail_modal(
@@ -541,6 +544,7 @@ mod_spot_checking_server <- function(id, uploaded_df, user_setup, workspace = NU
 
     # --- Source B: a second MODA form ---
     observeEvent(input$verif_fetch, {
+      req(input$verif_fetch > 0)
       token <- if (shiny::isTruthy(input$verif_token)) input$verif_token else api_key_get(session, "moda")
       if (!shiny::isTruthy(input$verif_form_id) || !shiny::isTruthy(token)) {
         showNotification("Enter both the verification Form ID and the API key.", type = "warning")
@@ -618,6 +622,7 @@ mod_spot_checking_server <- function(id, uploaded_df, user_setup, workspace = NU
     })
 
     observeEvent(input$verif_run, {
+      req(input$verif_run > 0)
       v <- verification_df()
       if (is.null(v)) {
         showNotification("Load the verification data first.", type = "warning")
@@ -725,55 +730,72 @@ mod_spot_checking_server <- function(id, uploaded_df, user_setup, workspace = NU
       if (is.null(r)) "\u2014" else format(r$only_original_n + r$only_verification_n, big.mark = ",")
     })
 
-    output$verif_plot <- render_wfp_plotly({
+    output$verif_plot <- render_echart({
       r <- comparison(); req(r, nrow(r$field_summary) > 0)
-      fs <- r$field_summary
-      fs$pct <- fs$agreement_rate * 100
-      # Worst-agreeing fields first, so the problems are at the top of the bar chart
-      fs <- fs[order(fs$pct), , drop = FALSE]
-      plotly::plot_ly(
-        fs, x = ~pct, y = ~factor(variable, levels = fs$variable), type = "bar",
-        orientation = "h",
-        marker = list(color = "#0A6EB4"),
-        hovertemplate = "%{y}: %{x:.1f}% agreement<extra></extra>"
-      ) |>
-        plotly::layout(
-          xaxis = list(title = "% agreement", range = c(0, 100), gridcolor = "rgba(128,128,128,0.2)"),
-          yaxis = list(title = ""),
-          margin = list(l = 140)
-        )
+      verification_field_chart(r$field_summary)
     })
 
-    output$verif_field_table <- DT::renderDT({
+    output$verif_field_table <- render_react_table({
       r <- comparison(); req(r)
       fs <- r$field_summary
       req(nrow(fs) > 0)
-      out <- data.frame(
+      data.frame(
         Field = fs$variable,
         Compared = fs$compared,
         Agree = fs$agree,
         Disagree = fs$disagree,
-        `Agreement` = paste0(round(fs$agreement_rate * 100, 1), "%"),
+        Agreement = fs$agreement_rate,
         check.names = FALSE,
         stringsAsFactors = FALSE
       )
-      tw_datatable(out, rownames = FALSE,
-                    options = list(pageLength = 10, scrollX = TRUE, order = list()))
-    })
+    }, page_size = 10, formats = list(Compared = "int", Agree = "int", Disagree = "int", Agreement = "pct1"),
+    # the reading of the agreement: below 90%, 90-95%, 95% or more
+    styles = list(Agreement = list(breaks = c(0.89999, 0.94999), colors = c("#f8d7da", "#fff3cd", "#d4edda"),
+                                   text = c("#842029", "#664d03", "#0f5132"))))
 
-    output$verif_disc_table <- DT::renderDT({
+    output$verif_disc_table <- render_react_table({
       r <- comparison(); req(r)
-      d <- r$discordances
-      if (nrow(d) == 0) {
-        return(tw_datatable(
-          data.frame(Message = "No discordances found on the compared fields."),
-          rownames = FALSE, options = list(dom = "t")
-        ))
-      }
-      out <- d
+      out <- r$discordances
       colnames(out) <- c(r$key_col, "Field", "Original round", "Verification round")
-      tw_datatable(out, rownames = FALSE, options = list(pageLength = 15, scrollX = TRUE))
+      out
+    }, page_size = 15, empty = "No discordances found on the compared fields.")
+
+    # ---- The React page (react/src/pages/spot/): facts as JSON -----------------
+    # The figures the Shiny page wrote with textOutput() / renderUI(), from the
+    # same reactives.
+    safe <- function(expr) tryCatch(expr, error = function(e) NULL)
+    output$sc_kpis <- shinyreact::reactive_output({
+      pool <- safe(sample_pool()); smp <- safe(sampled_data()); r <- comparison()
+      fmt <- function(n) format(n, big.mark = ",")
+      remote <- identical(applied$mode, "remote")
+      list(pool = if (is.null(pool)) NULL else fmt(nrow(pool)),
+           share = if (is.null(pool) || is.null(smp)) NULL else if (!nrow(pool)) "\u2014" else sprintf("%.1f%%", 100 * nrow(smp) / nrow(pool)),
+           sample = if (is.null(smp)) NULL else fmt(nrow(smp)),
+           agreement = if (is.null(r) || is.na(r$overall_agreement)) NULL else sprintf("%.1f%%", 100 * r$overall_agreement),
+           remote = remote, phone_col = applied$phone_col %||% "",
+           in_scope = if (remote) safe(fmt(nrow(filtered_data()))),
+           reachable = if (remote && !is.null(pool)) fmt(nrow(pool)))
     })
+    output$verif_state <- shinyreact::reactive_output({
+      v <- verification_df(); r <- comparison()
+      s <- safe(sampled_data())
+      shared <- if (is.null(v) || is.null(s)) character(0) else intersect(names(s), names(v))
+      fmt <- function(n) format(n, big.mark = ",")
+      src <- verif_source()
+      list(loaded = !is.null(v), n = if (is.null(v)) "0" else fmt(nrow(v)), source = if (is.na(src)) "" else src,
+           shared = length(shared), compared = !is.null(r),
+           kpis = if (!is.null(r)) list(
+             matched = fmt(r$matched_n),
+             agreement = if (is.na(r$overall_agreement)) "\u2014" else paste0(round(r$overall_agreement * 100, 1), "%"),
+             discordant = fmt(r$records_with_discordance),
+             unmatched = fmt(r$only_original_n + r$only_verification_n),
+             only_original = fmt(r$only_original_n), only_verification = fmt(r$only_verification_n),
+             fields = length(r$cols), key = r$key_col))
+    })
+    # the file input stays Shiny's
+    output$verif_file_ui <- renderUI(fileInput(
+      ns("verif_file"), NULL, accept = c(".xlsx", ".xls", ".sav", ".dta", ".csv", ".parquet"),
+      width = "100%", placeholder = "Re-collected households (Excel, CSV, SPSS, Stata, Parquet)"))
 
     # Where the discordances sit (enumerator, areas) and what changes: for the
     # report and the workbook.

@@ -92,8 +92,12 @@ dq_enumerator_server <- function(input, output, session, ns, core) {
   # Enumerator Performance
   # ------------------------------------------------------------
 
+  # whether the enumerator is mapped: the React page says so once for the tab
+  output$enum_state <- shinyreact::reactive_output(list(mapped = shiny::isTruthy(user_setup$enumerator_id)))
+
   enum_metrics <- reactive({
-    req(dq_filtered_data()); need_mapped(user_setup, "enumerator_id")
+    # not mapped: quiet here, the React tab says it once (output$enum_state)
+    req(dq_filtered_data(), shiny::isTruthy(user_setup$enumerator_id)); need_mapped(user_setup, "enumerator_id")
     enumerator_metrics(dq_filtered_data(), user_setup)
   })
 
@@ -234,46 +238,29 @@ dq_enumerator_server <- function(input, output, session, ns, core) {
                      font = list(size = 11, color = color)))
   }
 
-  output$enum_interviews_plot <- render_wfp_plotly({
+  output$enum_interviews_plot <- render_echart({
     m <- enum_metrics(); req(m, nrow(m) > 0)
     tab <- utils::head(m[order(-m$interviews), , drop = FALSE], 30)
-    tab <- tab[order(tab$interviews), , drop = FALSE]
-    tab$label <- substr(as.character(tab$enumerator_id), 1, 24)
     med <- stats::median(m$interviews)
-    ml <- vline(med, sprintf("median %s", format(round(med), big.mark = ",")))
-    plotly::plot_ly(
-      tab, x = ~interviews, y = ~factor(label, levels = label), type = "bar",
-      marker = list(color = ifelse(tab$flag == "Review", "#c5192d", "#0A6EB4")),
-      customdata = ~ifelse(nzchar(reasons), reasons, "No flag"),
-      hovertemplate = "%{y}: %{x:,.0f} interviews<br>%{customdata}<extra></extra>"
-    ) |>
-      plotly::layout(
-        xaxis = list(title = "Interviews", gridcolor = "rgba(128,128,128,0.2)"),
-        yaxis = list(title = "", automargin = TRUE),
-        shapes = list(ml$shape), annotations = list(ml$note),
-        margin = list(t = 30, b = 40, r = 20))
+    dq_hbar(substr(as.character(tab$enumerator_id), 1, 24), round(tab$interviews),
+            color = ifelse(tab$flag == "Review", "#c5192d", "#0A6EB4"),
+            tips = sprintf("<b>%s</b>: %s interviews<br>%s", htmltools::htmlEscape(tab$enumerator_id),
+                           format(round(tab$interviews), big.mark = ","), htmltools::htmlEscape(ifelse(nzchar(tab$reasons), tab$reasons, "No flag"))),
+            x_name = "Interviews", value_fmt = "fn:num",
+            lines = list(list(x = med, label = sprintf("median %s", format(round(med), big.mark = ",")), color = "#d08a00")))
   })
 
-  output$enum_daily_plot <- render_wfp_plotly({
+  output$enum_daily_plot <- render_echart({
     pd <- enum_per_day()
     validate(need(!is.null(pd) && nrow(pd) > 0, "Map the interview date in the variable setup to see the daily workload."))
     tot <- sort(tapply(pd$Freq, pd$enumerator_id, sum), decreasing = TRUE)
     keep <- names(tot)[seq_len(min(30, length(tot)))]
     pd <- pd[pd$enumerator_id %in% keep, , drop = FALSE]
     days <- sort(unique(pd$day))
-    z <- matrix(0, nrow = length(keep), ncol = length(days), dimnames = list(keep, days))
+    z <- matrix(0, nrow = length(keep), ncol = length(days))
     z[cbind(match(pd$enumerator_id, keep), match(pd$day, days))] <- pd$Freq
-    z <- z[rev(seq_len(nrow(z))), , drop = FALSE]
-    plotly::plot_ly(
-      x = days, y = substr(rownames(z), 1, 24), z = z, type = "heatmap",
-      colorscale = list(c(0, "rgba(10,110,180,0.04)"), c(0.01, "#d7e8f5"), c(1, "#0A6EB4")),
-      hovertemplate = "%{y}<br>%{x}: %{z} interviews<extra></extra>",
-      colorbar = list(title = "Interviews", thickness = 12)
-    ) |>
-      plotly::layout(
-        xaxis = list(title = "", tickangle = if (length(days) > 10) -90 else 0, type = "category"),
-        yaxis = list(title = "", automargin = TRUE),
-        margin = list(t = 10, b = 60, r = 10))
+    dq_heatmap(format(as.Date(days), "%d/%m"), substr(keep, 1, 24), z, name = "Interviews", tip_suffix = " interviews",
+               label_fmt = "fn:hmap")
   })
 
   output$enum_total_int <- renderText({
@@ -287,7 +274,7 @@ dq_enumerator_server <- function(input, output, session, ns, core) {
     format(sum(m$flag == "Review", na.rm = TRUE), big.mark = ",")
   })
 
-  output$enum_duration_plot <- render_wfp_plotly({
+  output$enum_duration_plot <- render_echart({
     m <- enum_metrics(); req(m)
     tab <- m[!is.na(m$avg_duration), , drop = FALSE]
     validate(need(nrow(tab) > 0, "No interview durations: the data needs start and end times (start/end or starttime/endtime)."))
@@ -296,81 +283,41 @@ dq_enumerator_server <- function(input, output, session, ns, core) {
     # The 30 furthest from the team median, then in order.
     tab <- utils::head(tab[order(-abs(tab$avg_duration - med)), , drop = FALSE], 30)
     tab <- tab[order(tab$avg_duration), , drop = FALSE]
-    tab$label <- substr(as.character(tab$enumerator_id), 1, 24)
     lo <- th$dur_lo %||% NA; hi <- th$dur_hi %||% NA
     col <- ifelse(!is.na(lo) & tab$avg_duration < lo, "#c5192d",
                   ifelse(!is.na(hi) & tab$avg_duration > hi, "#f7b825", "#0A6EB4"))
-    ml <- vline(med, sprintf("median %.0f min", med))
-    shapes <- list(ml$shape)
-    if (!is.na(lo) && !is.na(hi)) shapes <- c(list(list(type = "rect", x0 = lo, x1 = hi, y0 = 0, y1 = 1, yref = "paper",
-                                                           fillcolor = "rgba(63,126,68,0.10)", line = list(width = 0), layer = "below")), shapes)
-    plotly::plot_ly(
-      tab, x = ~avg_duration, y = ~factor(label, levels = label), type = "bar",
-      marker = list(color = col),
-      customdata = ~format(round(interviews), big.mark = ","),
-      hovertemplate = "%{y}: %{x:.1f} min on average<br>%{customdata} interviews<extra></extra>"
-    ) |>
-      plotly::layout(
-        xaxis = list(title = "Minutes", gridcolor = "rgba(128,128,128,0.2)"),
-        yaxis = list(title = "", automargin = TRUE),
-        shapes = shapes, annotations = list(ml$note),
-        margin = list(t = 30, b = 40, r = 20))
+    dq_hbar(substr(as.character(tab$enumerator_id), 1, 24), round(tab$avg_duration, 1), color = col,
+            tips = sprintf("<b>%s</b>: %.1f min on average<br>%s interviews", htmltools::htmlEscape(tab$enumerator_id),
+                           tab$avg_duration, format(round(tab$interviews), big.mark = ",")),
+            x_name = "Minutes", x_min = 0, band = c(lo, hi),
+            lines = list(list(x = round(med, 1), label = sprintf("median %.0f min", med), color = "#d08a00")))
   })
 
-  output$enum_missingness_plot <- render_wfp_plotly({
+  output$enum_missingness_plot <- render_echart({
     m <- enum_metrics(); req(m, nrow(m) > 0)
     th <- attr(m, "thresholds") %||% list()
     tab <- utils::head(m[order(-m$missingness_rate), , drop = FALSE], 30)
-    tab <- tab[order(tab$missingness_rate), , drop = FALSE]
-    tab$label <- substr(as.character(tab$enumerator_id), 1, 24)
     hi <- th$miss_hi %||% NA
-    notes <- list(); shapes <- list()
-    if (!is.na(hi)) { l <- vline(100 * hi, sprintf("team limit %.1f%%", 100 * hi), "#c5192d"); shapes <- list(l$shape); notes <- list(l$note) }
-    plotly::plot_ly(
-      tab, x = ~missingness_rate * 100, y = ~factor(label, levels = label), type = "bar",
-      marker = list(color = ifelse(!is.na(hi) & tab$missingness_rate > hi, "#c5192d", "#8a96a3")),
-      hovertemplate = "%{y}: %{x:.1f}% of fields empty<extra></extra>"
-    ) |>
-      plotly::layout(
-        xaxis = list(title = "Fields left empty (%)", gridcolor = "rgba(128,128,128,0.2)"),
-        yaxis = list(title = "", automargin = TRUE),
-        shapes = shapes, annotations = notes,
-        margin = list(t = 30, b = 40, r = 20))
+    dq_hbar(substr(as.character(tab$enumerator_id), 1, 24), round(100 * tab$missingness_rate, 1),
+            color = ifelse(!is.na(hi) & tab$missingness_rate > hi, "#c5192d", "#8a96a3"),
+            tips = sprintf("<b>%s</b>: %.1f%% of fields empty", htmltools::htmlEscape(tab$enumerator_id), 100 * tab$missingness_rate),
+            x_name = "Fields left empty (%)", x_min = 0,
+            lines = if (!is.na(hi)) list(list(x = round(100 * hi, 1), label = sprintf("team limit %.1f%%", 100 * hi), color = "#c5192d")))
   })
 
-  output$enum_metrics_table <- DT::renderDT({
+  # drawn by React (EnumeratorTab.tsx); the flag is a coloured pill
+  output$enum_metrics_table <- render_react_table({
     req(enum_metrics())
     m <- enum_metrics()
-    # The flag is a coloured label inside the cell: the tables' theme clears
-    # cell backgrounds, which left white text on white.
+    m <- m[order(m$flag != "Review", -m$interviews), , drop = FALSE]
     pill <- ifelse(m$flag == "Review", "<span class='tw-pill tw-pill-review'>Review</span>",
                    "<span class='tw-pill tw-pill-ok'>OK</span>")
-    d <- data.frame(Flag = pill, Enumerator = as.character(m$enumerator_id), Interviews = m$interviews,
-                    `Average duration (min)` = m$avg_duration, `Empty answers` = m$missingness_rate,
-                    `Average household size` = m$avg_hh_size, Reasons = m$reasons,
-                    check.names = FALSE, stringsAsFactors = FALSE)
-    tw_datatable(
-      d,
-      class = "compact hover",
-      escape = -1,
-      options = list(
-        pageLength = 10,
-        scrollX = TRUE,
-        searching = FALSE,
-        lengthChange = FALSE,
-        dom = "tp",
-        ordering = TRUE,
-        autoWidth = FALSE,
-        order = list(list(0, "desc")),
-        columnDefs = list(list(targets = 0, searchable = FALSE, className = "dt-center", width = "70px"),
-                          list(targets = 6, className = "tw-wide-cell"))
-      ),
-      rownames = FALSE
-    ) |>
-      DT::formatRound(c("Average duration (min)", "Average household size"), digits = 1) |>
-      DT::formatPercentage("Empty answers", digits = 1) |>
-      DT::formatCurrency("Interviews", currency = "", interval = 3, mark = ",", digits = 0)
-  })
+    data.frame(Flag = pill, Enumerator = as.character(m$enumerator_id), Interviews = m$interviews,
+               `Average duration (min)` = m$avg_duration, `Empty answers` = m$missingness_rate,
+               `Average household size` = m$avg_hh_size, Reasons = m$reasons,
+               check.names = FALSE, stringsAsFactors = FALSE)
+  }, page_size = 10, html = "Flag",
+  formats = list(Interviews = "int", `Average duration (min)` = "dec1", `Empty answers` = "pct1", `Average household size` = "dec1"))
 }
 
 #' Flag enumerators against their cohort, with the reason in words

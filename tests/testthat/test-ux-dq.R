@@ -11,9 +11,10 @@ test_that("the audit trail shows the action without its phase and hides empty co
                                        user = "a", reason = "", stringsAsFactors = FALSE))
   shiny::testServer(TargetWise:::mod_audit_server, args = list(modification_log = log), {
     session$setInputs(phase = "All")
-    tab <- output$tab_mod_log   # server-side table: only the headers are in the output
-    expect_match(tab, "Action", fixed = TRUE)
-    expect_false(grepl("Old value", tab, fixed = TRUE))
-    expect_false(grepl("Reason", tab, fixed = TRUE))
+    # render_react_table(): the columns the React table draws
+    heads <- vapply(output$tab_mod_log$columns, function(c) c$label, "")
+    expect_true("Action" %in% heads)
+    expect_false("Old value" %in% heads)
+    expect_false("Reason" %in% heads)
   })
 })

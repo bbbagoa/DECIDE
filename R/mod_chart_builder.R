@@ -75,7 +75,8 @@ mod_chart_builder_ui <- function(id, presets = names(chart_presets())) {
 #' @param dataset_name Reactive label of the dataset (report source line).
 #' @param add_item Function taking one report item.
 #' @noRd
-mod_chart_builder_server <- function(id, data, source, dataset_name = reactive(""), add_item) {
+mod_chart_builder_server <- function(id, data, source, dataset_name = reactive(""), add_item,
+                                     presets = names(chart_presets())) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
     none <- c("(none)" = "")
@@ -153,6 +154,7 @@ mod_chart_builder_server <- function(id, data, source, dataset_name = reactive("
       tryCatch(chart_aggregate(data(), spec_data()), error = function(e) NULL)
     })
     observeEvent(input$axes, {
+      req(input$axes > 0)   # a React button sends 0 at start
       d <- agg()
       hint <- if (!is.null(d) && nrow(d)) {
         a <- chart_auto_range(d, spec())
@@ -181,59 +183,33 @@ mod_chart_builder_server <- function(id, data, source, dataset_name = reactive("
       if (is.null(agg())) return(tags$div(class = "small text-muted mb-2", "Choose the columns on the left to see the chart."))
       NULL
     })
-    output$preview <- render_wfp_plotly({
+    output$preview <- render_echart({
       d <- agg(); req(d, nrow(d) > 0)
-      sp <- spec()
-      grp <- length(unique(d$group)) > 1
-      st <- chart_style(sp)
-      if (st %in% c("pie", "donut")) {
-        pd <- chart_pie_data(d)
-        donut <- identical(st, "donut")
-        top <- which.max(pd$n)
-        p <- plotly::plot_ly(pd, labels = ~category, values = ~n, type = "pie", sort = FALSE,
-                             hole = if (donut) 0.8 else 0, textinfo = if (donut) "none" else "percent",
-                             hoverinfo = "label+percent+value",
-                             marker = list(colors = rep_len(rp_cols$models, nrow(pd)))) |>
-          plotly::layout(legend = list(orientation = "h", x = 0, y = -0.05))
-        # a donut says its largest share in the middle
-        if (donut) p <- plotly::layout(p, annotations = list(list(
-          text = sprintf("<b style='font-size:22px'>%.0f%%</b><br><span style='font-size:11px'>%s</span>",
-                         100 * pd$n[top] / sum(pd$n), substr(as.character(pd$category[top]), 1, 22)),
-          showarrow = FALSE, x = 0.5, y = 0.5, xref = "paper", yref = "paper")))
-        return(p)
-      }
-      if (identical(st, "column")) {
-        d$x <- factor(d$x, levels = unique(d$x))
-        p <- plotly::plot_ly(d, x = ~x, y = ~value, color = if (grp) ~group else I("#0A6EB4"), type = "bar",
-                             text = ~value, textposition = "outside", cliponaxis = FALSE)
-        if (grp && chart_stacks(sp)) p <- plotly::layout(p, barmode = "stack")
-        return(plotly::layout(p, xaxis = list(title = "", automargin = TRUE),
-                              yaxis = c(list(title = chart_value_label(sp)), axis_range_list(d, sp)),
-                              legend = list(orientation = "h", x = 0, y = 1.08, xanchor = "left", yanchor = "bottom")))
-      }
-      if (st %in% c("line", "area")) {
-        d$x <- factor(d$x, levels = unique(d$x))   # periods arrive in date order, shown day first
-        p <- plotly::plot_ly(d, x = ~x, y = ~value, color = if (grp) ~group else I("#0A6EB4"),
-                             type = "scatter", mode = "lines+markers", fill = if (identical(st, "area")) "tozeroy" else "none")
-      } else {
-        d$x <- factor(d$x, levels = rev(unique(d$x)))
-        p <- plotly::plot_ly(d, x = ~value, y = ~x, color = if (grp) ~group else I("#0A6EB4"), type = "bar",
-                             orientation = "h", text = ~value, textposition = "outside", cliponaxis = FALSE)
-        if (grp && chart_stacks(sp)) p <- plotly::layout(p, barmode = "stack")
-      }
-      line <- st %in% c("line", "area")
-      plotly::layout(p, xaxis = c(list(title = if (line) "" else chart_value_label(sp)), if (!line) axis_range_list(d, sp)),
-                     yaxis = c(list(title = if (line) chart_value_label(sp) else "", automargin = TRUE), if (line) axis_range_list(d, sp)),
-                     legend = list(orientation = "h", x = 0, y = 1.08, xanchor = "left", yanchor = "bottom"))
-    })
+      chart_echart_option(d, spec())
+    }, height = 360)
 
-    output$preview_table <- DT::renderDT({
+    output$preview_table <- render_react_table({
       d <- agg(); req(d, nrow(d) > 0)
-      tw_datatable(chart_table(d, spec()), rownames = FALSE,
-                    options = list(dom = "t", paging = FALSE, ordering = FALSE))
+      chart_table(d, spec())
+    }, page_size = 100)
+
+    # --- The React page (react/src/pages/monitoring/): choices and state as facts
+    output$cb_meta <- shinyreact::reactive_output({
+      pr <- chart_presets()[presets]
+      opts <- c(list(list(value = "custom", label = "Custom chart", group = "Build my own")),
+                unlist(lapply(names(pr), function(g) lapply(names(pr[[g]]), function(k)
+                  list(value = k, label = pr[[g]][[k]]$label, group = g))), recursive = FALSE))
+      list(presets = opts, types = as.list(chart_types()), styles = as.list(chart_styles()))
     })
+    output$cb_state <- shinyreact::reactive_output({
+      d <- agg()
+      list(has_data = !is.null(data()), too_many = too_many(), ready = !is.null(d) && nrow(d) > 0,
+           axes_set = any(is.finite(unlist(axes()))))
+    })
+    # the comment editor (www/richtext.js) is drawn by React and bound by Shiny
 
     observeEvent(input$add, {
+      req(input$add > 0)
       d <- agg()
       if (!is.null(too_many())) { showNotification(too_many(), type = "warning", duration = 8); return() }
       if (is.null(d) || !nrow(d)) {
