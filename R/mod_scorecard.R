@@ -71,7 +71,12 @@ mod_scorecard_ui <- function(id) {
               downloadButton(ns("download_report"), class = "wfp-export-item", icon = icon("file-lines"),
                              label = tags$span(class = "wfp-export-text",
                                                tags$span(class = "wfp-export-title", with_outcome("Design report"), without_outcome("Ranking report"), " (HTML)"),
-                                               tags$span(class = "wfp-export-sub", "Every step and chart, to share and review")))))),
+                                               tags$span(class = "wfp-export-sub", "Every step and chart, to share and review"))),
+              # once adopted: a draft registration form that rebuilds the score
+              downloadButton(ns("download_xlsform"), class = "wfp-export-item", icon = icon("clipboard-list"),
+                             label = tags$span(class = "wfp-export-text",
+                                               tags$span(class = "wfp-export-title", "Registration form (XLSForm)"),
+                                               tags$span(class = "wfp-export-sub", "Draft for KoboToolbox, ODK or MODA, from the adopted design")))))),
         # Adopt: the one main action, always in view (one section is open at a time).
         side_actions(
           actionButton(ns("btn_use"), tagList(binary_only("Use this scorecard"), pmt_only("Use this PMT"), without_outcome("Use this ranking")),
@@ -2034,10 +2039,24 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
 
     # The run history as rows of the model comparison table (same columns:
     # model, criteria, AUC training, AUC held out, action)
+    # Runs removed from the history stay as a small marker (their place keeps
+    # every other run's number, which Restore and saved sessions use).
+    live_runs <- function() Filter(function(r) !isTRUE(r$deleted), runs())
+    best_run <- function(rl) { a <- vapply(rl, function(r) r$auc %||% NA_real_, numeric(1))
+      if (!length(a) || all(is.na(a))) NA_integer_ else rl[[which.max(a)]]$id }
+    # Remove / Restore buttons of a run that is not the one shown
+    run_actions <- function(r) tags$div(
+      class = "d-inline-flex gap-1",
+      tags$button(type = "button", class = "btn btn-outline-primary btn-sm",
+                  onclick = sprintf("Shiny.setInputValue('%s', %d, {priority:'event'})", ns("restore_run"), r$id), "Restore"),
+      tags$button(type = "button", class = "btn btn-outline-danger btn-sm", title = "Remove this fit from the history",
+                  `aria-label` = "Remove this fit from the history",
+                  onclick = sprintf("Shiny.setInputValue('%s', %d, {priority:'event'})", ns("delete_run"), r$id),
+                  bsicons::bs_icon("trash")))
     run_rows <- function() {
-      rl <- runs()
+      rl <- live_runs()
       if (length(rl) < 1) return(NULL)
-      best <- which.max(vapply(rl, function(r) r$auc %||% NA_real_, numeric(1)))
+      best <- best_run(rl)
       auc <- function(r, held) {
         if (is.na(r$auc %||% NA) || !identical(isTRUE(r$held_out), held)) return(tags$td(class = "text-muted", "\u2014"))
         tags$td(tags$strong(sprintf("%.3f", r$auc)))
@@ -2050,20 +2069,16 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
                   tags$div(class = "text-muted small", scheme_label(r$settings$scheme, r$settings$method), " \u00b7 ", r$at)),
           tags$td(class = "num", nrow(r$fit$weights)),
           auc(r, FALSE), auc(r, TRUE),
-          tags$td(if (cur) tags$span(class = "wfp-kept", bsicons::bs_icon("check2"), " shown")
-                  else tags$button(type = "button", class = "btn btn-outline-primary btn-sm",
-                                   onclick = sprintf("Shiny.setInputValue('%s', %d, {priority:'event'})",
-                                                     ns("restore_run"), r$id),
-                                   "Restore")))
+          tags$td(if (cur) tags$span(class = "wfp-kept", bsicons::bs_icon("check2"), " shown") else run_actions(r)))
       })
     }
     # Scorecards show their history inside the model comparison table
     runs_in_comparison <- reactive({ f <- fitted(); !is.null(f) && !isTRUE(f$unsupervised) && is.null(f$pmt) })
 
     output$runs_ui <- renderUI({
-      rl <- runs()
+      rl <- live_runs()
       if (length(rl) < 1 || runs_in_comparison()) return(NULL)
-      best <- which.max(vapply(rl, function(r) r$auc %||% NA_real_, numeric(1)))
+      best <- best_run(rl)
       rows <- lapply(rev(rl), function(r) {
         cur <- isTRUE(r$id == current_run())
         tags$tr(
@@ -2075,11 +2090,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
           tags$td(class = "num", if (is.na(r$auc %||% NA)) tags$span(class = "text-muted", "\u2013 no outcome") else
                   tagList(tags$strong(sprintf("%.3f", r$auc)),
                           tags$span(class = "text-muted small", if (r$held_out) " held out" else " training"))),
-          tags$td(if (cur) tags$span(class = "wfp-kept", bsicons::bs_icon("check2"), " shown")
-                  else tags$button(type = "button", class = "btn btn-outline-primary btn-sm",
-                                   onclick = sprintf("Shiny.setInputValue('%s', %d, {priority:'event'})",
-                                                     ns("restore_run"), r$id),
-                                   "Restore"))
+          tags$td(if (cur) tags$span(class = "wfp-kept", bsicons::bs_icon("check2"), " shown") else run_actions(r))
         )
       })
       tags$details(
@@ -2093,6 +2104,18 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
                              tags$th(class = "num", "Criteria"), tags$th(class = "num", "AUC"), tags$th(""))),
           tags$tbody(rows)))
       )
+    })
+
+    observeEvent(input$delete_run, {
+      id <- input$delete_run; rl <- runs()
+      need_ok(isTRUE(id >= 1 && id <= length(rl)) && !isTRUE(rl[[id]]$deleted), "This fit is no longer in the history.")
+      need_ok(!isTRUE(id == current_run()), "This is the fit shown: restore another one first.")
+      r <- rl[[id]]
+      rl[[id]] <- list(id = id, deleted = TRUE)   # frees the fit, keeps the numbering
+      runs(rl)
+      audit_add(modification_log, "Design", "Model fit removed from the history",
+                sprintf("Run #%d: %s", id, model_label(r$settings$method)))
+      showNotification(sprintf("Run #%d removed from the history.", id), type = "message")
     })
 
     observeEvent(input$restore_run, {
@@ -3111,7 +3134,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
         wts <- if (is.null(f)) NULL else safe(current_weights())
         lower <- (tol_applied()[1] %||% 5) / 100
         upper <- (tol_applied()[2] %||% 20) / 100
-        rl <- runs()
+        rl <- live_runs()
         runs_df <- if (length(rl)) data.frame(
           Run = vapply(rl, function(x) paste0("#", x$id, if (isTRUE(x$id == current_run()))
             (if (adopted_current()) " (current, adopted)" else " (current)") else ""), character(1)),
@@ -4164,6 +4187,36 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
       }
       out
     }
+
+    # Draft registration form from the adopted design (editable, not locked)
+    observe(gate_button("download_xlsform", isTRUE(adopted_current()),
+                        "Adopt the design first (Use this scorecard): the form is built from the adopted one."))
+    output$download_xlsform <- download_handler(
+      filename = function() export_file_name("Registration_form_draft_XLSForm", "xlsx"),
+      content = function(file) {
+        sc <- user_setup$scorecard
+        if (!isTRUE(adopted_current()) || scorecard_is_empty(sc)) {
+          openxlsx::write.xlsx(data.frame(Message = "Adopt the design first: the form is built from the adopted one."), file)
+          return(invisible())
+        }
+        sc_ <- tryCatch(apply_scorecard(assessment_df(), sc)$score, error = function(e) numeric(0))
+        sc_ <- sc_[is.finite(sc_)]
+        cuts <- if (length(sc_)) list(quartiles = stats::quantile(sc_, c(.25, .5, .75), names = FALSE),
+                                     quintiles = stats::quantile(sc_, c(.2, .4, .6, .8), names = FALSE)) else list()
+        # the area levels mapped on the registration data, if loaded
+        reg <- tryCatch(uploaded_df(), error = function(e) NULL)
+        lv <- unlist(lapply(c("admin1", "admin2", "admin3", "admin4", "village"), function(k) {
+          cl <- user_setup[[k]]; if (length(cl) == 1 && !is.na(cl) && nzchar(cl) && !is.null(reg) && cl %in% names(reg)) cl }))
+        areas <- if (length(lv)) unique(reg[, lv, drop = FALSE]) else NULL
+        crit <- vapply(sc$items, function(it) it$criterion, character(1))
+        labs <- stats::setNames(vapply(crit, function(cl) { l <- var_label(cl); if (is.na(l) || !nzchar(l)) NA_character_ else l }, character(1)), crit)
+        labs <- labs[!is.na(labs)]   # without a label: the scorecard's own
+        title <- paste(c("Household registration", user_setup$country_office), collapse = " - ")
+        xlsform_write(xlsform_draft(sc, cuts, areas, labs, title), file)
+        audit_add(modification_log, "Design", "Draft registration form exported",
+                  sprintf("XLSForm from the adopted design: %d criteria", length(sc$items)))
+      }
+    )
 
     output$download <- download_handler(
       filename = function() export_file_name(if (no_outcome()) "Vulnerability_Ranking" else if (pmt()) "PMT_Targeting" else "Targeting_Scorecard", "xlsx", "%Y-%m-%d_%Hh%Mm"),
