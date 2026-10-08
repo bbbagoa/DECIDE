@@ -42,11 +42,11 @@ NULL
 # Short acronyms, matched only when not glued to another word. Unbounded,
 # "hhs" matches HHSize -- household size, one of the most common columns in a
 # WFP dataset and a perfectly good criterion.
-OUTCOME_ACRONYMS <- c("fcs", "rcsi", "csi", "lcsi", "lcsfs", "cari", "fsi",
-                      "hhs", "hdds", "mahfp", "fes")
+OUTCOME_ACRONYMS <- c("fcs", "rcsi", "csi", "lcsi", "lcsfs", "lcsen", "cari", "fsi",
+                      "hhs", "hdds", "mahfp", "fes", "fcscat(21|28)?", "foodexp", "ecmen")
 
 # Phrases, which are specific enough to match anywhere in the name.
-OUTCOME_PHRASES <- c("food_?consumption", "livelihood_?coping", "coping_?strateg",
+OUTCOME_PHRASES <- c("food_?consumption", "livelihood_?coping", "coping_?strateg", "max_?coping",
                      "food_?security_?(index|class|status|score)", "food_?insecur",
                      "hunger_?scale", "diet(ary)?_?diversity",
                      "food_?expenditure_?share", "ipc_?phase",

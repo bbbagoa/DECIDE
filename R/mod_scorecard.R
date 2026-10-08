@@ -126,6 +126,11 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
     calc_vars <- mod_var_calc_server("calc", assessment_all, function(df) assessment_all(df),
                                      log = modification_log, phase = "Design",
                                      outcome = reactive(list(y = outcome_binary(), col = oc())))
+    # WFP food security indicators (FCS, rCSI, LCS, FES, CARI) from the
+    # dictionary's variables, added to the whole data like the calculator's
+    mod_fs_indicators_server("fsi", assessment_all, function(df) assessment_all(df),
+                             log = modification_log, created = calc_vars)
+    mod_data_summary_server("summary", assessment_all, "Assessment data")
 
     screened <- reactiveVal(NULL)      # screening result table
     collinear <- reactiveVal(NULL)     # dropped-by-correlation map

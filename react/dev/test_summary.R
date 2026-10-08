@@ -1,0 +1,45 @@
+# Browser check: the "Data summary" dialog on the uploads.
+#   NOT_CRAN=true Rscript react/dev/test_summary.R      (from the package root)
+source("react/dev/e2e.R")
+ok <- function(cond, what) cat(if (isTRUE(cond)) "PASS" else "FAIL", what, "\n")
+app <- tw_launch()
+js <- function(x) app$get_js(x)
+wait <- function(s = 1) { Sys.sleep(s); tw_idle(app); Sys.sleep(0.6) }
+cards <- function() js("document.querySelectorAll('.tw-ds-card').length")
+close <- function() { app$run_js("[...document.querySelectorAll('.tw-dialog-backdrop .modal-footer button')].find(b=>b.textContent.includes('Close')).click()"); wait(.5) }
+
+# registration data
+tw_load_registration(app)
+tw_go(app, "import_panel")
+ok(js("!!document.getElementById('summary_reg-open')"), "button on Load registration data")
+tw_click(app, "summary_reg-open"); wait(2)
+ok(cards() > 10, paste("one card per variable:", cards()))
+ok(grepl("1,500", js("document.querySelector('.tw-ds-size').textContent")), "rows and variables")
+ok(js("document.querySelectorAll('.tw-ds-level').length") > 5 && js("document.querySelectorAll('.tw-ds-spark rect').length") > 10, "category bars and histograms")
+app$run_js("[...document.querySelectorAll('.tw-ds-chip')].find(b=>b.textContent.includes('Numbers')).click()"); wait(.5)
+ok(js("[...document.querySelectorAll('.tw-ds-card')].every(c=>c.classList.contains('kind-number'))"), "filter by type")
+app$run_js("[...document.querySelectorAll('.tw-ds-chip')][0].click()"); wait(.5)
+tw_shot(app, "summary_reg")
+f <- app$get_download("summary_reg-download")
+x <- openxlsx::read.xlsx(f, check.names = FALSE, sep.names = " ")
+ok(nrow(x) > 10 && "Missing (%)" %in% names(x), paste("Excel export:", basename(f), nrow(x), "rows"))
+app$run_js("document.querySelector('.tw-mode-btn').click()"); wait(1); tw_shot(app, "summary_reg_dark"); app$run_js("document.querySelector('.tw-mode-btn').click()")
+close()
+ok(cards() == 0, "dialog closes")
+
+# assessment data on Targeting Design
+tw_go(app, "scorecard_panel"); wait(1.5)
+app$upload_file(`scorecard_1-assessment_file` = file.path(tw_root, "inst/extdata/assessment_demo.csv")); wait(4)
+ok(js("!!document.querySelector('.sc-data-tools #scorecard_1-summary-open')"), "button with the Design data buttons")
+tw_click(app, "scorecard_1-summary-open"); wait(2)
+ttl <- js("[...document.querySelectorAll('.tw-dialog-backdrop .modal-title')].map(e=>e.textContent).join(' | ')")
+ok(cards() > 10 && grepl("Assessment", ttl), paste("assessment summary:", cards(), "cards |", ttl))
+app$run_js("var i=document.querySelector('.tw-ds-head input'); var set=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set; set.call(i,'FCS'); i.dispatchEvent(new Event('input',{bubbles:true}))"); wait(.5)
+ok(cards() >= 1 && cards() < 10, paste("search:", cards()))
+tw_shot(app, "summary_design")
+close()
+# the other pages have their button
+tw_go(app, "spot_panel"); ok(js("!!document.getElementById('spot_checking_1-verif_summary-open')"), "button on Spot Checking")
+tw_go(app, "pdm_panel"); ok(js("!!document.getElementById('monitoring_1-pdm-summary-open') && !!document.getElementById('monitoring_1-pm_summary-open')"), "buttons on PDM and targeting process")
+cat("errors:", tw_errors(app), "\n")
+app$stop()

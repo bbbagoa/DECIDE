@@ -11,6 +11,7 @@ import { Card } from "@/lib/layout";
 import { FileImport } from "@/components/FileImport";
 import { ModaImport } from "@/components/ModaImport";
 import { VarCalc } from "@/components/VarCalc";
+import { DataSummary } from "@/components/DataSummary";
 import "./import.css";
 
 type T = (s: string) => string;
@@ -68,6 +69,7 @@ export function ImportPage({ t }: { active: boolean; t: T }) {
           <div className="tw-imp-alt">
             <label className="form-label">{t("Missing a variable?")}</label>
             <VarCalc ns="calc_reg" size="md" block t={t} />
+            <DataSummary ns="summary_reg" block className="mt-2" t={t} />
           </div>
         </div>
         <DataStatus t={t} />

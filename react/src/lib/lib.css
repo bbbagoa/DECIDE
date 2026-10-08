@@ -8,7 +8,9 @@
 .tw-field .form-text { font-size: .72rem; margin-top: .15rem; }
 .tw-field-inline { display: flex; align-items: center; gap: .5rem; }
 .tw-field-inline .form-label { margin: 0; }
-.tw-select-actions { display: flex; gap: .7rem; justify-content: flex-end; margin: -1.1rem 0 .15rem; font-size: .72rem; }
+.tw-select-head { display: flex; align-items: baseline; justify-content: space-between; gap: .5rem; }
+.tw-select-head > .form-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tw-select-actions { display: flex; flex: 0 0 auto; gap: .7rem; font-size: .72rem; }
 .tw-select-actions .btn-link { font-size: .72rem; text-decoration: none; }
 .tw-select__menu { background: var(--bs-body-bg) !important; color: var(--bs-body-color); border: 1px solid var(--bs-border-color); box-shadow: 0 8px 24px rgba(0, 0, 0, .14) !important; font-size: .85rem; }
 .tw-select__option--is-focused { background: rgba(10, 110, 180, .08) !important; }
@@ -105,8 +107,10 @@
 .tw-notice-danger { background: rgba(197, 25, 45, .07); border-color: rgba(197, 25, 45, .35); }
 .tw-notice-danger svg { color: #c5192d; }
 .tw-notice-success { background: rgba(63, 126, 68, .08); border-color: rgba(63, 126, 68, .35); }
-.tw-dialog-backdrop { position: fixed; inset: 0; z-index: 1070; background: rgba(15, 20, 30, .5); display: flex; align-items: flex-start; justify-content: center; padding: 4vh 16px; overflow: auto; }
-.tw-dialog { margin: 0; width: 100%; }
+.tw-dialog-backdrop { position: fixed; inset: 0; z-index: 1070; background: rgba(15, 20, 30, .5); display: flex; align-items: flex-start; justify-content: center; padding: 5vh 16px; overflow: auto; }
+.tw-dialog { margin: 0 auto; width: 100%; }
+.tw-dialog .modal-content { box-shadow: 0 20px 60px rgba(0, 0, 0, .35); }
+.tw-dialog .modal-title { display: inline-flex; align-items: center; gap: .4rem; font-size: 1.1rem; }
 .tw-grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 .tw-grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
 @media (max-width: 900px) {

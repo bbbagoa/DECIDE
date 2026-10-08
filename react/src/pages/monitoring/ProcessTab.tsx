@@ -7,6 +7,7 @@ import { ActionButton, SelectInput } from "@/lib/inputs";
 import { SidebarLayout, Steps } from "@/lib/layout";
 import { AreaScope } from "@/components/AreaScope";
 import { ModaImport } from "@/components/ModaImport";
+import { DataSummary } from "@/components/DataSummary";
 import { Dropzone } from "./Dropzone";
 import { ChartBuilder } from "./ChartBuilder";
 import type { MonState } from "./types";
@@ -29,6 +30,7 @@ export function ProcessTab({ t }: { t: (s: string) => string }) {
             <ActionButton id={ns("pm_remove")} icon={<Trash2 size={14} />} variant="outline-danger" title={t("Remove this dataset")} className="mb-2" />
           </div>
           <div className="mb-2"><ModaImport ns={ns("pm_moda")} size="sm" t={t} /></div>
+          <div className="mb-2"><DataSummary ns={ns("pm_summary")} label="Summary of this dataset" block t={t} /></div>
           {ds.length > 0 && (
             <div className="tw-mon-chips">
               {ds.map((d) => <span key={d.name} className="tw-mon-chip" title={d.name}>{d.name} <em>{d.rows.toLocaleString("en-US")}</em></span>)}

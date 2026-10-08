@@ -160,6 +160,7 @@ mod_monitoring_server <- function(id, workspace = NULL, country_office = reactiv
                lapply(names(ds), function(n) tags$span(class = "wfp-norm-chip", n, tags$em(format(nrow(ds[[n]]), big.mark = ",")))))
     })
     active_pm <- reactive({ ds <- datasets(); if (shiny::isTruthy(input$pm_active)) ds[[input$pm_active]] else NULL })
+    mod_data_summary_server("pm_summary", active_pm, "Targeting process data")
 
     mod_chart_builder_server("pdm_charts", data = pdm$df, source = "pdm", add_item = add_item, presets = "PDM",
                              dataset_name = reactive({

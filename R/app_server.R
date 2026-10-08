@@ -408,6 +408,8 @@ app_server <- function(input, output, session) {
   # Variable calculator on the registration data; every column it creates is
   # recorded in the audit trail.
   mod_var_calc_server("calc_reg", uploaded_df, function(df) uploaded_df(df), modification_log)
+  # a summary of every variable, for each upload (components/DataSummary.tsx)
+  mod_data_summary_server("summary_reg", uploaded_df, "Registration data")
 
   ## ===================================================================================
   #  ------------------- Session Persistence

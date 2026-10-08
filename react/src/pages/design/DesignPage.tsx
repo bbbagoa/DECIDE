@@ -4,7 +4,7 @@
 // and areas covered are the Shiny parts, hosted (output host_*).
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
-  BookOpen, Check, ChevronDown, CircleCheck, ClipboardList, Database, FileCode2, FileSpreadsheet, FileText,
+  BookOpen, Calculator, Check, ChevronDown, CircleCheck, ClipboardList, Database, FileCode2, FileSpreadsheet, FileText,
   MapPin, PackageOpen, Share2, TriangleAlert, Upload,
 } from "lucide-react";
 import { ShinyOutput, useShinyInput, useShinyInputValue, useShinyOutputValue } from "@/shiny";
@@ -13,6 +13,7 @@ import { SidebarLayout, SideActions, signalShown } from "@/lib/layout";
 import { AreaScope } from "@/components/AreaScope";
 import { ModaImport } from "@/components/ModaImport";
 import { VarCalc } from "@/components/VarCalc";
+import { DataSummary } from "@/components/DataSummary";
 import "@/components/modules.css";
 import { Boundary, ns, sendEvent, type T } from "./shared";
 import type { Flow, Meta, Mode } from "./types";
@@ -63,6 +64,9 @@ export function DesignPage({ t }: { active: boolean; t: T }) {
               <div className="sc-data-tools">
                 <ModaImport ns={ns("moda")} label="MODA" size="sm" t={t} />
                 <VarCalc ns={ns("calc")} label="Calculator" block t={t} />
+                <ActionButton id={ns("fsi-open")} label={t("Food security indicators")} icon={<Calculator size={14} />} variant="outline-secondary"
+                              title={t("Calculate FCS, rCSI, LCS, FES or CARI from the WFP standard variables")} className="sc-full" />
+                <DataSummary ns={ns("summary")} className="sc-full" t={t} />
                 <ActionButton id={ns("open_guide")} label={t("How it works")} icon={<BookOpen size={14} />} variant="outline-secondary"
                               title={t("The design process step by step, with its methods")} className="w-100" />
               </div>

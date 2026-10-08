@@ -5,7 +5,8 @@
 #' process (one per browser session, started on first use and kept warm), so
 #' the app stays responsive and the waiter's cross can stop it: the process is
 #' killed and the user carries on. The first task of a session also loads the
-#' package in that process (a few seconds). `TARGETWISE_BACKGROUND=false`, or a
+#' package in that process (a few seconds; from source, the same source folder,
+#' see `tw_source_path()`). `TARGETWISE_BACKGROUND=false`, or a
 #' session that is not a running app (unit tests, testServer), runs the task
 #' inline as before.
 #' @noRd
@@ -27,6 +28,18 @@ bg_worker <- function(root) {
     }
   }
   w
+}
+
+#' @noRd
+#' The source folder when TargetWise runs from source (pkgload::load_all()),
+#' else NULL. Another R process (the background worker) must then load that
+#' folder too: `TargetWise:::` there would otherwise be the installed copy,
+#' an older version.
+#' @noRd
+tw_source_path <- function() {
+  if (!requireNamespace("pkgload", quietly = TRUE) || !pkgload::is_dev_package("TargetWise")) return(NULL)
+  p <- getNamespaceInfo("TargetWise", "path")
+  if (file.exists(file.path(p, "DESCRIPTION"))) normalizePath(p, winslash = "/") else NULL
 }
 
 #' @noRd
@@ -68,7 +81,13 @@ bg_run <- function(label, job, args, on_done, on_error = function(msg) NULL,
     if (res$ok) on_done(res$value) else on_error(res$msg)
     return(invisible(NULL))
   }
-  call <- eval(parse(text = sprintf("function(a, log) TargetWise:::bg_call(\"%s\", a, log)", job_name)), envir = globalenv())
+  # From source, the worker loads the same folder once (the first job takes a
+  # few seconds longer); installed, it loads the installed package.
+  src <- tw_source_path()
+  call <- eval(parse(text = sprintf(paste0(
+    "function(a, log, src) { if (!is.null(src) && !isTRUE(getOption('tw.source_loaded'))) {",
+    " suppressMessages(pkgload::load_all(src, quiet = TRUE, export_all = TRUE, helpers = FALSE)); options(tw.source_loaded = TRUE) };",
+    " TargetWise:::bg_call(\"%s\", a, log) }"), job_name)), envir = globalenv())
   log_file <- tempfile("tw-job-", fileext = ".log"); seen <- 0L
   # the worker's steps and R messages, as they come
   relay <- function() {
@@ -97,7 +116,7 @@ bg_run <- function(label, job, args, on_done, on_error = function(msg) NULL,
       if (st == "starting") {
         if (identical(w$poll_process(0), "ready")) try(w$read(), silent = TRUE)
       } else if (st == "idle") {
-        w$call(call, list(args, log_file))
+        w$call(call, list(args, log_file, src))
         started <<- TRUE
         waiter_log("load the package and the data in the worker", "run", id = "bg-run", session = session)
       } else {

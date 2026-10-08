@@ -4,7 +4,7 @@
 // the server can switch (nav_select()), notices and empty states.
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { ChevronDown, Info, Maximize2, Minimize2, TriangleAlert, X } from "lucide-react";
+import { ChevronDown, Info, Maximize2, Minimize2, TriangleAlert } from "lucide-react";
 import { useShinyInput } from "@/shiny";
 import { useServerUpdates } from "./inputs";
 import "./lib.css";
@@ -179,12 +179,13 @@ export function Dialog({ open, onClose, title, children, footer, size = "lg" }: 
   }, [open, onClose]);
   if (!open) return null;
   return createPortal(
-    <div className="tw-dialog-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+    // "modal": Bootstrap's dialog spacing and colours are variables set on it
+    <div className="modal tw-dialog-backdrop" role="presentation" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className={`modal-dialog modal-${size} modal-dialog-scrollable tw-dialog`} role="dialog" aria-modal="true">
         <div className="modal-content">
           <div className="modal-header">
             <h5 className="modal-title">{title}</h5>
-            <button type="button" className="btn-close" onClick={onClose} aria-label="Close"><X size={0} /></button>
+            <button type="button" className="btn-close" onClick={onClose} aria-label="Close" />
           </div>
           <div className="modal-body">{children}</div>
           {footer ? <div className="modal-footer">{footer}</div> : null}

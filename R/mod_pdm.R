@@ -179,6 +179,7 @@ mod_pdm_server <- function(id, workspace = NULL, country_office = reactive(NULL)
 
     # Kept whole; the analysis runs on the areas covered (see mod_area_scope).
     pdm_all <- reactiveVal(NULL)
+    mod_data_summary_server("summary", pdm_all, "Verification survey / PDM data")
     scope <- mod_area_scope_server("scope", pdm_all, workspace, "pdm_scope", modification_log, "Monitoring")
     pdm_scoped <- reactive(scope$filter(pdm_all()))
     pdm_df <- function(value) if (missing(value)) pdm_scoped() else pdm_all(value)

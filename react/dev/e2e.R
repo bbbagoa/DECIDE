@@ -13,13 +13,16 @@
 tw_root <- normalizePath(getwd())
 stopifnot(file.exists(file.path(tw_root, "DESCRIPTION")))
 
-tw_launch <- function(width = 1500, height = 950) {
+#' background = TRUE: long tasks run in the background R process, as for users
+#' (the worker loads this source folder, see tw_source_path()); FALSE (the
+#' default, faster to start): inline.
+tw_launch <- function(width = 1500, height = 950, background = FALSE) {
   dir <- tempfile("twapp")
   dir.create(dir)
   store <- tempfile("twstore")
   writeLines(c(
-    sprintf('Sys.setenv(TARGETWISE_BACKGROUND = "false", TARGETWISE_UPDATE_CHECK = "false", TARGETWISE_SESSION_DIR = "%s")',
-            gsub("\\\\", "/", store)),
+    sprintf('Sys.setenv(TARGETWISE_BACKGROUND = "%s", TARGETWISE_UPDATE_CHECK = "false", TARGETWISE_SESSION_DIR = "%s")',
+            if (background) "true" else "false", gsub("\\\\", "/", store)),
     sprintf('pkgload::load_all("%s", quiet = TRUE, export_all = TRUE)', gsub("\\\\", "/", tw_root)),
     "options(shiny.maxRequestSize = 2 * 1024^3)",
     "shiny::shinyApp(app_ui, app_server)"

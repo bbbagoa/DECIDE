@@ -19,6 +19,7 @@ import { Card, Notice, SideActions, SidebarLayout, Steps, Tabs } from "@/lib/lay
 import { EmptyState } from "@/components/Figures";
 import { AreaScope } from "@/components/AreaScope";
 import { ModaImport } from "@/components/ModaImport";
+import { DataSummary } from "@/components/DataSummary";
 import { Dropzone } from "./Dropzone";
 import { ChartBuilder } from "./ChartBuilder";
 
@@ -125,6 +126,7 @@ export function PdmTab({ t }: { t: (s: string) => string }) {
               : <p className="small text-muted mb-2">{t("A survey of selected and non-selected households after the selection and before the distribution (the sample drawn in step 0): problems in an area can still be fixed, or its distribution paused.")}</p>}
             <Dropzone id={ns("pdm_file_ui")} />
             <ModaImport ns={ns("moda")} size="sm" t={t} />
+            <DataSummary ns={ns("summary")} block className="mt-2" t={t} />
             {st?.data && (
               <div className="tw-mon-status">
                 <span className="ok"><strong>{st.data.source}</strong></span><br />

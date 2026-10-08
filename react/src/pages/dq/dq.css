@@ -11,6 +11,24 @@
 .tw-dq-toolbar-row > .tw-field.wide { flex: 1 1 320px; max-width: 540px; }
 .tw-dq-toolbar-row > .btn, .tw-dq-toolbar-row > .tw-dq-btn { margin-bottom: .7rem; }
 .tw-dq-toolbar-actions { display: flex; flex-wrap: wrap; gap: .5rem; margin-left: auto; margin-bottom: .7rem; }
+
+/* One line in every toolbar: inputs and buttons 38px tall with their bottoms
+   aligned, labels on one line above, help text under its field without
+   pushing the row, switches and sliders as tall as an input. */
+.tw-dq-toolbar > .card-body { padding-bottom: .9rem; }
+.tw-dq-toolbar:has(.tw-dq-toolbar-row .form-text) > .card-body { padding-bottom: 1.6rem; }
+.tw-dq-toolbar-row { gap: .6rem 1rem; }
+.tw-dq-toolbar-row .tw-field, .tw-dq-toolbar-row .tw-dq-fieldset { margin-bottom: 0; position: relative; }
+.tw-dq-toolbar-row > .btn, .tw-dq-toolbar-row > .tw-dq-btn, .tw-dq-toolbar-actions { margin-bottom: 0; }
+.tw-dq-toolbar-row .btn:not(.btn-link) { height: 38px; display: inline-flex; align-items: center; justify-content: center; gap: .3rem; white-space: nowrap; }
+.tw-dq-toolbar-row .form-control, .tw-dq-toolbar-row .form-select { height: 38px; }
+.tw-dq-toolbar-row .tw-select__control { min-height: 38px !important; }
+.tw-dq-toolbar-row .tw-field > .form-label, .tw-dq-fieldset > .form-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2rem; }
+.tw-dq-toolbar-row .tw-field > .form-text { position: absolute; left: 0; top: 100%; margin-top: 2px; white-space: nowrap; }
+.tw-dq-toolbar-row .tw-field .form-check { min-height: 38px; display: flex; align-items: center; gap: .4rem; margin: 0; }
+.tw-dq-toolbar-row .tw-slider { display: flex; align-items: center; gap: .6rem; height: 38px; }
+.tw-dq-toolbar-row .tw-slider > .form-range, .tw-dq-toolbar-row .tw-slider > .tw-slider-dual { flex: 1 1 auto; }
+.tw-dq-toolbar-row .tw-slider-value { flex: 0 0 auto; min-width: 2.4rem; text-align: right; }
 .tw-dq-range { display: flex; gap: .4rem; }
 .tw-dq-range .tw-field { margin-bottom: 0; flex: 1 1 0; }
 .tw-dq-fieldset { flex: 0 1 230px; margin-bottom: .7rem; }

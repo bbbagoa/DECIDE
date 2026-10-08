@@ -4,6 +4,7 @@
 // every input and output keeps its id; the facts the Shiny page wrote with
 // textOutput() / renderUI() come as JSON (sc_kpis, verif_state).
 import { useEffect, useRef, type ReactNode } from "react";
+import { DataSummary } from "@/components/DataSummary";
 import {
   ArrowRight, CircleCheck, ClipboardCheck, CloudDownload, Database, Download, FileSpreadsheet, FileText, Filter, GitCompare,
   Link2, ListChecks, ListOrdered, MapPin, PieChart, Search, Shuffle, TriangleAlert, CircleHelp, X,
@@ -176,6 +177,7 @@ function VerifyTab({ t }: { t: T }) {
                 <ActionButton id={ns("verif_fetch")} label={t("Fetch")} icon={<CloudDownload size={14} />} />
               </div>
             </div>
+            <DataSummary ns={ns("verif_summary")} className="mt-2" t={t} />
             {v?.loaded && (
               <div className={`small d-flex align-items-center gap-1 ${v.shared ? "text-success" : "text-danger"}`}>
                 {v.shared ? <CircleCheck size={14} /> : <TriangleAlert size={14} />}

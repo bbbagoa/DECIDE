@@ -14,7 +14,7 @@
 .sc-side .tw-step-body { padding-top: .35rem; }
 .sc-file { margin-bottom: .5rem; }
 .sc-data-tools { display: grid; grid-template-columns: 1fr 1fr; gap: .4rem; }
-.sc-data-tools > :last-child { grid-column: 1 / -1; }
+.sc-data-tools > :last-child, .sc-data-tools > .sc-full { grid-column: 1 / -1; }
 .sc-data-tools .btn { width: 100%; }
 .sc-data-status { display: flex; gap: .55rem; align-items: flex-start; margin-top: .7rem; padding: .55rem .65rem; border-radius: 8px;
   font-size: .8rem; background: var(--accent-success-bg, rgba(63, 126, 68, .08)); min-width: 0; }
@@ -265,3 +265,4 @@
 .sc-fit-details > div { padding-left: 1.1rem; }
 .sc-tree-rules { max-height: 520px; overflow: auto; }
 .sc-insights li + li { margin-top: .25rem; }
+

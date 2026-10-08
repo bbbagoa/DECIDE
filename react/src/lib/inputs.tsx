@@ -182,6 +182,7 @@ export function SelectInput(p: SelectProps) {
     const l = c.label === c.value ? vl.label(c.value) : null;
     return l && ctx === "menu" ? <span className="tw-opt"><span className="tw-opt-name tw-strong">{c.label}</span><span className="tw-opt-label">{l}</span></span> : c.label;
   };
+  const withActions = !!(p.multiple && p.actions && choices.length > 1);
   const groups = [...new Set(choices.map((c) => c.group).filter(Boolean))] as string[];
   const opts = groups.length
     ? [...choices.filter((c) => !c.group), ...groups.map((g) => ({ label: g, options: choices.filter((c) => c.group === g) }))]
@@ -189,11 +190,15 @@ export function SelectInput(p: SelectProps) {
   const cur = Array.isArray(val) ? val : val ? [val] : [];
   const selected = cur.map((v) => choices.find((c) => c.value === v) ?? { value: v, label: v });
   return (
-    <Field id={p.id} label={label} help={p.help} className={p.className}>
-      {p.multiple && p.actions && choices.length > 1 ? (
-        <div className="tw-select-actions">
-          <button type="button" className="btn btn-link btn-sm p-0" onClick={() => send(choices.map((c) => c.value))}>Select all</button>
-          <button type="button" className="btn btn-link btn-sm p-0" onClick={() => send([])}>None</button>
+    // with "Select all / None", the label and the links share one row
+    <Field id={p.id} label={withActions ? undefined : label} help={p.help} className={p.className}>
+      {withActions ? (
+        <div className="tw-select-head">
+          {label ? <label className="form-label" htmlFor={ctlId(p.id)}>{label}</label> : <span />}
+          <div className="tw-select-actions">
+            <button type="button" className="btn btn-link btn-sm p-0" onClick={() => send(choices.map((c) => c.value))}>Select all</button>
+            <button type="button" className="btn btn-link btn-sm p-0" onClick={() => send([])}>None</button>
+          </div>
         </div>
       ) : null}
       <Select<Choice, boolean>

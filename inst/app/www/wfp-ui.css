@@ -2985,3 +2985,9 @@ table.dataTable td.tw-wide-cell, table.dataTable th.tw-wide-cell { min-width: 32
 [data-bs-theme="dark"] .wfp-p-ns, [data-bs-theme="dark"] .wfp-p-na { color: #9aa8b8; }
 .wfp-p-legend .wfp-p { margin-right: .5rem; }
 .wfp-dir { padding: 0; border-radius: 0; background: none !important; }
+
+/* Food security indicators dialog (R/mod_fs_indicators.R) */
+.tw-fsi-list { display: flex; flex-direction: column; gap: .5rem; }
+.tw-fsi-row { border: 1px solid var(--border, rgba(128,128,128,.25)); border-radius: 8px; padding: .55rem .75rem; }
+.tw-fsi-row .form-group, .tw-fsi-row .shiny-input-container { margin-bottom: .15rem; width: 100%; }
+.tw-fsi-off { opacity: .75; background: rgba(128,128,128,.05); }

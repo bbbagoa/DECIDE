@@ -506,6 +506,7 @@ mod_spot_checking_server <- function(id, uploaded_df, user_setup, workspace = NU
     # Back-check comparison
     # -----------------------------------------------------------------------
     verification_df <- reactiveVal(NULL)
+    mod_data_summary_server("verif_summary", verification_df, "Verification data")
     verif_source <- reactiveVal(NA_character_)
     comparison <- reactiveVal(NULL)
 
