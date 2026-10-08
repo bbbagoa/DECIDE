@@ -160,6 +160,8 @@ app_server <- function(input, output, session) {
       df, label = label %||% if (identical(source, "File")) "File upload" else source, notes = notes,
       footer = tagList(
         modalButton("Import another file"),
+        # the React summary opens over this dialog (mod_data_summary_server "summary_reg")
+        actionButton("summary_reg-open_modal", "Data summary", icon = icon("chart-bar"), class = "btn-outline-secondary"),
         actionButton("btn_import_to_setup", "Continue to variable setup", class = "btn-primary", icon = icon("arrow-right"))
       ))))
   }
@@ -410,6 +412,10 @@ app_server <- function(input, output, session) {
   mod_var_calc_server("calc_reg", uploaded_df, function(df) uploaded_df(df), modification_log)
   # a summary of every variable, for each upload (components/DataSummary.tsx)
   mod_data_summary_server("summary_reg", uploaded_df, "Registration data")
+  # the data as it is now (after cleaning), in several formats: on the import
+  # page and in the Data Quality sidebar
+  mod_data_export_server("export_reg", uploaded_df, "Registration data", log = modification_log)
+  mod_data_export_server("export_dq", uploaded_df, "Registration data (cleaned)", log = modification_log)
 
   ## ===================================================================================
   #  ------------------- Session Persistence

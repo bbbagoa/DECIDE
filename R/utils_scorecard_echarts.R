@@ -278,7 +278,9 @@ ec_heat <- function(xcats, ycats, z, tip_fmt = "%s<br>%s: <b>%.0f%%</b> meet it"
                         itemHeight = 120, inRange = list(color = I(c("rgba(10,110,180,0.06)", "#0A6EB4"))),
                         text = I(c("100%", "0%"))),
        series = list(list(type = "heatmap", data = d,
-                          label = list(show = length(d) <= 200, formatter = "fn:hmap"),
+                          # dark figures with a light halo: readable on pale and dark cells
+                          label = list(show = length(d) <= 200, formatter = "fn:hmap", color = "#1f2a37",
+                                       textBorderColor = "rgba(255,255,255,0.85)", textBorderWidth = 2),
                           itemStyle = list(borderColor = "rgba(128,128,128,0.25)", borderWidth = 1))))
 }
 
@@ -302,3 +304,9 @@ ec_area_share <- function(d, overall, labels = c("Vulnerable", "Not vulnerable")
   attr(o, "height") <- if (horizontal) max(440, 22 * n + 90) else if (n > 8) 440 else 380
   o
 }
+
+#' Height of the two charts side by side under "What drives it" (what drives
+#' the score, coverage by criterion): the same for both, 640px, taller only
+#' when the criteria need more than 26px a row
+#' @noRd
+drive_pair_height <- function(n) max(640, 26 * n + 110)

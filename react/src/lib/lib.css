@@ -135,3 +135,18 @@
 :root[data-bs-theme="dark"] .tw-select__control, :root[data-bs-theme="dark"] .tw-select__menu,
 :root[data-bs-theme="dark"] .form-control, :root[data-bs-theme="dark"] .form-select { background-color: var(--surface) !important; }
 :root[data-bs-theme="dark"] .tw-table thead th { background: var(--surface-3); }
+
+/* Rows of controls that line up (any page): .tw-align gives inputs, selects,
+   toggles and buttons one height (38px) and labels one line; .tw-align-bottom
+   also lines their bottoms up, with a field's help text below it, out of the
+   way (give the row some padding below when a field has help). */
+.tw-align .tw-field { margin-bottom: 0; position: relative; }
+.tw-align .btn:not(.btn-link) { height: 38px; display: inline-flex; align-items: center; justify-content: center; gap: .3rem; white-space: nowrap; }
+.tw-align .form-control, .tw-align .form-select { height: 38px; }
+.tw-align .tw-select__control { min-height: 38px !important; }
+.tw-align .tw-field > .form-label, .tw-align .tw-select-head { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2rem; min-height: 1.2rem; }
+.tw-align .tw-field .form-check { min-height: 38px; display: flex; align-items: center; gap: .4rem; margin: 0; }
+.tw-align .tw-slider { display: flex; align-items: center; gap: .6rem; height: 38px; }
+.tw-align .tw-slider > .form-range { flex: 1 1 auto; }
+.tw-align-bottom { align-items: flex-end; }
+.tw-align-bottom .tw-field > .form-text { position: absolute; left: 0; top: 100%; margin-top: 2px; width: max-content; max-width: 300px; }

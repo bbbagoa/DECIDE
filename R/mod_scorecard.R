@@ -1539,6 +1539,9 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
       pr <- pr[order(-profile_contrasts(ix$profiles, ix$size, fitted()$n)$v), , drop = FALSE]   # strongest separators on top
       o <- ec_heat(colnames(pr), rownames(pr), 100 * pr)
       o$yAxis$inverse <- TRUE
+      # one readable row per criterion: the chart grows with them
+      o$yAxis$axisLabel <- list(interval = 0, width = 220, overflow = "truncate")
+      attr(o, "height") <- max(360, 28 * nrow(pr) + 110)
       o
     })
 
@@ -2277,9 +2280,20 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
       items <- draft_scorecard()$items
       dir <- stats::setNames(vapply(items, function(i) i$direction, character(1)), vapply(items, function(i) i$criterion, character(1)))
       cr <- names(s$detail)
-      o <- order(-share)
-      ec_lollipop(cr[o], round(share[o], 2), unname(dir[cr[o]]),
-                  sprintf("<b>%s</b><br>%.1f%% of all points moved", ec_esc(cr[o]), share[o]), "Share of points (%)")
+      # inclusion criteria to the right of 0, exclusion criteria to the left,
+      # each group largest first: the two kinds never mix
+      d <- unname(dir[cr]); excl <- d %in% "exclusion"
+      o <- c(which(!excl)[order(-share[!excl])], which(excl)[order(-share[excl])])
+      signed <- ifelse(excl, -share, share)
+      g <- ec_lollipop(cr[o], round(signed[o], 2), d[o],
+                       sprintf("<b>%s</b> (%s)<br>%.1f%% of all points moved", ec_esc(cr[o]), ifelse(excl[o], "exclusion", "inclusion"), share[o]),
+                       "Share of points (%): inclusion to the right, exclusion to the left")
+      g$xAxis$axisLabel <- list(formatter = "fn:abspctv")
+      m <- max(share, 1)
+      g$xAxis$min <- if (any(excl)) -ceiling(m) else 0
+      g$xAxis$max <- if (any(!excl)) ceiling(m) else 0
+      attr(g, "height") <- drive_pair_height(length(cr))
+      g
     })
 
     # How many criteria a household meets, eligible against not: if the two
@@ -2308,9 +2322,11 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
       p[!is.finite(p)] <- NA
       lab <- W(c("Vulnerable", "Not vulnerable"))
       tip <- function(k) sprintf("%s<br>%s: <b>%s</b> eligible", ec_esc(cr), lab[k], ifelse(is.na(p[k, ]), "n/a", sprintf("%.1f%%", p[k, ])))
-      ec_bars(cr, list(list(name = lab[1], values = round(p[1, ], 1), color = "#c5192d", tips = tip(1)),
-                       list(name = lab[2], values = round(p[2, ], 1), color = "#3f7e44", tips = tip(2))),
-              horizontal = TRUE, value_name = "% of holders eligible", pct = TRUE)
+      o <- ec_bars(cr, list(list(name = lab[1], values = round(p[1, ], 1), color = "#c5192d", tips = tip(1)),
+                            list(name = lab[2], values = round(p[2, ], 1), color = "#3f7e44", tips = tip(2))),
+                   horizontal = TRUE, value_name = "% of holders eligible", pct = TRUE)
+      attr(o, "height") <- drive_pair_height(length(cr))
+      o
     })
 
     output$met_plot <- render_echart({

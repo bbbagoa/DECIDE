@@ -248,8 +248,18 @@ export function useRowInput<V>(id: string, value: V, stamp: number, type?: strin
   return [v, setV];
 }
 
+/** Tick or untick these Use boxes at once (the criteria table's Select all / Deselect all) */
+export function setUseTicks(ids: string[], on: boolean) {
+  window.dispatchEvent(new CustomEvent("sc-use-all", { detail: { ids, on } }));
+}
+
 export function UseTick({ id, value, stamp, label }: { id: string; value: boolean; stamp: number; label: string }) {
   const [v, setV] = useRowInput<boolean>(ns(id), value, stamp);
+  useEffect(() => {
+    const on = (e: Event) => { const d = (e as CustomEvent).detail; if (d?.ids?.includes(id)) setV(!!d.on); };
+    window.addEventListener("sc-use-all", on);
+    return () => window.removeEventListener("sc-use-all", on);
+  }, [id]); // eslint-disable-line
   return <input type="checkbox" className="form-check-input sc-tick" checked={!!v} aria-label={label} onChange={(e) => setV(e.target.checked)} />;
 }
 

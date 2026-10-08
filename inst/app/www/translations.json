@@ -2978,6 +2978,16 @@
     {"en": "Registration data", "fr": "Données d'enregistrement"},
     {"en": "Assessment data", "fr": "Données d'évaluation"},
     {"en": "Targeting process data", "fr": "Données sur le processus de ciblage"},
-    {"en": "Verification survey / PDM data", "fr": "Données de l'enquête de vérification / du PDM"}
+    {"en": "Verification survey / PDM data", "fr": "Données de l'enquête de vérification / du PDM"},
+    {"en": "Caseload (%)", "fr": "Nombre de ménages à servir (%)"},
+    {"en": "The data as it is now, after cleaning", "fr": "Les données telles qu'elles sont maintenant, après nettoyage"},
+    {"en": "Download data", "fr": "Télécharger les données"},
+    {"en": "Download the cleaned data", "fr": "Télécharger les données nettoyées"},
+    {"en": "Excel (.xlsx, read-only)", "fr": "Excel (.xlsx, en lecture seule)"},
+    {"en": "SPSS (.sav)", "fr": "SPSS (.sav)"},
+    {"en": "Stata (.dta)", "fr": "Stata (.dta)"},
+    {"en": "Parquet (.parquet)", "fr": "Parquet (.parquet)"},
+    {"en": "Tick Use for every variable shown", "fr": "Cocher Utiliser pour toutes les variables affichées"},
+    {"en": "Untick Use for every variable shown", "fr": "Décocher Utiliser pour toutes les variables affichées"}
   ]
 }

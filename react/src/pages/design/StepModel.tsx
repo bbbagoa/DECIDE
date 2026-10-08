@@ -444,7 +444,11 @@ function Diagnostics({ fit, meta, t }: { fit: Flow["fit"]; meta?: Meta; t: T }) 
   } else if (im === "count") {
     charts = <div className="sc-grid-3">{C("weights_plot", t("Weight of each deprivation"))}{C("dep_count_plot", t("Weighted deprivations per household"))}{C("unsup_map", t("Households on the first two components"))}</div>;
   } else if (fit.cluster) {
-    charts = <div className="sc-grid-3">{C("unsup_map", t("Households by profile, first two components"))}{C("cluster_plot", t("Profiles: share of households meeting each criterion"))}{C("weights_plot", t("Points that reproduce the targeted profiles"))}</div>;
+    // the profiles get the full width (a row per criterion), the two others share the next row
+    charts = <>
+      {C("cluster_plot", t("Profiles: share of households meeting each criterion"))}
+      <div className="sc-grid-2">{C("unsup_map", t("Households by profile, first two components"))}{C("weights_plot", t("Points that reproduce the targeted profiles"))}</div>
+    </>;
   } else if (im === "lda") {
     charts = <>
       <div className="sc-grid-3">{C("weights_plot", t("Weight and direction"))}{C("prevalence_plot", t("How common each criterion is"))}{C("lda_scores", t("Index by group"))}</div>

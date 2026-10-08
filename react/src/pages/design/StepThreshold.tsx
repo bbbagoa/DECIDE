@@ -35,41 +35,54 @@ export function StepThreshold({ flow, meta, mode, t }: { flow?: Flow; meta?: Met
       <Gate show={!!flow && flow.gates.threshold} text={t("The threshold is chosen against the errors a scored design produces, so fit the weights first.")}
             btn="back_to_weights" label={t("Back to Model & weights")} />
 
-      <div className="sc-grid-2 sc-thr-setup">
-        <div className="sc-setup-panel">
+      {/* every eligibility control on one line; the rationale below */}
+      <div className="sc-setup-panel sc-thr-setup">
+        <div className="sc-thr-row tw-align tw-align-bottom">
           <ThresholdSlider t={t} />
-          <div className="sc-settings sc-settings-3">
-            <Show when={!nof} style={{ display: "contents" }}>
-              <NumericInput id={ns("tol_lower")} value={meta?.tol_default[0] ?? 5} min={0} max={49} step={1}
-                            label={<>{t("Lower %")} <Tip>{t("Lower bound of the tolerance band (Advisory 2/2025). Errors below it are acceptable without action. Changing the default (5%) needs an explanation in the rationale.")}</Tip></>} />
-              <NumericInput id={ns("tol_upper")} value={meta?.tol_default[1] ?? 20} min={1} max={49} step={1}
-                            label={<>{t("Upper %")} <Tip>{t("Upper bound of the tolerance band. Errors above it call for a redesign; it can never reach 50% (no better than random). Changing the default (20%) needs an explanation in the rationale.")}</Tip></>} />
-            </Show>
-            <NumericInput id={ns("caseload_pct")} min={1} max={100} step={1}
-                          label={<>{t("Caseload (% of households)")} <Tip>{t("Share of households the programme can serve. Used by 'Fit to caseload' to set the highest threshold that stays within it.")}</Tip></>} />
+          <Show when={!nof} style={{ display: "contents" }}>
+            <NumericInput id={ns("tol_lower")} value={meta?.tol_default[0] ?? 5} min={0} max={49} step={1} className="sc-thr-num"
+                          label={<>{t("Lower %")} <Tip>{t("Lower bound of the tolerance band (Advisory 2/2025). Errors below it are acceptable without action. Changing the default (5%) needs an explanation in the rationale.")}</Tip></>} />
+            <NumericInput id={ns("tol_upper")} value={meta?.tol_default[1] ?? 20} min={1} max={49} step={1} className="sc-thr-num"
+                          label={<>{t("Upper %")} <Tip>{t("Upper bound of the tolerance band. Errors above it call for a redesign; it can never reach 50% (no better than random). Changing the default (20%) needs an explanation in the rationale.")}</Tip></>} />
+          </Show>
+          <NumericInput id={ns("caseload_pct")} min={1} max={100} step={1} className="sc-thr-caseload"
+                        label={<>{t("Caseload (%)")} <Tip>{t("Share of households the programme can serve. Used by 'Fit to caseload' to set the highest threshold that stays within it.")}</Tip></>} />
+          <div className="tw-field sc-thr-suggest">
+            <label className="form-label">{t("Suggest")}</label>
+            <div className="sc-thr-btns">
+              <Show as="span" when={!nof} style={{ display: "contents" }}>
+                <ActionButton id={ns("thr_balanced")} label={t("Minimise errors")} icon={<Crosshair size={13} />}
+                              title={t("Sets the threshold where the larger of the inclusion and exclusion errors is smallest, so neither is traded away for the other.")} />
+                <ActionButton id={ns("thr_youden")} label={t("Balance (Youden)")} icon={<Gauge size={13} />}
+                              title={t("Youden's J: picks the threshold maximising sensitivity + specificity - 1, the point of the ROC curve furthest from the diagonal (Targeting Advisory 3/2025; Youden 1950).")} />
+              </Show>
+              <Show as="span" when={pmt} style={{ display: "contents" }}>
+                <ActionButton id={ns("thr_line")} label={t("At the poverty line")} icon={<Ruler size={13} />}
+                              title={t("Eligible when predicted welfare per person is at or below the poverty line: the standard PMT cut-off. A cut-off above the line lowers exclusion errors at the cost of inclusion errors (Brown, Ravallion & van de Walle 2018).")} />
+              </Show>
+              <ActionButton id={ns("thr_caseload")} label={t("Fit to caseload")} icon={<Users size={13} />}
+                            title={t("Sets the threshold so no more than the caseload share of households is eligible.")} />
+            </div>
           </div>
-          <div className="sc-helpers">
-            <span className="sc-helpers-label">{t("Suggest")}</span>
-            <Show as="span" when={!nof} style={{ display: "contents" }}>
-              <ActionButton id={ns("thr_balanced")} label={t("Minimise errors")} icon={<Crosshair size={13} />}
-                            title={t("Sets the threshold where the larger of the inclusion and exclusion errors is smallest, so neither is traded away for the other.")} />
-              <ActionButton id={ns("thr_youden")} label={t("Balance (Youden)")} icon={<Gauge size={13} />}
-                            title={t("Youden's J: picks the threshold maximising sensitivity + specificity - 1, the point of the ROC curve furthest from the diagonal (Targeting Advisory 3/2025; Youden 1950).")} />
-            </Show>
-            <Show as="span" when={pmt} style={{ display: "contents" }}>
-              <ActionButton id={ns("thr_line")} label={t("At the poverty line")} icon={<Ruler size={13} />}
-                            title={t("Eligible when predicted welfare per person is at or below the poverty line: the standard PMT cut-off. A cut-off above the line lowers exclusion errors at the cost of inclusion errors (Brown, Ravallion & van de Walle 2018).")} />
-            </Show>
-            <ActionButton id={ns("thr_caseload")} label={t("Fit to caseload")} icon={<Users size={13} />}
-                          title={t("Sets the threshold so no more than the caseload share of households is eligible.")} />
-          </div>
-          <div className="sc-apply-row">
-            <ActionButton id={ns("thr_apply")} label={t("Apply")} icon={<CircleCheck size={14} />} variant="primary" size="md" />
-            <StaleNote show={!!stale?.thr}>{t("Threshold or tolerance changed: click Apply to update the errors and charts.")}</StaleNote>
-          </div>
-          <div className="small text-muted mt-2"><TextOutput id={ns("thr_note")} /></div>
-          <Show when={pmt} className="small mt-1"><PmtLineNote stale={stale} t={t} /></Show>
+          <ActionButton id={ns("thr_apply")} label={t("Apply")} icon={<CircleCheck size={14} />} variant="primary" size="md" className="sc-thr-apply" />
         </div>
+        <StaleNote show={!!stale?.thr}>{t("Threshold or tolerance changed: click Apply to update the errors and charts.")}</StaleNote>
+        <div className="small text-muted mt-1"><TextOutput id={ns("thr_note")} /></div>
+        <Show when={pmt} className="small mt-1"><PmtLineNote stale={stale} t={t} /></Show>
+      </div>
+      {/* with an outcome: the metrics (2 x 2) beside the rationale; without, the rationale alone */}
+      <Show when={!nof} className="small text-muted"><TextOutput id={ns("eval_note")} /></Show>
+      <div className={`sc-thr-mid${nof ? " one" : ""}`}>
+        <Show when={!nof}>
+          <div className="sc-kpis sc-kpis-2x2">
+            <Kpi label={<TextOutput id={ns("kpi_auc_title")} />} value={<TextOutput id={ns("kpi_auc")} />} tone="primary" />
+            <Kpi label={pmt ? t("Selected (predicted poor)") : t("Eligible households")} value={<TextOutput id={ns("kpi_elig")} />} tone="info" />
+            {th ? <>
+              <ErrorTrack which="incl" th={th} t={t} />
+              <ErrorTrack which="excl" th={th} t={t} />
+            </> : <><Kpi label={t("Inclusion error")} value={"–"} /><Kpi label={t("Exclusion error")} value={"–"} /></>}
+          </div>
+        </Show>
         <div className="sc-setup-panel sc-rationale">
           <div className="form-label sc-label">{t("Rationale for the band and the threshold")}{" "}
             <Tip>{t("Required by Targeting Advisory 2/2025; it goes into the exported scorecard and the design report.")}</Tip></div>
@@ -109,16 +122,7 @@ export function StepThreshold({ flow, meta, mode, t }: { flow?: Flow; meta?: Met
       {/* with an outcome: the errors, the matrix and the verdict */}
       <Show when={!nof}>
         <div ref={withRef} className="sc-stack">
-        <div className="small text-muted"><TextOutput id={ns("eval_note")} /></div>
         <Show when={pmt}><PmtAccuracyCard t={t} /></Show>
-        <div className="sc-kpis sc-kpis-4">
-          <Kpi label={<TextOutput id={ns("kpi_auc_title")} />} value={<TextOutput id={ns("kpi_auc")} />} tone="primary" />
-          <Kpi label={pmt ? t("Selected (predicted poor)") : t("Eligible households")} value={<TextOutput id={ns("kpi_elig")} />} tone="info" />
-          {th ? <>
-            <ErrorTrack which="incl" th={th} t={t} />
-            <ErrorTrack which="excl" th={th} t={t} />
-          </> : <><Kpi label={t("Inclusion error")} value={"–"} /><Kpi label={t("Exclusion error")} value={"–"} /></>}
-        </div>
         <div className="sc-grid-75">
           <Card title={pmt ? t("PMT targeting matrix") : t("Design error matrix")} icon={<Grid3x3 size={15} />}>
             {th ? <ErrorMatrix th={th} t={t} /> : <div className="small text-muted">{t("Fit a model and set a threshold to see the matrix.")}</div>}

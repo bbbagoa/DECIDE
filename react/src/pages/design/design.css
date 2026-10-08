@@ -266,3 +266,27 @@
 .sc-tree-rules { max-height: 520px; overflow: auto; }
 .sc-insights li + li { margin-top: .25rem; }
 
+
+/* Threshold step: slider, tolerance band, caseload, suggestions and Apply on one line */
+.sc-thr-row { display: flex; flex-wrap: wrap; gap: .9rem 1rem; padding-bottom: 1.1rem; }
+.sc-thr-row > .sc-threshold { flex: 2 1 280px; min-width: 240px; }
+.sc-thr-row > .sc-thr-num { flex: 0 0 82px; }
+.sc-thr-row > .sc-thr-caseload { flex: 0 0 110px; }
+.sc-thr-row > .sc-thr-suggest { flex: 0 1 auto; }
+.sc-thr-btns { display: flex; gap: .4rem; flex-wrap: nowrap; }
+.sc-thr-row > .sc-thr-apply { margin-left: auto; }
+.sc-thr-row .sc-threshold-scale { position: absolute; top: 100%; left: 0; right: 8.25rem; margin: 2px 0 0; }
+.sc-thr-row .sc-threshold-row { align-items: center; }
+.sc-thr-setup { margin-bottom: 0; }
+
+/* criteria table: Select all / Deselect all beside the search */
+.sc-crit-right { display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; }
+.sc-crit-right .btn { display: inline-flex; align-items: center; gap: .3rem; white-space: nowrap; }
+
+/* Threshold step: the metrics (2 x 2) beside the rationale */
+.sc-thr-mid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: stretch; }
+.sc-thr-mid.one { grid-template-columns: minmax(0, 1fr); }
+.sc-kpis-2x2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 0; }
+.sc-thr-mid .sc-rationale { display: flex; flex-direction: column; }
+.sc-thr-mid .sc-rationale > .shiny-html-output { flex: 1 1 auto; }
+@media (max-width: 1000px) { .sc-thr-mid { grid-template-columns: minmax(0, 1fr); } }

@@ -3,6 +3,7 @@
 // are input$dq_tabs, so the Health check's Review buttons switch them from
 // the server (bslib::nav_select("dq_tabs", <tab title>)). See PORT.md.
 import { CalendarRange, ClipboardList, Copy, FileText, Filter, Gauge, HeartPulse, IdCard, MapPin, RotateCcw, SpellCheck, X } from "lucide-react";
+import { DataExport } from "@/components/DataExport";
 import { useShinyInputValue, useShinyOutputValue } from "@/shiny";
 import { ActionButton, DateInput, DownloadButton, SelectInput, TextOutput } from "@/lib/inputs";
 import { SidebarLayout, SideActions, Steps, Tabs } from "@/lib/layout";
@@ -55,6 +56,7 @@ export function DqPage({ t }: { active: boolean; t: T }) {
           <ActionButton id={ns("btn_clear_dq_filters")} icon={<X size={14} />} variant="outline-secondary" title={t("Clear the filters")} />
         </div>
         <DownloadButton id={ns("dq_report")} label={t("Data quality report (HTML)")} icon={<FileText size={14} />} className="w-100" />
+        <DataExport ns="export_dq" label="Download the cleaned data" block t={t} />
         <ActionButton id={ns("btn_reset_data")} label={t("Reset to original data")} icon={<RotateCcw size={14} />} variant="outline-danger" className="w-100" />
         <div className="tw-dq-rows"><TextOutput id={ns("dq_filtered_rows")} /></div>
       </SideActions>

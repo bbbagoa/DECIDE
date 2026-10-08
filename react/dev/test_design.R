@@ -133,9 +133,9 @@ ok(identical(js("(document.querySelector('.shiny-react-output-container [id=\"sc
 ok(js("document.querySelectorAll('.sc-track').length") == 2, "two error tracks")
 scroll(".sc-thr-setup"); shot2("d4a_threshold_top")
 setv("tol_upper", 30); wait(1.5)
-cat("INFO apply row:", js("document.querySelector('.sc-apply-row').textContent"), "
+cat("INFO apply row:", js("document.querySelector('.sc-thr-setup').textContent"), "
 ")
-ok(grepl("Apply", js("document.querySelector('.sc-apply-row').textContent")) && grepl("changed", js("document.querySelector('.sc-apply-row').textContent")), "tolerance changed: note")
+ok(grepl("Apply", js("document.querySelector('.sc-thr-setup').textContent")) && grepl("changed", js("document.querySelector('.sc-thr-setup').textContent")), "tolerance changed: note")
 click("thr_apply", 2)
 ok(grepl("30%", js("document.querySelector('.vd-metrics').textContent")), "tolerance applied to the verdict")
 app$run_js("var e=document.getElementById('scorecard_1-tol_rationale'); e.innerHTML='Upper bound 30% agreed with the programme team.'; e.dispatchEvent(new Event('input',{bubbles:true}))"); wait(1)

@@ -12,6 +12,7 @@ import { FileImport } from "@/components/FileImport";
 import { ModaImport } from "@/components/ModaImport";
 import { VarCalc } from "@/components/VarCalc";
 import { DataSummary } from "@/components/DataSummary";
+import { DataExport } from "@/components/DataExport";
 import "./import.css";
 
 type T = (s: string) => string;
@@ -60,16 +61,14 @@ export function ImportPage({ t }: { active: boolean; t: T }) {
         <p className="tw-imp-formats">
           {t("Excel (.xlsx), SPSS (.sav), Stata (.dta), CSV or Parquet; CSV and Parquet load fastest for large files. You can also pull the data from MODA, Kobo Toolbox or ODK Central.")}
         </p>
-        <div className="tw-imp-grid">
-          <FileImport ns="file_import_1" label={t("Load registration data")} t={t} />
-          <div className="tw-imp-alt">
-            <label className="form-label">{t("Or pull from a server")}</label>
-            <ModaImport ns="moda_import_1" t={t} />
-          </div>
-          <div className="tw-imp-alt">
-            <label className="form-label">{t("Missing a variable?")}</label>
-            <VarCalc ns="calc_reg" size="md" block t={t} />
-            <DataSummary ns="summary_reg" block className="mt-2" t={t} />
+        {/* one line: the file, then the other ways in and the tools on the data */}
+        <div className="tw-imp-row">
+          <FileImport ns="file_import_1" t={t} />
+          <div className="tw-imp-tools">
+            <ModaImport ns="moda_import_1" size="sm" block={false} t={t} />
+            <VarCalc ns="calc_reg" size="sm" t={t} />
+            <DataSummary ns="summary_reg" t={t} />
+            <DataExport ns="export_reg" t={t} />
           </div>
         </div>
         <DataStatus t={t} />

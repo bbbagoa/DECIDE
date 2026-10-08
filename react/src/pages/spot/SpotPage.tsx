@@ -115,7 +115,7 @@ function SampleTab({ t }: { t: T }) {
   const mode = useShinyInputValue<string>(ns("sc_mode")) ?? "face";
   return (
     <>
-      <div className="tw-spot-band">
+      <div className={`tw-spot-band tw-align tw-align-bottom${mode === "remote" ? " has-help" : ""}`}>
         <RadioInput id={ns("sc_mode")} label={t("Interview mode")} buttons value="face"
                     choices={[{ value: "face", label: t("Face to face") }, { value: "remote", label: t("Remote (phone)") }]} />
         {/* kept mounted: the server fills its choices when the data arrives */}
@@ -170,7 +170,7 @@ function VerifyTab({ t }: { t: T }) {
             <div style={{ display: src === "file" ? undefined : "none" }}>
               <HostedUI id={ns("verif_file_ui")} className="tw-spot-file" />
             </div>
-            <div style={{ display: src === "moda" ? undefined : "none" }} className="tw-spot-moda">
+            <div style={{ display: src === "moda" ? undefined : "none" }} className="tw-spot-moda tw-align tw-align-bottom">
               <TextInput id={ns("verif_form_id")} label={t("Form ID")} placeholder={t("e.g. 123456")} />
               <TextInput id={ns("verif_token")} label={t("API key")} password />
               <div className="tw-spot-moda-go">
@@ -187,13 +187,13 @@ function VerifyTab({ t }: { t: T }) {
           </section>
           <section>
             <div className="tw-spot-vc-head"><span className="tw-spot-num">2</span>{t("Comparison")}</div>
-            <div className="tw-spot-cmp">
+            <div className="tw-spot-cmp tw-align">
               <SelectInput id={ns("verif_key")} label={t("Match records on")} clearable={false} />
               <SelectInput id={ns("verif_cols")} label={t("Fields to compare")} multiple actions placeholder={t("Nothing selected")} />
               <NumericInput id={ns("verif_tolerance")} label={t("Tolerance")} value={0} min={0} step={0.1}
                             help={t("Numeric answers closer than this count as agreeing.")} />
             </div>
-            <div className="d-flex justify-content-end">
+            <div className="d-flex justify-content-end tw-align mt-2">
               <ActionButton id={ns("verif_run")} label={t("Run comparison")} icon={<GitCompare size={14} />} variant="primary" />
             </div>
           </section>

@@ -2,7 +2,7 @@
 // overlap, the Use ticks (inputs rvuse_<variable>) pre-set by the server.
 // Continue (nav_next_screening) sends the ticked ones to the model.
 import { useMemo, useRef, useState } from "react";
-import { Grid3x3, Hash, Play, Search, ShieldAlert, TriangleAlert } from "lucide-react";
+import { CheckSquare, Grid3x3, Hash, Play, Search, ShieldAlert, Square, TriangleAlert } from "lucide-react";
 import { useShinyOutputValue } from "@/shiny";
 import { ActionButton, NumericInput, SelectInput } from "@/lib/inputs";
 import { Card } from "@/lib/layout";
@@ -11,12 +11,13 @@ import { useOutputVisibility } from "@/lib/visibility";
 import { BlockedNote } from "./facts";
 import { EmptyState } from "@/components/Figures";
 import { VarCalcBulk } from "@/components/VarCalc";
-import { Gate, OrCell, Pending, Show, StepNav, Tip, TipList, UseTick, isNum, ns, pct0, type T } from "./shared";
+import { Gate, OrCell, Pending, Show, StepNav, Tip, TipList, UseTick, isNum, ns, pct0, setUseTicks, type T } from "./shared";
 import type { CritRow, Criteria, Flow, Mode, PmtNumeric } from "./types";
 
 export function StepCriteria({ flow, mode, t }: { flow?: Flow; mode: Mode; t: T }) {
   const crit = useShinyOutputValue<Criteria>(ns("sc_criteria"));
   const [q, setQ] = useState("");
+  const vl = useVarLabels();
   const nof = mode === "none";
   // computed only while this step shows (PORTING.md, "Hidden outputs wait")
   const ref = useRef<HTMLDivElement>(null);
@@ -67,11 +68,18 @@ export function StepCriteria({ flow, mode, t }: { flow?: Flow; mode: Mode; t: T 
                 <span><strong>{crit.repeating}</strong> {t("repeating another")}</span>
                 <span className="is-key"><strong>{flow?.nav.screening.n ?? 0}</strong> {t("ticked")}</span>
               </div>
-              <label className="tw-search sc-search">
-                <Search size={13} />
-                <input type="search" className="form-control form-control-sm" placeholder={t("Search variables")} aria-label={t("Search variables")}
-                       value={q} onChange={(e) => setQ(e.target.value)} />
-              </label>
+              <div className="sc-crit-right">
+                {/* the rows shown: after a search, only the ones found */}
+                <button type="button" className="btn btn-outline-secondary btn-sm" onClick={() => setUseTicks(shownIds(crit, q, vl), true)}
+                        title={t("Tick Use for every variable shown")}><CheckSquare size={13} /> {t("Select all")}</button>
+                <button type="button" className="btn btn-outline-secondary btn-sm" onClick={() => setUseTicks(shownIds(crit, q, vl), false)}
+                        title={t("Untick Use for every variable shown")}><Square size={13} /> {t("Deselect all")}</button>
+                <label className="tw-search sc-search">
+                  <Search size={13} />
+                  <input type="search" className="form-control form-control-sm" placeholder={t("Search variables")} aria-label={t("Search variables")}
+                         value={q} onChange={(e) => setQ(e.target.value)} />
+                </label>
+              </div>
             </div>
             <CriteriaTable crit={crit} q={q} t={t} />
           </>
@@ -102,6 +110,12 @@ export function StepCriteria({ flow, mode, t }: { flow?: Flow; mode: Mode; t: T 
                next="nav_next_screening" nextLabel={`${t("Continue to the model")} (${flow?.nav.screening.n ?? 0})`} t={t} />
     </div>
   );
+}
+
+/** The rows the table shows for this search (name or label) */
+function shownIds(crit: Criteria, q: string, vl: { label: (v: string) => string | null }): string[] {
+  const s = q.trim().toLowerCase();
+  return crit.rows.filter((r) => !s || `${r.criterion} ${vl.label(r.criterion) ?? ""}`.toLowerCase().includes(s)).map((r) => r.id);
 }
 
 function CriteriaTable({ crit, q, t }: { crit: Criteria; q: string; t: T }) {

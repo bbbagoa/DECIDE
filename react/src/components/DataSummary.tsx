@@ -14,9 +14,9 @@
 // dialog lists every variable: its type, missing values, its categories (with
 // bars) or its distribution (a small histogram and the five numbers), and
 // exports the same to Excel.
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { BarChart3, Calendar, Fingerprint, Hash, ListChecks, Search, TableProperties, Type } from "lucide-react";
-import { useShinyInputValue, useShinyOutputValue } from "@/shiny";
+import { useShinyMessageHandler, useShinyOutputValue } from "@/shiny";
 import { ActionButton, DownloadButton } from "@/lib/inputs";
 import { Dialog } from "@/lib/layout";
 import "./data-summary.css";
@@ -29,7 +29,7 @@ type Var = {
   levels?: Level[]; other?: number; top?: Level[]; range?: string[]; hist?: Hist;
   stats?: { min: number; q1: number; median: number; mean: number; q3: number; max: number; sd: number | null };
 };
-type Summary = { empty: boolean; title: string; at: number; rows?: number; cols?: number; vars?: Var[] };
+type Summary = { empty: boolean; title: string; n: number; rows?: number; cols?: number; vars?: Var[] };
 type Variant = Parameters<typeof ActionButton>[0]["variant"];
 
 const KINDS: { key: Var["kind"]; label: string; one: string; Icon: typeof Hash }[] = [
@@ -48,24 +48,28 @@ const pct = (x: number) => `${(100 * x).toFixed(x > 0 && x < 0.01 ? 1 : 0)}%`;
 export function DataSummary({ ns, label = "Data summary", variant = "outline-secondary", block, className, t = (s) => s }: {
   ns: string; label?: string; variant?: Variant; block?: boolean; className?: string; t?: (s: string) => string;
 }) {
-  const [open, setOpen] = useState(false);
+  // `after`: the dialog waits for a summary numbered above it (the one this click asked for)
+  const [after, setAfter] = useState<number | null>(null);
+  const s = useShinyOutputValue<Summary>(`${ns}-summary`);
+  // opened from a Shiny dialog (the import summary): the server says which summary to wait for
+  useShinyMessageHandler<{ n: number }>(`${ns}-show`, (m) => setAfter((m?.n ?? 1) - 1));
   return (
     <>
       <ActionButton id={`${ns}-open`} label={t(label)} icon={<BarChart3 size={15} />} variant={variant}
                     className={[block ? "w-100" : "", className ?? ""].join(" ").trim() || undefined}
-                    title={t("Every variable: its type, missing values, categories or distribution")} onClick={() => setOpen(true)} />
-      {open && <SummaryDialog ns={ns} t={t} onClose={() => setOpen(false)} />}
+                    title={t("Every variable: its type, missing values, categories or distribution")} onClick={() => setAfter(s?.n ?? 0)} />
+      {after !== null && <SummaryDialog ns={ns} after={after} t={t} onClose={() => setAfter(null)} />}
     </>
   );
 }
 
-function SummaryDialog({ ns, t, onClose }: { ns: string; t: (s: string) => string; onClose: () => void }) {
+function SummaryDialog({ ns, after, t, onClose }: { ns: string; after: number; t: (s: string) => string; onClose: () => void }) {
   const s = useShinyOutputValue<Summary>(`${ns}-summary`);
-  const clicks = useShinyInputValue<number>(`${ns}-open`) ?? 0;
+  useReleaseModalFocus();
   const [q, setQ] = useState("");
   const [kind, setKind] = useState<Var["kind"] | "all">("all");
   const [shown, setShown] = useState(PAGE);
-  const ready = !!s && s.at === clicks;
+  const ready = !!s && s.n > after;
   const vars = useMemo(() => {
     const x = q.trim().toLowerCase();
     return (s?.vars ?? []).filter((v) => (kind === "all" || v.kind === kind) &&
@@ -172,6 +176,24 @@ function VarCard({ v, rows, t }: { v: Var; rows: number; t: (s: string) => strin
       {v.kind === "empty" && <div className="tw-ds-top text-muted">{t("No value in any row.")}</div>}
     </div>
   );
+}
+
+/**
+ * Over a Shiny (Bootstrap) dialog, the dialog keeps the keyboard focus inside
+ * itself: the summary's search box could not be typed in. Its focus trap is
+ * paused while the summary is open.
+ */
+function useReleaseModalFocus() {
+  const paused = useRef<{ deactivate: () => void; activate: () => void } | null>(null);
+  useEffect(() => {
+    try {
+      const el = document.querySelector(".modal.show:not(.tw-dialog-backdrop)");
+      const bs = (window as unknown as { bootstrap?: { Modal?: { getInstance: (e: Element) => unknown } } }).bootstrap;
+      const inst = el && bs?.Modal?.getInstance(el) as { _focustrap?: { deactivate: () => void; activate: () => void } } | null;
+      if (inst?._focustrap) { inst._focustrap.deactivate(); paused.current = inst._focustrap; }
+    } catch { /* no Bootstrap dialog open */ }
+    return () => { try { paused.current?.activate(); } catch { /* closed meanwhile */ } };
+  }, []);
 }
 
 const dmy = (iso: string) => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso); return m ? `${m[3]}/${m[2]}/${m[1]}` : iso; };

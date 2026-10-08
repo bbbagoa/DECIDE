@@ -4,8 +4,12 @@
 .tw-imp-head h4 { margin: 0 0 .2rem; font-weight: 700; color: var(--wfp-blue, #0A6EB4); }
 .tw-imp-head p { margin: 0; color: var(--bs-secondary-color); font-size: .92rem; }
 .tw-imp-formats { font-size: .85rem; color: var(--bs-secondary-color); margin: 0 0 .9rem; }
-.tw-imp-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr); gap: 1rem; align-items: start; }
-@media (max-width: 820px) { .tw-imp-grid { grid-template-columns: 1fr; } }
+.tw-imp-row { display: flex; flex-wrap: wrap; align-items: flex-start; gap: .6rem; }
+.tw-imp-row > .tw-fileimport { flex: 1 1 320px; min-width: 260px; }
+.tw-imp-row .tw-dropzone { padding: .25rem .5rem; }
+.tw-imp-row .tw-dropzone-input .form-control, .tw-imp-row .tw-dropzone-input .btn { height: 32px; font-size: .85rem; padding-top: .2rem; padding-bottom: .2rem; }
+.tw-imp-tools { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; padding-top: .3rem; }
+.tw-imp-tools > .btn, .tw-imp-tools .tw-export-btn, .tw-imp-tools > * > .btn { height: 32px; display: inline-flex; align-items: center; gap: .3rem; white-space: nowrap; }
 .tw-imp-grid .form-label { font-size: .8rem; font-weight: 500; color: var(--bs-secondary-color); margin-bottom: .25rem; }
 .tw-imp-alt { display: flex; flex-direction: column; }
 .tw-imp-alt .btn { min-height: 46px; display: inline-flex; align-items: center; justify-content: center; gap: .35rem; }

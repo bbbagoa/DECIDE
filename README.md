@@ -259,7 +259,9 @@ With a PDM extract (or a survey not drawn in the app), map the eligibility (grou
 
 ### Data summary
 
-Every upload (registration data, assessment data, PDM or verification survey, targeting-process datasets, spot-check re-collected data) has a **Data summary** button: every variable with its type, missing values, its categories with their shares or its distribution (a small histogram, minimum, median, mean, maximum, standard deviation), searchable and filterable by type, and exportable to Excel. It is computed when you click, on the data as it is then.
+Every upload (registration data, assessment data, PDM or verification survey, targeting-process datasets, spot-check re-collected data) has a **Data summary** button: every variable with its type, missing values, its categories with their shares or its distribution (a small histogram, minimum, median, mean, maximum, standard deviation), searchable and filterable by type, and exportable to Excel. It is computed when you click, on the data as it is then. The import summary has the same button.
+
+**Download data** (on the import page) and **Download the cleaned data** (Data Quality sidebar) save the registration data as it is after cleaning: Excel (read-only), SPSS (.sav) or Stata (.dta) with the variable labels, or Parquet. Each download is recorded in the audit trail.
 
 ## Data requirements
 
