@@ -1,8 +1,8 @@
 // Step 2, the criteria: one table, every yes/no variable with its test and
 // overlap, the Use ticks (inputs rvuse_<variable>) pre-set by the server.
 // Continue (nav_next_screening) sends the ticked ones to the model.
-import { useMemo, useRef, useState } from "react";
-import { CheckSquare, Grid3x3, Hash, Play, Search, ShieldAlert, Square, TriangleAlert } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Grid3x3, Hash, Play, Search, ShieldAlert, TriangleAlert } from "lucide-react";
 import { useShinyOutputValue } from "@/shiny";
 import { ActionButton, NumericInput, SelectInput } from "@/lib/inputs";
 import { Card } from "@/lib/layout";
@@ -11,13 +11,12 @@ import { useOutputVisibility } from "@/lib/visibility";
 import { BlockedNote } from "./facts";
 import { EmptyState } from "@/components/Figures";
 import { VarCalcBulk } from "@/components/VarCalc";
-import { Gate, OrCell, Pending, Show, StepNav, Tip, TipList, UseTick, isNum, ns, pct0, setUseTicks, type T } from "./shared";
+import { Gate, OrCell, Pending, Show, StepNav, Tip, TipList, UseTick, isNum, ns, pct0, setUseTicks, useTicksOf, type T } from "./shared";
 import type { CritRow, Criteria, Flow, Mode, PmtNumeric } from "./types";
 
 export function StepCriteria({ flow, mode, t }: { flow?: Flow; mode: Mode; t: T }) {
   const crit = useShinyOutputValue<Criteria>(ns("sc_criteria"));
   const [q, setQ] = useState("");
-  const vl = useVarLabels();
   const nof = mode === "none";
   // computed only while this step shows (PORTING.md, "Hidden outputs wait")
   const ref = useRef<HTMLDivElement>(null);
@@ -69,11 +68,6 @@ export function StepCriteria({ flow, mode, t }: { flow?: Flow; mode: Mode; t: T 
                 <span className="is-key"><strong>{flow?.nav.screening.n ?? 0}</strong> {t("ticked")}</span>
               </div>
               <div className="sc-crit-right">
-                {/* the rows shown: after a search, only the ones found */}
-                <button type="button" className="btn btn-outline-secondary btn-sm" onClick={() => setUseTicks(shownIds(crit, q, vl), true)}
-                        title={t("Tick Use for every variable shown")}><CheckSquare size={13} /> {t("Select all")}</button>
-                <button type="button" className="btn btn-outline-secondary btn-sm" onClick={() => setUseTicks(shownIds(crit, q, vl), false)}
-                        title={t("Untick Use for every variable shown")}><Square size={13} /> {t("Deselect all")}</button>
                 <label className="tw-search sc-search">
                   <Search size={13} />
                   <input type="search" className="form-control form-control-sm" placeholder={t("Search variables")} aria-label={t("Search variables")}
@@ -112,6 +106,20 @@ export function StepCriteria({ flow, mode, t }: { flow?: Flow; mode: Mode; t: T 
   );
 }
 
+/** The Use header: one box that ticks or unticks every row shown (after a search, the ones found) */
+function UseAll({ ids, t }: { ids: string[]; t: T }) {
+  const state = useTicksOf(ids);
+  const ref = useRef<HTMLInputElement>(null);
+  useEffect(() => { if (ref.current) ref.current.indeterminate = state === "some"; }, [state]);
+  return (
+    <label className="sc-use-all" title={state === "all" ? t("Untick Use for every variable shown") : t("Tick Use for every variable shown")}>
+      <input ref={ref} type="checkbox" className="form-check-input sc-tick" checked={state === "all"}
+             aria-label={t("Tick Use for every variable shown")} onChange={() => setUseTicks(ids, state !== "all")} />
+      <span>{t("Use")}</span>
+    </label>
+  );
+}
+
 /** The rows the table shows for this search (name or label) */
 function shownIds(crit: Criteria, q: string, vl: { label: (v: string) => string | null }): string[] {
   const s = q.trim().toLowerCase();
@@ -131,7 +139,7 @@ function CriteriaTable({ crit, q, t }: { crit: Criteria; q: string; t: T }) {
       <table className="wfp-model-table sc-crit">
         <thead>
           <tr>
-            <th className="text-center">{t("Use")}</th><th>{t("Variable")}</th>
+            <th className="text-center"><UseAll ids={shownIds(crit, q, vl)} t={t} /></th><th>{t("Variable")}</th>
             {crit.nof ? <th className="num">{t("Households yes")}</th> : <>
               <th className="num">{t("Among vulnerable")}</th><th className="num">{t("Among others")}</th>
               <th>{t("Odds ratio")}</th><th className="num">{t("Adjusted p")}</th></>}

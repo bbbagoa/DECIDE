@@ -248,9 +248,29 @@ export function useRowInput<V>(id: string, value: V, stamp: number, type?: strin
   return [v, setV];
 }
 
-/** Tick or untick these Use boxes at once (the criteria table's Select all / Deselect all) */
+/** Tick or untick these Use boxes at once (the criteria table's header checkbox) */
 export function setUseTicks(ids: string[], on: boolean) {
+  // One message for all the rows: Shiny sends the values set in the same
+  // instant together, where each box on its own would send one each (69 rows
+  // took seconds to reach the server). The boxes then follow on the page.
+  const S = (window as unknown as { Shiny?: { setInputValue: (id: string, v: unknown) => void } }).Shiny;
+  for (const id of ids) S?.setInputValue(`${ns(id)}:shinyreact.default`, on);
   window.dispatchEvent(new CustomEvent("sc-use-all", { detail: { ids, on } }));
+}
+
+// Each Use box says whether it is ticked, so the header can show all / some / none
+const ticks = new Map<string, boolean>();
+const tickWatchers = new Set<() => void>();
+function noteTick(id: string, on: boolean | null) {
+  if (on === null) ticks.delete(id); else ticks.set(id, on);
+  tickWatchers.forEach((f) => f());
+}
+/** Ticked among these ids: "all", "some" or "none" */
+export function useTicksOf(ids: string[]): "all" | "some" | "none" {
+  const [, bump] = useState(0);
+  useEffect(() => { const f = () => bump((n) => n + 1); tickWatchers.add(f); return () => { tickWatchers.delete(f); }; }, []);
+  const on = ids.filter((id) => ticks.get(id)).length;
+  return !ids.length || on === 0 ? "none" : on === ids.length ? "all" : "some";
 }
 
 export function UseTick({ id, value, stamp, label }: { id: string; value: boolean; stamp: number; label: string }) {
@@ -260,6 +280,8 @@ export function UseTick({ id, value, stamp, label }: { id: string; value: boolea
     window.addEventListener("sc-use-all", on);
     return () => window.removeEventListener("sc-use-all", on);
   }, [id]); // eslint-disable-line
+  useEffect(() => { noteTick(id, !!v); }, [id, v]);
+  useEffect(() => () => noteTick(id, null), [id]);
   return <input type="checkbox" className="form-check-input sc-tick" checked={!!v} aria-label={label} onChange={(e) => setV(e.target.checked)} />;
 }
 

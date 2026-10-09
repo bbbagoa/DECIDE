@@ -694,6 +694,11 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
         if (is.null(v)) isTRUE(res$retained[i]) else isTRUE(v)
       }, logical(1))
     })
+    # What the page shows (ticked count, step status): once the ticks settle.
+    # Ticking every row from the header sends one input per row; redrawing the
+    # status after each one made the count crawl for seconds on a long table.
+    # Actions (Continue, correlations) read use_now() itself, never a late copy.
+    use_shown <- debounce(use_now, 150)
 
     # Overlap: for each associated or ticked variable, the one of that set it
     # correlates with most (one correlation matrix per screening).
@@ -2459,7 +2464,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
       cur_i <- match(here, names(panels))
       # each step's footer
       res <- screened()
-      u <- safe(use_now())
+      u <- safe(use_shown())
       use <- if (is.null(res) || is.null(u)) character(0) else res$criterion[u]
       if (pmt()) use <- c(use, setdiff(pmt_numeric_sel(), use))
       sent <- isTRUE(selection_applied()) && setequal(use, ready_criteria())
