@@ -136,7 +136,9 @@ mod_monitoring_server <- function(id, workspace = NULL, country_office = reactiv
       req(df)
       take_pm(df, f$name)
     })
-    take_pm <- function(df, name) {
+    pm_forms <- reactiveVal(list())   # dataset name -> the MODA form it came from (saved; never the key)
+    take_pm <- function(df, name, form = NULL) {
+      fm <- pm_forms(); fm[[name]] <- form; pm_forms(fm)
       ds <- datasets(); ds[[name]] <- df; datasets(ds)
       updateSelectInput(session, "pm_active", choices = names(ds), selected = name)
       audit_add(modification_log, "Monitoring", "Targeting-process data loaded", sprintf("%s (%s rows)", name, nrow(df)))
@@ -145,7 +147,8 @@ mod_monitoring_server <- function(id, workspace = NULL, country_office = reactiv
     pm_moda <- mod_moda_import_server("pm_moda")
     observeEvent(pm_moda$data(), {
       df <- pm_moda$data(); req(df)
-      take_pm(as.data.frame(df), pm_moda$label() %||% sprintf("MODA form %s", pm_moda$credentials()$form_id %||% ""))
+      take_pm(as.data.frame(df), pm_moda$label() %||% sprintf("MODA form %s", pm_moda$credentials()$form_id %||% ""),
+              form = pm_moda$credentials()$form_id)
     })
     observeEvent(input$pm_remove, {
       req(input$pm_remove > 0)   # a React button sends 0 at start
@@ -161,6 +164,11 @@ mod_monitoring_server <- function(id, workspace = NULL, country_office = reactiv
     })
     active_pm <- reactive({ ds <- datasets(); if (shiny::isTruthy(input$pm_active)) ds[[input$pm_active]] else NULL })
     mod_data_summary_server("pm_summary", active_pm, "Targeting process data")
+    # the chosen dataset's new submissions, when it came from MODA
+    mod_moda_refresh_server("pm_refresh", active_pm,
+                            function(df) { ds <- datasets(); ds[[input$pm_active]] <- df; datasets(ds) },
+                            reactive(if (shiny::isTruthy(input$pm_active)) pm_forms()[[input$pm_active]]),
+                            "Targeting process data", log = modification_log, phase = "Monitoring")
 
     mod_chart_builder_server("pdm_charts", data = pdm$df, source = "pdm", add_item = add_item, presets = "PDM",
                              dataset_name = reactive({
@@ -485,12 +493,13 @@ mod_monitoring_server <- function(id, workspace = NULL, country_office = reactiv
       snapshot = function() {
         if (!length(datasets()) && !length(items()) && !length(previous_rounds()) &&
             !nzchar(paste0(input$context, input$findings, input$recommendations))) return(NULL)
-        list(datasets = datasets(), active = input$pm_active, items = items(),
+        list(datasets = datasets(), active = input$pm_active, moda_forms = pm_forms(), items = items(),
              context = input$context, findings = input$findings, recommendations = input$recommendations,
              include_pdm = input$include_pdm, previous = previous_rounds(), template = input$tpl)
       },
       restore = function(s) {
         datasets(s$datasets %||% list()); items(s$items %||% list()); previous_rounds(s$previous %||% list())
+        pm_forms(s$moda_forms %||% list())
         if (!is.null(s$template)) after_flush(session, function() updateSelectInput(session, "tpl", selected = s$template))
         updateSelectInput(session, "pm_active", choices = names(s$datasets %||% list()), selected = s$active)
         for (k in c("context", "findings", "recommendations")) update_rich_text(session, k, s[[k]] %||% "")

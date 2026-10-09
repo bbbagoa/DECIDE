@@ -2988,6 +2988,8 @@
     {"en": "Stata (.dta)", "fr": "Stata (.dta)"},
     {"en": "Parquet (.parquet)", "fr": "Parquet (.parquet)"},
     {"en": "Tick Use for every variable shown", "fr": "Cocher Utiliser pour toutes les variables affichées"},
-    {"en": "Untick Use for every variable shown", "fr": "Décocher Utiliser pour toutes les variables affichées"}
+    {"en": "Untick Use for every variable shown", "fr": "Décocher Utiliser pour toutes les variables affichées"},
+    {"en": "Refresh from MODA", "fr": "Actualiser depuis MODA"},
+    {"en": "Fetch the submissions received since, from MODA form", "fr": "Récupérer les soumissions reçues depuis, du formulaire MODA"}
   ]
 }

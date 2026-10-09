@@ -86,6 +86,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
                        NULL
                      })
       req(df)
+      assessment_form(NULL)
       take_assessment(df, input$assessment_file$name)
     })
     take_assessment <- function(df, name) {
@@ -101,10 +102,15 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
     }
     # The same data can come from a MODA / ONA form.
     moda <- mod_moda_import_server("moda")
+    assessment_form <- reactiveVal(NULL)   # the MODA form the data came from (saved; never the key)
     observeEvent(moda$data(), {
       df <- moda$data(); req(df)
+      assessment_form(moda$credentials()$form_id)
       take_assessment(df, moda$label() %||% sprintf("MODA form %s", moda$credentials()$form_id %||% ""))
     })
+    # its new submissions, later (also after a restore)
+    mod_moda_refresh_server("moda_refresh", assessment_all, function(df) assessment_all(df), assessment_form,
+                            "Assessment data", log = modification_log, phase = "Design")
 
     observeEvent(input$open_guide, { req(input$open_guide > 0); showModal(design_guide_modal()) })
 
@@ -160,7 +166,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
       snapshot = function() {
         if (is.null(assessment_df())) return(NULL)
         pts <- tryCatch(current_weights()[, c("weight", "verifiable", "validated")], error = function(e) NULL)
-        list(data = assessment_all(), source = assessment_source(), calc = calc_vars(),
+        list(data = assessment_all(), source = assessment_source(), moda_form = assessment_form(), calc = calc_vars(),
              inputs = lapply(stats::setNames(sc_inputs, sc_inputs), function(k) input[[k]]),
              screened = screened(), collinear = collinear(), analyst_dropped = analyst_dropped(),
              criteria = criteria_sel(), corr_suggest = corr_suggest(), selection_applied = selection_applied(),
@@ -174,7 +180,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
       },
       restore = function(s) {
         restoring(s)
-        assessment_df(s$data); assessment_source(s$source)
+        assessment_df(s$data); assessment_source(s$source); assessment_form(s$moda_form)
         qs_result(s$quick_screen)
         review(s$review %||% list())
         exceed_note(s$exceed_note %||% "")

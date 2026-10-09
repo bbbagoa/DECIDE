@@ -16,10 +16,10 @@ stopifnot(file.exists(file.path(tw_root, "DESCRIPTION")))
 #' background = TRUE: long tasks run in the background R process, as for users
 #' (the worker loads this source folder, see tw_source_path()); FALSE (the
 #' default, faster to start): inline.
-tw_launch <- function(width = 1500, height = 950, background = FALSE) {
+tw_launch <- function(width = 1500, height = 950, background = FALSE, store = NULL) {
   dir <- tempfile("twapp")
   dir.create(dir)
-  store <- tempfile("twstore")
+  store <- store %||% tempfile("twstore")   # a folder of saved sessions to start with, or a new one
   writeLines(c(
     sprintf('Sys.setenv(TARGETWISE_BACKGROUND = "%s", TARGETWISE_UPDATE_CHECK = "false", TARGETWISE_SESSION_DIR = "%s")',
             if (background) "true" else "false", gsub("\\\\", "/", store)),

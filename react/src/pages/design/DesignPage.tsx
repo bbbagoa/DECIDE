@@ -12,6 +12,7 @@ import { ActionButton, HostedUI, TextOutput, useServerUpdates } from "@/lib/inpu
 import { SidebarLayout, SideActions, signalShown } from "@/lib/layout";
 import { AreaScope } from "@/components/AreaScope";
 import { ModaImport } from "@/components/ModaImport";
+import { ModaRefresh } from "@/components/ModaRefresh";
 import { VarCalc } from "@/components/VarCalc";
 import { DataSummary } from "@/components/DataSummary";
 import "@/components/modules.css";
@@ -63,6 +64,7 @@ export function DesignPage({ t }: { active: boolean; t: T }) {
               </div>
               <div className="sc-data-tools">
                 <ModaImport ns={ns("moda")} label="MODA" size="sm" t={t} />
+                <ModaRefresh ns={ns("moda_refresh")} className="sc-full" t={t} />
                 <VarCalc ns={ns("calc")} label="Calculator" block t={t} />
                 <ActionButton id={ns("fsi-open")} label={t("Food security indicators")} icon={<Calculator size={14} />} variant="outline-secondary"
                               title={t("Calculate FCS, rCSI, LCS, FES or CARI from the WFP standard variables")} className="sc-full" />

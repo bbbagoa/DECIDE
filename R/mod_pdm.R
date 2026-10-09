@@ -189,7 +189,7 @@ mod_pdm_server <- function(id, workspace = NULL, country_office = reactive(NULL)
     workspace_register(workspace, "pdm",
       snapshot = function() {
         if (is.null(pdm_df()) && is.null(sample_design())) return(NULL)
-        list(df = pdm_all(), results = results(), source = pdm_source(), sample_design = sample_design(),
+        list(df = pdm_all(), results = results(), source = pdm_source(), moda_form = pdm_form(), sample_design = sample_design(),
              inputs = lapply(stats::setNames(pdm_inputs, pdm_inputs), function(k) input[[k]]),
              options = list(data_kind = input$data_kind, elig_source = input$pdm_elig_source, weight_mode = input$pdm_weight_mode,
                             benef_source = input$benef_source,
@@ -201,6 +201,7 @@ mod_pdm_server <- function(id, workspace = NULL, country_office = reactive(NULL)
       restore = function(s) {
         pdm_df(s$df)
         pdm_source(s$source)
+        pdm_form(s$moda_form)
         results(s$results)
         sample_design(s$sample_design)
         cols <- names(s$df)
@@ -430,15 +431,20 @@ mod_pdm_server <- function(id, workspace = NULL, country_office = reactive(NULL)
       df <- tryCatch(read_import_file(input$pdm_file$datapath, ext),
                      error = function(e) { showNotification(paste("Could not read file:", conditionMessage(e)), type = "error", duration = 10); NULL })
       req(df)
+      pdm_form(NULL)
       take_pdm(df, input$pdm_file$name)
     })
     pdm_source <- reactiveVal(NULL)
     # The same data can come from a MODA / ONA form.
     moda <- mod_moda_import_server("moda")
+    pdm_form <- reactiveVal(NULL)   # the MODA form the data came from (saved; never the key)
     observeEvent(moda$data(), {
       df <- moda$data(); req(df)
+      pdm_form(moda$credentials()$form_id)
       take_pdm(df, moda$label() %||% sprintf("MODA form %s", moda$credentials()$form_id %||% ""))
     })
+    mod_moda_refresh_server("moda_refresh", pdm_all, function(df) pdm_all(df), pdm_form,
+                            "Survey data", log = modification_log, phase = "Monitoring")
     take_pdm <- function(df, name) {
       pdm_df(df)
       pdm_source(name)
