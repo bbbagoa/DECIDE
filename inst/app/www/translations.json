@@ -2990,6 +2990,9 @@
     {"en": "Tick Use for every variable shown", "fr": "Cocher Utiliser pour toutes les variables affichées"},
     {"en": "Untick Use for every variable shown", "fr": "Décocher Utiliser pour toutes les variables affichées"},
     {"en": "Refresh from MODA", "fr": "Actualiser depuis MODA"},
-    {"en": "Fetch the submissions received since, from MODA form", "fr": "Récupérer les soumissions reçues depuis, du formulaire MODA"}
+    {"en": "Fetch the submissions received since, from MODA form", "fr": "Récupérer les soumissions reçues depuis, du formulaire MODA"},
+    {"en": "Compare areas by", "fr": "Comparer les zones par"},
+    {"en": "Flag rate by area", "fr": "Taux de valeurs signalées par zone"},
+    {"en": "The spread in each area; red points lie beyond the whiskers.", "fr": "La dispersion dans chaque zone ; les points rouges sont au-delà des moustaches."}
   ]
 }

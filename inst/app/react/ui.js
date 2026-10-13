@@ -14072,7 +14072,7 @@ function Ih({ t: e }) {
 	let s = qd(X("ol_pick"), null, {
 		debounceMs: 0,
 		priority: "event"
-	}), c = (I(X("ol_scan")) ?? 0) > 0;
+	}), c = (I(X("ol_scan")) ?? 0) > 0, l = L(X("ol_level_meta")), u = l?.current ?? "Admin 1";
 	return /* @__PURE__ */ (0, R.jsxs)(R.Fragment, { children: [
 		/* @__PURE__ */ (0, R.jsxs)(bh, {
 			actions: /* @__PURE__ */ (0, R.jsx)(B, {
@@ -14115,6 +14115,16 @@ function Ih({ t: e }) {
 							placeholder: "max"
 						})]
 					})]
+				}),
+				/* @__PURE__ */ (0, R.jsx)(z, {
+					id: X("ol_level"),
+					label: e("Compare areas by"),
+					value: "admin1",
+					clearable: !1,
+					choices: l?.levels?.length ? l.levels : [{
+						value: "admin1",
+						label: "Admin 1"
+					}]
 				}),
 				/* @__PURE__ */ (0, R.jsx)(z, {
 					id: X("outlier_correction_method"),
@@ -14194,9 +14204,9 @@ function Ih({ t: e }) {
 								height: 320
 							})]
 						}), /* @__PURE__ */ (0, R.jsxs)(H, {
-							title: e("By area"),
+							title: `${e("By area")} (${u})`,
 							full: !0,
-							children: [/* @__PURE__ */ (0, R.jsx)(xh, { children: e("The spread in each Admin 1; red points lie beyond the whiskers.") }), /* @__PURE__ */ (0, R.jsx)(U, {
+							children: [/* @__PURE__ */ (0, R.jsx)(xh, { children: e("The spread in each area; red points lie beyond the whiskers.") }), /* @__PURE__ */ (0, R.jsx)(U, {
 								id: X("plot_outlier_box"),
 								height: 320
 							})]
@@ -14210,7 +14220,7 @@ function Ih({ t: e }) {
 					content: /* @__PURE__ */ (0, R.jsxs)("div", {
 						className: "tw-grid-2",
 						children: [/* @__PURE__ */ (0, R.jsx)(H, {
-							title: e("Flag rate by Admin 1"),
+							title: `${e("Flag rate by area")} (${u})`,
 							full: !0,
 							children: /* @__PURE__ */ (0, R.jsx)(U, { id: X("plot_outlier_admin_rates") })
 						}), /* @__PURE__ */ (0, R.jsx)(H, {

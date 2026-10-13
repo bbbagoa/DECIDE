@@ -44,6 +44,9 @@ export function OutliersTab({ t }: { t: T }) {
   // a card's "Select ..." link: the server selects those rows of ol_table
   const pick = useSetShinyInput<unknown>(ns("ol_pick"), null, { debounceMs: 0, priority: "event" });
   const scanned = (useShinyInputValue<number>(ns("ol_scan")) ?? 0) > 0;
+  // the area level the area charts compare: the mapped ones (Admin 1 to 4, village)
+  const lv = useShinyOutputValue<{ levels: { value: string; label: string }[]; current: string } | null>(ns("ol_level_meta"));
+  const area = lv?.current ?? "Admin 1";
   return (
     <>
       <Toolbar
@@ -62,6 +65,8 @@ export function OutliersTab({ t }: { t: T }) {
             <NumericInput id={ns("range_max")} placeholder="max" />
           </div>
         </div>
+        <SelectInput id={ns("ol_level")} label={t("Compare areas by")} value="admin1" clearable={false}
+                     choices={lv?.levels?.length ? lv.levels : [{ value: "admin1", label: "Admin 1" }]} />
         <SelectInput id={ns("outlier_correction_method")} label={t("Correction")} choices={tr(CORRECTIONS)} value="cap" />
       </Toolbar>
       {hint === "inverted" && <div className="tw-dq-hint danger"><TriangleAlert size={14} /> {t("The allowed minimum is above the maximum, so the range is ignored.")}</div>}
@@ -82,8 +87,8 @@ export function OutliersTab({ t }: { t: T }) {
                 <Note>{t("Red dashed: statistical bounds. Blue dotted: allowed range.")}</Note>
                 <Chart id={ns("plot_outlier_hist")} height={320} />
               </Card>
-              <Card title={t("By area")} full>
-                <Note>{t("The spread in each Admin 1; red points lie beyond the whiskers.")}</Note>
+              <Card title={`${t("By area")} (${area})`} full>
+                <Note>{t("The spread in each area; red points lie beyond the whiskers.")}</Note>
                 <Chart id={ns("plot_outlier_box")} height={320} />
               </Card>
             </div>
@@ -93,7 +98,7 @@ export function OutliersTab({ t }: { t: T }) {
           value: "where", label: t("Where they come from"), icon: <MapPin size={14} />,
           content: (
             <div className="tw-grid-2">
-              <Card title={t("Flag rate by Admin 1")} full><Chart id={ns("plot_outlier_admin_rates")} /></Card>
+              <Card title={`${t("Flag rate by area")} (${area})`} full><Chart id={ns("plot_outlier_admin_rates")} /></Card>
               <Card title={t("Flag rate by enumerator")} full><Chart id={ns("plot_outlier_enum_rates")} /></Card>
             </div>
           ),

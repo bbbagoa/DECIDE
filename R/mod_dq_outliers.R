@@ -352,6 +352,22 @@ dq_outliers_server <- function(input, output, session, ns, core) {
     else if (has_rg) "Allowed range" else if (has_stat) "Statistical bounds" else "No limit set"
   })
 
+  # --- the area level the charts compare (Admin 1 to 4, village: the mapped ones) --
+  # A display choice: switching it redraws the area charts and the "concentrated
+  # in an area" insight, nothing else.
+  ol_levels <- c(admin1 = "Admin 1", admin2 = "Admin 2", admin3 = "Admin 3", admin4 = "Admin 4", village = "Village")
+  ol_area <- reactive({
+    k <- input$ol_level %||% "admin1"
+    if (!k %in% names(ol_levels)) k <- "admin1"
+    col <- as.character(user_setup[[k]] %||% "")[1]
+    list(key = k, label = ol_levels[[k]], col = if (!is.na(col) && nzchar(col) && col %in% names(dq_filtered_data())) col)
+  })
+  output$ol_level_meta <- shinyreact::reactive_output({
+    keys <- names(ol_levels)[vapply(names(ol_levels), function(k) { v <- as.character(user_setup[[k]] %||% "")[1]; !is.na(v) && nzchar(v) }, logical(1))]
+    list(levels = lapply(keys, function(k) list(value = k, label = sprintf("%s · %s", ol_levels[[k]], user_setup[[k]]))),
+         current = ol_area()$label)
+  })
+
   # --- charts --------------------------------------------------------------------
   output$plot_outlier_hist <- render_echart({
     info <- outlier_info()
@@ -362,13 +378,22 @@ dq_outliers_server <- function(input, output, session, ns, core) {
 
   output$plot_outlier_box <- render_echart({
     info <- outlier_info()
-    validate(need(shiny::isTruthy(user_setup$admin1), "Map Admin 1 to compare the areas."))
+    a <- ol_area()
+    validate(need(!is.null(a$col), sprintf("Map %s to compare the areas.", a$label)))
     df <- dq_filtered_data()
-    req(user_setup$admin1 %in% names(df))
-    d <- data.frame(admin = as.character(df[[user_setup$admin1]]), value = info$vals, stringsAsFactors = FALSE)
-    d <- d[!is.na(d$value) & !is.na(d$admin), , drop = FALSE]
+    d <- data.frame(admin = as.character(df[[a$col]]), value = info$vals, stringsAsFactors = FALSE)
+    d <- d[!is.na(d$value) & !is.na(d$admin) & nzchar(d$admin), , drop = FALSE]
     req(nrow(d) > 0)
-    dq_box_option(d$admin, d$value, info$var_col)
+    # many areas (villages): the 25 with the most answers, so each box stays readable
+    n_areas <- length(unique(d$admin))
+    if (n_areas > 25) {
+      keep <- names(sort(table(d$admin), decreasing = TRUE))[1:25]
+      d <- d[d$admin %in% keep, , drop = FALSE]
+    }
+    o <- dq_box_option(d$admin, d$value, info$var_col)
+    if (n_areas > 25) o$title <- list(text = sprintf("The 25 of %s areas with the most answers", format(n_areas, big.mark = ",")),
+                                      textStyle = list(fontSize = 11, fontWeight = "normal"), left = "center", top = 0)
+    o
   })
 
   # Flag rate per group, among the households that answered.
@@ -391,10 +416,9 @@ dq_outliers_server <- function(input, output, session, ns, core) {
   }
 
   output$plot_outlier_admin_rates <- render_echart({
-    validate(need(shiny::isTruthy(user_setup$admin1), "Map Admin 1 to see where the flags come from."))
-    df <- dq_filtered_data()
-    req(user_setup$admin1 %in% names(df))
-    rate_plot(df[[user_setup$admin1]], "#f7b825", "No admin-level data to display")
+    a <- ol_area()
+    validate(need(!is.null(a$col), sprintf("Map %s to see where the flags come from.", a$label)))
+    rate_plot(dq_filtered_data()[[a$col]], "#f7b825", sprintf("No %s with at least 5 answers to display.", a$label))
   })
 
   output$plot_outlier_enum_rates <- render_echart({
@@ -480,7 +504,7 @@ dq_outliers_server <- function(input, output, session, ns, core) {
               pick_btn(what, top, "Select their values"))
     }
     cards <- c(cards, list(concentration(user_setup$enumerator_id, "enum", "person-badge", "Concentrated on an enumerator"),
-                           concentration(user_setup$admin1, "admin", "geo-alt", "Concentrated in an area")))
+                           concentration(ol_area()$col, "admin", "geo-alt", sprintf("Concentrated in an area (%s)", ol_area()$label))))
 
     sc <- sentinel_codes(v)
     if (nrow(sc)) {
@@ -539,7 +563,7 @@ dq_outliers_server <- function(input, output, session, ns, core) {
     hit <- switch(p$what,
       value = which(d$Value %in% as.numeric(unlist(p$value))),
       enum = which(as.character(df[[user_setup$enumerator_id]][d$.idx]) == p$value),
-      admin = which(as.character(df[[user_setup$admin1]][d$.idx]) == p$value),
+      admin = if (is.null(ol_area()$col)) integer(0) else which(as.character(df[[ol_area()$col]][d$.idx]) == p$value),
       integer(0))
     react_table_select("ol_table", hit)
     showNotification(sprintf("%d value(s) selected.", length(hit)), type = "message", duration = 3)
