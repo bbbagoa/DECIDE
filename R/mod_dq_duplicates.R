@@ -296,7 +296,7 @@ dq_duplicates_server <- function(input, output, session, ns, core) {
   # Rows are found back in the full data by id AND content, so deleting one of
   # two records sharing an id removes that one, and one of two exact copies
   # removes exactly one.
-  delete_rows <- function(rows, note) {
+  delete_rows <- function(rows, note) tw_guard("Deleting the duplicates", {
     a <- analysis_or_null(); req(a)
     d <- a$dup_df[rows, a$data_cols, drop = FALSE]
     full <- uploaded_df()
@@ -326,7 +326,7 @@ dq_duplicates_server <- function(input, output, session, ns, core) {
     rerun(rerun() + 1)
     showNotification(sprintf("%d duplicate record(s) deleted and logged.", length(hit)), type = "warning")
     invisible(TRUE)
-  }
+  })
 
   observeEvent(input$dup_delete, {
     req(input$dup_delete > 0)

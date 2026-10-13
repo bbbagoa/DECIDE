@@ -445,7 +445,7 @@ mod_pdm_server <- function(id, workspace = NULL, country_office = reactive(NULL)
     })
     mod_moda_refresh_server("moda_refresh", pdm_all, function(df) pdm_all(df), pdm_form,
                             "Survey data", log = modification_log, phase = "Monitoring")
-    take_pdm <- function(df, name) {
+    take_pdm <- function(df, name) tw_guard("Loading the PDM data", {
       pdm_df(df)
       pdm_source(name)
       results(NULL)
@@ -472,7 +472,7 @@ mod_pdm_server <- function(id, workspace = NULL, country_office = reactive(NULL)
       sd <- sample_design()
       idg <- if (!is.null(sd) && sd$id_col %in% cols) sd$id_col else guess(c("household_id", "hh_id", "hhid", "unique", "id"))
       shinyWidgets::updatePickerInput(session, "ptm_id", choices = c("Choose a column" = "", cols), selected = idg %||% "")
-    }
+    })
 
     output$pdm_file_status <- renderUI({
       df <- pdm_df()

@@ -24,7 +24,7 @@ mod_moda_refresh_server <- function(id, get_data, set_data, form, name = "Data",
       before <- NROW(df)
       moda_async_fetch(
         form_id = fid, token = token, existing_df = df, page_size = MODA_PAGE_SIZE, session = session,
-        on_success = function(r) {
+        on_success = function(r) tw_guard("Adding the MODA submissions", {
           set_data(as.data.frame(r$df))
           added <- NROW(r$df) - before
           audit_add(log, phase, "MODA refresh", sprintf("%s, form %s: %s new records (%s in all)", name, fid,
@@ -33,7 +33,7 @@ mod_moda_refresh_server <- function(id, get_data, set_data, form, name = "Data",
                                                   format(added, big.mark = ","), format(NROW(r$df), big.mark = ","))
                            else sprintf("%s: no new submission since the last download.", name),
                            type = "message", duration = 8)
-        },
+        }),
         on_error = function(msg) showNotification(paste("MODA refresh failed:", msg), type = "error", duration = NULL))
     }
 

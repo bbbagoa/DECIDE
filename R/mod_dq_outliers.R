@@ -749,7 +749,7 @@ dq_outliers_server <- function(input, output, session, ns, core) {
     modification_log(dplyr::bind_rows(modification_log(), rows))
   }
 
-  observeEvent(input$btn_confirm_outlier_correction, {
+  observeEvent(input$btn_confirm_outlier_correction, tw_guard("Correcting the outliers", {
     prop <- pending()
     req(prop)
     waiter::waiter_show(html = waiter_content("Applying the correction\u2026"), color = "rgba(10, 30, 50, 0.65)")
@@ -777,7 +777,7 @@ dq_outliers_server <- function(input, output, session, ns, core) {
     pending(NULL)
     removeModal()
     showNotification(sprintf("%d value(s) corrected and logged.", length(idx)), type = "message")
-  })
+  }))
 
   # Checked and true: logged, and no longer flagged (read back by verified_uids()).
   observeEvent(input$ol_verify, {

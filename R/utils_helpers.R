@@ -658,6 +658,26 @@ need_ok <- function(ok, message) {
   invisible(TRUE)
 }
 
+#' Run a data-changing handler without losing the session to an error
+#'
+#' An error escaping an observer ends the Shiny session. Inside `tw_guard()`
+#' it is reported as a notification (and on the R console) instead, the
+#' loader is hidden, and the session carries on. `req()`, `need_ok()` and
+#' `validate()` still stop the handler quietly.
+#' @param what What the handler does, as the notice names it ("Merging the names").
+#' @param expr The handler's body.
+#' @noRd
+tw_guard <- function(what, expr) {
+  tryCatch(expr, error = function(e) {
+    if (inherits(e, c("shiny.silent.error", "validation"))) stop(e)
+    msg <- conditionMessage(e)
+    message(sprintf("[TargetWise] %s failed: %s", what, msg))
+    try(waiter::waiter_hide(), silent = TRUE)
+    shiny::showNotification(sprintf("%s did not complete: %s", what, msg), type = "error", duration = NULL)
+    invisible(NULL)
+  })
+}
+
 #' Freeze a button until its condition holds (www/gates.js)
 #'
 #' A frozen button is greyed out, shows `reason` on hover, and tells it again

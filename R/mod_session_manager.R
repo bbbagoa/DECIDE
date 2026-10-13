@@ -100,7 +100,7 @@ mod_session_manager_server <- function(
       stats::setNames(lapply(grp, as.list), lab[names(grp)])
     }
 
-    restore_session <- function(name) {
+    restore_session <- function(name) tw_guard("Loading the session", {
       waiter::waiter_show(
         html = waiter_content(paste0("Loading session \"", name, "\"...")),
         color = "rgba(10, 30, 50, 0.65)"
@@ -187,7 +187,7 @@ mod_session_manager_server <- function(
       audit_add(modification_log, "Session", "Session loaded", shown)
       mark_saved()
       showNotification(paste("Session", shown, "loaded."), type = "message")
-    }
+    })
 
     observeEvent(input$restore_settled, waiter::waiter_hide())
 

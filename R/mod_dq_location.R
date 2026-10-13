@@ -301,7 +301,7 @@ dq_location_server <- function(input, output, session, ns, core) {
 
   ### -----------------------  Confirm Merge !
 
-  observeEvent(input$btn_confirm_norm_merge, {
+  observeEvent(input$btn_confirm_norm_merge, tw_guard("Merging the names", {
     req(current_norm_batch(), input$correct_name)
     batch <- current_norm_batch()
 
@@ -346,7 +346,7 @@ dq_location_server <- function(input, output, session, ns, core) {
       ),
       type = "message"
     )
-  })
+  }))
 
   ### ----------------- Download Locations Button Logic
 

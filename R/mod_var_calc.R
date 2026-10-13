@@ -464,7 +464,7 @@ mod_var_calc_server <- function(id, get_data, set_data, log = NULL, phase = "Sel
       output$preview_ui <- renderUI(ui)
     })
 
-    observeEvent(input$create, {
+    observeEvent(input$create, tw_guard("Creating the variable", {
       df <- get_data()
       if (optimal()) {
         d <- opt_res()
@@ -560,7 +560,7 @@ mod_var_calc_server <- function(id, get_data, set_data, log = NULL, phase = "Sel
       removeModal()
       showNotification(sprintf("'%s' added (%s).", res$name, res$r$description),
                        type = "message", duration = 8)
-    })
+    }))
 
     created
   })

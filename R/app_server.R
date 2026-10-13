@@ -180,7 +180,7 @@ app_server <- function(input, output, session) {
   pending_df <- reactiveVal(NULL)
   pending_source <- reactiveVal(NULL)
 
-  process_import <- function(df, source) {
+  process_import <- function(df, source) tw_guard("Importing the data", {
     uploaded_df(df)
     original_df(df)
     src <- if (identical(source, "File")) "file upload" else
@@ -192,7 +192,7 @@ app_server <- function(input, output, session) {
     if (identical(source, "File")) show_import_summary(df, source = source, label = "File upload")
     else show_import_summary(df, source = source, label = moda_import_result$label() %||% src,
                              notes = moda_import_result$notes())
-  }
+  })
 
   show_override_modal <- function(source) {
     showModal(modalDialog(
@@ -292,7 +292,7 @@ app_server <- function(input, output, session) {
   # 2. Watch for the 'Validation' signal from your setup module
   # Every confirmed setup (not only the first) goes on the record, and the
   # Reset baseline gets the same transformations so a reset does not undo them.
-  observeEvent(setup_result$saved(), {
+  observeEvent(setup_result$saved(), tw_guard("Saving the variable setup", {
     req(setup_result$saved() > 0)
 
     # REVEAL the panels
@@ -335,7 +335,7 @@ app_server <- function(input, output, session) {
     tw_nav("select", "overview_panel")
 
     showNotification("Variables mapped. The analysis tabs are now open.", type = "message")
-  })
+  }))
 
 
   # ---------------------------------------------------------------------------
@@ -452,7 +452,7 @@ app_server <- function(input, output, session) {
       # page returning fewer than 10 records.
       page_size = MODA_PAGE_SIZE,
       session = session,
-      on_success = function(result) {
+      on_success = function(result) tw_guard("Adding the MODA submissions", {
         # Only new records are added. Records deleted during data cleaning
         # stay deleted, and the Reset baseline keeps the original import plus
         # the new records, not the cleaned data.
@@ -486,7 +486,7 @@ app_server <- function(input, output, session) {
           ),
           tags$p(class = "text-muted small", "Your variable mapping has been kept.")
         ), session = session)
-      },
+      }),
       on_error = function(msg) {
         showNotification(paste("MODA sync failed:", msg), type = "error", duration = NULL, session = session)
       }

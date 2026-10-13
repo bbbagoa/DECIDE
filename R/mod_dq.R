@@ -301,7 +301,7 @@ mod_dq_server <- function(id, uploaded_df, user_setup, modification_log, origina
     ))
   })
 
-  observeEvent(input$confirm_reset, {
+  observeEvent(input$confirm_reset, tw_guard("Resetting to the original data", {
     waiter::waiter_show(
       html = waiter_content("Restoring the original data\u2026"),
       color = "rgba(10, 30, 50, 0.65)"
@@ -328,7 +328,7 @@ mod_dq_server <- function(id, uploaded_df, user_setup, modification_log, origina
       )
     ))
     showNotification("Data reset to original imported dataset.", type = "message")
-  })
+  }))
 
   })
 }

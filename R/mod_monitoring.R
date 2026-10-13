@@ -137,12 +137,12 @@ mod_monitoring_server <- function(id, workspace = NULL, country_office = reactiv
       take_pm(df, f$name)
     })
     pm_forms <- reactiveVal(list())   # dataset name -> the MODA form it came from (saved; never the key)
-    take_pm <- function(df, name, form = NULL) {
+    take_pm <- function(df, name, form = NULL) tw_guard("Loading the dataset", {
       fm <- pm_forms(); fm[[name]] <- form; pm_forms(fm)
       ds <- datasets(); ds[[name]] <- df; datasets(ds)
       updateSelectInput(session, "pm_active", choices = names(ds), selected = name)
       audit_add(modification_log, "Monitoring", "Targeting-process data loaded", sprintf("%s (%s rows)", name, nrow(df)))
-    }
+    })
     # Datasets can also come from MODA / ONA forms, one per form.
     pm_moda <- mod_moda_import_server("pm_moda")
     observeEvent(pm_moda$data(), {

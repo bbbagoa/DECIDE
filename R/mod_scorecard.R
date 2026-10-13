@@ -89,7 +89,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
       assessment_form(NULL)
       take_assessment(df, input$assessment_file$name)
     })
-    take_assessment <- function(df, name) {
+    take_assessment <- function(df, name) tw_guard("Loading the assessment data", {
       assessment_df(as.data.frame(df))
       assessment_source(name)
       audit_add(modification_log, "Design", "Assessment data loaded",
@@ -99,7 +99,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
       showNotification(sprintf("Assessment data loaded: %s rows, %s columns.",
                                format(nrow(df), big.mark = ","), ncol(df)),
                        type = "message")
-    }
+    })
     # The same data can come from a MODA / ONA form.
     moda <- mod_moda_import_server("moda")
     assessment_form <- reactiveVal(NULL)   # the MODA form the data came from (saved; never the key)

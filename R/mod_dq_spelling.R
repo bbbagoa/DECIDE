@@ -368,7 +368,7 @@ dq_spelling_server <- function(input, output, session, ns, core) {
 
   ## ---- Delete and log the action
 
-  observeEvent(input$btn_confirm_delete, {
+  observeEvent(input$btn_confirm_delete, tw_guard("Deleting the records", {
     reason <- input$reason_delete_rec
     if (!shiny::isTruthy(reason) || trimws(reason) == "") {
       showNotification(
@@ -406,7 +406,7 @@ dq_spelling_server <- function(input, output, session, ns, core) {
 
     removeModal() # Close confirmation
     showNotification("Record deleted and logged.", type = "warning")
-  })
+  }))
 
   ## ---------------------------- Bulk Delete empty rows
 
@@ -472,7 +472,7 @@ dq_spelling_server <- function(input, output, session, ns, core) {
     ))
   })
 
-  observeEvent(input$btn_confirm_surgical_bulk, {
+  observeEvent(input$btn_confirm_surgical_bulk, tw_guard("Correcting the names", {
     req(ids_for_purge())
 
     reason <- input$reason_bulk_delete
@@ -517,12 +517,12 @@ dq_spelling_server <- function(input, output, session, ns, core) {
       paste("Removed", n_purged, "empty records."),
       type = "warning"
     )
-  })
+  }))
 
   ## ----------------- Edit Selected HH
   # -----------------------------------------------------------------------
 
-  observeEvent(input$btn_save_dq, {
+  observeEvent(input$btn_save_dq, tw_guard("Saving the edit", {
     # 1. Access the master data and setup info
 
     # print("Save button detected!") # Debugging line
@@ -580,5 +580,5 @@ dq_spelling_server <- function(input, output, session, ns, core) {
     # 6. UI Cleanup
     removeModal()
     showNotification("Record updated and change logged.", type = "message")
-  })
+  }))
 }

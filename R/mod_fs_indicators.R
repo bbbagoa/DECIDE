@@ -25,7 +25,7 @@ mod_fs_indicators_server <- function(id, get_data, set_data, log = NULL, created
       showModal(fsi_dialog(ns, fsi_status(df), names(df)))
     })
 
-    observeEvent(input$compute, {
+    observeEvent(input$compute, tw_guard("Calculating the indicators", {
       req(input$compute > 0)
       df <- get_data()
       need_ok(!is.null(df), "Load the assessment data first.")
@@ -58,7 +58,7 @@ mod_fs_indicators_server <- function(id, get_data, set_data, log = NULL, created
                         if ("cari" %in% which) paste0(" CARI version: ", ver, if (identical(ver, "ECMEN"))
                           sprintf(" (MEB %s, SMEB %s per person per month)", input$meb, input$smeb) else "", ".") else ""))
       showModal(fsi_result_dialog(res, which))
-    })
+    }))
   })
 }
 
