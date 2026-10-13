@@ -1,9 +1,10 @@
 // Location names normalization (R/mod_dq_location.R): the names of a level
 // with their records, shown on Show names; selected names are merged into the
 // correct spelling (the server's confirmation dialog, then the audit trail).
-import { CheckCheck, Download, Eraser, List, MousePointerClick, Network, Signpost, Wand2 } from "lucide-react";
+import { CheckCheck, Download, Eraser, List, MousePointerClick, Network, Signpost, Wand2, X } from "lucide-react";
+import { useState } from "react";
 import { useShinyOutputValue } from "@/shiny";
-import { ActionButton, DownloadButton, SelectInput, TextInput } from "@/lib/inputs";
+import { ActionButton, DownloadButton, NumericInput, RadioInput, SelectInput, TextInput } from "@/lib/inputs";
 import { EmptyState } from "@/components/Figures";
 import { Card } from "@/lib/layout";
 import { Chart } from "@/lib/chart";
@@ -11,9 +12,20 @@ import { DataTable } from "@/lib/table";
 import { ns, Toolbar, type T } from "./common";
 
 const LEVELS = ["Admin 1", "Admin 2", "Admin 3", "Admin 4", "Village"];
+const VIEWS = [
+  { value: "similar", label: "Similar names", note: "Each bubble is a name, sized by its records; look-alike names are linked and share a colour. Click one to select its group in the table." },
+  { value: "sunburst", label: "Sunburst", note: "The levels as rings, the top level in the centre, sized by records; click a segment to zoom in, the centre to zoom out." },
+  { value: "bars", label: "Variant bars", note: "One bar per group of look-alike names: the most common spelling in blue, the variants after it. Click a bar to select its group." },
+];
+
+type ShinyApi = { setInputValue: (id: string, v: unknown, o?: { priority: string }) => void };
+// a name taken out of the selection (the cross on its chip)
+const unselect = (name: string) =>
+  (window as unknown as { Shiny?: ShinyApi }).Shiny?.setInputValue(ns("norm_unselect"), { name }, { priority: "event" });
 
 export function LocationTab({ t }: { t: T }) {
   const hint = useShinyOutputValue<{ state: "none" | "unmapped"; level?: string } | null>(ns("location_hint"));
+  const [view, setView] = useState("similar");
   const sel = useShinyOutputValue<{ name: string; n: number }[]>(ns("norm_selection")) ?? [];
   return (
     <>
@@ -38,18 +50,30 @@ export function LocationTab({ t }: { t: T }) {
       {sel.length ? (
         <div className="tw-dq-chips tw-dq-norm-sel">
           <strong>{sel.length} {t("selected")}</strong>
-          {sel.map((c) => <span key={c.name} className="tw-dq-chip">{c.name}<em>{c.n.toLocaleString("en-US")}</em></span>)}
+          {sel.map((c) => (
+            <span key={c.name} className="tw-dq-chip">{c.name}<em>{c.n.toLocaleString("en-US")}</em>
+              <button type="button" className="tw-dq-chip-x" title={t("Remove from the selection")} aria-label={`${t("Remove from the selection")}: ${c.name}`}
+                      onClick={() => unselect(c.name)}><X size={12} /></button>
+            </span>
+          ))}
         </div>
       ) : (
         <div className="tw-dq-chips empty tw-dq-norm-sel"><MousePointerClick size={14} /> {t("Click the rows to merge, or search and use Select all shown.")}</div>
       )}
       <div className="tw-grid-2">
         <Card title={t("Names and their records")} icon={<Signpost size={15} />} full>
-          <DataTable id={ns("tab_location_norm")} compact />
+          <DataTable id={ns("tab_location_norm")} compact selectedFirst />
         </Card>
-        <Card title={t("How the names nest")} icon={<Network size={15} />} full>
-          <p className="tw-dq-note">{t("Each box is a place, sized by its records; click one to zoom in. Near-identical names side by side are candidates to merge.")}</p>
-          <Chart id={ns("dq_location_treemap")} />
+        <Card title={t("Names at a glance")} icon={<Network size={15} />} full
+              actions={<RadioInput id={ns("loc_view")} choices={VIEWS.map((v) => ({ value: v.value, label: t(v.label) }))} value="similar" buttons className="mb-0" onChange={setView} />}>
+          <div className="tw-loc-note-row">
+            <p className="tw-dq-note">{t(VIEWS.find((v) => v.value === view)?.note ?? VIEWS[0].note)}</p>
+            <div style={view === "sunburst" ? { display: "none" } : undefined}
+                 title={t("How alike two names must be to count as variants: 80% lets one letter in five differ.")}>
+              <NumericInput id={ns("loc_similarity")} label={t("Similarity (%)")} value={80} min={50} max={100} step={5} className="mb-0" />
+            </div>
+          </div>
+          <Chart id={ns("dq_location_view")} />
         </Card>
       </div>
     </>

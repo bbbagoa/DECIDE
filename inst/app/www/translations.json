@@ -2993,6 +2993,19 @@
     {"en": "Fetch the submissions received since, from MODA form", "fr": "Récupérer les soumissions reçues depuis, du formulaire MODA"},
     {"en": "Compare areas by", "fr": "Comparer les zones par"},
     {"en": "Flag rate by area", "fr": "Taux de valeurs signalées par zone"},
-    {"en": "The spread in each area; red points lie beyond the whiskers.", "fr": "La dispersion dans chaque zone ; les points rouges sont au-delà des moustaches."}
+    {"en": "The spread in each area; red points lie beyond the whiskers.", "fr": "La dispersion dans chaque zone ; les points rouges sont au-delà des moustaches."},
+    {"en": "Names at a glance", "fr": "Les noms en un coup d’œil"},
+    {"en": "Similar names", "fr": "Noms similaires"},
+    {"en": "Sunburst", "fr": "Rayons de soleil"},
+    {"en": "Variant bars", "fr": "Barres des variantes"},
+    {"en": "Each bubble is a name, sized by its records; look-alike names are linked and share a colour. Click one to select its group in the table.", "fr": "Chaque bulle est un nom, dimensionnée selon ses enregistrements ; les noms qui se ressemblent sont reliés et partagent une couleur. Cliquez sur l’un d’eux pour sélectionner son groupe dans le tableau."},
+    {"en": "The levels as rings, the top level in the centre, sized by records; click a segment to zoom in, the centre to zoom out.", "fr": "Les niveaux en anneaux, le niveau supérieur au centre, dimensionnés selon les enregistrements ; cliquez sur un segment pour zoomer, sur le centre pour revenir."},
+    {"en": "One bar per group of look-alike names: the most common spelling in blue, the variants after it. Click a bar to select its group.", "fr": "Une barre par groupe de noms qui se ressemblent : l’orthographe la plus courante en bleu, les variantes ensuite. Cliquez sur une barre pour sélectionner son groupe."},
+    {"en": "No look-alike names at this level.", "fr": "Aucun nom similaire à ce niveau."},
+    {"en": "Most common spelling", "fr": "Orthographe la plus courante"},
+    {"en": "Records", "fr": "Enregistrements"},
+    {"en": "Remove from the selection", "fr": "Retirer de la sélection"},
+    {"en": "Similarity (%)", "fr": "Similarité (%)"},
+    {"en": "How alike two names must be to count as variants: 80% lets one letter in five differ.", "fr": "À quel point deux noms doivent se ressembler pour compter comme variantes : 80 % permet qu’une lettre sur cinq diffère."}
   ]
 }

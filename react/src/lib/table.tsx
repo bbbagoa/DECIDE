@@ -71,8 +71,10 @@ const cmp = (a: Cell, b: Cell) => {
   return String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: "base" });
 };
 
-export function DataTable({ id, height, className, toolbar, searchable = true, compact }: {
+export function DataTable({ id, height, className, toolbar, searchable = true, compact, selectedFirst }: {
   id: string; height?: number | string; className?: string; toolbar?: ReactNode; searchable?: boolean; compact?: boolean;
+  /** selected rows float to the top (client-side tables), to compare them side by side */
+  selectedFirst?: boolean;
 }) {
   const data = useShinyOutputValue<TablePayload>(id);
   useOutputVisibility(id);   // computed only while on screen
@@ -106,7 +108,10 @@ export function DataTable({ id, height, className, toolbar, searchable = true, c
     if (!server) setPage(0);
   }, [sig]); // eslint-disable-line
 
-  useShinyMessageHandler<{ rows: number[] }>(`${id}__select`, (m) => { const r = m.rows ?? []; setSel(r); setSelected(r.length ? r : null); });
+  useShinyMessageHandler<{ rows: number[] }>(`${id}__select`, (m) => {
+    const r = m.rows ?? []; setSel(r); setSelected(r.length ? r : null);
+    if (selectedFirst) setPage(0);   // the selection is on the first page
+  });
 
   // the server pages large tables
   useEffect(() => { if (server) setState({ page, size: pageSize, sort: sort?.key ?? "", desc: !!sort?.desc, search }); },
@@ -126,10 +131,16 @@ export function DataTable({ id, height, className, toolbar, searchable = true, c
   const allKey = server ? "" : rows.map((r) => r.row).join(",");
   useEffect(() => { if (data && !server) setAll(rows.map((r) => r.row)); }, [allKey]); // eslint-disable-line
 
+  const ordered = useMemo(() => {
+    if (!selectedFirst || server || !sel.length) return rows;
+    const on = new Set(sel);
+    return [...rows.filter((r) => on.has(r.row)), ...rows.filter((r) => !on.has(r.row))];
+  }, [rows, sel, selectedFirst, server]);
+
   const filtered = server ? data?.filtered ?? 0 : rows.length;
   const pages = Math.max(1, Math.ceil(filtered / pageSize));
   const at = server ? data?.page ?? 0 : Math.min(page, pages - 1);
-  const shown = server ? rows : rows.slice(at * pageSize, at * pageSize + pageSize);
+  const shown = server ? rows : ordered.slice(at * pageSize, at * pageSize + pageSize);
   const max = useMemo(() => {
     const m: number[] = cols.map((c, j) => (c.style?.bar ? Math.max(0, ...(data?.rows ?? []).map((r) => Number(r[j]) || 0)) : 0));
     return m;

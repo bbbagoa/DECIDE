@@ -296,7 +296,7 @@ export function RadioInput({ id, label, choices, value, inline, buttons, help, c
   useServerUpdates(id, (u) => {
     if (u.label !== undefined) setLab(u.label);
     if (u.choices) setCs(u.choices);
-    if (u.value !== undefined) setV(String(Array.isArray(u.value) ? u.value[0] : u.value ?? ""));
+    if (u.value !== undefined) { const x = String(Array.isArray(u.value) ? u.value[0] : u.value ?? ""); setV(x); onChange?.(x); }
   });
   const pick = (x: string) => { setV(x); onChange?.(x); };
   return (

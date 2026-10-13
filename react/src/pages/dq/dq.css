@@ -113,3 +113,8 @@
 .tw-dq-chips.empty { border-style: dashed; background: transparent; color: var(--bs-secondary-color); }
 .tw-dq-chip { display: inline-flex; align-items: center; gap: .35rem; padding: .1rem .55rem; border-radius: 999px; background: rgba(10, 110, 180, .1); border: 1px solid rgba(10, 110, 180, .25); }
 .tw-dq-chip em { font-style: normal; font-weight: 500; color: var(--bs-secondary-color); font-size: .72rem; }
+.tw-dq-chip-x { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; margin-right: -.25rem; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--bs-secondary-color); cursor: pointer; }
+.tw-dq-chip-x:hover { background: rgba(197, 25, 45, .12); color: #c5192d; }
+.tw-loc-note-row { display: flex; align-items: flex-end; gap: 1rem; }
+.tw-loc-note-row .tw-dq-note { flex: 1; }
+.tw-loc-note-row > div:last-child { width: 130px; flex: none; }

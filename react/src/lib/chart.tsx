@@ -114,17 +114,23 @@ function useDark(): boolean {
 }
 
 /** Draw an ECharts option (from the server or built here). */
-export function EChart({ option, height = 320, className }: { option: Record<string, unknown> | null | undefined; height?: number | string; className?: string }) {
+export function EChart({ option, height = 320, className, onClick }: {
+  option: Record<string, unknown> | null | undefined; height?: number | string; className?: string;
+  onClick?: (p: { name?: string; seriesIndex?: number; dataIndex?: number; data?: unknown }) => void;
+}) {
   const el = useRef<HTMLDivElement>(null);
   const chart = useRef<Echarts.ECharts | null>(null);
   const [ready, setReady] = useState(0);
   const dark = useDark();
+  const click = useRef(onClick);
+  click.current = onClick;
   useEffect(() => {
     let gone = false, ro: ResizeObserver | null = null;
     loadEcharts().then((ec) => {
       if (gone || !el.current) return;
       const c = ec.init(el.current, dark ? "tw-dark" : "tw-light", { renderer: "canvas" });
       chart.current = c;
+      c.on("click", (p) => click.current?.({ name: p.name, seriesIndex: p.seriesIndex, dataIndex: p.dataIndex, data: p.data }));
       ro = new ResizeObserver(() => { if (el.current && el.current.offsetWidth > 0) c.resize(); });
       ro.observe(el.current);
       setReady((n) => n + 1);
@@ -138,7 +144,9 @@ export function EChart({ option, height = 320, className }: { option: Record<str
   return <div ref={el} className={`tw-echart${className ? " " + className : ""}`} style={{ height, width: "100%" }} />;
 }
 
-/** A chart rendered by the server: output$<id> <- render_echart(...). Validation messages show in its place. */
+type ShinyApi = { setInputValue: (id: string, v: unknown, o?: { priority: string }) => void };
+/** A chart rendered by the server: output$<id> <- render_echart(...). Validation messages show in its place.
+ *  A click reaches the server as input$<id>_click (name, seriesIndex, dataIndex, data). */
 export function Chart({ id, height, className }: { id: string; height?: number | string; className?: string }) {
   const v = useShinyOutputValue<{ option: Record<string, unknown>; height?: number | null }>(id);
   useOutputVisibility(id);   // computed only while on screen
@@ -149,7 +157,8 @@ export function Chart({ id, height, className }: { id: string; height?: number |
   if (err?.message) return <div className="tw-output-note" id={id}>{err.message}</div>;
   return (
     <div id={id} className={`tw-chart-holder${status === "recalculating" ? " recalculating" : ""}`}>
-      {v?.option ? <EChart option={v.option} height={h} className={className} /> : <div style={{ height: typeof h === "number" ? h : 120 }} />}
+      {v?.option ? <EChart option={v.option} height={h} className={className}
+        onClick={(p) => (window as unknown as { Shiny?: ShinyApi }).Shiny?.setInputValue(`${id}_click`, p, { priority: "event" })} /> : <div style={{ height: typeof h === "number" ? h : 120 }} />}
     </div>
   );
 }

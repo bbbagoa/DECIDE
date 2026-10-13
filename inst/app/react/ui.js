@@ -22,8 +22,8 @@ var i = /* @__PURE__ */ n({
 	createElement: () => w,
 	createRef: () => ee,
 	default: () => a,
-	forwardRef: () => T,
-	isValidElement: () => te,
+	forwardRef: () => te,
+	isValidElement: () => T,
 	lazy: () => ne,
 	memo: () => re,
 	startTransition: () => ie,
@@ -48,8 +48,8 @@ var i = /* @__PURE__ */ n({
 	useSyncExternalStore: () => be,
 	useTransition: () => xe,
 	version: () => Se
-}), a, o, s, c, l, u, d, f, p, m, h, g, _, v, y, b, x, S, C, w, ee, T, te, ne, re, ie, ae, oe, se, ce, le, ue, de, E, fe, pe, me, he, ge, _e, ve, ye, D, O, be, xe, Se, k = t((() => {
-	a = window.shinyreact.React, {Activity: o, Children: s, Component: c, Fragment: l, Profiler: u, PureComponent: d, StrictMode: f, Suspense: p, ViewTransition: m, __CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE: h, __COMPILER_RUNTIME: g, act: _, addTransitionType: v, cache: y, cacheSignal: b, captureOwnerStack: x, cloneElement: S, createContext: C, createElement: w, createRef: ee, forwardRef: T, isValidElement: te, lazy: ne, memo: re, startTransition: ie, unstable_useCacheRefresh: ae, use: oe, useActionState: se, useCallback: ce, useContext: le, useDebugValue: ue, useDeferredValue: de, useEffect: E, useEffectEvent: fe, useId: pe, useImperativeHandle: me, useInsertionEffect: he, useLayoutEffect: ge, useMemo: _e, useOptimistic: ve, useReducer: ye, useRef: D, useState: O, useSyncExternalStore: be, useTransition: xe, version: Se} = a;
+}), a, o, s, c, l, u, d, f, p, m, h, g, _, v, y, b, x, S, C, w, ee, te, T, ne, re, ie, ae, oe, se, ce, le, ue, de, E, fe, pe, me, he, ge, _e, ve, ye, D, O, be, xe, Se, k = t((() => {
+	a = window.shinyreact.React, {Activity: o, Children: s, Component: c, Fragment: l, Profiler: u, PureComponent: d, StrictMode: f, Suspense: p, ViewTransition: m, __CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE: h, __COMPILER_RUNTIME: g, act: _, addTransitionType: v, cache: y, cacheSignal: b, captureOwnerStack: x, cloneElement: S, createContext: C, createElement: w, createRef: ee, forwardRef: te, isValidElement: T, lazy: ne, memo: re, startTransition: ie, unstable_useCacheRefresh: ae, use: oe, useActionState: se, useCallback: ce, useContext: le, useDebugValue: ue, useDeferredValue: de, useEffect: E, useEffectEvent: fe, useId: pe, useImperativeHandle: me, useInsertionEffect: he, useLayoutEffect: ge, useMemo: _e, useOptimistic: ve, useReducer: ye, useRef: D, useState: O, useSyncExternalStore: be, useTransition: xe, version: Se} = a;
 })), Ce = (e) => e?.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase();
 //#endregion
 //#region node_modules/lucide-react/dist/esm/shared/src/utils/toLucideIconData.mjs
@@ -147,7 +147,7 @@ var Ne = C({}), Pe = () => le(Ne);
 //#endregion
 //#region node_modules/lucide-react/dist/esm/Icon.mjs
 k();
-var Fe = T(({ color: e, size: t, width: n, height: r, strokeWidth: i, absoluteStrokeWidth: a, nonScalingStroke: o, className: s = "", children: c, iconNode: l = [], icon: u = {
+var Fe = te(({ color: e, size: t, width: n, height: r, strokeWidth: i, absoluteStrokeWidth: a, nonScalingStroke: o, className: s = "", children: c, iconNode: l = [], icon: u = {
 	node: l,
 	aliases: [],
 	size: 24
@@ -172,7 +172,7 @@ var Fe = T(({ color: e, size: t, width: n, height: r, strokeWidth: i, absoluteSt
 //#region node_modules/lucide-react/dist/esm/createLucideIcon.mjs
 k();
 function A(e, t = [], n = []) {
-	let r = typeof e == "string" ? we(e, t, n) : e, i = T(({ className: e, ...t }, n) => w(Fe, {
+	let r = typeof e == "string" ? we(e, t, n) : e, i = te(({ className: e, ...t }, n) => w(Fe, {
 		ref: n,
 		icon: r,
 		className: e,
@@ -3315,9 +3315,9 @@ function Ya(e) {
 	}, [l]), ee = ce(function(e, t) {
 		var n;
 		typeof u == "function" && (n = u(e, t)), _(n === void 0 ? e : n);
-	}, [u]), T = ce(function() {
+	}, [u]), te = ce(function() {
 		typeof f == "function" && f(), b(!0);
-	}, [f]), te = ce(function() {
+	}, [f]), T = ce(function() {
 		typeof d == "function" && d(), b(!1);
 	}, [d]), ne = s === void 0 ? g : s, re = c === void 0 ? y : c, ie = p === void 0 ? S : p;
 	return j(j({}, m), {}, {
@@ -3325,8 +3325,8 @@ function Ya(e) {
 		menuIsOpen: re,
 		onChange: w,
 		onInputChange: ee,
-		onMenuClose: te,
-		onMenuOpen: T,
+		onMenuClose: T,
+		onMenuOpen: te,
 		value: ie
 	});
 }
@@ -4228,7 +4228,7 @@ k();
 var Us = /* #__PURE__ */ C(typeof HTMLElement < "u" ? /* #__PURE__ */ Ss({ key: "css" }) : null);
 Us.Provider;
 var Ws = function(e) {
-	return /*#__PURE__*/ T(function(t, n) {
+	return /*#__PURE__*/ te(function(t, n) {
 		return e(t, le(Us), n);
 	});
 }, Gs = /* #__PURE__ */ C({}), Ks = {}.hasOwnProperty, qs = "__EMOTION_TYPE_PLEASE_DO_NOT_USE__", Js = function(e, t) {
@@ -4670,7 +4670,7 @@ function fl(e) {
 		maxHeight: t
 	};
 	if (!n || !n.offsetParent) return l;
-	var u = c.getBoundingClientRect().height, d = n.getBoundingClientRect(), f = d.bottom, p = d.height, m = d.top, h = n.offsetParent.getBoundingClientRect().top, g = o ? window.innerHeight : Wc(c), _ = Gc(c), v = parseInt(getComputedStyle(n).marginBottom, 10), y = parseInt(getComputedStyle(n).marginTop, 10), b = h - y, x = g - m, S = b + _, C = u - _ - m, w = f - g + _ + v, ee = _ + m - y, T = 160;
+	var u = c.getBoundingClientRect().height, d = n.getBoundingClientRect(), f = d.bottom, p = d.height, m = d.top, h = n.offsetParent.getBoundingClientRect().top, g = o ? window.innerHeight : Wc(c), _ = Gc(c), v = parseInt(getComputedStyle(n).marginBottom, 10), y = parseInt(getComputedStyle(n).marginTop, 10), b = h - y, x = g - m, S = b + _, C = u - _ - m, w = f - g + _ + v, ee = _ + m - y, te = 160;
 	switch (i) {
 		case "auto":
 		case "bottom":
@@ -4678,19 +4678,19 @@ function fl(e) {
 				placement: "bottom",
 				maxHeight: t
 			};
-			if (C >= p && !o) return a && Yc(c, w, T), {
+			if (C >= p && !o) return a && Yc(c, w, te), {
 				placement: "bottom",
 				maxHeight: t
 			};
-			if (!o && C >= r || o && x >= r) return a && Yc(c, w, T), {
+			if (!o && C >= r || o && x >= r) return a && Yc(c, w, te), {
 				placement: "bottom",
 				maxHeight: o ? x - v : C - v
 			};
 			if (i === "auto" || o) {
-				var te = t, ne = o ? b : S;
-				return ne >= r && (te = Math.min(ne - v - s, t)), {
+				var T = t, ne = o ? b : S;
+				return ne >= r && (T = Math.min(ne - v - s, t)), {
 					placement: "top",
-					maxHeight: te
+					maxHeight: T
 				};
 			}
 			if (i === "bottom") return a && Kc(c, w), {
@@ -4703,13 +4703,13 @@ function fl(e) {
 				placement: "top",
 				maxHeight: t
 			};
-			if (S >= p && !o) return a && Yc(c, ee, T), {
+			if (S >= p && !o) return a && Yc(c, ee, te), {
 				placement: "top",
 				maxHeight: t
 			};
 			if (!o && S >= r || o && b >= r) {
 				var re = t;
-				return (!o && S >= r || o && b >= r) && (re = o ? b - y : S - y), a && Yc(c, ee, T), {
+				return (!o && S >= r || o && b >= r) && (re = o ? b - y : S - y), a && Yc(c, ee, te), {
 					placement: "top",
 					maxHeight: re
 				};
@@ -5366,7 +5366,7 @@ for (var ju = {
 		h,
 		o,
 		f
-	]), T = _e(function() {
+	]), te = _e(function() {
 		var e = "", t = n || r, a = !!(n && o && o.includes(n));
 		if (t && w.onFocus) {
 			var s = {
@@ -5391,7 +5391,7 @@ for (var ju = {
 		i,
 		o,
 		u
-	]), te = _e(function() {
+	]), T = _e(function() {
 		var e = "";
 		if (_ && v.length && !x && w.onFilter) {
 			var t = y({ count: i.length });
@@ -5436,7 +5436,7 @@ for (var ju = {
 		o,
 		b,
 		ne
-	]), ie = F(l, null, F("span", { id: "aria-selection" }, ee), F("span", { id: "aria-focused" }, T), F("span", { id: "aria-results" }, te), F("span", { id: "aria-guidance" }, re));
+	]), ie = F(l, null, F("span", { id: "aria-selection" }, ee), F("span", { id: "aria-focused" }, te), F("span", { id: "aria-results" }, T), F("span", { id: "aria-guidance" }, re));
 	return F(l, null, F(Mu, { id: c }, ne && ie), F(Mu, {
 		"aria-live": C,
 		"aria-atomic": "false",
@@ -6833,7 +6833,7 @@ var Vd = function(e) {
 		{
 			key: "renderMenu",
 			value: function() {
-				var e = this, t = this.getComponents(), n = t.Group, r = t.GroupHeading, i = t.Menu, a = t.MenuList, o = t.MenuPortal, s = t.LoadingMessage, c = t.NoOptionsMessage, l = t.Option, u = this.commonProps, d = this.state.focusedOption, f = this.props, p = f.captureMenuScroll, m = f.inputValue, h = f.isLoading, g = f.loadingMessage, _ = f.minMenuHeight, v = f.maxMenuHeight, y = f.menuIsOpen, b = f.menuPlacement, x = f.menuPosition, S = f.menuPortalTarget, C = f.menuShouldBlockScroll, ee = f.menuShouldScrollIntoView, T = f.noOptionsMessage, te = f.onMenuScrollToTop, ne = f.onMenuScrollToBottom;
+				var e = this, t = this.getComponents(), n = t.Group, r = t.GroupHeading, i = t.Menu, a = t.MenuList, o = t.MenuPortal, s = t.LoadingMessage, c = t.NoOptionsMessage, l = t.Option, u = this.commonProps, d = this.state.focusedOption, f = this.props, p = f.captureMenuScroll, m = f.inputValue, h = f.isLoading, g = f.loadingMessage, _ = f.minMenuHeight, v = f.maxMenuHeight, y = f.menuIsOpen, b = f.menuPlacement, x = f.menuPosition, S = f.menuPortalTarget, C = f.menuShouldBlockScroll, ee = f.menuShouldScrollIntoView, te = f.noOptionsMessage, T = f.onMenuScrollToTop, ne = f.onMenuScrollToBottom;
 				if (!y) return null;
 				var re = function(t, n) {
 					var r = t.type, i = t.data, a = t.isDisabled, o = t.isSelected, s = t.label, c = t.value, f = d === i, p = a ? void 0 : function() {
@@ -6886,7 +6886,7 @@ var Vd = function(e) {
 					if (ae === null) return null;
 					ie = /*#__PURE__*/ w(s, u, ae);
 				} else {
-					var oe = T({ inputValue: m });
+					var oe = te({ inputValue: m });
 					if (oe === null) return null;
 					ie = /*#__PURE__*/ w(c, u, oe);
 				}
@@ -6908,7 +6908,7 @@ var Vd = function(e) {
 						placement: o
 					}), /*#__PURE__*/ w(cd, {
 						captureEnabled: p,
-						onTopArrive: te,
+						onTopArrive: T,
 						onBottomArrive: ne,
 						lockEnabled: C
 					}, function(t) {
@@ -7052,7 +7052,7 @@ var Vd = function(e) {
 //#endregion
 //#region node_modules/react-select/dist/react-select.esm.js
 Ud.defaultProps = Ed, k();
-var Wd = /* @__PURE__ */ T(function(e, t) {
+var Wd = /* @__PURE__ */ te(function(e, t) {
 	var n = Ya(e);
 	return /*#__PURE__*/ w(Ud, M({ ref: t }, n));
 }), Gd = window.shinyreact, { useShinyInput: Kd, useSetShinyInput: qd, useShinyInputValue: I, useShinyOutputValue: L, useShinyOutputStatus: Jd, useShinyOutputError: Yd, useShinyMessageHandler: Xd, useShinyInitialized: Zd, useShinyBusy: Qd, ShinyOutput: $d, ImageOutput: ef } = Gd;
@@ -7400,7 +7400,10 @@ function _f({ id: e, label: t, choices: n, value: r, inline: i, buttons: a, help
 		type: "tw.chr"
 	}), [h, g] = O(t);
 	uf(e, (e) => {
-		e.label !== void 0 && g(e.label), e.choices && d(e.choices), e.value !== void 0 && m(String(Array.isArray(e.value) ? e.value[0] : e.value ?? ""));
+		if (e.label !== void 0 && g(e.label), e.choices && d(e.choices), e.value !== void 0) {
+			let t = String(Array.isArray(e.value) ? e.value[0] : e.value ?? "");
+			m(t), l?.(t);
+		}
 	});
 	let _ = (e) => {
 		m(e), l?.(e);
@@ -7745,99 +7748,108 @@ var Rf = (e, t) => e === null ? 1 : t === null ? -1 : typeof e == "number" && ty
 	numeric: !0,
 	sensitivity: "base"
 });
-function zf({ id: e, height: t, className: n, toolbar: r, searchable: i = !0, compact: a }) {
-	let o = L(e);
+function zf({ id: e, height: t, className: n, toolbar: r, searchable: i = !0, compact: a, selectedFirst: o }) {
+	let s = L(e);
 	V(e);
-	let s = Jd(e), c = Yd(e), l = qd(`${e}_rows_selected`, null, {
+	let c = Jd(e), l = Yd(e), u = qd(`${e}_rows_selected`, null, {
 		debounceMs: 0,
 		type: "tw.num"
-	}), u = qd(`${e}_rows_all`, null, {
+	}), d = qd(`${e}_rows_all`, null, {
 		debounceMs: 150,
 		type: "tw.num"
-	}), d = qd(`${e}_state`, null, { debounceMs: 250 }), f = qd(`${e}_cell_edit`, null, {
+	}), f = qd(`${e}_state`, null, { debounceMs: 250 }), p = qd(`${e}_cell_edit`, null, {
 		debounceMs: 0,
 		priority: "event"
-	}), p = rf(), [m, h] = O(""), [g, _] = O(null), [v, y] = O(0), [b, x] = O(null), [S, C] = O([]), [w, ee] = O(null), T = o?.columns ?? [], te = b ?? o?.page_size ?? 15, ne = !!o?.server, re = o ? `${T.map((e) => e.key).join("|")}#${o.total}#${ne ? "" : o.index.slice(0, 50).join(",")}` : "", ie = D("");
+	}), m = rf(), [h, g] = O(""), [_, v] = O(null), [y, b] = O(0), [x, S] = O(null), [C, w] = O([]), [ee, te] = O(null), T = s?.columns ?? [], ne = x ?? s?.page_size ?? 15, re = !!s?.server, ie = s ? `${T.map((e) => e.key).join("|")}#${s.total}#${re ? "" : s.index.slice(0, 50).join(",")}` : "", ae = D("");
 	E(() => {
-		if (!o || re === ie.current) return;
-		let e = ie.current === "";
-		ie.current = re, (!e || S.length) && (C([]), l(null)), ne || y(0);
-	}, [re]), Xd(`${e}__select`, (e) => {
+		if (!s || ie === ae.current) return;
+		let e = ae.current === "";
+		ae.current = ie, (!e || C.length) && (w([]), u(null)), re || b(0);
+	}, [ie]), Xd(`${e}__select`, (e) => {
 		let t = e.rows ?? [];
-		C(t), l(t.length ? t : null);
+		w(t), u(t.length ? t : null), o && b(0);
 	}), E(() => {
-		ne && d({
-			page: v,
-			size: te,
-			sort: g?.key ?? "",
-			desc: !!g?.desc,
-			search: m
+		re && f({
+			page: y,
+			size: ne,
+			sort: _?.key ?? "",
+			desc: !!_?.desc,
+			search: h
 		});
 	}, [
+		re,
+		y,
 		ne,
-		v,
-		te,
-		g,
-		m
+		_,
+		h
 	]);
-	let ae = _e(() => {
-		if (!o) return [];
-		let e = o.rows.map((e, t) => ({
+	let oe = _e(() => {
+		if (!s) return [];
+		let e = s.rows.map((e, t) => ({
 			cells: e,
-			row: o.index[t]
+			row: s.index[t]
 		}));
-		if (ne) return e;
-		let t = m.trim().toLowerCase();
-		if (t && (e = e.filter((e) => e.cells.some((e, n) => e !== null && (T[n].html ? String(e).replace(/<[^>]+>/g, "") : If(e, T[n])).toLowerCase().includes(t)))), g) {
-			let t = T.findIndex((e) => e.key === g.key);
-			t >= 0 && (e = [...e].sort((e, n) => (g.desc ? -1 : 1) * Rf(e.cells[t], n.cells[t])));
+		if (re) return e;
+		let t = h.trim().toLowerCase();
+		if (t && (e = e.filter((e) => e.cells.some((e, n) => e !== null && (T[n].html ? String(e).replace(/<[^>]+>/g, "") : If(e, T[n])).toLowerCase().includes(t)))), _) {
+			let t = T.findIndex((e) => e.key === _.key);
+			t >= 0 && (e = [...e].sort((e, n) => (_.desc ? -1 : 1) * Rf(e.cells[t], n.cells[t])));
 		}
 		return e;
 	}, [
-		o,
-		m,
-		g,
-		ne,
+		s,
+		h,
+		_,
+		re,
 		T
-	]), oe = ne ? "" : ae.map((e) => e.row).join(",");
+	]), se = re ? "" : oe.map((e) => e.row).join(",");
 	E(() => {
-		o && !ne && u(ae.map((e) => e.row));
-	}, [oe]);
-	let se = ne ? o?.filtered ?? 0 : ae.length, ce = Math.max(1, Math.ceil(se / te)), le = ne ? o?.page ?? 0 : Math.min(v, ce - 1), ue = ne ? ae : ae.slice(le * te, le * te + te), de = _e(() => T.map((e, t) => e.style?.bar ? Math.max(0, ...(o?.rows ?? []).map((e) => Number(e[t]) || 0)) : 0), [o, T]);
-	if (c?.message) return /* @__PURE__ */ (0, R.jsx)("div", {
+		s && !re && d(oe.map((e) => e.row));
+	}, [se]);
+	let ce = _e(() => {
+		if (!o || re || !C.length) return oe;
+		let e = new Set(C);
+		return [...oe.filter((t) => e.has(t.row)), ...oe.filter((t) => !e.has(t.row))];
+	}, [
+		oe,
+		C,
+		o,
+		re
+	]), le = re ? s?.filtered ?? 0 : oe.length, ue = Math.max(1, Math.ceil(le / ne)), de = re ? s?.page ?? 0 : Math.min(y, ue - 1), fe = re ? oe : ce.slice(de * ne, de * ne + ne), pe = _e(() => T.map((e, t) => e.style?.bar ? Math.max(0, ...(s?.rows ?? []).map((e) => Number(e[t]) || 0)) : 0), [s, T]);
+	if (l?.message) return /* @__PURE__ */ (0, R.jsx)("div", {
 		className: "tw-output-note",
 		id: e,
-		children: c.message
+		children: l.message
 	});
-	if (!o) return /* @__PURE__ */ (0, R.jsx)("div", {
-		className: `tw-dt tw-dt-empty${s === "recalculating" ? " recalculating" : ""}`,
+	if (!s) return /* @__PURE__ */ (0, R.jsx)("div", {
+		className: `tw-dt tw-dt-empty${c === "recalculating" ? " recalculating" : ""}`,
 		id: e
 	});
-	let fe = o.selection, pe = (e) => {
-		if (fe === "none") return;
-		let t = fe === "single" ? S[0] === e ? [] : [e] : S.includes(e) ? S.filter((t) => t !== e) : [...S, e];
-		C(t), l(t.length ? t : null);
-	}, me = ue.map((e) => e.row), he = fe === "multiple" && me.length > 0 && me.every((e) => S.includes(e)), ge = () => {
-		let e = he ? S.filter((e) => !me.includes(e)) : [.../* @__PURE__ */ new Set([...S, ...me])];
-		C(e), l(e.length ? e : null);
-	}, ve = (e) => {
-		_((t) => t?.key === e ? t.desc ? null : {
+	let me = s.selection, he = (e) => {
+		if (me === "none") return;
+		let t = me === "single" ? C[0] === e ? [] : [e] : C.includes(e) ? C.filter((t) => t !== e) : [...C, e];
+		w(t), u(t.length ? t : null);
+	}, ge = fe.map((e) => e.row), ve = me === "multiple" && ge.length > 0 && ge.every((e) => C.includes(e)), ye = () => {
+		let e = ve ? C.filter((e) => !ge.includes(e)) : [.../* @__PURE__ */ new Set([...C, ...ge])];
+		w(e), u(e.length ? e : null);
+	}, be = (e) => {
+		v((t) => t?.key === e ? t.desc ? null : {
 			key: e,
 			desc: !0
 		} : {
 			key: e,
 			desc: !1
-		}), y(0);
-	}, ye = o.group ? T.findIndex((e) => e.key === o.group) : -1, be = T.filter((e, t) => t !== ye), xe = t ?? o.height ?? void 0, Se = () => {
-		w && (f({
-			row: w.row,
-			col: w.col + 1,
-			value: w.value,
+		}), b(0);
+	}, xe = s.group ? T.findIndex((e) => e.key === s.group) : -1, Se = T.filter((e, t) => t !== xe), k = t ?? s.height ?? void 0, Ce = () => {
+		ee && (p({
+			row: ee.row,
+			col: ee.col + 1,
+			value: ee.value,
 			nonce: Date.now()
-		}), ee(null));
-	}, k;
+		}), te(null));
+	}, we;
 	return /* @__PURE__ */ (0, R.jsxs)("div", {
-		className: `tw-dt${a ? " tw-dt-compact" : ""}${s === "recalculating" ? " recalculating" : ""}${n ? " " + n : ""}`,
+		className: `tw-dt${a ? " tw-dt-compact" : ""}${c === "recalculating" ? " recalculating" : ""}${n ? " " + n : ""}`,
 		id: e,
 		children: [
 			(i || r) && /* @__PURE__ */ (0, R.jsxs)("div", {
@@ -7851,88 +7863,88 @@ function zf({ id: e, height: t, className: n, toolbar: r, searchable: i = !0, co
 						type: "search",
 						className: "form-control form-control-sm",
 						placeholder: "Search",
-						value: m,
+						value: h,
 						onChange: (e) => {
-							h(e.target.value), y(0);
+							g(e.target.value), b(0);
 						}
 					})]
 				})]
 			}),
-			se ? /* @__PURE__ */ (0, R.jsx)("div", {
+			le ? /* @__PURE__ */ (0, R.jsx)("div", {
 				className: "tw-table-wrap",
-				style: xe ? { maxHeight: xe } : void 0,
+				style: k ? { maxHeight: k } : void 0,
 				children: /* @__PURE__ */ (0, R.jsxs)("table", {
 					className: "table table-sm table-hover tw-table mb-0",
-					children: [/* @__PURE__ */ (0, R.jsx)("thead", { children: /* @__PURE__ */ (0, R.jsxs)("tr", { children: [fe === "multiple" && /* @__PURE__ */ (0, R.jsx)("th", {
+					children: [/* @__PURE__ */ (0, R.jsx)("thead", { children: /* @__PURE__ */ (0, R.jsxs)("tr", { children: [me === "multiple" && /* @__PURE__ */ (0, R.jsx)("th", {
 						className: "tw-dt-check",
 						children: /* @__PURE__ */ (0, R.jsx)("input", {
 							type: "checkbox",
 							className: "form-check-input",
-							checked: he,
-							onChange: ge,
+							checked: ve,
+							onChange: ye,
 							"aria-label": "Select the rows of this page"
 						})
-					}), be.map((e) => /* @__PURE__ */ (0, R.jsxs)("th", {
-						onClick: () => ve(e.key),
+					}), Se.map((e) => /* @__PURE__ */ (0, R.jsxs)("th", {
+						onClick: () => be(e.key),
 						className: e.type === "number" ? "text-end" : void 0,
-						"aria-sort": g?.key === e.key ? g.desc ? "descending" : "ascending" : "none",
+						"aria-sort": _?.key === e.key ? _.desc ? "descending" : "ascending" : "none",
 						"data-col": e.key,
-						title: p.label(e.key) ?? void 0,
+						title: m.label(e.key) ?? void 0,
 						children: [
 							e.label,
 							" ",
-							g?.key === e.key && (g.desc ? /* @__PURE__ */ (0, R.jsx)(Ue, { size: 11 }) : /* @__PURE__ */ (0, R.jsx)(Ye, { size: 11 }))
+							_?.key === e.key && (_.desc ? /* @__PURE__ */ (0, R.jsx)(Ue, { size: 11 }) : /* @__PURE__ */ (0, R.jsx)(Ye, { size: 11 }))
 						]
-					}, e.key))] }) }), /* @__PURE__ */ (0, R.jsx)("tbody", { children: ue.map((e) => {
-						let t = ye >= 0 && e.cells[ye] !== k;
-						k = ye >= 0 ? e.cells[ye] : void 0;
-						let n = S.includes(e.row);
+					}, e.key))] }) }), /* @__PURE__ */ (0, R.jsx)("tbody", { children: fe.map((e) => {
+						let t = xe >= 0 && e.cells[xe] !== we;
+						we = xe >= 0 ? e.cells[xe] : void 0;
+						let n = C.includes(e.row);
 						return [t ? /* @__PURE__ */ (0, R.jsx)("tr", {
 							className: "tw-dt-group",
 							children: /* @__PURE__ */ (0, R.jsx)("td", {
-								colSpan: be.length + +(fe === "multiple"),
-								children: If(e.cells[ye], T[ye])
+								colSpan: Se.length + +(me === "multiple"),
+								children: If(e.cells[xe], T[xe])
 							})
 						}, `g${e.row}`) : null, /* @__PURE__ */ (0, R.jsxs)("tr", {
 							className: n ? "tw-dt-selected" : void 0,
-							onClick: () => pe(e.row),
-							style: fe === "none" ? void 0 : { cursor: "pointer" },
-							children: [fe === "multiple" && /* @__PURE__ */ (0, R.jsx)("td", {
+							onClick: () => he(e.row),
+							style: me === "none" ? void 0 : { cursor: "pointer" },
+							children: [me === "multiple" && /* @__PURE__ */ (0, R.jsx)("td", {
 								className: "tw-dt-check",
 								children: /* @__PURE__ */ (0, R.jsx)("input", {
 									type: "checkbox",
 									className: "form-check-input",
 									checked: n,
-									onChange: () => pe(e.row),
+									onChange: () => he(e.row),
 									onClick: (e) => e.stopPropagation(),
 									"aria-label": "Select"
 								})
 							}), T.map((t, n) => {
-								if (n === ye) return null;
+								if (n === xe) return null;
 								let r = e.cells[n];
-								if (w && w.row === e.row && w.col === n) return /* @__PURE__ */ (0, R.jsx)("td", {
+								if (ee && ee.row === e.row && ee.col === n) return /* @__PURE__ */ (0, R.jsx)("td", {
 									onClick: (e) => e.stopPropagation(),
 									children: /* @__PURE__ */ (0, R.jsx)("input", {
 										autoFocus: !0,
 										className: "form-control form-control-sm",
-										value: w.value,
-										onChange: (e) => ee({
-											...w,
+										value: ee.value,
+										onChange: (e) => te({
+											...ee,
 											value: e.target.value
 										}),
 										onKeyDown: (e) => {
-											e.key === "Enter" && Se(), e.key === "Escape" && ee(null);
+											e.key === "Enter" && Ce(), e.key === "Escape" && te(null);
 										},
-										onBlur: Se
+										onBlur: Ce
 									})
 								}, t.key);
 								let i = {
 									key: t.key,
-									style: Lf(r, t, de[n]),
+									style: Lf(r, t, pe[n]),
 									className: `${t.type === "number" ? "text-end" : ""}${t.editable ? " tw-dt-editable" : ""}`,
 									title: t.editable ? "Double-click to edit" : void 0,
 									onDoubleClick: t.editable ? (t) => {
-										t.stopPropagation(), ee({
+										t.stopPropagation(), te({
 											row: e.row,
 											col: n,
 											value: r === null ? "" : String(r)
@@ -7943,7 +7955,7 @@ function zf({ id: e, height: t, className: n, toolbar: r, searchable: i = !0, co
 									...i,
 									dangerouslySetInnerHTML: { __html: String(r ?? "") }
 								});
-								let a = n === +(ye === 0) && typeof r == "string" && p.isVar(r) ? p.label(r) : null;
+								let a = n === +(xe === 0) && typeof r == "string" && m.isVar(r) ? m.label(r) : null;
 								return /* @__PURE__ */ (0, R.jsxs)("td", {
 									...i,
 									children: [If(r, t), a ? /* @__PURE__ */ (0, R.jsx)("span", {
@@ -7957,25 +7969,25 @@ function zf({ id: e, height: t, className: n, toolbar: r, searchable: i = !0, co
 				})
 			}) : /* @__PURE__ */ (0, R.jsx)("div", {
 				className: "tw-dt-none",
-				children: m ? "No row matches." : o.empty ?? "No data."
+				children: h ? "No row matches." : s.empty ?? "No data."
 			}),
-			se > 0 && /* @__PURE__ */ (0, R.jsxs)("div", {
+			le > 0 && /* @__PURE__ */ (0, R.jsxs)("div", {
 				className: "tw-dt-foot",
 				children: [/* @__PURE__ */ (0, R.jsxs)("span", { children: [
-					le * te + 1,
+					de * ne + 1,
 					"-",
-					Math.min(se, le * te + te),
+					Math.min(le, de * ne + ne),
 					" of ",
-					se.toLocaleString("en-US"),
-					se < o.total ? ` (filtered from ${o.total.toLocaleString("en-US")})` : "",
-					S.length ? ` · ${S.length} selected` : ""
+					le.toLocaleString("en-US"),
+					le < s.total ? ` (filtered from ${s.total.toLocaleString("en-US")})` : "",
+					C.length ? ` · ${C.length} selected` : ""
 				] }), /* @__PURE__ */ (0, R.jsxs)("div", {
 					className: "d-flex align-items-center gap-2",
 					children: [/* @__PURE__ */ (0, R.jsx)("select", {
 						className: "form-select form-select-sm tw-dt-size",
-						value: te,
+						value: ne,
 						onChange: (e) => {
-							x(Number(e.target.value)), y(0);
+							S(Number(e.target.value)), b(0);
 						},
 						"aria-label": "Rows per page",
 						children: [
@@ -7993,15 +8005,15 @@ function zf({ id: e, height: t, className: n, toolbar: r, searchable: i = !0, co
 						children: [/* @__PURE__ */ (0, R.jsx)("button", {
 							type: "button",
 							className: "btn btn-outline-secondary",
-							disabled: le === 0,
-							onClick: () => y(le - 1),
+							disabled: de === 0,
+							onClick: () => b(de - 1),
 							"aria-label": "Previous page",
 							children: /* @__PURE__ */ (0, R.jsx)(kt, { size: 14 })
 						}), /* @__PURE__ */ (0, R.jsx)("button", {
 							type: "button",
 							className: "btn btn-outline-secondary",
-							disabled: le >= ce - 1,
-							onClick: () => y(le + 1),
+							disabled: de >= ue - 1,
+							onClick: () => b(de + 1),
 							"aria-label": "Next page",
 							children: /* @__PURE__ */ (0, R.jsx)(jt, { size: 14 })
 						})]
@@ -8903,7 +8915,7 @@ function vp(e) {
 }
 var yp = null;
 function bp() {
-	return yp ??= import("./chunks/echarts-core-DmGpb3fQ.js").then(({ default: e }) => (e.registerTheme("tw-light", vp(!1)), e.registerTheme("tw-dark", vp(!0)), e)), yp;
+	return yp ??= import("./chunks/echarts-core-xcd_WbOF.js").then(({ default: e }) => (e.registerTheme("tw-light", vp(!1)), e.registerTheme("tw-dark", vp(!0)), e)), yp;
 }
 var xp = (e) => {
 	if (typeof e == "number") return e;
@@ -8970,26 +8982,31 @@ function Dp() {
 		}), () => t.disconnect();
 	}, []), t;
 }
-function Op({ option: e, height: t = 320, className: n }) {
-	let r = D(null), i = D(null), [a, o] = O(0), s = Dp();
-	return E(() => {
+function Op({ option: e, height: t = 320, className: n, onClick: r }) {
+	let i = D(null), a = D(null), [o, s] = O(0), c = Dp(), l = D(r);
+	return l.current = r, E(() => {
 		let e = !1, t = null;
 		return bp().then((n) => {
-			if (e || !r.current) return;
-			let a = n.init(r.current, s ? "tw-dark" : "tw-light", { renderer: "canvas" });
-			i.current = a, t = new ResizeObserver(() => {
-				r.current && r.current.offsetWidth > 0 && a.resize();
-			}), t.observe(r.current), o((e) => e + 1);
+			if (e || !i.current) return;
+			let r = n.init(i.current, c ? "tw-dark" : "tw-light", { renderer: "canvas" });
+			a.current = r, r.on("click", (e) => l.current?.({
+				name: e.name,
+				seriesIndex: e.seriesIndex,
+				dataIndex: e.dataIndex,
+				data: e.data
+			})), t = new ResizeObserver(() => {
+				i.current && i.current.offsetWidth > 0 && r.resize();
+			}), t.observe(i.current), s((e) => e + 1);
 		}), () => {
-			e = !0, t?.disconnect(), i.current?.dispose(), i.current = null;
+			e = !0, t?.disconnect(), a.current?.dispose(), a.current = null;
 		};
-	}, [s]), E(() => {
-		i.current && e && i.current.setOption(Tp(Ep({
+	}, [c]), E(() => {
+		a.current && e && a.current.setOption(Tp(Ep({
 			animationDuration: 300,
 			...e
 		})), { notMerge: !0 });
-	}, [e, a]), /* @__PURE__ */ (0, R.jsx)("div", {
-		ref: r,
+	}, [e, o]), /* @__PURE__ */ (0, R.jsx)("div", {
+		ref: i,
 		className: `tw-echart${n ? " " + n : ""}`,
 		style: {
 			height: t,
@@ -9011,7 +9028,8 @@ function U({ id: e, height: t, className: n }) {
 		children: r?.option ? /* @__PURE__ */ (0, R.jsx)(Op, {
 			option: r.option,
 			height: o,
-			className: n
+			className: n,
+			onClick: (t) => window.Shiny?.setInputValue(`${e}_click`, t, { priority: "event" })
 		}) : /* @__PURE__ */ (0, R.jsx)("div", { style: { height: typeof o == "number" ? o : 120 } })
 	});
 }
@@ -13711,15 +13729,32 @@ function Th({ t: e }) {
 }
 //#endregion
 //#region src/pages/dq/LocationTab.tsx
+k();
 var Eh = [
 	"Admin 1",
 	"Admin 2",
 	"Admin 3",
 	"Admin 4",
 	"Village"
-];
-function Dh({ t: e }) {
-	let t = L(X("location_hint")), n = L(X("norm_selection")) ?? [];
+], Dh = [
+	{
+		value: "similar",
+		label: "Similar names",
+		note: "Each bubble is a name, sized by its records; look-alike names are linked and share a colour. Click one to select its group in the table."
+	},
+	{
+		value: "sunburst",
+		label: "Sunburst",
+		note: "The levels as rings, the top level in the centre, sized by records; click a segment to zoom in, the centre to zoom out."
+	},
+	{
+		value: "bars",
+		label: "Variant bars",
+		note: "One bar per group of look-alike names: the most common spelling in blue, the variants after it. Click a bar to select its group."
+	}
+], Oh = (e) => window.Shiny?.setInputValue(X("norm_unselect"), { name: e }, { priority: "event" });
+function kh({ t: e }) {
+	let t = L(X("location_hint")), [n, r] = O("similar"), i = L(X("norm_selection")) ?? [];
 	return /* @__PURE__ */ (0, R.jsxs)(R.Fragment, { children: [
 		/* @__PURE__ */ (0, R.jsxs)(bh, {
 			intro: e("Standardise the spelling of place names across the dataset: pick a level, select the variants of one name, type the correct spelling and apply."),
@@ -13782,16 +13817,27 @@ function Dh({ t: e }) {
 				})
 			})
 		}),
-		n.length ? /* @__PURE__ */ (0, R.jsxs)("div", {
+		i.length ? /* @__PURE__ */ (0, R.jsxs)("div", {
 			className: "tw-dq-chips tw-dq-norm-sel",
 			children: [/* @__PURE__ */ (0, R.jsxs)("strong", { children: [
-				n.length,
+				i.length,
 				" ",
 				e("selected")
-			] }), n.map((e) => /* @__PURE__ */ (0, R.jsxs)("span", {
+			] }), i.map((t) => /* @__PURE__ */ (0, R.jsxs)("span", {
 				className: "tw-dq-chip",
-				children: [e.name, /* @__PURE__ */ (0, R.jsx)("em", { children: e.n.toLocaleString("en-US") })]
-			}, e.name))]
+				children: [
+					t.name,
+					/* @__PURE__ */ (0, R.jsx)("em", { children: t.n.toLocaleString("en-US") }),
+					/* @__PURE__ */ (0, R.jsx)("button", {
+						type: "button",
+						className: "tw-dq-chip-x",
+						title: e("Remove from the selection"),
+						"aria-label": `${e("Remove from the selection")}: ${t.name}`,
+						onClick: () => Oh(t.name),
+						children: /* @__PURE__ */ (0, R.jsx)(Ma, { size: 12 })
+					})
+				]
+			}, t.name))]
 		}) : /* @__PURE__ */ (0, R.jsxs)("div", {
 			className: "tw-dq-chips empty tw-dq-norm-sel",
 			children: [
@@ -13808,16 +13854,43 @@ function Dh({ t: e }) {
 				full: !0,
 				children: /* @__PURE__ */ (0, R.jsx)(zf, {
 					id: X("tab_location_norm"),
-					compact: !0
+					compact: !0,
+					selectedFirst: !0
 				})
 			}), /* @__PURE__ */ (0, R.jsxs)(H, {
-				title: e("How the names nest"),
+				title: e("Names at a glance"),
 				icon: /* @__PURE__ */ (0, R.jsx)(Br, { size: 15 }),
 				full: !0,
-				children: [/* @__PURE__ */ (0, R.jsx)("p", {
-					className: "tw-dq-note",
-					children: e("Each box is a place, sized by its records; click one to zoom in. Near-identical names side by side are candidates to merge.")
-				}), /* @__PURE__ */ (0, R.jsx)(U, { id: X("dq_location_treemap") })]
+				actions: /* @__PURE__ */ (0, R.jsx)(_f, {
+					id: X("loc_view"),
+					choices: Dh.map((t) => ({
+						value: t.value,
+						label: e(t.label)
+					})),
+					value: "similar",
+					buttons: !0,
+					className: "mb-0",
+					onChange: r
+				}),
+				children: [/* @__PURE__ */ (0, R.jsxs)("div", {
+					className: "tw-loc-note-row",
+					children: [/* @__PURE__ */ (0, R.jsx)("p", {
+						className: "tw-dq-note",
+						children: e(Dh.find((e) => e.value === n)?.note ?? Dh[0].note)
+					}), /* @__PURE__ */ (0, R.jsx)("div", {
+						style: n === "sunburst" ? { display: "none" } : void 0,
+						title: e("How alike two names must be to count as variants: 80% lets one letter in five differ."),
+						children: /* @__PURE__ */ (0, R.jsx)(mf, {
+							id: X("loc_similarity"),
+							label: e("Similarity (%)"),
+							value: 80,
+							min: 50,
+							max: 100,
+							step: 5,
+							className: "mb-0"
+						})
+					})]
+				}), /* @__PURE__ */ (0, R.jsx)(U, { id: X("dq_location_view") })]
 			})]
 		})
 	] });
@@ -13825,13 +13898,13 @@ function Dh({ t: e }) {
 //#endregion
 //#region src/pages/dq/MissingTab.tsx
 k();
-var Oh = [
+var Ah = [
 	"Admin 1",
 	"Admin 2",
 	"Admin 3",
 	"Admin 4",
 	"Village"
-], kh = {
+], jh = {
 	ok: {
 		icon: /* @__PURE__ */ (0, R.jsx)(Lt, { size: 18 }),
 		tone: "green"
@@ -13849,7 +13922,7 @@ var Oh = [
 		tone: "red"
 	}
 };
-function Ah({ t: e }) {
+function Mh({ t: e }) {
 	let t = L(X("missing_results")), n = L(X("missing_kpis")), r = D(null);
 	return V(X("missing_kpis"), r), E(() => {
 		Mf();
@@ -13865,7 +13938,7 @@ function Ah({ t: e }) {
 			/* @__PURE__ */ (0, R.jsx)(z, {
 				id: X("missing_geo_level"),
 				label: e("Geographic level"),
-				choices: Oh,
+				choices: Ah,
 				value: "Admin 1"
 			}),
 			/* @__PURE__ */ (0, R.jsx)(B, {
@@ -13893,7 +13966,7 @@ function Ah({ t: e }) {
 				label: e(t.label),
 				value: t.value,
 				sub: t.sub,
-				...kh[t.tone]
+				...jh[t.tone]
 			})) }), /* @__PURE__ */ (0, R.jsx)(Wf, { tabs: [
 				{
 					value: "field",
@@ -13953,7 +14026,7 @@ function Ah({ t: e }) {
 }
 //#endregion
 //#region src/pages/dq/Insights.tsx
-var jh = {
+var Nh = {
 	people: /* @__PURE__ */ (0, R.jsx)(Ea, { size: 14 }),
 	stopwatch: /* @__PURE__ */ (0, R.jsx)(Qi, { size: 14 }),
 	"calendar-event": /* @__PURE__ */ (0, R.jsx)(lt, { size: 14 }),
@@ -13966,7 +14039,7 @@ var jh = {
 	"question-octagon": /* @__PURE__ */ (0, R.jsx)(Ut, { size: 14 }),
 	signpost: /* @__PURE__ */ (0, R.jsx)(Oi, { size: 14 })
 };
-function Mh({ items: e, t, onPick: n }) {
+function Ph({ items: e, t, onPick: n }) {
 	return e.length ? /* @__PURE__ */ (0, R.jsx)("div", {
 		className: "tw-dq-insights",
 		children: e.map((e) => /* @__PURE__ */ (0, R.jsxs)("div", {
@@ -13975,7 +14048,7 @@ function Mh({ items: e, t, onPick: n }) {
 				/* @__PURE__ */ (0, R.jsxs)("div", {
 					className: "tw-dq-insight-label",
 					children: [
-						jh[e.icon] ?? /* @__PURE__ */ (0, R.jsx)(ir, { size: 14 }),
+						Nh[e.icon] ?? /* @__PURE__ */ (0, R.jsx)(ir, { size: 14 }),
 						" ",
 						t(e.label)
 					]
@@ -14001,7 +14074,7 @@ function Mh({ items: e, t, onPick: n }) {
 //#endregion
 //#region src/pages/dq/OutliersTab.tsx
 k();
-var Nh = [
+var Fh = [
 	{
 		value: "IQR",
 		label: "IQR (Tukey)"
@@ -14018,7 +14091,7 @@ var Nh = [
 		value: "none",
 		label: "Allowed range only"
 	}
-], Ph = {
+], Ih = {
 	IQR: {
 		label: "IQR multiplier",
 		min: 1,
@@ -14037,7 +14110,7 @@ var Nh = [
 		max: 6,
 		value: 3.5
 	}
-}, Fh = [
+}, Lh = [
 	{
 		value: "cap",
 		label: "Cap at the limits"
@@ -14063,8 +14136,8 @@ var Nh = [
 		label: "Drop Row entirely"
 	}
 ];
-function Ih({ t: e }) {
-	let t = I(X("outlier_method")) || "IQR", n = Ph[t], r = (t) => t.map((t) => ({
+function Rh({ t: e }) {
+	let t = I(X("outlier_method")) || "IQR", n = Ih[t], r = (t) => t.map((t) => ({
 		value: t.value,
 		label: e(t.label)
 	})), i = L(X("range_hint")), a = L(X("outlier_insights")), o = D(null);
@@ -14088,7 +14161,7 @@ function Ih({ t: e }) {
 				/* @__PURE__ */ (0, R.jsx)(z, {
 					id: X("outlier_method"),
 					label: e("Detection method"),
-					choices: r(Nh),
+					choices: r(Fh),
 					value: "IQR"
 				}),
 				n ? /* @__PURE__ */ (0, R.jsx)(vf, {
@@ -14129,7 +14202,7 @@ function Ih({ t: e }) {
 				/* @__PURE__ */ (0, R.jsx)(z, {
 					id: X("outlier_correction_method"),
 					label: e("Correction"),
-					choices: r(Fh),
+					choices: r(Lh),
 					value: "cap"
 				})
 			]
@@ -14240,7 +14313,7 @@ function Ih({ t: e }) {
 						children: a?.empty ? /* @__PURE__ */ (0, R.jsx)(Y, {
 							title: e(a.empty.title),
 							sub: e(a.empty.sub)
-						}) : /* @__PURE__ */ (0, R.jsx)(Mh, {
+						}) : /* @__PURE__ */ (0, R.jsx)(Ph, {
 							items: a?.cards ?? [],
 							t: e,
 							onPick: (e) => s({
@@ -14336,7 +14409,7 @@ function Ih({ t: e }) {
 }
 //#endregion
 //#region src/pages/dq/DuplicatesTab.tsx
-function Lh({ t: e }) {
+function zh({ t: e }) {
 	let t = I(X("duplicate_fuzzy")), n = L(X("dup_has_rows")), r = L(X("dup_hint"));
 	return /* @__PURE__ */ (0, R.jsxs)(R.Fragment, { children: [
 		/* @__PURE__ */ (0, R.jsxs)(bh, { children: [
@@ -14481,7 +14554,7 @@ function Lh({ t: e }) {
 //#endregion
 //#region src/pages/dq/EnumeratorTab.tsx
 k();
-function Rh({ t: e }) {
+function Bh({ t: e }) {
 	let t = D(null);
 	V(X("enum_flagged_ui"), t);
 	let n = L(X("enum_flagged_ui")), r = qd(X("enum_open"), null, {
@@ -14560,19 +14633,19 @@ function Rh({ t: e }) {
 		]
 	});
 }
-function zh({ t: e }) {
+function Vh({ t: e }) {
 	let t = D(null);
 	V(X("enum_speed_insights"), t);
 	let n = L(X("enum_speed_insights"));
 	return /* @__PURE__ */ (0, R.jsx)("div", {
 		ref: t,
-		children: /* @__PURE__ */ (0, R.jsx)(Mh, {
+		children: /* @__PURE__ */ (0, R.jsx)(Ph, {
 			items: n ?? [],
 			t: e
 		})
 	});
 }
-function Bh({ t: e }) {
+function Hh({ t: e }) {
 	let t = L(X("enum_state")), n = t && !t.mapped;
 	return /* @__PURE__ */ (0, R.jsxs)(R.Fragment, { children: [n && /* @__PURE__ */ (0, R.jsx)("div", {
 		className: "card tw-card",
@@ -14616,14 +14689,14 @@ function Bh({ t: e }) {
 				value: "flagged",
 				label: e("Flagged enumerators"),
 				icon: /* @__PURE__ */ (0, R.jsx)(Pn, { size: 14 }),
-				content: /* @__PURE__ */ (0, R.jsx)(Rh, { t: e })
+				content: /* @__PURE__ */ (0, R.jsx)(Bh, { t: e })
 			},
 			{
 				value: "speed",
 				label: e("Workload and speed"),
 				icon: /* @__PURE__ */ (0, R.jsx)(yt, { size: 14 }),
 				content: /* @__PURE__ */ (0, R.jsxs)(R.Fragment, { children: [
-					/* @__PURE__ */ (0, R.jsx)(zh, { t: e }),
+					/* @__PURE__ */ (0, R.jsx)(Vh, { t: e }),
 					/* @__PURE__ */ (0, R.jsxs)("div", {
 						className: "tw-grid-2",
 						children: [/* @__PURE__ */ (0, R.jsxs)(H, {
@@ -14666,11 +14739,11 @@ function Bh({ t: e }) {
 }
 //#endregion
 //#region src/pages/dq/DqPage.tsx
-var Vh = (e) => {
+var Uh = (e) => {
 	let t = /^(\d{4})-(\d{2})-(\d{2})/.exec(e ?? "");
 	return t ? `${t[3]}/${t[2]}/${t[1]}` : "";
 };
-function Hh({ t: e }) {
+function Wh({ t: e }) {
 	let t = L(X("dq_meta")), n = I(X("dq_filter_adm1")), r = I(X("dq_filter_adm2")), i = I(X("dq_filter_adm3")), a = I(X("dq_filter_date")), o = [
 		n,
 		r,
@@ -14700,7 +14773,7 @@ function Hh({ t: e }) {
 		key: "dates",
 		title: e("2. Interview dates"),
 		icon: /* @__PURE__ */ (0, R.jsx)(dt, { size: 14 }),
-		summary: Array.isArray(a) && a[0] ? `${Vh(a[0])} - ${Vh(a[1])}` : e("All dates"),
+		summary: Array.isArray(a) && a[0] ? `${Uh(a[0])} - ${Uh(a[1])}` : e("All dates"),
 		content: /* @__PURE__ */ (0, R.jsx)(yf, {
 			id: X("dq_filter_date"),
 			range: !0,
@@ -14765,31 +14838,31 @@ function Hh({ t: e }) {
 			value: "Location names normalization",
 			label: e("Location names"),
 			icon: /* @__PURE__ */ (0, R.jsx)(Er, { size: 14 }),
-			content: /* @__PURE__ */ (0, R.jsx)(Dh, { t: e })
+			content: /* @__PURE__ */ (0, R.jsx)(kh, { t: e })
 		},
 		{
 			value: "Missing Data Checking",
 			label: e("Missing data"),
 			icon: /* @__PURE__ */ (0, R.jsx)(Zt, { size: 14 }),
-			content: /* @__PURE__ */ (0, R.jsx)(Ah, { t: e })
+			content: /* @__PURE__ */ (0, R.jsx)(Mh, { t: e })
 		},
 		{
 			value: "Outliers",
 			label: e("Outliers"),
 			icon: /* @__PURE__ */ (0, R.jsx)(Bn, { size: 14 }),
-			content: /* @__PURE__ */ (0, R.jsx)(Ih, { t: e })
+			content: /* @__PURE__ */ (0, R.jsx)(Rh, { t: e })
 		},
 		{
 			value: "Duplicates",
 			label: e("Duplicates"),
 			icon: /* @__PURE__ */ (0, R.jsx)(cn, { size: 14 }),
-			content: /* @__PURE__ */ (0, R.jsx)(Lh, { t: e })
+			content: /* @__PURE__ */ (0, R.jsx)(zh, { t: e })
 		},
 		{
 			value: "Enumerator Performance",
 			label: e("Enumerators"),
 			icon: /* @__PURE__ */ (0, R.jsx)(nr, { size: 14 }),
-			content: /* @__PURE__ */ (0, R.jsx)(Bh, { t: e })
+			content: /* @__PURE__ */ (0, R.jsx)(Hh, { t: e })
 		}
 	];
 	return /* @__PURE__ */ (0, R.jsx)(Vf, {
@@ -14804,11 +14877,11 @@ function Hh({ t: e }) {
 }
 //#endregion
 //#region src/pages/dq/index.tsx
-var Uh = /* @__PURE__ */ n({
-	default: () => Hh,
-	page: () => Wh
-}), Wh = "dq_panel", Gh = (e) => e.toLocaleString("en-US");
-function Kh({ ns: e, label: t, hint: n, t: r = (e) => e }) {
+var Gh = /* @__PURE__ */ n({
+	default: () => Wh,
+	page: () => Kh
+}), Kh = "dq_panel", qh = (e) => e.toLocaleString("en-US");
+function Jh({ ns: e, label: t, hint: n, t: r = (e) => e }) {
 	let i = L(`${e}-loaded`);
 	return /* @__PURE__ */ (0, R.jsxs)("div", {
 		className: "tw-fileimport",
@@ -14840,11 +14913,11 @@ function Kh({ ns: e, label: t, hint: n, t: r = (e) => e }) {
 				}), /* @__PURE__ */ (0, R.jsxs)("span", { children: [
 					/* @__PURE__ */ (0, R.jsx)("strong", { children: i.name || r("File loaded.") }),
 					" · ",
-					Gh(i.rows),
+					qh(i.rows),
 					" ",
 					r("rows"),
 					" · ",
-					Gh(i.cols),
+					qh(i.cols),
 					" ",
 					r("columns")
 				] })]
@@ -14854,8 +14927,8 @@ function Kh({ ns: e, label: t, hint: n, t: r = (e) => e }) {
 }
 //#endregion
 //#region src/pages/import/ImportPage.tsx
-var qh = (e) => (e ?? 0).toLocaleString("en-US");
-function Jh({ t: e }) {
+var Yh = (e) => (e ?? 0).toLocaleString("en-US");
+function Xh({ t: e }) {
 	let t = L("setup_1-state");
 	return t?.loaded ? /* @__PURE__ */ (0, R.jsxs)("div", {
 		className: "tw-imp-status",
@@ -14874,11 +14947,11 @@ function Jh({ t: e }) {
 				children: [/* @__PURE__ */ (0, R.jsxs)("div", {
 					className: "tw-imp-status-main",
 					children: [
-						/* @__PURE__ */ (0, R.jsx)("strong", { children: qh(t.rows) }),
+						/* @__PURE__ */ (0, R.jsx)("strong", { children: Yh(t.rows) }),
 						" ",
 						e("rows"),
 						" · ",
-						/* @__PURE__ */ (0, R.jsx)("strong", { children: qh(t.cols) }),
+						/* @__PURE__ */ (0, R.jsx)("strong", { children: Yh(t.cols) }),
 						" ",
 						e("columns"),
 						/* @__PURE__ */ (0, R.jsx)("span", {
@@ -14907,8 +14980,8 @@ function Jh({ t: e }) {
 		}), /* @__PURE__ */ (0, R.jsx)("div", { children: e("No registration data yet. Load a file or pull it from a server; the variable setup opens after the import.") })]
 	});
 }
-var Yh = (e) => /* @__PURE__ */ (0, R.jsx)("code", { children: e });
-function Xh({ t: e }) {
+var Zh = (e) => /* @__PURE__ */ (0, R.jsx)("code", { children: e });
+function Qh({ t: e }) {
 	return /* @__PURE__ */ (0, R.jsxs)("div", {
 		className: "tw-imp",
 		children: [
@@ -14926,7 +14999,7 @@ function Xh({ t: e }) {
 					}),
 					/* @__PURE__ */ (0, R.jsxs)("div", {
 						className: "tw-imp-row",
-						children: [/* @__PURE__ */ (0, R.jsx)(Kh, {
+						children: [/* @__PURE__ */ (0, R.jsx)(Jh, {
 							ns: "file_import_1",
 							t: e
 						}), /* @__PURE__ */ (0, R.jsxs)("div", {
@@ -14954,7 +15027,7 @@ function Xh({ t: e }) {
 							]
 						})]
 					}),
-					/* @__PURE__ */ (0, R.jsx)(Jh, { t: e })
+					/* @__PURE__ */ (0, R.jsx)(Xh, { t: e })
 				]
 			}),
 			/* @__PURE__ */ (0, R.jsx)(H, {
@@ -14966,14 +15039,14 @@ function Xh({ t: e }) {
 						/* @__PURE__ */ (0, R.jsxs)("li", { children: [
 							e("Ensure quantitative variables (Age, HH Size, Scores) are formatted as"),
 							" ",
-							Yh("numeric"),
+							Zh("numeric"),
 							" ",
 							e("in your source file.")
 						] }),
 						/* @__PURE__ */ (0, R.jsxs)("li", { children: [
 							e("Vulnerability scales must be"),
 							" ",
-							Yh("ordered"),
+							Zh("ordered"),
 							" ",
 							e("(e.g., 1 to 5)."),
 							" ",
@@ -14982,7 +15055,7 @@ function Xh({ t: e }) {
 						/* @__PURE__ */ (0, R.jsxs)("li", { children: [
 							e("Records with missing"),
 							" ",
-							Yh("Long/Lat"),
+							Zh("Long/Lat"),
 							" ",
 							e("coordinates are left off the map.")
 						] }),
@@ -14990,9 +15063,9 @@ function Xh({ t: e }) {
 						/* @__PURE__ */ (0, R.jsxs)("li", { children: [
 							e("Do not remove or rename the"),
 							" ",
-							Yh("start"),
+							Zh("start"),
 							" / ",
-							Yh("end"),
+							Zh("end"),
 							" ",
 							e("variables. They are essential for computing survey duration and tracking operational speed.")
 						] })
@@ -15004,15 +15077,15 @@ function Xh({ t: e }) {
 }
 //#endregion
 //#region src/pages/import/index.tsx
-var Zh = /* @__PURE__ */ n({
-	default: () => Xh,
-	page: () => Qh
-}), Qh = "import_panel";
+var $h = /* @__PURE__ */ n({
+	default: () => Qh,
+	page: () => eg
+}), eg = "import_panel";
 //#endregion
 //#region src/components/VerdictCard.tsx
 k();
-var $h = (e) => typeof e == "number" && isFinite(e);
-function eg(e) {
+var tg = (e) => typeof e == "number" && isFinite(e);
+function ng(e) {
 	let t = [
 		"good",
 		"review",
@@ -15024,7 +15097,7 @@ function eg(e) {
 		unknown: e.invalid ? "Tolerance not valid" : "Not enough data"
 	}[t];
 }
-function tg({ v: e, t, labels: n, children: r }) {
+function rg({ v: e, t, labels: n, children: r }) {
 	let i = [
 		"good",
 		"review",
@@ -15033,8 +15106,8 @@ function tg({ v: e, t, labels: n, children: r }) {
 	E(() => {
 		a.current = i;
 	}, [i]);
-	let s = $h(e.lower) && $h(e.upper), c = (n, r) => {
-		if (!$h(r)) return null;
+	let s = tg(e.lower) && tg(e.upper), c = (n, r) => {
+		if (!tg(r)) return null;
 		let i = s ? r <= e.lower ? "is-ok" : r <= e.upper ? "is-mid" : "is-bad" : "";
 		return /* @__PURE__ */ (0, R.jsxs)("div", {
 			className: `vd-metric ${i}`,
@@ -15068,7 +15141,7 @@ function tg({ v: e, t, labels: n, children: r }) {
 				})
 			]
 		});
-	}, l = $h(e.inclusion) || $h(e.exclusion);
+	}, l = tg(e.inclusion) || tg(e.exclusion);
 	return /* @__PURE__ */ (0, R.jsxs)("div", {
 		className: `wfp-verdict is-${i}${o ? "" : " no-anim"}`,
 		role: "status",
@@ -15085,7 +15158,7 @@ function tg({ v: e, t, labels: n, children: r }) {
 					className: "vd-head",
 					children: /* @__PURE__ */ (0, R.jsx)("span", {
 						className: "vd-status",
-						children: t(eg(e))
+						children: t(ng(e))
 					})
 				}),
 				/* @__PURE__ */ (0, R.jsx)("div", {
@@ -15107,7 +15180,7 @@ function tg({ v: e, t, labels: n, children: r }) {
 }
 //#endregion
 //#region src/pages/monitoring/Dropzone.tsx
-function ng({ id: e }) {
+function ig({ id: e }) {
 	return /* @__PURE__ */ (0, R.jsxs)("div", {
 		className: "tw-dropzone mb-2",
 		children: [/* @__PURE__ */ (0, R.jsx)(fa, {
@@ -15123,7 +15196,7 @@ function ng({ id: e }) {
 //#endregion
 //#region src/pages/monitoring/RichText.tsx
 k();
-var rg = ({ cmd: e, title: t, children: n }) => /* @__PURE__ */ (0, R.jsx)("button", {
+var ag = ({ cmd: e, title: t, children: n }) => /* @__PURE__ */ (0, R.jsx)("button", {
 	type: "button",
 	className: "tw-rt-btn",
 	"data-cmd": e,
@@ -15131,7 +15204,7 @@ var rg = ({ cmd: e, title: t, children: n }) => /* @__PURE__ */ (0, R.jsx)("butt
 	"aria-label": t,
 	children: n
 });
-function ig({ id: e, send: t, item: n, label: r, placeholder: i = "", rows: a = 3, value: o = "", compact: s }) {
+function og({ id: e, send: t, item: n, label: r, placeholder: i = "", rows: a = 3, value: o = "", compact: s }) {
 	let c = D(null), l = D(null), u = Zd();
 	return E(() => {
 		l.current && (l.current.innerHTML = o);
@@ -15201,22 +15274,22 @@ function ig({ id: e, send: t, item: n, label: r, placeholder: i = "", rows: a = 
 						]
 					}),
 					/* @__PURE__ */ (0, R.jsx)("span", { className: "tw-rt-sep" }),
-					/* @__PURE__ */ (0, R.jsx)(rg, {
+					/* @__PURE__ */ (0, R.jsx)(ag, {
 						cmd: "bold",
 						title: "Bold",
 						children: /* @__PURE__ */ (0, R.jsx)(tt, { size: 14 })
 					}),
-					/* @__PURE__ */ (0, R.jsx)(rg, {
+					/* @__PURE__ */ (0, R.jsx)(ag, {
 						cmd: "italic",
 						title: "Italic",
 						children: /* @__PURE__ */ (0, R.jsx)(or, { size: 14 })
 					}),
-					/* @__PURE__ */ (0, R.jsx)(rg, {
+					/* @__PURE__ */ (0, R.jsx)(ag, {
 						cmd: "underline",
 						title: "Underline",
 						children: /* @__PURE__ */ (0, R.jsx)(ua, { size: 14 })
 					}),
-					/* @__PURE__ */ (0, R.jsx)(rg, {
+					/* @__PURE__ */ (0, R.jsx)(ag, {
 						cmd: "strikeThrough",
 						title: "Strikethrough",
 						children: /* @__PURE__ */ (0, R.jsx)(Pi, { size: 14 })
@@ -15241,38 +15314,38 @@ function ig({ id: e, send: t, item: n, label: r, placeholder: i = "", rows: a = 
 						})]
 					}),
 					/* @__PURE__ */ (0, R.jsx)("span", { className: "tw-rt-sep" }),
-					/* @__PURE__ */ (0, R.jsx)(rg, {
+					/* @__PURE__ */ (0, R.jsx)(ag, {
 						cmd: "insertUnorderedList",
 						title: "Bulleted list",
 						children: /* @__PURE__ */ (0, R.jsx)(br, { size: 14 })
 					}),
-					/* @__PURE__ */ (0, R.jsx)(rg, {
+					/* @__PURE__ */ (0, R.jsx)(ag, {
 						cmd: "insertOrderedList",
 						title: "Numbered list",
 						children: /* @__PURE__ */ (0, R.jsx)(vr, { size: 14 })
 					}),
-					/* @__PURE__ */ (0, R.jsx)(rg, {
+					/* @__PURE__ */ (0, R.jsx)(ag, {
 						cmd: "justifyLeft",
 						title: "Align left",
 						children: /* @__PURE__ */ (0, R.jsx)(Xi, { size: 14 })
 					}),
-					/* @__PURE__ */ (0, R.jsx)(rg, {
+					/* @__PURE__ */ (0, R.jsx)(ag, {
 						cmd: "justifyCenter",
 						title: "Centre",
 						children: /* @__PURE__ */ (0, R.jsx)(Ki, { size: 14 })
 					}),
-					/* @__PURE__ */ (0, R.jsx)(rg, {
+					/* @__PURE__ */ (0, R.jsx)(ag, {
 						cmd: "justifyRight",
 						title: "Align right",
 						children: /* @__PURE__ */ (0, R.jsx)(Ji, { size: 14 })
 					}),
 					/* @__PURE__ */ (0, R.jsx)("span", { className: "tw-rt-sep" }),
-					/* @__PURE__ */ (0, R.jsx)(rg, {
+					/* @__PURE__ */ (0, R.jsx)(ag, {
 						cmd: "createLink",
 						title: "Link",
 						children: /* @__PURE__ */ (0, R.jsx)(mr, { size: 14 })
 					}),
-					/* @__PURE__ */ (0, R.jsx)(rg, {
+					/* @__PURE__ */ (0, R.jsx)(ag, {
 						cmd: "removeFormat",
 						title: "Clear formatting",
 						children: /* @__PURE__ */ (0, R.jsx)(vn, { size: 14 })
@@ -15298,7 +15371,7 @@ function ig({ id: e, send: t, item: n, label: r, placeholder: i = "", rows: a = 
 //#endregion
 //#region src/pages/monitoring/ChartBuilder.tsx
 k();
-function ag({ prefix: e, t }) {
+function sg({ prefix: e, t }) {
 	let n = (t) => e + t, r = L(n("cb_meta")), i = L(n("cb_state")), a = I(n("display")) ?? "chart", o = I(n("type")) ?? "count", s = I(n("title")) ?? "", c = a === "table", l = !!i?.ready, u = D(null);
 	E(() => {
 		Bf(u.current, !0);
@@ -15526,7 +15599,7 @@ function ag({ prefix: e, t }) {
 						id: n("title"),
 						label: t("Title in the report")
 					}),
-					/* @__PURE__ */ (0, R.jsx)(ig, {
+					/* @__PURE__ */ (0, R.jsx)(og, {
 						id: n("comment"),
 						label: t("Your comment (what it shows, why it matters)"),
 						rows: 3,
@@ -15549,8 +15622,8 @@ function ag({ prefix: e, t }) {
 //#endregion
 //#region src/pages/monitoring/PdmTab.tsx
 k();
-var og = "monitoring_1-pdm-", Z = (e) => og + e, sg = (e) => Math.round(e).toLocaleString("en-US"), cg = (e) => e == null || !isFinite(e) ? "—" : `${(100 * e).toFixed(1).replace(/\.0$/, "")}%`, lg = (e) => e == null || !isFinite(e) ? "n/a" : `${(100 * e).toFixed(1)}%`, ug = (e) => e ? void 0 : { display: "none" };
-function dg({ label: e, value: t, icon: n, tone: r }) {
+var cg = "monitoring_1-pdm-", Z = (e) => cg + e, lg = (e) => Math.round(e).toLocaleString("en-US"), ug = (e) => e == null || !isFinite(e) ? "—" : `${(100 * e).toFixed(1).replace(/\.0$/, "")}%`, dg = (e) => e == null || !isFinite(e) ? "n/a" : `${(100 * e).toFixed(1)}%`, fg = (e) => e ? void 0 : { display: "none" };
+function pg({ label: e, value: t, icon: n, tone: r }) {
 	return /* @__PURE__ */ (0, R.jsxs)("div", {
 		className: `tw-mon-kpi tone-${r}`,
 		children: [/* @__PURE__ */ (0, R.jsx)("span", {
@@ -15565,7 +15638,7 @@ function dg({ label: e, value: t, icon: n, tone: r }) {
 		})] })]
 	});
 }
-function fg({ t: e }) {
+function mg({ t: e }) {
 	let t = L(Z("pdm_state")), n = L(Z("pdm_side")), r = D(null);
 	V(Z("pdm_state"), r);
 	let i = I(Z("ptm_size_mode")) ?? "margin", a = I(Z("data_kind")) ?? "Baseline", o = I(Z("benef_source")) ?? "design", s = I(Z("pdm_elig_source")) ?? "column", c = I(Z("pdm_weight_mode")) ?? "design", l = I(Z("pop_scope")) ?? "overall", u = I(Z("pdm_unit")) ?? "", d = t?.results ?? null, f = d ? d.kind !== "PDM" : a !== "PDM", p = d?.decisions ?? [], m = p.filter((e) => e.level === "redesign").length, h = p.filter((e) => e.level === "review").length, g = /* @__PURE__ */ (0, R.jsxs)(R.Fragment, { children: [/* @__PURE__ */ (0, R.jsx)(Hf, {
@@ -15575,7 +15648,7 @@ function fg({ t: e }) {
 				key: "sample",
 				title: e("0. Verification sample"),
 				icon: /* @__PURE__ */ (0, R.jsx)(Si, { size: 14 }),
-				summary: t?.sample ? `${sg(t.sample.n)} ${e("households")}` : e("Not drawn"),
+				summary: t?.sample ? `${lg(t.sample.n)} ${e("households")}` : e("Not drawn"),
 				content: /* @__PURE__ */ (0, R.jsxs)(R.Fragment, { children: [
 					/* @__PURE__ */ (0, R.jsx)("p", {
 						className: "small text-muted mb-2",
@@ -15601,7 +15674,7 @@ function fg({ t: e }) {
 						}]
 					}),
 					/* @__PURE__ */ (0, R.jsx)("div", {
-						style: ug(i === "margin"),
+						style: fg(i === "margin"),
 						children: /* @__PURE__ */ (0, R.jsx)(mf, {
 							id: Z("ptm_margin"),
 							label: e("Margin of error (%)"),
@@ -15613,7 +15686,7 @@ function fg({ t: e }) {
 						})
 					}),
 					/* @__PURE__ */ (0, R.jsx)("div", {
-						style: ug(i === "fixed"),
+						style: fg(i === "fixed"),
 						children: /* @__PURE__ */ (0, R.jsx)(mf, {
 							id: Z("ptm_n"),
 							label: e("Households per group"),
@@ -15667,21 +15740,21 @@ function fg({ t: e }) {
 								" ",
 								t.sample.drawn_at,
 								": ",
-								sg(t.sample.n),
+								lg(t.sample.n),
 								" ",
 								e("households to survey"),
 								" (",
-								sg(t.sample.selected),
+								lg(t.sample.selected),
 								" ",
 								e("selected"),
 								", ",
-								sg(t.sample.not_selected),
+								lg(t.sample.not_selected),
 								" ",
 								e("not selected"),
 								") ",
 								e("and"),
 								" ",
-								sg(t.sample.reserve),
+								lg(t.sample.reserve),
 								" ",
 								e("in reserve"),
 								", ",
@@ -15718,7 +15791,7 @@ function fg({ t: e }) {
 						className: "small text-muted mb-2",
 						children: e("A survey of selected and non-selected households after the selection and before the distribution (the sample drawn in step 0): problems in an area can still be fixed, or its distribution paused.")
 					}),
-					/* @__PURE__ */ (0, R.jsx)(ng, { id: Z("pdm_file_ui") }),
+					/* @__PURE__ */ (0, R.jsx)(ig, { id: Z("pdm_file_ui") }),
 					/* @__PURE__ */ (0, R.jsx)(rp, {
 						ns: Z("moda"),
 						size: "sm",
@@ -15744,11 +15817,11 @@ function fg({ t: e }) {
 								children: /* @__PURE__ */ (0, R.jsx)("strong", { children: t.data.source })
 							}),
 							/* @__PURE__ */ (0, R.jsx)("br", {}),
-							sg(t.data.rows),
+							lg(t.data.rows),
 							" ",
 							e("records"),
 							", ",
-							sg(t.data.cols),
+							lg(t.data.cols),
 							" ",
 							e("variables. Continue with the steps below.")
 						]
@@ -15783,7 +15856,7 @@ function fg({ t: e }) {
 						}]
 					}),
 					/* @__PURE__ */ (0, R.jsxs)("div", {
-						style: ug(o === "design"),
+						style: fg(o === "design"),
 						children: [/* @__PURE__ */ (0, R.jsx)(z, {
 							id: Z("ptm_id"),
 							label: e("Household ID in the survey"),
@@ -15792,11 +15865,11 @@ function fg({ t: e }) {
 						}), t?.sample ? t.match && /* @__PURE__ */ (0, R.jsxs)("div", {
 							className: `small mb-2 ${t.match.n < t.match.of ? "text-warning" : "text-success"}`,
 							children: [
-								sg(t.match.n),
+								lg(t.match.n),
 								" ",
 								e("of"),
 								" ",
-								sg(t.match.of),
+								lg(t.match.of),
 								" ",
 								e("surveyed households found in the sample list."),
 								t.match.n < t.match.of ? ` ${e("The others are left out.")}` : ""
@@ -15807,7 +15880,7 @@ function fg({ t: e }) {
 						})]
 					}),
 					/* @__PURE__ */ (0, R.jsxs)("div", {
-						style: ug(o === "column"),
+						style: fg(o === "column"),
 						children: [
 							/* @__PURE__ */ (0, R.jsx)(z, {
 								id: Z("pdm_beneficiary"),
@@ -15874,7 +15947,7 @@ function fg({ t: e }) {
 						]
 					}),
 					/* @__PURE__ */ (0, R.jsx)("div", {
-						style: ug(s === "column"),
+						style: fg(s === "column"),
 						children: /* @__PURE__ */ (0, R.jsx)(z, {
 							id: Z("pdm_eligibility"),
 							label: e("Eligibility column"),
@@ -15926,7 +15999,7 @@ function fg({ t: e }) {
 						]
 					}),
 					/* @__PURE__ */ (0, R.jsx)("div", {
-						style: ug(c === "column"),
+						style: fg(c === "column"),
 						children: /* @__PURE__ */ (0, R.jsx)(z, {
 							id: Z("pdm_weight"),
 							label: e("Weight column"),
@@ -15935,7 +16008,7 @@ function fg({ t: e }) {
 						})
 					}),
 					/* @__PURE__ */ (0, R.jsxs)("div", {
-						style: ug(c === "population"),
+						style: fg(c === "population"),
 						children: [
 							/* @__PURE__ */ (0, R.jsx)(_f, {
 								id: Z("pop_scope"),
@@ -15950,7 +16023,7 @@ function fg({ t: e }) {
 								}]
 							}),
 							/* @__PURE__ */ (0, R.jsxs)("div", {
-								style: ug(l === "overall"),
+								style: fg(l === "overall"),
 								children: [/* @__PURE__ */ (0, R.jsx)(mf, {
 									id: Z("pop_benef"),
 									label: e("Beneficiary households"),
@@ -16035,27 +16108,27 @@ function fg({ t: e }) {
 							d && /* @__PURE__ */ (0, R.jsxs)(R.Fragment, { children: [/* @__PURE__ */ (0, R.jsxs)("div", {
 								className: "tw-mon-kpis",
 								children: [
-									/* @__PURE__ */ (0, R.jsx)(dg, {
+									/* @__PURE__ */ (0, R.jsx)(pg, {
 										label: e("Implementation inclusion error"),
-										value: cg(d.inclusion),
+										value: ug(d.inclusion),
 										icon: /* @__PURE__ */ (0, R.jsx)(va, { size: 18 }),
 										tone: "danger"
 									}),
-									/* @__PURE__ */ (0, R.jsx)(dg, {
+									/* @__PURE__ */ (0, R.jsx)(pg, {
 										label: e("Implementation exclusion error"),
-										value: cg(d.exclusion),
+										value: ug(d.exclusion),
 										icon: /* @__PURE__ */ (0, R.jsx)(ga, { size: 18 }),
 										tone: "warning"
 									}),
-									/* @__PURE__ */ (0, R.jsx)(dg, {
+									/* @__PURE__ */ (0, R.jsx)(pg, {
 										label: e("Coverage rate"),
-										value: cg(d.coverage),
+										value: ug(d.coverage),
 										icon: /* @__PURE__ */ (0, R.jsx)(Jr, { size: 18 }),
 										tone: "success"
 									}),
-									/* @__PURE__ */ (0, R.jsx)(dg, {
+									/* @__PURE__ */ (0, R.jsx)(pg, {
 										label: e("Precision / Recall"),
-										value: `${cg(d.precision)} / ${cg(d.recall)}`,
+										value: `${ug(d.precision)} / ${ug(d.recall)}`,
 										icon: /* @__PURE__ */ (0, R.jsx)(Wi, { size: 18 }),
 										tone: "info"
 									})
@@ -16121,19 +16194,19 @@ function fg({ t: e }) {
 											}),
 											/* @__PURE__ */ (0, R.jsx)("td", {
 												className: "text-end",
-												children: sg(e.n_selected)
+												children: lg(e.n_selected)
 											}),
 											/* @__PURE__ */ (0, R.jsx)("td", {
 												className: "text-end",
-												children: sg(e.n_not)
+												children: lg(e.n_not)
 											}),
 											/* @__PURE__ */ (0, R.jsx)("td", {
 												className: "text-end",
-												children: cg(e.inclusion)
+												children: ug(e.inclusion)
 											}),
 											/* @__PURE__ */ (0, R.jsx)("td", {
 												className: "text-end",
-												children: cg(e.exclusion)
+												children: ug(e.exclusion)
 											}),
 											/* @__PURE__ */ (0, R.jsx)("td", { children: /* @__PURE__ */ (0, R.jsx)("span", {
 												className: `tw-mon-decision lv-${e.level}`,
@@ -16161,7 +16234,7 @@ function fg({ t: e }) {
 									step: 1
 								})]
 							}),
-							/* @__PURE__ */ (0, R.jsx)(pg, { t: e })
+							/* @__PURE__ */ (0, R.jsx)(hg, { t: e })
 						] })
 					},
 					{
@@ -16175,7 +16248,7 @@ function fg({ t: e }) {
 							}),
 							/* @__PURE__ */ (0, R.jsxs)("div", {
 								className: "tw-grid-2",
-								style: ug(!!d),
+								style: fg(!!d),
 								children: [/* @__PURE__ */ (0, R.jsx)(H, {
 									title: e("Eligibility vs. assistance received (estimated households)"),
 									full: !0,
@@ -16193,7 +16266,7 @@ function fg({ t: e }) {
 								})]
 							}),
 							/* @__PURE__ */ (0, R.jsx)("div", {
-								style: ug(!!d),
+								style: fg(!!d),
 								children: /* @__PURE__ */ (0, R.jsx)(H, {
 									title: e("Coverage by area"),
 									full: !0,
@@ -16206,13 +16279,13 @@ function fg({ t: e }) {
 						value: "calibrate",
 						label: e("Calibrate the ranking"),
 						icon: /* @__PURE__ */ (0, R.jsx)(Ai, { size: 14 }),
-						content: /* @__PURE__ */ (0, R.jsx)(mg, { t: e })
+						content: /* @__PURE__ */ (0, R.jsx)(gg, { t: e })
 					},
 					{
 						value: "explore",
 						label: e("Explore the data"),
 						icon: /* @__PURE__ */ (0, R.jsx)(yt, { size: 14 }),
-						content: /* @__PURE__ */ (0, R.jsx)(ag, {
+						content: /* @__PURE__ */ (0, R.jsx)(sg, {
 							prefix: "monitoring_1-pdm_charts-",
 							t: e
 						})
@@ -16222,14 +16295,14 @@ function fg({ t: e }) {
 		]
 	});
 }
-function pg({ t: e }) {
+function hg({ t: e }) {
 	let t = L(Z("pdm_verdict")), n = D(null);
 	V(Z("pdm_verdict"), n);
 	let r = t && typeof t.lower == "number" ? Math.round(100 * t.lower) : 5, i = t && typeof t.upper == "number" ? Math.round(100 * t.upper) : 20;
 	return /* @__PURE__ */ (0, R.jsx)("div", {
 		ref: n,
 		className: "tw-mon-verdict",
-		children: t && /* @__PURE__ */ (0, R.jsxs)(tg, {
+		children: t && /* @__PURE__ */ (0, R.jsxs)(rg, {
 			v: t,
 			t: e,
 			children: [/* @__PURE__ */ (0, R.jsxs)("div", {
@@ -16245,11 +16318,11 @@ function pg({ t: e }) {
 					/* @__PURE__ */ (0, R.jsxs)("strong", { children: [
 						e("Excluded by design"),
 						": ",
-						sg(t.excl_design.n),
+						lg(t.excl_design.n),
 						" ",
 						e("households"),
 						" (",
-						cg(t.excl_design.share),
+						ug(t.excl_design.share),
 						" ",
 						e("of eligible"),
 						")."
@@ -16261,7 +16334,7 @@ function pg({ t: e }) {
 		})
 	});
 }
-function mg({ t: e }) {
+function gg({ t: e }) {
 	let t = L(Z("calib_state")), n = D(null);
 	V(Z("calib_state"), n);
 	let r = t?.result ?? null, i = t?.missing ?? [];
@@ -16330,27 +16403,27 @@ function mg({ t: e }) {
 				/* @__PURE__ */ (0, R.jsxs)("div", {
 					className: "tw-mon-kpis",
 					children: [
-						/* @__PURE__ */ (0, R.jsx)(dg, {
+						/* @__PURE__ */ (0, R.jsx)(pg, {
 							label: e("AUC of the ranking"),
 							value: r.auc === null || r.auc === void 0 ? "n/a" : r.auc.toFixed(3),
 							icon: /* @__PURE__ */ (0, R.jsx)(ia, { size: 18 }),
 							tone: "info"
 						}),
-						/* @__PURE__ */ (0, R.jsx)(dg, {
+						/* @__PURE__ */ (0, R.jsx)(pg, {
 							label: e("Inclusion error (adopted threshold)"),
-							value: lg(r.inclusion),
+							value: dg(r.inclusion),
 							icon: /* @__PURE__ */ (0, R.jsx)(va, { size: 18 }),
 							tone: "warning"
 						}),
-						/* @__PURE__ */ (0, R.jsx)(dg, {
+						/* @__PURE__ */ (0, R.jsx)(pg, {
 							label: e("Exclusion error (adopted threshold)"),
-							value: lg(r.exclusion),
+							value: dg(r.exclusion),
 							icon: /* @__PURE__ */ (0, R.jsx)(ga, { size: 18 }),
 							tone: "danger"
 						}),
-						/* @__PURE__ */ (0, R.jsx)(dg, {
+						/* @__PURE__ */ (0, R.jsx)(pg, {
 							label: e("Households measured"),
-							value: sg(r.n),
+							value: lg(r.n),
 							icon: /* @__PURE__ */ (0, R.jsx)(Ea, { size: 18 }),
 							tone: "info"
 						})
@@ -16358,7 +16431,7 @@ function mg({ t: e }) {
 				}),
 				/* @__PURE__ */ (0, R.jsx)("div", {
 					className: "small",
-					children: r.best ? e("The threshold that keeps both errors lowest on these data is %1 (inclusion %2, exclusion %3), against %4 adopted. Re-adopt the ranking in Targeting Design with it if the data are representative.").replace("%1", r.best.threshold).replace("%2", lg(r.best.inclusion)).replace("%3", lg(r.best.exclusion)).replace("%4", r.threshold) : e("No threshold does better than selecting everyone on these data.")
+					children: r.best ? e("The threshold that keeps both errors lowest on these data is %1 (inclusion %2, exclusion %3), against %4 adopted. Re-adopt the ranking in Targeting Design with it if the data are representative.").replace("%1", r.best.threshold).replace("%2", dg(r.best.inclusion)).replace("%3", dg(r.best.exclusion)).replace("%4", r.threshold) : e("No threshold does better than selecting everyone on these data.")
 				}),
 				/* @__PURE__ */ (0, R.jsxs)("div", {
 					className: "small text-muted",
@@ -16378,9 +16451,9 @@ function mg({ t: e }) {
 }
 //#endregion
 //#region src/pages/monitoring/ProcessTab.tsx
-var hg = (e) => "monitoring_1-" + e;
-function gg({ t: e }) {
-	let t = L(hg("mon_state"))?.datasets ?? [], n = /* @__PURE__ */ (0, R.jsx)(Hf, {
+var _g = (e) => "monitoring_1-" + e;
+function vg({ t: e }) {
+	let t = L(_g("mon_state"))?.datasets ?? [], n = /* @__PURE__ */ (0, R.jsx)(Hf, {
 		open: "data",
 		steps: [{
 			key: "data",
@@ -16392,17 +16465,17 @@ function gg({ t: e }) {
 					className: "small text-muted mb-2",
 					children: e("Complaints and feedback, community sessions, targeting committees, participation of women and minorities, focus groups on the criteria. Load as many as you have.")
 				}),
-				/* @__PURE__ */ (0, R.jsx)(ng, { id: hg("pm_file_ui") }),
+				/* @__PURE__ */ (0, R.jsx)(ig, { id: _g("pm_file_ui") }),
 				/* @__PURE__ */ (0, R.jsxs)("div", {
 					className: "d-flex gap-2 align-items-end",
 					children: [/* @__PURE__ */ (0, R.jsx)(z, {
-						id: hg("pm_active"),
+						id: _g("pm_active"),
 						label: e("Dataset to chart"),
 						choices: [],
 						value: "",
 						className: "flex-fill"
 					}), /* @__PURE__ */ (0, R.jsx)(B, {
-						id: hg("pm_remove"),
+						id: _g("pm_remove"),
 						icon: /* @__PURE__ */ (0, R.jsx)(ea, { size: 14 }),
 						variant: "outline-danger",
 						title: e("Remove this dataset"),
@@ -16412,7 +16485,7 @@ function gg({ t: e }) {
 				/* @__PURE__ */ (0, R.jsx)("div", {
 					className: "mb-2",
 					children: /* @__PURE__ */ (0, R.jsx)(rp, {
-						ns: hg("pm_moda"),
+						ns: _g("pm_moda"),
 						size: "sm",
 						t: e
 					})
@@ -16420,7 +16493,7 @@ function gg({ t: e }) {
 				/* @__PURE__ */ (0, R.jsx)("div", {
 					className: "mb-2",
 					children: /* @__PURE__ */ (0, R.jsx)(ip, {
-						ns: hg("pm_refresh"),
+						ns: _g("pm_refresh"),
 						block: !0,
 						t: e
 					})
@@ -16428,7 +16501,7 @@ function gg({ t: e }) {
 				/* @__PURE__ */ (0, R.jsx)("div", {
 					className: "mb-2",
 					children: /* @__PURE__ */ (0, R.jsx)(dp, {
-						ns: hg("pm_summary"),
+						ns: _g("pm_summary"),
 						label: "Summary of this dataset",
 						block: !0,
 						t: e
@@ -16452,7 +16525,7 @@ function gg({ t: e }) {
 			title: e("Areas covered"),
 			icon: /* @__PURE__ */ (0, R.jsx)(Er, { size: 14 }),
 			content: /* @__PURE__ */ (0, R.jsx)(np, {
-				ns: hg("pm_scope"),
+				ns: _g("pm_scope"),
 				title: null,
 				t: e
 			})
@@ -16461,7 +16534,7 @@ function gg({ t: e }) {
 	return /* @__PURE__ */ (0, R.jsx)(Vf, {
 		width: 330,
 		sidebar: n,
-		children: /* @__PURE__ */ (0, R.jsx)(ag, {
+		children: /* @__PURE__ */ (0, R.jsx)(sg, {
 			prefix: "monitoring_1-pm_charts-",
 			t: e
 		})
@@ -16470,17 +16543,17 @@ function gg({ t: e }) {
 //#endregion
 //#region src/pages/monitoring/ReportTab.tsx
 k();
-var _g = (e) => "monitoring_1-" + e;
-function vg() {
+var yg = (e) => "monitoring_1-" + e;
+function bg() {
 	let e = Zd();
 	E(() => {
 		let e = window;
 		!e.twMonDl && e.Shiny && (e.twMonDl = !0, e.Shiny.addCustomMessageHandler("tw-mon-download", (e) => document.getElementById(e.id)?.click()));
 	}, [e]);
 }
-function yg({ t: e }) {
-	vg();
-	let t = L(_g("mon_state")), n = t?.items ?? [];
+function xg({ t: e }) {
+	bg();
+	let t = L(yg("mon_state")), n = t?.items ?? [];
 	return /* @__PURE__ */ (0, R.jsxs)("div", {
 		className: "tw-mon-report",
 		children: [/* @__PURE__ */ (0, R.jsxs)(H, {
@@ -16504,12 +16577,12 @@ function yg({ t: e }) {
 						/* @__PURE__ */ (0, R.jsxs)("div", {
 							className: "d-flex gap-2 align-items-end",
 							children: [/* @__PURE__ */ (0, R.jsx)(z, {
-								id: _g("tpl"),
+								id: yg("tpl"),
 								choices: [],
 								value: "",
 								className: "flex-fill"
 							}), /* @__PURE__ */ (0, R.jsx)(B, {
-								id: _g("tpl_apply"),
+								id: yg("tpl_apply"),
 								label: e("Draft"),
 								icon: /* @__PURE__ */ (0, R.jsx)(Aa, { size: 14 }),
 								className: "mb-2",
@@ -16523,19 +16596,19 @@ function yg({ t: e }) {
 						/* @__PURE__ */ (0, R.jsxs)("div", {
 							className: "d-flex gap-2 mb-2",
 							children: [/* @__PURE__ */ (0, R.jsx)(bf, {
-								id: _g("tpl_export"),
+								id: yg("tpl_export"),
 								label: e("Export"),
 								icon: /* @__PURE__ */ (0, R.jsx)(mn, { size: 14 }),
 								variant: "outline-secondary",
 								title: e("Save the template picked above as a file")
 							}), /* @__PURE__ */ (0, R.jsx)(B, {
-								id: _g("tpl_delete"),
+								id: yg("tpl_delete"),
 								icon: /* @__PURE__ */ (0, R.jsx)(ea, { size: 14 }),
 								variant: "outline-danger",
 								title: e("Delete the saved template picked above")
 							})]
 						}),
-						/* @__PURE__ */ (0, R.jsx)(ng, { id: _g("tpl_import_ui") }),
+						/* @__PURE__ */ (0, R.jsx)(ig, { id: yg("tpl_import_ui") }),
 						t?.rounds && /* @__PURE__ */ (0, R.jsxs)("div", {
 							className: "small d-flex align-items-center gap-1",
 							children: [
@@ -16546,28 +16619,28 @@ function yg({ t: e }) {
 						})
 					]
 				}),
-				/* @__PURE__ */ (0, R.jsx)(ig, {
-					id: _g("context"),
+				/* @__PURE__ */ (0, R.jsx)(og, {
+					id: yg("context"),
 					label: e("Context"),
 					placeholder: e("Programme, area, period, targeting approach, who collected what.")
 				}),
-				/* @__PURE__ */ (0, R.jsx)(ig, {
-					id: _g("findings"),
+				/* @__PURE__ */ (0, R.jsx)(og, {
+					id: yg("findings"),
 					label: e("Key findings"),
 					placeholder: e("What worked, what did not, where and for whom.")
 				}),
-				/* @__PURE__ */ (0, R.jsx)(ig, {
-					id: _g("recommendations"),
+				/* @__PURE__ */ (0, R.jsx)(og, {
+					id: yg("recommendations"),
 					label: e("Recommendations"),
 					placeholder: e("What to change in the next round, and who does it.")
 				}),
 				/* @__PURE__ */ (0, R.jsx)(gf, {
-					id: _g("include_pdm"),
+					id: yg("include_pdm"),
 					label: e("Include the implementation errors (post-targeting survey or PDM)"),
 					value: !0
 				}),
 				/* @__PURE__ */ (0, R.jsx)(B, {
-					id: _g("report_check"),
+					id: yg("report_check"),
 					label: e("Targeting monitoring report (HTML)"),
 					icon: /* @__PURE__ */ (0, R.jsx)(On, { size: 14 }),
 					variant: "primary",
@@ -16579,7 +16652,7 @@ function yg({ t: e }) {
 					children: e("The report is checked first (titles, comments, small groups); you can still export as it is.")
 				}),
 				/* @__PURE__ */ (0, R.jsx)(B, {
-					id: _g("tpl_save"),
+					id: yg("tpl_save"),
 					label: e("Save this report as a template"),
 					icon: /* @__PURE__ */ (0, R.jsx)(ci, { size: 14 }),
 					className: "w-100 mt-3",
@@ -16588,7 +16661,7 @@ function yg({ t: e }) {
 				/* @__PURE__ */ (0, R.jsx)("div", {
 					style: { display: "none" },
 					children: /* @__PURE__ */ (0, R.jsx)(bf, {
-						id: _g("report"),
+						id: yg("report"),
 						label: "Download"
 					})
 				})
@@ -16601,7 +16674,7 @@ function yg({ t: e }) {
 				className: "tw-mon-count",
 				children: n.length
 			}) : null,
-			children: n.length ? /* @__PURE__ */ (0, R.jsx)(bg, {
+			children: n.length ? /* @__PURE__ */ (0, R.jsx)(Sg, {
 				items: n,
 				redraw: t?.redraw ?? 0,
 				t: e
@@ -16612,11 +16685,11 @@ function yg({ t: e }) {
 		})]
 	});
 }
-function bg({ items: e, redraw: t, t: n }) {
-	let r = qd(_g("item_act"), null, {
+function Sg({ items: e, redraw: t, t: n }) {
+	let r = qd(yg("item_act"), null, {
 		debounceMs: 0,
 		priority: "event"
-	}), i = qd(_g("item_order"), null, {
+	}), i = qd(yg("item_order"), null, {
 		debounceMs: 0,
 		priority: "event"
 	}), a = (e, t) => r({
@@ -16728,8 +16801,8 @@ function bg({ items: e, redraw: t, t: n }) {
 						})
 					]
 				}),
-				/* @__PURE__ */ (0, R.jsx)(ig, {
-					send: _g("item_comment"),
+				/* @__PURE__ */ (0, R.jsx)(og, {
+					send: yg("item_comment"),
 					item: r.id,
 					value: r.comment,
 					placeholder: n("Comment"),
@@ -16762,7 +16835,7 @@ function bg({ items: e, redraw: t, t: n }) {
 }
 //#endregion
 //#region src/pages/monitoring/MonitoringPage.tsx
-function xg({ t: e }) {
+function Cg({ t: e }) {
 	return /* @__PURE__ */ (0, R.jsx)("div", {
 		className: "tw-mon",
 		children: /* @__PURE__ */ (0, R.jsx)(Wf, {
@@ -16772,19 +16845,19 @@ function xg({ t: e }) {
 					value: "pdm",
 					label: e("1. Implementation errors"),
 					icon: /* @__PURE__ */ (0, R.jsx)(Wi, { size: 15 }),
-					content: /* @__PURE__ */ (0, R.jsx)(fg, { t: e })
+					content: /* @__PURE__ */ (0, R.jsx)(mg, { t: e })
 				},
 				{
 					value: "process",
 					label: e("2. Targeting process"),
 					icon: /* @__PURE__ */ (0, R.jsx)(Ea, { size: 15 }),
-					content: /* @__PURE__ */ (0, R.jsx)(gg, { t: e })
+					content: /* @__PURE__ */ (0, R.jsx)(vg, { t: e })
 				},
 				{
 					value: "report",
 					label: e("3. Monitoring report"),
 					icon: /* @__PURE__ */ (0, R.jsx)(On, { size: 15 }),
-					content: /* @__PURE__ */ (0, R.jsx)(yg, { t: e })
+					content: /* @__PURE__ */ (0, R.jsx)(xg, { t: e })
 				}
 			]
 		})
@@ -16792,30 +16865,30 @@ function xg({ t: e }) {
 }
 //#endregion
 //#region src/pages/monitoring/index.tsx
-var Sg = /* @__PURE__ */ n({
-	default: () => xg,
-	page: () => Cg
-}), Cg = "pdm_panel";
+var wg = /* @__PURE__ */ n({
+	default: () => Cg,
+	page: () => Tg
+}), Tg = "pdm_panel";
 //#endregion
 //#region src/pages/overview/charts.tsx
 k();
-var wg = (e) => {
+var Eg = (e) => {
 	let [t, n, r] = e.split("-");
 	return `${r}/${n}/${t}`;
-}, Tg = (e) => {
+}, Dg = (e) => {
 	let [, t, n] = e.split("-");
 	return `${n}/${t}`;
-}, Eg = (e) => e.replace(/[&<>"]/g, (e) => ({
+}, Og = (e) => e.replace(/[&<>"]/g, (e) => ({
 	"&": "&amp;",
 	"<": "&lt;",
 	">": "&gt;",
 	"\"": "&quot;"
-})[e]), Dg = (e) => ({
+})[e]), kg = (e) => ({
 	fontSize: 9,
 	textBorderWidth: 0,
 	color: e ? "#c9d1dc" : "#5b6b7c"
 });
-function Og() {
+function Ag() {
 	let e = () => document.documentElement.getAttribute("data-bs-theme") === "dark", [t, n] = O(e);
 	return E(() => {
 		let t = new MutationObserver(() => n(e()));
@@ -16825,7 +16898,7 @@ function Og() {
 		}), () => t.disconnect();
 	}, []), t;
 }
-function kg({ daily: e, byArea: t, areas: n, height: r = 205 }) {
+function jg({ daily: e, byArea: t, areas: n, height: r = 205 }) {
 	let i = _e(() => {
 		let r = [...new Set(e.map((e) => e.day))].sort(), i = t ? [...new Set(e.map((e) => e.area))].sort((e, t) => n.indexOf(e) - n.indexOf(t)) : ["Households"], a = new Map(r.map((e, t) => [e, t])), o = i.map(() => r.map(() => 0));
 		for (let n of e) o[t ? i.indexOf(n.area) : 0][a.get(n.day)] += n.n;
@@ -16850,11 +16923,11 @@ function kg({ daily: e, byArea: t, areas: n, height: r = 205 }) {
 			tooltip: {
 				trigger: "axis",
 				axisPointer: { type: "shadow" },
-				formatter: (e) => `<b>${wg(r[e[0].dataIndex])}</b><br>` + e.filter((e) => e.value > 0 || e.seriesName === "Cumulative").map((e) => `${e.marker}${e.seriesName === "Cumulative" ? "In all" : Eg(e.seriesName)}: <b>${Pm(e.value)}</b>`).join("<br>")
+				formatter: (e) => `<b>${Eg(r[e[0].dataIndex])}</b><br>` + e.filter((e) => e.value > 0 || e.seriesName === "Cumulative").map((e) => `${e.marker}${e.seriesName === "Cumulative" ? "In all" : Og(e.seriesName)}: <b>${Pm(e.value)}</b>`).join("<br>")
 			},
 			xAxis: {
 				type: "category",
-				data: r.map(Tg),
+				data: r.map(Dg),
 				axisLabel: { hideOverlap: !0 }
 			},
 			yAxis: [{
@@ -16899,7 +16972,7 @@ function kg({ daily: e, byArea: t, areas: n, height: r = 205 }) {
 		height: r
 	});
 }
-function Ag(e, t, n) {
+function Mg(e, t, n) {
 	return {
 		grid: {
 			left: 4,
@@ -16936,16 +17009,16 @@ function Ag(e, t, n) {
 			label: {
 				show: !0,
 				position: "right",
-				...Dg(n),
+				...kg(n),
 				formatter: (e) => t(e.value)
 			}
 		}]
 	};
 }
-function jg({ data: e, kind: t, height: n = 170 }) {
-	let r = Og(), i = _e(() => {
-		let n = e.reduce((e, t) => e + t.n, 0) || 1, i = (e) => `${Eg(e.category)}: <b>${Nm(e.n / n, 1)}</b> (${Pm(e.n)} households)`;
-		if (t !== "bins") return Ag(e.map((e) => ({
+function Ng({ data: e, kind: t, height: n = 170 }) {
+	let r = Ag(), i = _e(() => {
+		let n = e.reduce((e, t) => e + t.n, 0) || 1, i = (e) => `${Og(e.category)}: <b>${Nm(e.n / n, 1)}</b> (${Pm(e.n)} households)`;
+		if (t !== "bins") return Mg(e.map((e) => ({
 			label: e.category,
 			value: e.n / n,
 			colour: Om.blue,
@@ -16993,7 +17066,7 @@ function jg({ data: e, kind: t, height: n = 170 }) {
 				label: {
 					show: !0,
 					position: "top",
-					...Dg(r),
+					...kg(r),
 					formatter: (e) => Nm(e.value)
 				}
 			}]
@@ -17008,14 +17081,14 @@ function jg({ data: e, kind: t, height: n = 170 }) {
 		height: a
 	});
 }
-function Mg({ groups: e, height: t = 200 }) {
-	let n = Og(), r = _e(() => {
+function Pg({ groups: e, height: t = 200 }) {
+	let n = Ag(), r = _e(() => {
 		let t = e.reduce((e, t) => e + t.households, 0) || 1;
-		return Ag(e.map((e) => ({
+		return Mg(e.map((e) => ({
 			label: e.group,
 			value: e.households / t,
 			colour: e.colour,
-			tip: `${Eg(e.group)}: <b>${Nm(e.households / t, 1)}</b> of households, ${Pm(e.people)} people`
+			tip: `${Og(e.group)}: <b>${Nm(e.households / t, 1)}</b> of households, ${Pm(e.people)} people`
 		})), (e) => Nm(e), n);
 	}, [e, n]);
 	return /* @__PURE__ */ (0, R.jsx)(Op, {
@@ -17023,13 +17096,13 @@ function Mg({ groups: e, height: t = 200 }) {
 		height: Math.max(t, 28 * e.length + 12)
 	});
 }
-function Ng({ rows: e, pctScale: t, overall: n, label: r }) {
-	let i = _e(() => [...new Set(e.map((e) => e.dimension))], [e]), a = Og(), o = _e(() => {
-		let o = (e) => t ? Nm(e) : e.toFixed(1), s = (e) => km[i.indexOf(e) % km.length], c = Math.max(0, ...e.map((e) => e.value), n ?? 0), l = Ag(e.map((e) => ({
+function Fg({ rows: e, pctScale: t, overall: n, label: r }) {
+	let i = _e(() => [...new Set(e.map((e) => e.dimension))], [e]), a = Ag(), o = _e(() => {
+		let o = (e) => t ? Nm(e) : e.toFixed(1), s = (e) => km[i.indexOf(e) % km.length], c = Math.max(0, ...e.map((e) => e.value), n ?? 0), l = Mg(e.map((e) => ({
 			label: `${e.category} `,
 			value: e.value,
 			colour: s(e.dimension),
-			tip: `${Eg(e.category)} (${Eg(e.dimension)})<br>${Eg(r)}: <b>${t ? Nm(e.value, 1) : e.value.toFixed(1)}</b><br>${Pm(e.households)} households`
+			tip: `${Og(e.category)} (${Og(e.dimension)})<br>${Og(r)}: <b>${t ? Nm(e.value, 1) : e.value.toFixed(1)}</b><br>${Pm(e.households)} households`
 		})), o, a);
 		return l.grid = {
 			left: 4,
@@ -17090,22 +17163,22 @@ function Ng({ rows: e, pctScale: t, overall: n, label: r }) {
 //#endregion
 //#region src/pages/overview/Builders.tsx
 k();
-var Pg = (e) => `overview_1-${e}`;
-function Fg() {
-	let e = L(Pg("ov_explore"));
+var Ig = (e) => `overview_1-${e}`;
+function Lg() {
+	let e = L(Ig("ov_explore"));
 	return {
 		ex: e,
 		key: e ? e.all.join("|") : ""
 	};
 }
-function Ig({ t: e }) {
-	let { ex: t, key: n } = Fg();
-	return t ? t.all.length ? /* @__PURE__ */ (0, R.jsx)(Rg, {
+function Rg({ t: e }) {
+	let { ex: t, key: n } = Lg();
+	return t ? t.all.length ? /* @__PURE__ */ (0, R.jsx)(Bg, {
 		ex: t,
 		t: e
 	}, n) : /* @__PURE__ */ (0, R.jsx)(Y, { title: e("No column to tabulate") }) : null;
 }
-var Lg = [
+var zg = [
 	{
 		value: "n",
 		label: "Households"
@@ -17131,8 +17204,8 @@ var Lg = [
 		label: "Sum of a number"
 	}
 ];
-function Rg({ ex: e, t }) {
-	let n = I(Pg("ct_stat")) ?? "n", r = L(Pg("ct_info")), i = n === "mean" || n === "sum";
+function Bg({ ex: e, t }) {
+	let n = I(Ig("ct_stat")) ?? "n", r = L(Ig("ct_info")), i = n === "mean" || n === "sum";
 	return /* @__PURE__ */ (0, R.jsxs)("div", {
 		className: "tw-ob",
 		children: [
@@ -17140,14 +17213,14 @@ function Rg({ ex: e, t }) {
 				className: "tw-ob-controls",
 				children: [
 					/* @__PURE__ */ (0, R.jsx)(z, {
-						id: Pg("ct_row"),
+						id: Ig("ct_row"),
 						label: t("Rows"),
 						choices: e.choices,
 						value: e.all[0],
 						clearable: !1
 					}),
 					/* @__PURE__ */ (0, R.jsx)(z, {
-						id: Pg("ct_col"),
+						id: Ig("ct_col"),
 						label: t("Columns"),
 						value: e.all[1] ?? "",
 						clearable: !1,
@@ -17157,11 +17230,11 @@ function Rg({ ex: e, t }) {
 						}, ...e.choices]
 					}),
 					/* @__PURE__ */ (0, R.jsx)(z, {
-						id: Pg("ct_stat"),
+						id: Ig("ct_stat"),
 						label: t("Cells"),
 						value: "n",
 						clearable: !1,
-						choices: Lg.map((e) => ({
+						choices: zg.map((e) => ({
 							...e,
 							label: t(e.label)
 						}))
@@ -17169,7 +17242,7 @@ function Rg({ ex: e, t }) {
 					/* @__PURE__ */ (0, R.jsx)("div", {
 						style: { display: i ? void 0 : "none" },
 						children: /* @__PURE__ */ (0, R.jsx)(z, {
-							id: Pg("ct_value"),
+							id: Ig("ct_value"),
 							label: t("Number"),
 							value: e.nums[0] ?? "",
 							clearable: !1,
@@ -17201,7 +17274,7 @@ function Rg({ ex: e, t }) {
 				]
 			}),
 			/* @__PURE__ */ (0, R.jsx)(zf, {
-				id: Pg("ct_table"),
+				id: Ig("ct_table"),
 				compact: !0,
 				searchable: !1,
 				height: 360
@@ -17213,15 +17286,15 @@ function Rg({ ex: e, t }) {
 		]
 	});
 }
-function zg({ t: e }) {
-	let { ex: t, key: n } = Fg();
-	return t ? t.all.length ? /* @__PURE__ */ (0, R.jsx)(Bg, {
+function Vg({ t: e }) {
+	let { ex: t, key: n } = Lg();
+	return t ? t.all.length ? /* @__PURE__ */ (0, R.jsx)(Hg, {
 		ex: t,
 		t: e
 	}, n) : /* @__PURE__ */ (0, R.jsx)(Y, { title: e("No column to chart") }) : null;
 }
-function Bg({ ex: e, t }) {
-	let n = L(Pg("gb_meta")), [r, i] = Kd(Pg("gb_type"), "", { debounceMs: 0 }), a = n?.types ?? [];
+function Hg({ ex: e, t }) {
+	let n = L(Ig("gb_meta")), [r, i] = Kd(Ig("gb_type"), "", { debounceMs: 0 }), a = n?.types ?? [];
 	E(() => {
 		a.length && !a.some((e) => e.value === r) && i(a[0].value);
 	}, [a.map((e) => e.value).join("|")]);
@@ -17236,21 +17309,21 @@ function Bg({ ex: e, t }) {
 				className: "tw-ob-controls",
 				children: [
 					/* @__PURE__ */ (0, R.jsx)(z, {
-						id: Pg("gb_x"),
+						id: Ig("gb_x"),
 						label: t("Variable"),
 						choices: e.choices,
 						value: e.all[0],
 						clearable: !1
 					}),
 					/* @__PURE__ */ (0, R.jsx)(z, {
-						id: Pg("gb_y"),
+						id: Ig("gb_y"),
 						label: t("Against"),
 						choices: [o, ...e.choices],
 						value: "",
 						clearable: !1
 					}),
 					/* @__PURE__ */ (0, R.jsx)(z, {
-						id: Pg("gb_group"),
+						id: Ig("gb_group"),
 						label: t("Grouped by"),
 						choices: [o, ...e.choices],
 						value: "",
@@ -17273,7 +17346,7 @@ function Bg({ ex: e, t }) {
 						children: t(e.label)
 					}, e.value))
 				}), /* @__PURE__ */ (0, R.jsx)(B, {
-					id: Pg("gb_axes"),
+					id: Ig("gb_axes"),
 					label: n?.axes_set ? t("Axes (set)") : t("Axes"),
 					icon: /* @__PURE__ */ (0, R.jsx)(Rr, { size: 13 }),
 					variant: "outline-secondary",
@@ -17281,10 +17354,10 @@ function Bg({ ex: e, t }) {
 					title: t("Set the bounds of the axes")
 				})]
 			}),
-			/* @__PURE__ */ (0, R.jsx)(U, { id: Pg("gb_plot") }),
+			/* @__PURE__ */ (0, R.jsx)(U, { id: Ig("gb_plot") }),
 			/* @__PURE__ */ (0, R.jsx)("div", {
 				className: "tw-ob-note",
-				children: /* @__PURE__ */ (0, R.jsx)(Sf, { id: Pg("gb_note") })
+				children: /* @__PURE__ */ (0, R.jsx)(Sf, { id: Ig("gb_note") })
 			})
 		]
 	});
@@ -17292,20 +17365,20 @@ function Bg({ ex: e, t }) {
 //#endregion
 //#region src/pages/overview/MapView.tsx
 k();
-var Vg = [
+var Ug = [
 	"Light",
 	"Dark",
 	"Terrain",
 	"Satellite",
 	"Satellite (Clarity)"
-], Hg = () => document.documentElement.getAttribute("data-bs-theme") === "dark";
-function Ug({ ns: e, t, card: n, fitSignal: r, onColourCol: i }) {
+], Wg = () => document.documentElement.getAttribute("data-bs-theme") === "dark";
+function Gg({ ns: e, t, card: n, fitSignal: r, onColourCol: i }) {
 	let a = D(null), o = D(null);
 	V(e("map_points"), a), V(e("map_colours"), a);
 	let s = L(e("map_points")), c = L(e("map_colours")), l = Yd(e("map_points")), u = qd(e("map_plot_bounds"), null, { debounceMs: 150 }), d = qd(e("map_click"), null, {
 		debounceMs: 0,
 		priority: "event"
-	}), [f, p] = O(null), [m, h] = O(Hg), [g, _] = O("Terrain"), v = D("Terrain"), [y, b] = O(-1), [x, S] = O(0), C = D(null);
+	}), [f, p] = O(null), [m, h] = O(Wg), [g, _] = O("Terrain"), v = D("Terrain"), [y, b] = O(-1), [x, S] = O(0), C = D(null);
 	C.current = f, E(() => {
 		let e = !1, t = null;
 		return import("./chunks/mapgl-suRRulEH.js").then(({ TwMap: r }) => {
@@ -17316,12 +17389,12 @@ function Ug({ ns: e, t, card: n, fitSignal: r, onColourCol: i }) {
 					nonce: Date.now()
 				}),
 				onDrawn: (e) => b(e)
-			}, Hg() ? "Dark" : "Terrain", Hg()), p(t));
+			}, Wg() ? "Dark" : "Terrain", Wg()), p(t));
 		}), () => {
 			e = !0, t?.destroy();
 		};
 	}, []), E(() => {
-		let e = new MutationObserver(() => h(Hg()));
+		let e = new MutationObserver(() => h(Wg()));
 		return e.observe(document.documentElement, {
 			attributes: !0,
 			attributeFilter: ["data-bs-theme"]
@@ -17377,7 +17450,7 @@ function Ug({ ns: e, t, card: n, fitSignal: r, onColourCol: i }) {
 				onChange: (e) => {
 					_(e.target.value), e.target.value !== "Dark" && (v.current = e.target.value);
 				},
-				children: Vg.map((e) => /* @__PURE__ */ (0, R.jsx)("option", {
+				children: Ug.map((e) => /* @__PURE__ */ (0, R.jsx)("option", {
 					value: e,
 					children: t(e)
 				}, e))
@@ -17412,18 +17485,18 @@ function Ug({ ns: e, t, card: n, fitSignal: r, onColourCol: i }) {
 //#endregion
 //#region src/pages/overview/OverviewPage.tsx
 k();
-var Wg = "overview_1-", Gg = (e) => Wg + e, Kg = {
+var Kg = "overview_1-", qg = (e) => Kg + e, Jg = {
 	admin1: "Admin 1",
 	admin2: "Admin 2",
 	admin3: "Admin 3"
-}, qg = {
+}, Yg = {
 	eligible: "Share eligible",
 	vulnerable: "Share in the most vulnerable groups",
 	score: "Mean score"
 };
-function Jg({ active: e, t }) {
-	let n = L(Gg("ov_meta"));
-	return n ? /* @__PURE__ */ (0, R.jsx)(Yg, {
+function Xg({ active: e, t }) {
+	let n = L(qg("ov_meta"));
+	return n ? /* @__PURE__ */ (0, R.jsx)(Zg, {
 		meta: n,
 		active: e,
 		t
@@ -17432,8 +17505,8 @@ function Jg({ active: e, t }) {
 		children: /* @__PURE__ */ (0, R.jsx)(Y, { title: t("Load the registration data and map its variables first.") })
 	});
 }
-function Yg({ meta: e, active: t, t: n }) {
-	let [r, i] = Kd(Gg("filter_admin1"), []), [a, o] = Kd(Gg("filter_admin2"), []), [s, c] = Kd(Gg("filter_admin3"), []), l = [
+function Zg({ meta: e, active: t, t: n }) {
+	let [r, i] = Kd(qg("filter_admin1"), []), [a, o] = Kd(qg("filter_admin2"), []), [s, c] = Kd(qg("filter_admin3"), []), l = [
 		r,
 		a,
 		s
@@ -17441,7 +17514,7 @@ function Yg({ meta: e, active: t, t: n }) {
 		i,
 		o,
 		c
-	], [d, f] = Kd(Gg("filter_date"), e.dates ?? []), p = tf(Gg("btn_apply_filters")), m = tf(Gg("btn_clear_filters"));
+	], [d, f] = Kd(qg("filter_date"), e.dates ?? []), p = tf(qg("btn_apply_filters")), m = tf(qg("btn_clear_filters"));
 	E(() => {
 		e.dates && d.length !== 2 && f([...e.dates]);
 	}, [e.dates]);
@@ -17470,13 +17543,13 @@ function Yg({ meta: e, active: t, t: n }) {
 	}, [h]);
 	let g = () => {
 		i([]), o([]), c([]), e.dates && f([...e.dates]), m();
-	}, [_, v] = Kd(Gg("map_var"), e.map_default);
+	}, [_, v] = Kd(qg("map_var"), e.map_default);
 	E(() => {
 		!_ && e.map_default && v(e.map_default);
 	}, [e.map_default]);
-	let [y, b] = Kd(Gg("view_follow"), !1), x = tf(Gg("view_all")), S = D(null), [C, w] = O(0), ee = L(Gg("ov_view")), T = L(Gg("ov_ready")), te = L(Gg("ov_collection")), ne = D(null);
-	V(Gg("ov_collection"), ne);
-	let re = Jd(Gg("ov_collection")), [ie, ae] = O(!0), oe = L(Gg("ov_profile")), se = L(Gg("ov_vuln")), [ce, le] = O(""), ue = se && !se.empty ? se.cross[ce] ?? se.cross[se.indicator] : void 0, [de, fe] = O("who");
+	let [y, b] = Kd(qg("view_follow"), !1), x = tf(qg("view_all")), S = D(null), [C, w] = O(0), ee = L(qg("ov_view")), te = L(qg("ov_ready")), T = L(qg("ov_collection")), ne = D(null);
+	V(qg("ov_collection"), ne);
+	let re = Jd(qg("ov_collection")), [ie, ae] = O(!0), oe = L(qg("ov_profile")), se = L(qg("ov_vuln")), [ce, le] = O(""), ue = se && !se.empty ? se.cross[ce] ?? se.cross[se.indicator] : void 0, [de, fe] = O("who");
 	E(() => {
 		t && window.setTimeout(() => window.dispatchEvent(new Event("resize")), 30);
 	}, [de, t]);
@@ -17497,7 +17570,7 @@ function Yg({ meta: e, active: t, t: n }) {
 							children: ["1. ", n("Areas")]
 						}), e.levels.map((e, t) => /* @__PURE__ */ (0, R.jsxs)("label", {
 							className: "tw-rov-field",
-							children: [/* @__PURE__ */ (0, R.jsx)("span", { children: n(Kg[e] ?? e) }), /* @__PURE__ */ (0, R.jsx)(Wd, {
+							children: [/* @__PURE__ */ (0, R.jsx)("span", { children: n(Jg[e] ?? e) }), /* @__PURE__ */ (0, R.jsx)(Wd, {
 								isMulti: !0,
 								classNamePrefix: "tw-select",
 								placeholder: n("Nothing selected"),
@@ -17563,7 +17636,7 @@ function Yg({ meta: e, active: t, t: n }) {
 								children: /* @__PURE__ */ (0, R.jsx)(Ma, { size: 14 })
 							})]
 						}), /* @__PURE__ */ (0, R.jsxs)($d, {
-							id: Gg("overview_report"),
+							id: qg("overview_report"),
 							tagName: "a",
 							className: "btn btn-outline-primary btn-sm w-100 mt-2 shiny-download-link",
 							download: "",
@@ -17598,8 +17671,8 @@ function Yg({ meta: e, active: t, t: n }) {
 							}, e.value))
 						})]
 					})
-				}), /* @__PURE__ */ (0, R.jsx)(Ug, {
-					ns: Gg,
+				}), /* @__PURE__ */ (0, R.jsx)(Gg, {
+					ns: qg,
 					t: n,
 					card: S,
 					fitSignal: C,
@@ -17657,15 +17730,15 @@ function Yg({ meta: e, active: t, t: n }) {
 								})
 							]
 						}),
-						T && T.off.length > 0 && /* @__PURE__ */ (0, R.jsxs)("div", {
+						te && te.off.length > 0 && /* @__PURE__ */ (0, R.jsxs)("div", {
 							className: "tw-ready-strip",
-							children: [/* @__PURE__ */ (0, R.jsx)("span", { children: n("Not available with these data:") }), T.off.map((e) => /* @__PURE__ */ (0, R.jsx)("span", {
+							children: [/* @__PURE__ */ (0, R.jsx)("span", { children: n("Not available with these data:") }), te.off.map((e) => /* @__PURE__ */ (0, R.jsx)("span", {
 								className: "tw-ready-chip off",
 								title: e.detail,
 								children: e.feature
 							}, e.feature))]
 						}),
-						te ? /* @__PURE__ */ (0, R.jsx)(jm, { tiles: te.tiles }) : null,
+						T ? /* @__PURE__ */ (0, R.jsx)(jm, { tiles: T.tiles }) : null,
 						/* @__PURE__ */ (0, R.jsxs)("div", {
 							className: "tw-ov-daily",
 							children: [/* @__PURE__ */ (0, R.jsxs)("div", {
@@ -17673,7 +17746,7 @@ function Yg({ meta: e, active: t, t: n }) {
 								children: [/* @__PURE__ */ (0, R.jsx)("span", {
 									className: "tw-ov-sub",
 									children: n("Households per day")
-								}), te?.by_area && /* @__PURE__ */ (0, R.jsxs)("div", {
+								}), T?.by_area && /* @__PURE__ */ (0, R.jsxs)("div", {
 									className: "btn-group btn-group-sm tw-seg-r",
 									role: "group",
 									"aria-label": "Total or by area",
@@ -17689,11 +17762,11 @@ function Yg({ meta: e, active: t, t: n }) {
 										children: n("By area")
 									})]
 								})]
-							}), te && te.daily.length > 0 ? /* @__PURE__ */ (0, R.jsx)(kg, {
-								daily: te.daily,
-								byArea: ie && te.by_area,
-								areas: te.areas
-							}) : te ? /* @__PURE__ */ (0, R.jsx)("div", {
+							}), T && T.daily.length > 0 ? /* @__PURE__ */ (0, R.jsx)(jg, {
+								daily: T.daily,
+								byArea: ie && T.by_area,
+								areas: T.areas
+							}) : T ? /* @__PURE__ */ (0, R.jsx)("div", {
 								className: "small text-muted py-3",
 								children: n("Not in these data: map the data collection date to see the daily submissions.")
 							}) : null]
@@ -17702,12 +17775,12 @@ function Yg({ meta: e, active: t, t: n }) {
 				}), /* @__PURE__ */ (0, R.jsxs)("div", {
 					className: "tw-rov-sections",
 					children: [
-						/* @__PURE__ */ (0, R.jsx)(Xg, {
+						/* @__PURE__ */ (0, R.jsx)(Qg, {
 							id: "who",
 							title: n("Who is in the data"),
 							open: de,
 							setOpen: fe,
-							watch: Gg("ov_profile"),
+							watch: qg("ov_profile"),
 							children: oe ? oe.empty ? /* @__PURE__ */ (0, R.jsx)(Y, {
 								title: n("No household characteristic is mapped"),
 								sub: n("Map the head's sex and age, household size, children under 5, residence status... in Variable Definition & Setup.")
@@ -17718,19 +17791,19 @@ function Yg({ meta: e, active: t, t: n }) {
 									children: [/* @__PURE__ */ (0, R.jsx)("div", {
 										className: "tw-mini-title",
 										children: n(e.title)
-									}), /* @__PURE__ */ (0, R.jsx)(jg, {
+									}), /* @__PURE__ */ (0, R.jsx)(Ng, {
 										data: e.data,
 										kind: e.kind
 									})]
 								}, e.key))
 							})] }) : null
 						}),
-						/* @__PURE__ */ (0, R.jsx)(Xg, {
+						/* @__PURE__ */ (0, R.jsx)(Qg, {
 							id: "vuln",
 							title: n("Vulnerability"),
 							open: de,
 							setOpen: fe,
-							watch: Gg("ov_vuln"),
+							watch: qg("ov_vuln"),
 							children: se ? se.empty ? /* @__PURE__ */ (0, R.jsx)(Y, {
 								title: n("No vulnerability variable is mapped"),
 								sub: n("Map a vulnerability score, vulnerability groups or eligibility in Variable Definition & Setup, or build a scorecard in Targeting Design.")
@@ -17741,13 +17814,13 @@ function Yg({ meta: e, active: t, t: n }) {
 									children: [/* @__PURE__ */ (0, R.jsx)("div", {
 										className: "tw-mini-title",
 										children: n("Households by vulnerability group")
-									}), /* @__PURE__ */ (0, R.jsx)(Mg, { groups: se.groups })]
+									}), /* @__PURE__ */ (0, R.jsx)(Pg, { groups: se.groups })]
 								}), se.score && /* @__PURE__ */ (0, R.jsxs)("div", {
 									className: "tw-mini",
 									children: [/* @__PURE__ */ (0, R.jsx)("div", {
 										className: "tw-mini-title",
 										children: n("Distribution of the vulnerability score")
-									}), /* @__PURE__ */ (0, R.jsx)(jg, {
+									}), /* @__PURE__ */ (0, R.jsx)(Ng, {
 										data: se.score,
 										kind: "bins",
 										height: 200
@@ -17765,10 +17838,10 @@ function Yg({ meta: e, active: t, t: n }) {
 										"aria-label": "Indicator",
 										children: se.available.map((e) => /* @__PURE__ */ (0, R.jsx)("option", {
 											value: e,
-											children: n(qg[e] ?? e)
+											children: n(Yg[e] ?? e)
 										}, e))
 									})]
-								}), /* @__PURE__ */ (0, R.jsx)(Ng, {
+								}), /* @__PURE__ */ (0, R.jsx)(Fg, {
 									rows: ue.rows,
 									pctScale: ue.pct,
 									overall: ue.overall,
@@ -17776,19 +17849,19 @@ function Yg({ meta: e, active: t, t: n }) {
 								})]
 							})] }) : null
 						}),
-						/* @__PURE__ */ (0, R.jsx)(Xg, {
+						/* @__PURE__ */ (0, R.jsx)(Qg, {
 							id: "explore",
 							title: n("Table builder"),
 							open: de,
 							setOpen: fe,
-							children: /* @__PURE__ */ (0, R.jsx)(Ig, { t: n })
+							children: /* @__PURE__ */ (0, R.jsx)(Rg, { t: n })
 						}),
-						/* @__PURE__ */ (0, R.jsx)(Xg, {
+						/* @__PURE__ */ (0, R.jsx)(Qg, {
 							id: "charts",
 							title: n("Chart builder"),
 							open: de,
 							setOpen: fe,
-							children: /* @__PURE__ */ (0, R.jsx)(zg, { t: n })
+							children: /* @__PURE__ */ (0, R.jsx)(Vg, { t: n })
 						})
 					]
 				})]
@@ -17796,7 +17869,7 @@ function Yg({ meta: e, active: t, t: n }) {
 		]
 	});
 }
-function Xg({ id: e, title: t, open: n, setOpen: r, children: i, watch: a }) {
+function Qg({ id: e, title: t, open: n, setOpen: r, children: i, watch: a }) {
 	let o = n === e, s = D(null);
 	return V(a ?? "", s), /* @__PURE__ */ (0, R.jsxs)("div", {
 		className: "tw-rov-sec" + (o ? " open" : ""),
@@ -17820,21 +17893,21 @@ function Xg({ id: e, title: t, open: n, setOpen: r, children: i, watch: a }) {
 }
 //#endregion
 //#region src/pages/overview/index.tsx
-var Zg = /* @__PURE__ */ n({
-	default: () => Jg,
-	page: () => Qg
-}), Qg = "overview_panel";
+var $g = /* @__PURE__ */ n({
+	default: () => Xg,
+	page: () => e_
+}), e_ = "overview_panel";
 //#endregion
 //#region src/pages/selection/SelectionPage.tsx
 k();
-var Q = (e) => `ben_selection_1-${e}`, $g = (e) => Math.round(e).toLocaleString("en-US"), e_ = {
+var Q = (e) => `ben_selection_1-${e}`, t_ = (e) => Math.round(e).toLocaleString("en-US"), n_ = {
 	people: /* @__PURE__ */ (0, R.jsx)(Ea, { size: 14 }),
 	person: /* @__PURE__ */ (0, R.jsx)(Sa, { size: 14 }),
 	female: /* @__PURE__ */ (0, R.jsx)(Oa, { size: 14 }),
 	cut: /* @__PURE__ */ (0, R.jsx)(Vt, { size: 14 }),
 	area: /* @__PURE__ */ (0, R.jsx)(Er, { size: 14 })
 };
-function t_({ t: e }) {
+function r_({ t: e }) {
 	let t = L(Q("ben_meta")), n = L(Q("ben_pending"))?.pending ?? [], r = I(Q("ben_approach")) ?? "hybrid", i = t?.approaches.find((e) => e.value === r), a = i?.gates ?? [
 		"area",
 		"criteria",
@@ -17876,7 +17949,7 @@ function t_({ t: e }) {
 			})
 		] })
 	}] }), /* @__PURE__ */ (0, R.jsxs)(Uf, { children: [
-		/* @__PURE__ */ (0, R.jsx)(i_, {
+		/* @__PURE__ */ (0, R.jsx)(o_, {
 			pending: n,
 			t: e
 		}),
@@ -17924,8 +17997,8 @@ function t_({ t: e }) {
 			className: "tw-sel-main",
 			children: [
 				t && !t.ready && /* @__PURE__ */ (0, R.jsx)(Y, { title: e("Load the registration data and map its variables first.") }),
-				/* @__PURE__ */ (0, R.jsx)(n_, { t: e }),
-				/* @__PURE__ */ (0, R.jsx)(r_, { t: e }),
+				/* @__PURE__ */ (0, R.jsx)(i_, { t: e }),
+				/* @__PURE__ */ (0, R.jsx)(a_, { t: e }),
 				/* @__PURE__ */ (0, R.jsx)(Wf, {
 					id: Q("ben_tabs"),
 					value: "design",
@@ -17934,7 +18007,7 @@ function t_({ t: e }) {
 							value: "design",
 							label: e("Selection design"),
 							icon: /* @__PURE__ */ (0, R.jsx)(Ai, { size: 14 }),
-							content: /* @__PURE__ */ (0, R.jsx)(a_, {
+							content: /* @__PURE__ */ (0, R.jsx)(s_, {
 								t: e,
 								meta: t,
 								gates: a,
@@ -17946,7 +18019,7 @@ function t_({ t: e }) {
 							value: "composition",
 							label: e("Composition"),
 							icon: /* @__PURE__ */ (0, R.jsx)(_t, { size: 14 }),
-							content: /* @__PURE__ */ (0, R.jsx)(c_, {
+							content: /* @__PURE__ */ (0, R.jsx)(u_, {
 								t: e,
 								meta: t
 							})
@@ -17955,7 +18028,7 @@ function t_({ t: e }) {
 							value: "list",
 							label: e("Beneficiary list"),
 							icon: /* @__PURE__ */ (0, R.jsx)(br, { size: 14 }),
-							content: /* @__PURE__ */ (0, R.jsx)(l_, { t: e })
+							content: /* @__PURE__ */ (0, R.jsx)(d_, { t: e })
 						}
 					]
 				})
@@ -17963,7 +18036,7 @@ function t_({ t: e }) {
 		})
 	});
 }
-function n_({ t: e }) {
+function i_({ t: e }) {
 	let t = (e, t, n, r) => /* @__PURE__ */ (0, R.jsxs)("div", {
 		className: "tw-sel-kpi",
 		children: [/* @__PURE__ */ (0, R.jsx)("span", {
@@ -17990,7 +18063,7 @@ function n_({ t: e }) {
 		]
 	});
 }
-function r_({ t: e }) {
+function a_({ t: e }) {
 	let t = L(Q("selection_note"));
 	if (!t) return null;
 	let n = t.eligible - t.served;
@@ -18000,17 +18073,17 @@ function r_({ t: e }) {
 			/* @__PURE__ */ (0, R.jsx)("strong", { children: e(t.label) }),
 			": ",
 			t.list_produced ? /* @__PURE__ */ (0, R.jsxs)(R.Fragment, { children: [
-				$g(t.eligible),
+				t_(t.eligible),
 				" ",
 				e("eligible by design"),
 				t.served < t.eligible && /* @__PURE__ */ (0, R.jsxs)(R.Fragment, { children: [
 					", ",
-					$g(t.served),
+					t_(t.served),
 					" ",
 					e("prioritised"),
 					", ",
 					/* @__PURE__ */ (0, R.jsxs)("strong", { children: [
-						$g(n),
+						t_(n),
 						" ",
 						e("excluded by design")
 					] }),
@@ -18026,7 +18099,7 @@ function r_({ t: e }) {
 		}, e))]
 	});
 }
-function i_({ pending: e, t }) {
+function o_({ pending: e, t }) {
 	return e.length ? /* @__PURE__ */ (0, R.jsxs)(Jf, {
 		kind: "warning",
 		className: "tw-sel-pending",
@@ -18039,7 +18112,7 @@ function i_({ pending: e, t }) {
 		]
 	}) : null;
 }
-function a_({ t: e, meta: t, gates: n, approach: r, pending: i }) {
+function s_({ t: e, meta: t, gates: n, approach: r, pending: i }) {
 	let a = r?.value ?? "hybrid", o = a === "self", s = I(Q("ben_prio_mode")) ?? "none", c = I(Q("use_scorecard")), l = t?.card ?? null, u = !!l && c !== !1, d = [
 		{
 			key: "approach",
@@ -18120,7 +18193,7 @@ function a_({ t: e, meta: t, gates: n, approach: r, pending: i }) {
 								step: .1
 							})
 						}),
-						/* @__PURE__ */ (0, R.jsx)(o_, { t: e }),
+						/* @__PURE__ */ (0, R.jsx)(c_, { t: e }),
 						/* @__PURE__ */ (0, R.jsx)(B, {
 							id: Q("sc_rematch"),
 							label: e("Match columns"),
@@ -18257,7 +18330,7 @@ function a_({ t: e, meta: t, gates: n, approach: r, pending: i }) {
 								icon: /* @__PURE__ */ (0, R.jsx)(En, { size: 14 }),
 								className: "w-100 mb-2"
 							}),
-							/* @__PURE__ */ (0, R.jsx)(s_, { t: e })
+							/* @__PURE__ */ (0, R.jsx)(l_, { t: e })
 						]
 					}),
 					/* @__PURE__ */ (0, R.jsx)("div", {
@@ -18302,7 +18375,7 @@ function a_({ t: e, meta: t, gates: n, approach: r, pending: i }) {
 		})]
 	})] });
 }
-function o_({ t: e }) {
+function c_({ t: e }) {
 	let t = L(Q("scorecard_note"));
 	return t ? /* @__PURE__ */ (0, R.jsxs)("div", {
 		className: "tw-sel-scnote",
@@ -18337,7 +18410,7 @@ function o_({ t: e }) {
 		})]
 	}) : null;
 }
-function s_({ t: e }) {
+function l_({ t: e }) {
 	let t = L(Q("quota_summary"));
 	return t ? t.set ? /* @__PURE__ */ (0, R.jsxs)("div", {
 		className: "small text-muted tw-sel-quota",
@@ -18347,7 +18420,7 @@ function s_({ t: e }) {
 				className: "text-success"
 			}),
 			" ",
-			$g(t.total ?? 0),
+			t_(t.total ?? 0),
 			" ",
 			e(t.count ?? "households"),
 			" ",
@@ -18369,7 +18442,7 @@ function s_({ t: e }) {
 		]
 	}) : null;
 }
-function c_({ t: e, meta: t }) {
+function u_({ t: e, meta: t }) {
 	let n = L(Q("comp_insights")), r = L(Q("ben_profile")), i = t?.ranking ?? null, a = Yd(Q("ben_validation_plot"))?.message, o = (t) => /* @__PURE__ */ (0, R.jsx)("span", {
 		className: "tw-sel-help",
 		title: e(t),
@@ -18391,7 +18464,7 @@ function c_({ t: e, meta: t }) {
 						/* @__PURE__ */ (0, R.jsxs)("div", {
 							className: "tw-sel-insight-label",
 							children: [
-								e_[t.icon],
+								n_[t.icon],
 								" ",
 								e(t.label)
 							]
@@ -18497,7 +18570,7 @@ function c_({ t: e, meta: t }) {
 		]
 	});
 }
-function l_({ t: e }) {
+function d_({ t: e }) {
 	return /* @__PURE__ */ (0, R.jsx)(H, {
 		title: e("Selected beneficiaries"),
 		icon: /* @__PURE__ */ (0, R.jsx)(Ea, { size: 15 }),
@@ -18518,15 +18591,15 @@ function l_({ t: e }) {
 }
 //#endregion
 //#region src/pages/selection/index.tsx
-var u_ = /* @__PURE__ */ n({
-	default: () => t_,
-	page: () => d_
-}), d_ = "ben_panel";
+var f_ = /* @__PURE__ */ n({
+	default: () => r_,
+	page: () => p_
+}), p_ = "ben_panel";
 //#endregion
 //#region src/pages/spot/SpotPage.tsx
 k();
 var $ = (e) => `spot_checking_1-${e}`;
-function f_({ active: e, t }) {
+function m_({ active: e, t }) {
 	let n = D(null);
 	E(() => {
 		e && Bf(n.current, !0);
@@ -18616,26 +18689,26 @@ function f_({ active: e, t }) {
 				/* @__PURE__ */ (0, R.jsxs)("div", {
 					className: "tw-spot-kpis",
 					children: [
-						/* @__PURE__ */ (0, R.jsx)(p_, {
+						/* @__PURE__ */ (0, R.jsx)(h_, {
 							icon: /* @__PURE__ */ (0, R.jsx)(fn, { size: 16 }),
 							label: t("Households in scope"),
 							value: r?.pool,
 							sub: r?.remote ? t("with a valid phone number") : t("after the area and search filters")
 						}),
-						/* @__PURE__ */ (0, R.jsx)(p_, {
+						/* @__PURE__ */ (0, R.jsx)(h_, {
 							icon: /* @__PURE__ */ (0, R.jsx)(xt, { size: 16 }),
 							label: t("Share sampled"),
 							value: r?.share,
 							tone: "info"
 						}),
-						/* @__PURE__ */ (0, R.jsx)(p_, {
+						/* @__PURE__ */ (0, R.jsx)(h_, {
 							icon: /* @__PURE__ */ (0, R.jsx)(vr, { size: 16 }),
 							label: t("Sample size"),
 							value: r?.sample,
 							tone: "neutral",
 							sub: r?.sample ? void 0 : t("Draw the spot-check sample first.")
 						}),
-						/* @__PURE__ */ (0, R.jsx)(p_, {
+						/* @__PURE__ */ (0, R.jsx)(h_, {
 							icon: /* @__PURE__ */ (0, R.jsx)(Lt, { size: 16 }),
 							label: t("Back-check agreement"),
 							value: r?.agreement,
@@ -18667,19 +18740,19 @@ function f_({ active: e, t }) {
 						value: "sample",
 						label: t("1. Sample for checking"),
 						icon: /* @__PURE__ */ (0, R.jsx)(gr, { size: 15 }),
-						content: /* @__PURE__ */ (0, R.jsx)(m_, { t })
+						content: /* @__PURE__ */ (0, R.jsx)(g_, { t })
 					}, {
 						value: "verify",
 						label: t("2. Verification"),
 						icon: /* @__PURE__ */ (0, R.jsx)(Yt, { size: 15 }),
-						content: /* @__PURE__ */ (0, R.jsx)(h_, { t })
+						content: /* @__PURE__ */ (0, R.jsx)(__, { t })
 					}]
 				})
 			]
 		})
 	});
 }
-function p_({ icon: e, label: t, value: n, sub: r, tone: i = "primary" }) {
+function h_({ icon: e, label: t, value: n, sub: r, tone: i = "primary" }) {
 	return /* @__PURE__ */ (0, R.jsxs)("div", {
 		className: `tw-spot-kpi tone-${i}`,
 		children: [/* @__PURE__ */ (0, R.jsx)("span", {
@@ -18704,7 +18777,7 @@ function p_({ icon: e, label: t, value: n, sub: r, tone: i = "primary" }) {
 		})]
 	});
 }
-function m_({ t: e }) {
+function g_({ t: e }) {
 	let t = I($("sc_mode")) ?? "face";
 	return /* @__PURE__ */ (0, R.jsxs)(R.Fragment, { children: [/* @__PURE__ */ (0, R.jsxs)("div", {
 		className: `tw-spot-band tw-align tw-align-bottom${t === "remote" ? " has-help" : ""}`,
@@ -18829,7 +18902,7 @@ function m_({ t: e }) {
 		}), /* @__PURE__ */ (0, R.jsx)(zf, { id: $("spot_table") })]
 	})] });
 }
-function h_({ t: e }) {
+function __({ t: e }) {
 	let t = L($("verif_state")), n = I($("verif_source")) ?? "file";
 	return /* @__PURE__ */ (0, R.jsxs)(R.Fragment, { children: [/* @__PURE__ */ (0, R.jsxs)(H, {
 		title: e("Back-check comparison"),
@@ -18968,26 +19041,26 @@ function h_({ t: e }) {
 		/* @__PURE__ */ (0, R.jsxs)("div", {
 			className: "tw-spot-kpis",
 			children: [
-				/* @__PURE__ */ (0, R.jsx)(p_, {
+				/* @__PURE__ */ (0, R.jsx)(h_, {
 					icon: /* @__PURE__ */ (0, R.jsx)(fr, { size: 16 }),
 					label: e("Matched records"),
 					value: t.kpis.matched,
 					sub: `${e("on")} ${t.kpis.key}`
 				}),
-				/* @__PURE__ */ (0, R.jsx)(p_, {
+				/* @__PURE__ */ (0, R.jsx)(h_, {
 					icon: /* @__PURE__ */ (0, R.jsx)(Lt, { size: 16 }),
 					label: e("Overall agreement"),
 					value: t.kpis.agreement,
 					tone: "success",
 					sub: `${t.kpis.fields} ${e("fields compared")}`
 				}),
-				/* @__PURE__ */ (0, R.jsx)(p_, {
+				/* @__PURE__ */ (0, R.jsx)(h_, {
 					icon: /* @__PURE__ */ (0, R.jsx)(na, { size: 16 }),
 					label: e("Records with a discordance"),
 					value: t.kpis.discordant,
 					tone: "warning"
 				}),
-				/* @__PURE__ */ (0, R.jsx)(p_, {
+				/* @__PURE__ */ (0, R.jsx)(h_, {
 					icon: /* @__PURE__ */ (0, R.jsx)(Ut, { size: 16 }),
 					label: e("Unmatched"),
 					value: t.kpis.unmatched,
@@ -19001,7 +19074,7 @@ function h_({ t: e }) {
 			children: [/* @__PURE__ */ (0, R.jsx)(H, {
 				full: !0,
 				title: e("Agreement by field"),
-				help: /* @__PURE__ */ (0, R.jsx)(g_, { t: e }),
+				help: /* @__PURE__ */ (0, R.jsx)(v_, { t: e }),
 				children: /* @__PURE__ */ (0, R.jsx)(U, { id: $("verif_plot") })
 			}), /* @__PURE__ */ (0, R.jsx)(H, {
 				full: !0,
@@ -19022,7 +19095,7 @@ function h_({ t: e }) {
 		})
 	] })] });
 }
-function g_({ t: e }) {
+function v_({ t: e }) {
 	return /* @__PURE__ */ (0, R.jsxs)("span", {
 		className: "tw-spot-legend",
 		children: [
@@ -19037,13 +19110,13 @@ function g_({ t: e }) {
 }
 //#endregion
 //#region src/pages/spot/index.tsx
-var __ = /* @__PURE__ */ n({
-	default: () => f_,
-	page: () => v_
-}), v_ = "spot_panel";
+var y_ = /* @__PURE__ */ n({
+	default: () => m_,
+	page: () => b_
+}), b_ = "spot_panel";
 //#endregion
 //#region src/pages/welcome/WelcomePage.tsx
-function y_({ n: e, title: t, dataset: n, body: r, icon: i, action: a }) {
+function x_({ n: e, title: t, dataset: n, body: r, icon: i, action: a }) {
 	return /* @__PURE__ */ (0, R.jsx)("div", {
 		className: "card tw-card tw-wl-phase wfp-lift",
 		children: /* @__PURE__ */ (0, R.jsxs)("div", {
@@ -19083,7 +19156,7 @@ function y_({ n: e, title: t, dataset: n, body: r, icon: i, action: a }) {
 		})
 	});
 }
-function b_({ t: e }) {
+function S_({ t: e }) {
 	let t = L("welcome_meta"), n = (t, n, r) => /* @__PURE__ */ (0, R.jsx)(B, {
 		id: t,
 		label: /* @__PURE__ */ (0, R.jsxs)(R.Fragment, { children: [
@@ -19132,7 +19205,7 @@ function b_({ t: e }) {
 				className: "tw-wl-phases",
 				"aria-label": e("The three phases"),
 				children: [
-					/* @__PURE__ */ (0, R.jsx)(y_, {
+					/* @__PURE__ */ (0, R.jsx)(x_, {
 						n: "1",
 						title: e("Targeting Design"),
 						dataset: e("Needs-assessment data"),
@@ -19140,7 +19213,7 @@ function b_({ t: e }) {
 						body: e("Screen candidate eligibility criteria against a food-security outcome, fit a scorecard, and see the inclusion and exclusion errors your design would produce before anyone is served."),
 						action: n("go_design", "Start a targeting design", "primary")
 					}),
-					/* @__PURE__ */ (0, R.jsx)(y_, {
+					/* @__PURE__ */ (0, R.jsx)(x_, {
 						n: "2",
 						title: e("Beneficiary Selection"),
 						dataset: e("Household registration data"),
@@ -19148,7 +19221,7 @@ function b_({ t: e }) {
 						body: e("Load and clean the registration data, spot-check it against field verification, then apply the scorecard and your eligibility rules to produce the beneficiary list."),
 						action: n("go_import", "Load registration data", "outline-primary")
 					}),
-					/* @__PURE__ */ (0, R.jsx)(y_, {
+					/* @__PURE__ */ (0, R.jsx)(x_, {
 						n: "3",
 						title: e("Targeting Monitoring"),
 						dataset: e("Post-distribution monitoring data"),
@@ -19253,33 +19326,33 @@ function b_({ t: e }) {
 }
 //#endregion
 //#region src/pages/welcome/index.tsx
-var x_ = /* @__PURE__ */ n({
-	default: () => b_,
-	page: () => S_
-}), S_ = "welcome_panel";
+var C_ = /* @__PURE__ */ n({
+	default: () => S_,
+	page: () => w_
+}), w_ = "welcome_panel";
 //#endregion
 //#region src/i18n.ts
 k();
-var C_ = null;
-function w_() {
-	return C_ ||= fetch("www/translations.json").then((e) => e.ok ? e.json() : { translation: [] }).then((e) => {
+var T_ = null;
+function E_() {
+	return T_ ||= fetch("www/translations.json").then((e) => e.ok ? e.json() : { translation: [] }).then((e) => {
 		let t = {};
 		for (let n of e.translation ?? []) for (let [e, r] of Object.entries(n)) e !== "en" && ((t[e] ??= {})[n.en] = r);
 		return t;
-	}).catch(() => ({})), C_;
+	}).catch(() => ({})), T_;
 }
-function T_(e) {
+function D_(e) {
 	let [t, n] = O({});
 	return E(() => {
 		let t = !0;
-		return w_().then((r) => t && n(e === "en" ? {} : r[e] ?? {})), () => {
+		return E_().then((r) => t && n(e === "en" ? {} : r[e] ?? {})), () => {
 			t = !1;
 		};
 	}, [e]), (e) => t[e] ?? e;
 }
 //#endregion
 //#region src/components/SessionToolbar.tsx
-function E_({ ns: e = "session_manager_1", t = (e) => e }) {
+function O_({ ns: e = "session_manager_1", t = (e) => e }) {
 	let n = (t) => `${e}-${t}`, r = L(n("toolbar")), i = (e) => /* @__PURE__ */ (0, R.jsx)("span", {
 		className: "action-label",
 		children: t(e)
@@ -19338,7 +19411,7 @@ function E_({ ns: e = "session_manager_1", t = (e) => e }) {
 //#endregion
 //#region src/App.tsx
 k();
-var D_ = [
+var k_ = [
 	{
 		value: "welcome_panel",
 		label: "Welcome",
@@ -19392,18 +19465,18 @@ var D_ = [
 		label: "Audit Trail",
 		Icon: ni
 	}
-], O_ = D_.flatMap((e) => "pages" in e ? e.pages : [e]), k_ = Object.fromEntries(Object.values([
+], A_ = k_.flatMap((e) => "pages" in e ? e.pages : [e]), j_ = Object.fromEntries(Object.values([
 	$f,
 	hh,
-	Uh,
-	Zh,
-	Sg,
-	Zg,
-	u_,
-	__,
-	x_
+	Gh,
+	$h,
+	wg,
+	$g,
+	f_,
+	y_,
+	C_
 ]).map((e) => [e.page, e.default]));
-function A_() {
+function M_() {
 	let [e, t] = Kd("main_nav", "welcome_panel", { debounceMs: 0 }), [n, r] = Kd("lang_selector", "en", { debounceMs: 0 }), [i, a] = Kd("dark_mode", "light", { debounceMs: 0 }), [o, s] = O([
 		"overview_panel",
 		"dq_panel",
@@ -19412,12 +19485,12 @@ function A_() {
 	]);
 	Xd("tw-nav-state", (e) => s(e.hidden ?? []));
 	let c = new Set(o), l = Zd(), u = qd("tw_client_ready", 0, { debounceMs: 0 });
-	Kd("tw_ported", Object.keys(k_), { debounceMs: 0 }), E(() => {
+	Kd("tw_ported", Object.keys(j_), { debounceMs: 0 }), E(() => {
 		if (!l) return;
 		let e = window.setTimeout(() => u(Date.now()), 50);
 		return () => window.clearTimeout(e);
 	}, [l]);
-	let [d, f] = O(!1), p = T_(n);
+	let [d, f] = O(!1), p = D_(n);
 	Xd("tw-nav", (e) => {
 		e.action === "select" && e.target.length && t(e.target[0]);
 	}), E(() => {
@@ -19459,7 +19532,7 @@ function A_() {
 					}),
 					/* @__PURE__ */ (0, R.jsx)("ul", {
 						className: "navbar-nav nav me-auto",
-						children: D_.map((t) => "pages" in t ? /* @__PURE__ */ (0, R.jsxs)("li", {
+						children: k_.map((t) => "pages" in t ? /* @__PURE__ */ (0, R.jsxs)("li", {
 							ref: m,
 							className: "nav-item dropdown" + (d ? " show" : ""),
 							children: [/* @__PURE__ */ (0, R.jsxs)("a", {
@@ -19531,7 +19604,7 @@ function A_() {
 									})]
 								})]
 							}),
-							/* @__PURE__ */ (0, R.jsx)(E_, { t: p }),
+							/* @__PURE__ */ (0, R.jsx)(O_, { t: p }),
 							/* @__PURE__ */ (0, R.jsx)("button", {
 								type: "button",
 								className: "btn btn-sm tw-mode-btn",
@@ -19546,16 +19619,16 @@ function A_() {
 			})
 		}), /* @__PURE__ */ (0, R.jsx)("main", {
 			className: "tw-main",
-			children: O_.map((t) => {
-				let n = k_[t.value], r = t.value === e;
-				return n ? /* @__PURE__ */ (0, R.jsx)(j_, {
+			children: A_.map((t) => {
+				let n = j_[t.value], r = t.value === e;
+				return n ? /* @__PURE__ */ (0, R.jsx)(N_, {
 					value: t.value,
 					active: r,
 					children: /* @__PURE__ */ (0, R.jsx)(n, {
 						active: r,
 						t: p
 					})
-				}, t.value) : /* @__PURE__ */ (0, R.jsx)(M_, {
+				}, t.value) : /* @__PURE__ */ (0, R.jsx)(P_, {
 					value: t.value,
 					active: r
 				}, t.value);
@@ -19563,7 +19636,7 @@ function A_() {
 		})]
 	});
 }
-function j_({ value: e, active: t, children: n }) {
+function N_({ value: e, active: t, children: n }) {
 	let r = D(null);
 	return E(() => Bf(r.current, t), [t]), /* @__PURE__ */ (0, R.jsx)("div", {
 		ref: r,
@@ -19573,7 +19646,7 @@ function j_({ value: e, active: t, children: n }) {
 		children: n
 	});
 }
-function M_({ value: e, active: t }) {
+function P_({ value: e, active: t }) {
 	let n = "pg_" + e;
 	return E(() => {
 		let e = document.getElementById(n), r = window.jQuery;
@@ -19586,6 +19659,6 @@ function M_({ value: e, active: t }) {
 }
 //#endregion
 //#region src/ui.tsx
-var { ReactDOM: N_ } = window.shinyreact;
-N_.createRoot(document.body.appendChild(document.createElement("div"))).render(/* @__PURE__ */ (0, R.jsx)(A_, {}));
+var { ReactDOM: F_ } = window.shinyreact;
+F_.createRoot(document.body.appendChild(document.createElement("div"))).render(/* @__PURE__ */ (0, R.jsx)(M_, {}));
 //#endregion

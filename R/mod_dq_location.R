@@ -85,7 +85,7 @@ dq_location_ui <- function(ns) {
 
               bslib::layout_columns(
                 DT::DTOutput(ns("tab_location_norm"), fill = FALSE),
-                plotly::plotlyOutput(ns("dq_location_treemap"), height = "600px"),
+                plotly::plotlyOutput(ns("dq_location_view"), height = "600px"),
                 col_widths = c(6, 6)
               ),
             )
@@ -397,48 +397,64 @@ dq_location_server <- function(input, output, session, ns, core) {
     }
   )
 
-  ## --------- Similarity Tree Map
-
-  output$dq_location_treemap <- render_echart({
-    dat <- norm_data_summary()
+  ## --------- The names as a chart: similar names (network), the nesting
+  ## (sunburst) or variant groups (bars); input$loc_view is a display toggle
+  # the similarity rate redraws the chart as it changes (a display setting)
+  loc_similarity <- debounce(reactive({
+    x <- suppressWarnings(as.numeric(input$loc_similarity))
+    if (!length(x) || is.na(x)) 80 else min(100, max(50, x))
+  }), 400)
+  loc_groups <- reactive({
+    dat <- norm_data_summary(); cols <- norm_cols()
     req(dat, nrow(dat) > 0)
-    dq_treemap_option(dat)
+    loc_similar_groups(dat, cols[length(cols)], similarity = loc_similarity() / 100)
+  })
+  output$dq_location_view <- render_echart({
+    view <- input$loc_view %||% "similar"
+    if (identical(view, "sunburst")) {
+      dat <- norm_data_summary(); req(dat, nrow(dat) > 0)
+      return(loc_sunburst_option(dat))
+    }
+    g <- loc_groups()
+    validate(need(nrow(g) > 0, "No look-alike names at this level."))
+    if (identical(view, "bars")) loc_bars_option(g) else loc_network_option(g)
   }, height = 560)
-}
 
-#' The location hierarchy as an ECharts treemap: each level nests in the one
-#' above, sized by the number of records (react/src/pages/dq/LocationTab.tsx)
-#' @param dat One row per combination of the levels, with `count`.
-#' @noRd
-dq_treemap_option <- function(dat) {
-  lv <- setdiff(names(dat), "count")
-  node <- function(d, k) {
-    if (k > length(lv)) return(NULL)
-    key <- as.character(d[[lv[k]]]); key[is.na(key)] <- "(missing)"
-    lapply(split(seq_len(nrow(d)), factor(key, levels = unique(key))), function(i) {
-      kids <- node(d[i, , drop = FALSE], k + 1)
-      c(list(name = key[i[1]], value = sum(d$count[i])), if (length(kids)) list(children = unname(kids)))
-    }) |> unname()
-  }
-  dq_compact(list(
-    tooltip = list(trigger = "item"),
-    series = list(list(
-      type = "treemap", name = "All records", data = node(dat, 1), roam = FALSE, nodeClick = "zoomToNode",
-      top = 4, left = 0, right = 0, bottom = 28, leafDepth = if (length(lv) > 1) 2 else NULL,
-      breadcrumb = list(show = TRUE, bottom = 0, height = 20),
-      label = list(show = TRUE, formatter = "{b}
-{c}", fontSize = 11),
-      upperLabel = list(show = TRUE, height = 18, color = "#fff", fontSize = 11),
-      itemStyle = list(borderColor = "rgba(255,255,255,0.6)", borderWidth = 1, gapWidth = 1),
-      # a level's colours go to its children: the root colours the top level,
-      # each top-level place shades its own children
-      levels = list(
-        list(color = I(c("#0A6EB4", "#26bde2", "#3f7e44", "#f7b825", "#5b6b7c", "#7fb3d5", "#c5192d", "#8a96a3")),
-             itemStyle = list(borderWidth = 0, gapWidth = 3)),
-        list(colorSaturation = I(c(0.35, 0.65)), itemStyle = list(gapWidth = 2, borderWidth = 2, borderColor = "rgba(255,255,255,0.35)"),
-             upperLabel = list(show = TRUE)),
-        list(colorSaturation = I(c(0.3, 0.6)), itemStyle = list(gapWidth = 1, borderColorSaturation = 0.6))
-      )
-    ))
-  ))
+  # a click on a name or a bar selects its whole group in the table and
+  # suggests the most common spelling
+  observeEvent(input$dq_location_view_click, {
+    k <- suppressWarnings(as.integer(input$dq_location_view_click$data$group))
+    if (!length(k) || is.na(k)) return()
+    g <- loc_groups(); g <- g[g$group == k, , drop = FALSE]
+    if (!nrow(g)) return()
+    d <- norm_data_summary(); cols <- norm_cols()
+    react_table_select("tab_location_norm", which(as.character(d[[cols[length(cols)]]]) %in% g$name))
+    updateTextInput(session, "correct_name", value = g$label[1])
+  })
+
+  # the cross on a selected name's chip takes its rows out of the selection
+  observeEvent(input$norm_unselect, {
+    nm <- input$norm_unselect$name
+    rows <- input$tab_location_norm_rows_selected
+    if (is.null(nm) || !length(rows)) return()
+    d <- norm_data_summary(); cols <- norm_cols()
+    keep <- rows[rows >= 1 & rows <= nrow(d)]
+    keep <- keep[as.character(d[[cols[length(cols)]]][keep]) != nm]
+    react_table_select("tab_location_norm", if (length(keep)) keep else NULL)
+    # the suggested spelling was the name taken out: suggest from the rest
+    if (identical(trimws(input$correct_name %||% ""), trimws(nm))) {
+      agg <- if (length(keep)) tapply(d$count[keep], as.character(d[[cols[length(cols)]]][keep]), sum)
+      updateTextInput(session, "correct_name", value = if (length(agg)) names(agg)[which.max(agg)] else "")
+    }
+  })
+
+  workspace_register(core$workspace, "dq_location",
+    snapshot = function() {
+      if (is.null(uploaded_df()) || is.null(input$loc_view)) return(NULL)
+      list(view = input$loc_view, similarity = input$loc_similarity)
+    },
+    restore = function(s) after_flush(session, function() {
+      updateRadioButtons(session, "loc_view", selected = s$view)
+      if (length(s$similarity)) updateNumericInput(session, "loc_similarity", value = s$similarity)
+    }))
 }
