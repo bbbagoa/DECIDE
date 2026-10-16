@@ -193,7 +193,8 @@ rp_grp <- function(tr) stats::setNames(c(rp_cols$vuln, rp_cols$not), tr(c("Vulne
 
 #' @noRd
 design_report_plots <- function(weights = NULL, roc = NULL, roc_point = NULL,
-                                score = NULL, vulnerable = NULL, threshold = NULL, lang = "en") {
+                                score = NULL, vulnerable = NULL, threshold = NULL, lang = "en",
+                                all_score = NULL) {
   tr <- function(x) i18n_lookup(x, lang)
   out <- list()
 
@@ -243,6 +244,38 @@ design_report_plots <- function(weights = NULL, roc = NULL, roc_point = NULL,
       billboarder::bb_x_grid(lines = list(list(value = max(0, thr_bin - 0.5), text = tr("Threshold"))))
     bb$x$bb_opts$data$groups <- list(as.list(names(d)[2:3]))
     out$scores <- bb
+  }
+
+  # Every household's score, as on the threshold step: bars (eligible right
+  # of the threshold), the density curve and the threshold dotted.
+  x <- all_score[is.finite(all_score)]
+  if (length(x) > 1 && length(unique(x)) > 1) {
+    br <- unique(pretty(range(x), n = 30))
+    n <- as.integer(table(cut(x, br, include.lowest = TRUE)))
+    mid <- (utils::head(br, -1) + br[-1]) / 2
+    thr <- threshold %||% 0
+    el <- mid > thr
+    dens <- stats::density(x, n = 512, from = min(br), to = max(br))
+    dy <- stats::approx(dens$x, dens$y, xout = mid)$y * length(x) * diff(br)[1]
+    d <- data.frame(bin = format(mid, trim = TRUE, drop0trailing = TRUE),
+                    a = ifelse(el, n, 0), b = ifelse(el, 0, n), c = round(dy, 2))
+    names(d)[2:4] <- tr(c("Eligible", "Not eligible", "Density"))
+    types <- stats::setNames(list("spline"), names(d)[4])
+    pos <- (thr - br[1]) / diff(br)[1] - 0.5
+    bb <- rp_base(340) |>
+      billboarder::bb_barchart(d) |>
+      billboarder::bb_data(types = types) |>
+      rp_colors(c(rp_cols$elig, rp_cols$notelig, "#26bde2")) |>
+      billboarder::bb_bar(width = list(ratio = 0.92)) |>
+      billboarder::bb_point(show = FALSE) |>
+      billboarder::bb_x_axis(tick = list(culling = list(max = 10), multiline = FALSE),
+                             label = rp_axis_label(tr("Score (middle of the bin)"), rotated = TRUE)) |>
+      billboarder::bb_y_axis(label = rp_axis_label(tr("Households"))) |>
+      billboarder::bb_x_grid(lines = list(list(value = max(-0.5, min(length(mid) - 0.5, pos)),
+                                               text = sprintf("%s %s", tr("Threshold"), fmt5(thr)), class = "tw-thr"))) |>
+      billboarder::bb_add_style(".bb-xgrid-line.tw-thr line" = "stroke-dasharray: 2 3; stroke-width: 1.6;")
+    bb$x$bb_opts$data$groups <- list(as.list(names(d)[2:3]))
+    out$score_hist <- bb
   }
   out
 }

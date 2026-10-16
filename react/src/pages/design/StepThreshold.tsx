@@ -5,8 +5,8 @@
 // and stability. The footer adopts the design (nav_adopt).
 import { useEffect, useRef, useState } from "react";
 import {
-  ArrowLeft, BadgeCheck, CircleCheck, CircleX, ClipboardCheck, Crosshair, Gauge, Grid3x3, House, Lightbulb, MapPin, Percent,
-  Ruler, Search, Shuffle, Sigma, TriangleAlert, Users,
+  ArrowLeft, BadgeCheck, CircleCheck, ClipboardCheck, Crosshair, Gauge, Grid3x3, House, Lightbulb, MapPin, Percent,
+  Ruler, Search, Shuffle, Sigma, Users,
 } from "lucide-react";
 import { useShinyInput, useShinyOutputValue } from "@/shiny";
 import { ActionButton, HostedUI, NumericInput, SelectInput, TextOutput, useServerUpdates } from "@/lib/inputs";
@@ -35,10 +35,47 @@ export function StepThreshold({ flow, meta, mode, t }: { flow?: Flow; meta?: Met
       <Gate show={!!flow && flow.gates.threshold} text={t("The threshold is chosen against the errors a scored design produces, so fit the weights first.")}
             btn="back_to_weights" label={t("Back to Model & weights")} />
 
-      {/* every eligibility control on one line; the rationale below */}
+      {/* the parameter bar, two rows: the threshold, its suggestions and what
+          it gives; then the rules it is judged by, and Apply */}
       <div className="sc-setup-panel sc-thr-setup">
         <div className="sc-thr-row tw-align tw-align-bottom">
           <ThresholdSlider t={t} />
+          <div className="tw-field sc-thr-suggest">
+            <label className="form-label">{t("Suggest")}</label>
+            <div className="sc-thr-btns">
+              <Show as="span" when={!nof} style={{ display: "contents" }}>
+                <ActionButton id={ns("thr_balanced")} label={t("Min. errors")} icon={<Crosshair size={13} />}
+                              title={t("Sets the threshold where the larger of the inclusion and exclusion errors is smallest, so neither is traded away for the other.")} />
+                <ActionButton id={ns("thr_youden")} label={t("Youden")} icon={<Gauge size={13} />}
+                              title={t("Youden's J: picks the threshold maximising sensitivity + specificity - 1, the point of the ROC curve furthest from the diagonal (Targeting Advisory 3/2025; Youden 1950).")} />
+              </Show>
+              <Show as="span" when={pmt} style={{ display: "contents" }}>
+                <ActionButton id={ns("thr_line")} label={t("Poverty line")} icon={<Ruler size={13} />}
+                              title={t("Eligible when predicted welfare per person is at or below the poverty line: the standard PMT cut-off. A cut-off above the line lowers exclusion errors at the cost of inclusion errors (Brown, Ravallion & van de Walle 2018).")} />
+              </Show>
+              <ActionButton id={ns("thr_caseload")} label={t("Caseload")} icon={<Users size={13} />}
+                            title={t("Sets the threshold so no more than the caseload share of households is eligible.")} />
+            </div>
+          </div>
+          <Show when={!nof} style={{ display: "contents" }}>
+            <div className="sc-thr-stats">
+              <div className="sc-thr-stat">
+                <div className="sc-thr-stat-l"><TextOutput id={ns("kpi_auc_title")} /></div>
+                <div className="sc-thr-stat-v"><TextOutput id={ns("kpi_auc")} /></div>
+              </div>
+              <div className="sc-thr-stat">
+                <div className="sc-thr-stat-l">{pmt ? t("Selected (predicted poor)") : t("Eligible households")}</div>
+                <div className="sc-thr-stat-v"><TextOutput id={ns("kpi_elig")} /></div>
+              </div>
+            </div>
+          </Show>
+        </div>
+        <div className="sc-thr-row sc-thr-row2 tw-align tw-align-bottom">
+          <Show when={mode === "outcome"} style={{ display: "contents" }}>
+            <SelectInput id={ns("score_floor")} className="sc-thr-floor" clearable={false} value="none"
+                         choices={[{ value: "none", label: t("No floor") }, { value: "total", label: t("Negative score at 0") }, { value: "items", label: t("Exclusion criteria at 0") }]}
+                         label={<>{t("Score floor")} <Tip>{t("What happens below zero. No floor: the score is the sum of the points, negative when exclusion criteria (odds ratio below 1) outweigh the others. Negative score at 0: a negative sum counts as 0. Exclusion criteria at 0: criteria with negative points count as 0, so they remove nothing. Applied with the threshold.")}</Tip></>} />
+          </Show>
           <Show when={!nof} style={{ display: "contents" }}>
             <NumericInput id={ns("tol_lower")} value={meta?.tol_default[0] ?? 5} min={0} max={49} step={1} className="sc-thr-num"
                           label={<>{t("Lower %")} <Tip>{t("Lower bound of the tolerance band (Advisory 2/2025). Errors below it are acceptable without action. Changing the default (5%) needs an explanation in the rationale.")}</Tip></>} />
@@ -47,47 +84,24 @@ export function StepThreshold({ flow, meta, mode, t }: { flow?: Flow; meta?: Met
           </Show>
           <NumericInput id={ns("caseload_pct")} min={1} max={100} step={1} className="sc-thr-caseload"
                         label={<>{t("Caseload (%)")} <Tip>{t("Share of households the programme can serve. Used by 'Fit to caseload' to set the highest threshold that stays within it.")}</Tip></>} />
-          <div className="tw-field sc-thr-suggest">
-            <label className="form-label">{t("Suggest")}</label>
-            <div className="sc-thr-btns">
-              <Show as="span" when={!nof} style={{ display: "contents" }}>
-                <ActionButton id={ns("thr_balanced")} label={t("Minimise errors")} icon={<Crosshair size={13} />}
-                              title={t("Sets the threshold where the larger of the inclusion and exclusion errors is smallest, so neither is traded away for the other.")} />
-                <ActionButton id={ns("thr_youden")} label={t("Balance (Youden)")} icon={<Gauge size={13} />}
-                              title={t("Youden's J: picks the threshold maximising sensitivity + specificity - 1, the point of the ROC curve furthest from the diagonal (Targeting Advisory 3/2025; Youden 1950).")} />
-              </Show>
-              <Show as="span" when={pmt} style={{ display: "contents" }}>
-                <ActionButton id={ns("thr_line")} label={t("At the poverty line")} icon={<Ruler size={13} />}
-                              title={t("Eligible when predicted welfare per person is at or below the poverty line: the standard PMT cut-off. A cut-off above the line lowers exclusion errors at the cost of inclusion errors (Brown, Ravallion & van de Walle 2018).")} />
-              </Show>
-              <ActionButton id={ns("thr_caseload")} label={t("Fit to caseload")} icon={<Users size={13} />}
-                            title={t("Sets the threshold so no more than the caseload share of households is eligible.")} />
-            </div>
-          </div>
           <ActionButton id={ns("thr_apply")} label={t("Apply")} icon={<CircleCheck size={14} />} variant="primary" size="md" className="sc-thr-apply" />
         </div>
         <StaleNote show={!!stale?.thr}>{t("Threshold or tolerance changed: click Apply to update the errors and charts.")}</StaleNote>
         <div className="small text-muted mt-1"><TextOutput id={ns("thr_note")} /></div>
         <Show when={pmt} className="small mt-1"><PmtLineNote stale={stale} t={t} /></Show>
       </div>
-      {/* with an outcome: the metrics (2 x 2) beside the rationale; without, the rationale alone */}
-      <Show when={!nof} className="small text-muted"><TextOutput id={ns("eval_note")} /></Show>
+      {/* the rationale beside the verdict (without an outcome, the rationale alone) */}
       <div className={`sc-thr-mid${nof ? " one" : ""}`}>
-        <Show when={!nof}>
-          <div className="sc-kpis sc-kpis-2x2">
-            <Kpi label={<TextOutput id={ns("kpi_auc_title")} />} value={<TextOutput id={ns("kpi_auc")} />} tone="primary" />
-            <Kpi label={pmt ? t("Selected (predicted poor)") : t("Eligible households")} value={<TextOutput id={ns("kpi_elig")} />} tone="info" />
-            {th ? <>
-              <ErrorTrack which="incl" th={th} t={t} />
-              <ErrorTrack which="excl" th={th} t={t} />
-            </> : <><Kpi label={t("Inclusion error")} value={"–"} /><Kpi label={t("Exclusion error")} value={"–"} /></>}
-          </div>
-        </Show>
         <div className="sc-setup-panel sc-rationale">
           <div className="form-label sc-label">{t("Rationale for the band and the threshold")}{" "}
             <Tip>{t("Required by Targeting Advisory 2/2025; it goes into the exported scorecard and the design report.")}</Tip></div>
           <HostedUI id={ns("host_rationale")} />
         </div>
+        <Show when={!nof}>
+          <Card title={t("Verdict")} icon={<BadgeCheck size={15} />} className="sc-verdict-card">
+            {th ? <Verdict th={th} t={t} /> : <div className="small text-muted">{t("The verdict follows the errors.")}</div>}
+          </Card>
+        </Show>
       </div>
 
       {/* without an outcome: the selection, its consistency and stability */}
@@ -119,16 +133,17 @@ export function StepThreshold({ flow, meta, mode, t }: { flow?: Flow; meta?: Met
         </div>
       </Show>
 
-      {/* with an outcome: the errors, the matrix and the verdict */}
+      {/* with an outcome: the matrix beside its metrics */}
       <Show when={!nof}>
         <div ref={withRef} className="sc-stack">
         <Show when={pmt}><PmtAccuracyCard t={t} /></Show>
-        <div className="sc-grid-75">
+        <div className="small text-muted"><TextOutput id={ns("eval_note")} /></div>
+        <div className="sc-thr-mid sc-thr-matrix">
           <Card title={pmt ? t("PMT targeting matrix") : t("Design error matrix")} icon={<Grid3x3 size={15} />}>
             {th ? <ErrorMatrix th={th} t={t} /> : <div className="small text-muted">{t("Fit a model and set a threshold to see the matrix.")}</div>}
           </Card>
-          <Card title={t("Verdict")} icon={<BadgeCheck size={15} />}>
-            {th ? <Verdict th={th} t={t} /> : <div className="small text-muted">{t("The verdict follows the errors.")}</div>}
+          <Card full title={t("Score distribution")} icon={<Sigma size={15} />} help={<ChartHelp id="score_hist_plot" meta={meta} t={t} />}>
+            <Chart id={ns("score_hist_plot")} height={360} />
           </Card>
         </div>
         </div>
@@ -207,88 +222,69 @@ function ThresholdSlider({ t }: { t: T }) {
   );
 }
 
-/** An error rate on a 0-50% track with the tolerance band drawn in */
-function ErrorTrack({ which, th, t }: { which: "incl" | "excl"; th: Thresh; t: T }) {
-  const e = th.e;
-  const v = which === "incl" ? e.inclusion_error : e.exclusion_error;
-  const numer = which === "incl" ? e.included_not_in_need : e.excluded_in_need;
-  const denom = which === "incl" ? e.correctly_included + e.included_not_in_need : e.correctly_included + e.excluded_in_need;
-  const band = !isNum(v) ? "na" : v <= th.lower ? "good" : v <= th.upper ? "review" : "bad";
-  const pos = (x: number) => `${(100 * Math.min(Math.max(x, 0), 0.5)) / 0.5}%`;
-  return (
-    <div className={`sc-track is-${band}`}>
-      <div className="sc-track-head">
-        <span className="sc-kpi-label">{which === "incl" ? th.words.incl : th.words.excl}</span>
-        <span className="sc-track-value">{isNum(v) ? `${(100 * v).toFixed(1)}%` : "n/a"}</span>
-      </div>
-      <div className="sc-track-bar" aria-hidden="true">
-        <span className="zone good" style={{ width: pos(th.lower) }} />
-        <span className="zone review" style={{ left: pos(th.lower), width: `${(100 * (Math.min(th.upper, 0.5) - Math.min(th.lower, 0.5))) / 0.5}%` }} />
-        <span className="zone bad" style={{ left: pos(th.upper), right: 0 }} />
-        {isNum(v) ? <span className="marker" style={{ left: pos(v) }} /> : null}
-      </div>
-      <div className="sc-track-scale">
-        <span style={{ left: pos(th.lower) }}>{Math.round(100 * th.lower)}%</span>
-        <span style={{ left: pos(th.upper) }}>{Math.round(100 * th.upper)}%</span>
-        <span className="end-r">50%</span>
-      </div>
-      <div className="sc-kpi-sub">{int(numer)} / {int(denom)} {"—"} {which === "incl" ? th.words.incl_mean : th.words.excl_mean}</div>
-    </div>
-  );
-}
-
-/** The contingency table of Targeting Advisory 2/2025 with this design's counts */
+/** The contingency table of Targeting Advisory 2/2025 with this design's
+ *  counts: the scorecard's decision in rows, the outcome in columns; colour
+ *  marks only the two error cells */
 function ErrorMatrix({ th, t }: { th: Thresh; t: T }) {
   const e = th.e, w = th.words;
-  const nElig = e.correctly_included + e.included_not_in_need, nNot = e.excluded_in_need + e.correctly_excluded;
-  const nVuln = e.correctly_included + e.excluded_in_need, nNo = e.included_not_in_need + e.correctly_excluded;
-  const pc = (x: number, d: number) => (!d ? "-" : `${((100 * x) / d).toFixed(1)}%`);
-  const cell = (n: number, row: number, label: string, kind: string, icon: React.ReactNode) => (
-    <td className={`wfp-cm-cell ${kind}`}>
-      <div className="wfp-cm-label">{icon} {label}</div>
-      <div className="wfp-cm-count">{int(n)}</div>
-      <div className="wfp-cm-share"><span>{pc(n, row)} {t("of row")}</span><span>{pc(n, e.n)} {t("of all")}</span></div>
+  const rowE = e.correctly_included + e.included_not_in_need, rowN = e.excluded_in_need + e.correctly_excluded;
+  const colV = e.correctly_included + e.excluded_in_need, colN = e.included_not_in_need + e.correctly_excluded;
+  const pc = (x: number, d: number) => (d ? `${((100 * x) / d).toFixed(1)}%` : "n/a");
+  // a correct cell: its count and its share of its column (correctly
+  // included: of the vulnerable households, i.e. 1 - exclusion error;
+  // correctly excluded: of the households not vulnerable)
+  const cell = (n: number, den: number, label: string, kind: string) => (
+    <td className={`sc-cm-cell ${kind}`}>
+      <div className="sc-cm-count">{int(n)} <span className="sc-cm-rate">({pc(n, den)})</span></div>
+      <div className="sc-cm-label"><span className="sc-cm-dot" />{label}</div>
+      <div className="sc-cm-share">{int(n)} / {int(den)}</div>
+    </td>
+  );
+  // the two error cells: the count and the error rate, coloured by the tolerance band
+  const band = (v: number | null) => (!isNum(v) ? "na" : v <= th.lower ? "good" : v <= th.upper ? "review" : "bad");
+  const errCell = (n: number, v: number | null, den: number, label: string, kind: string) => (
+    <td className={`sc-cm-cell ${kind}`}>
+      <div className="sc-cm-count">{int(n)} <span className={`sc-cm-rate is-${band(v)}`}>({isNum(v) ? `${(100 * v).toFixed(1)}%` : "n/a"})</span></div>
+      <div className="sc-cm-label"><span className="sc-cm-dot" />{label}</div>
+      <div className="sc-cm-share">{int(n)} / {int(den)}</div>
     </td>
   );
   return (
     <>
-      <div className="wfp-cm-wrap">
-        <table className="wfp-matrix wfp-cm">
-          <thead>
-            <tr>
-              <th className="wfp-cm-corner" colSpan={2} rowSpan={2}><div className="wfp-cm-axis">{w.axis_row}</div><div className="wfp-cm-axis">{w.axis_col}</div></th>
-              <th className="wfp-cm-group" colSpan={2}>{th.pmt ? t("Welfare per person:") : t("Outcome:")} <strong>{th.outcome}</strong></th>
-              <th className="wfp-cm-tot-head" rowSpan={2}>{t("Total")}</th>
-            </tr>
-            <tr>
-              <th className="wfp-cm-col">{w.vuln}<div className="wfp-cm-sub">{th.opos}</div></th>
-              <th className="wfp-cm-col">{w.notvuln}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <th className="wfp-cm-rowgroup" rowSpan={2}><span>{w.card}</span></th>
-              <th className="wfp-cm-row">{w.elig}<div className="wfp-cm-sub">{t("score >")} {th.threshold}</div></th>
-              {cell(e.correctly_included, nElig, t("Correctly included"), "ok", <CircleCheck size={13} />)}
-              {cell(e.included_not_in_need, nElig, w.incl, "err-incl", <CircleX size={13} />)}
-              <td className="wfp-cm-tot">{int(nElig)}<div className="wfp-cm-sub">{pc(nElig, e.n)}</div></td>
-            </tr>
-            <tr>
-              <th className="wfp-cm-row">{w.notelig}</th>
-              {cell(e.excluded_in_need, nNot, w.excl, "err-excl", <TriangleAlert size={13} />)}
-              {cell(e.correctly_excluded, nNot, t("Correctly excluded"), "ok", <CircleCheck size={13} />)}
-              <td className="wfp-cm-tot">{int(nNot)}<div className="wfp-cm-sub">{pc(nNot, e.n)}</div></td>
-            </tr>
-            <tr className="wfp-matrix-totals-row">
-              <th className="wfp-cm-row wfp-cm-tot-label" colSpan={2}>{t("Total")}</th>
-              <td className="wfp-cm-tot">{int(nVuln)}<div className="wfp-cm-sub">{pc(nVuln, e.n)}</div></td>
-              <td className="wfp-cm-tot">{int(nNo)}<div className="wfp-cm-sub">{pc(nNo, e.n)}</div></td>
-              <td className="wfp-cm-tot wfp-cm-grand">{int(e.n)}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-      <div className="small text-muted mt-2">{t("Valid for direct household-level assistance (Tier 1) only. In emergencies the OGN gives priority to reducing exclusion errors; inclusion errors are more acceptable.")}</div>
+      <table className="sc-cm">
+        <thead>
+          <tr>
+            <th className="sc-cm-corner">{w.axis_row}<br />{w.axis_col}</th>
+            <th>{w.vuln}{th.opos ? <small>{th.outcome}: {th.opos}</small> : null}</th>
+            <th>{w.notvuln}</th>
+            <th className="sc-cm-tot">{t("Total")}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th scope="row">{w.elig}<small>{t("score >")} {th.threshold}</small></th>
+            {cell(e.correctly_included, colV, t("Correctly included"), "ok")}
+            {errCell(e.included_not_in_need, e.inclusion_error, colN, w.incl, "incl")}
+            <td className="sc-cm-tot">{int(rowE)}</td>
+          </tr>
+          <tr>
+            <th scope="row">{w.notelig}</th>
+            {errCell(e.excluded_in_need, e.exclusion_error, colV, w.excl, "excl")}
+            {cell(e.correctly_excluded, colN, t("Correctly excluded"), "ok")}
+            <td className="sc-cm-tot">{int(rowN)}</td>
+          </tr>
+        </tbody>
+        <tfoot>
+          <tr>
+            <th scope="row">{t("Total")}</th>
+            <td className="sc-cm-tot">{int(colV)}</td>
+            <td className="sc-cm-tot">{int(colN)}</td>
+            <td className="sc-cm-tot sc-cm-grand">{int(e.n)}</td>
+          </tr>
+        </tfoot>
+      </table>
+      <div className="small text-muted mt-2">{t("Error rates in brackets, against the tolerance band of %s: green within it, amber to review, red above it.").replace("%s", `${Math.round(100 * th.lower)}%-${Math.round(100 * th.upper)}%`)}{" "}
+        {t("Valid for direct household-level assistance (Tier 1) only. In emergencies the OGN gives priority to reducing exclusion errors; inclusion errors are more acceptable.")}</div>
     </>
   );
 }

@@ -21,3 +21,14 @@ test_that("data_summary() describes every column by its kind", {
   expect_equal(nrow(f), ncol(d))
   expect_true(grepl("North (24)", f$`Values (count)`[2], fixed = TRUE))
 })
+
+test_that("infinite values are counted apart, not drawn", {
+  d <- data.frame(a = c(1:21, Inf), b = c(-Inf, Inf, 1:20))
+  s <- data_summary(d)$vars
+  expect_equal(s[[1]]$kind, "number")
+  expect_equal(s[[1]]$infinite, 1)
+  expect_equal(s[[1]]$stats$max, 21)
+  expect_equal(sum(s[[2]]$hist$counts), 20)
+  expect_null(data_summary(data.frame(a = 1:20))$vars[[1]]$infinite)
+  expect_silent(dq_hist_option(c(1:20, Inf), "a"))
+})

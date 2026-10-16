@@ -5,7 +5,8 @@
 #' screened against a binary food-security outcome, a multivariable logistic
 #' regression is fitted, and each retained criterion is given a weight equal to
 #' its odds ratio. A household's score is the sum of its inclusion weights minus
-#' the sum of its exclusion weights, floored at zero.
+#' the sum of its exclusion weights; the design chooses whether it is floored
+#' at zero (`score_floor()`).
 #'
 #' Three corporate advisories shape what this is allowed to do:
 #'
@@ -578,7 +579,8 @@ scorecard_fingerprint <- function(sc) {
 #'   programmatic decision to be made on the ROC curve.
 #' @noRd
 build_scorecard <- function(weights, outcome = NA_character_,
-                            outcome_positive = NA_character_, threshold = 0, kind = "scorecard", pmt = NULL) {
+                            outcome_positive = NA_character_, threshold = 0, kind = "scorecard", pmt = NULL,
+                            floor = "none") {
   items <- lapply(seq_len(nrow(weights)), function(i) {
     list(
       criterion = weights$criterion[i],
@@ -607,7 +609,8 @@ build_scorecard <- function(weights, outcome = NA_character_,
   # or "pmt" (predicts welfare; `pmt` holds the intercept and the line)
   list(outcome = outcome, outcome_positive = outcome_positive,
        threshold = as.numeric(threshold), items = items,
-       created = format(Sys.Date()), kind = kind, pmt = pmt)
+       created = format(Sys.Date()), kind = kind, pmt = pmt,
+       floor = if (floor %in% names(SCORE_FLOORS)) floor else "none")
 }
 
 #' Months since a scorecard was designed, or NA when not recorded
@@ -621,8 +624,10 @@ scorecard_age_months <- function(sc, today = Sys.Date()) {
 #' Score every household
 #'
 #' Score = sum of the weights of the inclusion criteria the household meets,
-#' minus the sum of the weights of the exclusion criteria it meets, floored at
-#' zero (a household cannot be less than not-vulnerable).
+#' minus the sum of the weights of the exclusion criteria it meets. The card's
+#' `floor` (`score_floor()`) says what happens below zero: "none" keeps the
+#' sum, "total" floors the sum at zero, "items" counts no criterion below zero
+#' (exclusion criteria then remove nothing).
 #'
 #' A criterion whose column is missing from `df` contributes nothing and is
 #' reported, rather than silently scoring every household as if they failed it.
@@ -645,6 +650,7 @@ apply_scorecard <- function(df, scorecard) {
   # NOT met. It orders households as the unfloored sum and never needs the
   # floor, so a profile defined by what households lack still scores.
   rk <- is_ranking(scorecard)
+  fl <- score_floor(scorecard)
 
   for (it in scorecard$items) {
     # A crosswalk (see match_scorecard_columns()) points the criterion at a
@@ -669,13 +675,14 @@ apply_scorecard <- function(df, scorecard) {
     }
     pts <- x * as.numeric(it$weight)
     if (identical(it$direction, "exclusion")) pts <- if (rk) (1 - x) * as.numeric(it$weight) else -pts
+    if (identical(fl, "items")) pts <- pmax(pts, 0)
     detail[[cl]] <- pts
     score <- score + pts
   }
 
   # A PMT score is predicted welfare turned around (100 x (intercept -
   # predicted log welfare)): negative for the better-off, never floored.
-  score <- round(if (is_pmt(scorecard)) score else pmax(score, 0), 5)
+  score <- round(if (identical(fl, "total")) pmax(score, 0) else score, 5)
   list(
     score = score,
     eligible = score > (scorecard$threshold %||% 0),
@@ -724,7 +731,7 @@ roc_curve <- function(score, outcome) {
     stringsAsFactors = FALSE
   )
   # Design errors, in the advisory's own terms (Issue 2/2025).
-  curve$inclusion_error <- ifelse(curve$n_eligible > 0, fp / (tp + fp), NA_real_)
+  curve$inclusion_error <- fp / nneg
   curve$exclusion_error <- (npos - tp) / npos
 
   # Mann-Whitney AUC: the probability a random vulnerable household scores
@@ -748,8 +755,12 @@ roc_curve <- function(score, outcome) {
 #' Using the advisory's contingency table, where rows are eligibility and
 #' columns are vulnerability:
 #'
-#'   inclusion error = not-vulnerable-but-eligible / all eligible
+#'   inclusion error = not-vulnerable-but-eligible / all not vulnerable
 #'   exclusion error = vulnerable-but-not-eligible / all vulnerable
+#'
+#' At the design stage both errors compare the eligibility the score gives
+#' with the vulnerability measured: each is the share of one outcome group
+#' the score puts on the wrong side.
 #'
 #' @param eligible Logical vector.
 #' @param vulnerable Logical or 0/1 vector (the outcome).
@@ -768,7 +779,7 @@ design_errors <- function(eligible, vulnerable) {
     n = length(e),
     correctly_included = a, excluded_in_need = b,
     included_not_in_need = cc, correctly_excluded = d,
-    inclusion_error = if ((a + cc) > 0) cc / (a + cc) else NA_real_,
+    inclusion_error = if ((cc + d) > 0) cc / (cc + d) else NA_real_,
     exclusion_error = if ((a + b) > 0) b / (a + b) else NA_real_,
     coverage = if (length(e) > 0) (a + cc) / length(e) else NA_real_
   )
@@ -797,7 +808,7 @@ balanced_threshold <- function(score, vulnerable) {
   sv <- sort(s[v]); sn <- sort(s[!v])
   tp <- length(sv) - findInterval(cand, sv)   # vulnerable with score > t
   fp <- length(sn) - findInterval(cand, sn)
-  incl <- ifelse(tp + fp > 0, fp / (tp + fp), NA_real_)
+  incl <- fp / length(sn)                     # of the households not vulnerable
   excl <- (length(sv) - tp) / length(sv)
   worst <- pmax(ifelse(is.na(incl), 1, incl), excl)
   i <- order(worst, ifelse(is.na(incl), 1, incl) + excl, cand)[1]
@@ -1027,7 +1038,8 @@ normalise_scorecard <- function(sc) {
     items = out,
     created = chr1(sc$created),
     kind = chr1(sc$kind, "scorecard"),
-    pmt = sc$pmt
+    pmt = sc$pmt,
+    floor = chr1(sc$floor)   # NA: a card from before the option (floored)
   )
 }
 
@@ -1244,7 +1256,7 @@ scorecard_workbook <- function(scorecard, meta = list(), screening = NULL,
     Explanation = c(
       "A targeting scorecard: weighted household criteria that produce an eligibility score. Built on needs-assessment data.",
       "One row per criterion. Weight is the odds ratio from the logistic model, rounded, and may have been adjusted by hand.",
-      "Add the weight of every inclusion criterion the household meets, subtract the weight of every exclusion criterion it meets, and floor the result at zero.",
+      "Add the weight of every inclusion criterion the household meets and subtract the weight of every exclusion criterion it meets. The Design field Score floor says whether the result is floored at zero.",
       "Optional. The column in the REGISTRATION data that carries this criterion, when it is named differently there. Leave blank to use the criterion name.",
       "The outcome modelled, the eligibility threshold, and the design errors this card produced on the assessment data.",
       "Every candidate criterion tested, with its odds ratio and adjusted p-value, including the ones that were rejected.",
@@ -1283,11 +1295,11 @@ scorecard_workbook <- function(scorecard, meta = list(), screening = NULL,
         "Optional. The column in the REGISTRATION data that carries this proxy, when it is named differently there. Leave blank to use the proxy name.",
         "The welfare measure, the poverty line, the model, its R-squared in and out of sample, and the threshold.",
         "Leakage (inclusion error: non-poor among the selected), under-coverage (exclusion error: poor not selected), coverage of the poor, targeting accuracy, the targeting differential and the CGH indicator, measured on held-out households. Report_tables holds the error curves by cut-off, selection by welfare decile and the model comparison.",
-        "Load this file in Beneficiary Selection to score a registration list. Only the Scorecard sheet and the Design fields Outcome, Eligibility threshold, PMT intercept and Poverty line are read; do not rename their headers.",
+        "Load this file in Beneficiary Selection to score a registration list. Only the Scorecard sheet and the Design fields Outcome, Eligibility threshold, Score floor, PMT intercept and Poverty line are read; do not rename their headers.",
         "Re-estimate the PMT when a new welfare survey is available (every 3 to 5 years, sooner after a shock or high inflation), and update the line with prices."),
       stringsAsFactors = FALSE)
     # PMT words in the descriptive fields; the fields read back keep their names
-    keep <- c("Outcome", "Vulnerable level", "Eligibility threshold", "Designed on", "PMT intercept", "Poverty line (per person)")
+    keep <- c("Outcome", "Vulnerable level", "Eligibility threshold", "Score floor", "Designed on", "PMT intercept", "Poverty line (per person)")
     if (length(meta)) names(meta) <- ifelse(names(meta) %in% keep, names(meta), pmt_wording(names(meta)))
     if (length(report_tables)) names(report_tables) <- pmt_wording(names(report_tables))
   }
@@ -1317,6 +1329,8 @@ scorecard_workbook <- function(scorecard, meta = list(), screening = NULL,
 
   # --- Design --------------------------------------------------------------
   openxlsx::addWorksheet(wb, "Design")
+  # read back by read_scorecard_workbook(): the card scores the same way
+  if (is.null(meta[["Score floor"]])) meta[["Score floor"]] <- score_floor_label(score_floor(scorecard))
   if (length(meta)) {
     md <- data.frame(Field = names(meta),
                      Value = vapply(meta, function(v) paste(as.character(v), collapse = ", "), character(1)),
@@ -1438,6 +1452,8 @@ read_scorecard_workbook <- function(path) {
       thr <- suppressWarnings(as.numeric(gsub("[^0-9.-]", "", pick("Eligibility threshold"))))
       if (!is.na(thr)) sc$threshold <- thr
       sc$created <- pick("Designed on")
+      # cards from before the option were floored at zero
+      sc$floor <- score_floor_parse(pick("Score floor"))
       # a proxy means test: the intercept and the line turn a score back
       # into predicted welfare
       if (isTRUE(grepl("^PMT", sc$outcome %||% ""))) {
@@ -1521,4 +1537,41 @@ index_note_facts <- function(ix) {
                 target = I(as.integer(ix$target %||% integer(0))),
                 target_share = if (identical(ix$type, "cluster")) sum(ix$size[ix$target]) else NA))
   list(type = "lda", mahalanobis = n(ix$mahalanobis))
+}
+
+#' How a scorecard treats scores below zero
+#'
+#' "none": the sum as it is (the default for new designs); "total": the sum
+#' floored at zero; "items": exclusion criteria (negative points, odds ratio
+#' below 1) count as zero, so they remove nothing. Rankings and PMTs are never floored; a card
+#' without the field (designed before the option) was floored at zero.
+#' @noRd
+SCORE_FLOORS <- c(none = "No floor", total = "Negative score at 0", items = "Exclusion criteria at 0")
+
+#' @noRd
+score_floor <- function(sc) {
+  if (is_pmt(sc) || is_ranking(sc)) return("none")
+  f <- sc$floor
+  if (is.null(f) || length(f) != 1 || is.na(f)) "total" else if (f %in% names(SCORE_FLOORS)) f else "total"
+}
+
+#' The floor as the workbook writes it, and back
+#' @noRd
+score_floor_label <- function(f) unname(SCORE_FLOORS[[if (f %in% names(SCORE_FLOORS)) f else "none"]])
+#' @noRd
+score_floor_parse <- function(x) {
+  if (is.null(x) || length(x) != 1 || is.na(x) || !nzchar(x)) return(NULL)
+  k <- names(SCORE_FLOORS)[match(tolower(trimws(x)), tolower(SCORE_FLOORS))]
+  if (is.na(k)) k <- c("floor each criterion at 0" = "items", "floor the score at 0" = "total")[tolower(trimws(x))]
+  if (!is.na(k)) return(unname(k))
+  if (tolower(trimws(x)) %in% names(SCORE_FLOORS)) tolower(trimws(x)) else NULL
+}
+
+#' One sentence for reports: how the score is built, floor included
+#' @noRd
+score_floor_sentence <- function(f) {
+  switch(f %||% "none",
+    total = "The score is floored at zero.",
+    items = "Exclusion criteria (negative points) count as zero, so they remove no points.",
+    "The score is not floored: households meeting exclusion criteria can score below zero.")
 }

@@ -865,6 +865,8 @@ outlier_default_var <- function(cols, mk, setup) {
 #' (blue dotted) as lines
 #' @noRd
 dq_hist_option <- function(v, name, bounds = numeric(0), allowed = numeric(0)) {
+  v <- v[is.finite(v)]   # Inf (a division by zero) cannot be binned
+  req(length(v) > 0)
   whole <- all(v == round(v)) && diff(range(v)) <= 60
   h <- graphics::hist(v, breaks = if (whole) seq(min(v) - 0.5, max(v) + 0.5, 1) else "Sturges", plot = FALSE)
   tip <- sprintf("%s to %s: <b>%s</b> households", format(signif(h$breaks[-length(h$breaks)], 4)),

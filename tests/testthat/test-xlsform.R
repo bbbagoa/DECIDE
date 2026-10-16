@@ -16,7 +16,14 @@ test_that("the draft XLSForm rebuilds the score, eligibility and both categories
   expect_equal(s$calculation[s$name == "pts_no_latrine"], "if(${no_latrine} = '1', 3, 0)")
   expect_equal(s$calculation[s$name == "pts_owns_cattle"], "if(${owns_cattle} = '1', -1.5, 0)")
   expect_equal(s$calculation[s$name == "eligible"], "if(${vuln_score} > 2, 1, 0)")
-  expect_true(startsWith(s$calculation[s$name == "vuln_score"], "if(${vuln_score_raw} < 0, 0"))
+  expect_equal(s$calculation[s$name == "vuln_score"], "${vuln_score_raw}")   # not floored by default
+  sc$floor <- "total"
+  expect_true(startsWith(xlsform_draft(sc, cuts = list(quartiles = c(0, 1.5, 3), quintiles = c(0, 1, 2, 3)), areas = areas)$survey$calculation[s$name == "vuln_score"],
+                         "if(${vuln_score_raw} < 0, 0"))
+  sc$floor <- "items"
+  expect_equal(xlsform_draft(sc, cuts = list(quartiles = c(0, 1.5, 3), quintiles = c(0, 1, 2, 3)), areas = areas)$survey$calculation[s$name == "pts_owns_cattle"],
+               "if((if(${owns_cattle} = '1', -1.5, 0)) < 0, 0, if(${owns_cattle} = '1', -1.5, 0))")
+  sc$floor <- "none"
   expect_equal(s$calculation[s$name == "vuln_quartile"],
                "if(${vuln_score} <= 0, 1, if(${vuln_score} <= 1.5, 2, if(${vuln_score} <= 3, 3, 4)))")
   expect_true(endsWith(s$calculation[s$name == "vuln_quintile"], ", 5))))"))

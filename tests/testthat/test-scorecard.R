@@ -253,14 +253,16 @@ test_that("the ROC curve carries the design errors at every threshold", {
 
 test_that("design errors reproduce the advisory's worked example", {
   # Advisory Issue 2/2025, page 4: eligible 40 vulnerable / 10 not,
-  # not eligible 30 vulnerable / 20 not. Inclusion 20%, exclusion 43%.
+  # not eligible 30 vulnerable / 20 not. Exclusion 43%. At the design stage
+  # the inclusion error is taken over the households not vulnerable (10 / 30,
+  # 33%), not over the eligible (the Advisory's 10 / 50).
   eligible   <- c(rep(TRUE, 50), rep(FALSE, 50))
   vulnerable <- c(rep(TRUE, 40), rep(FALSE, 10), rep(TRUE, 30), rep(FALSE, 20))
 
   e <- tm("design_errors")(eligible, vulnerable)
-  expect_equal(e$inclusion_error, 10 / 50)
+  expect_equal(e$inclusion_error, 10 / 30)
   expect_equal(round(e$exclusion_error, 4), round(30 / 70, 4))
-  expect_equal(round(100 * e$inclusion_error), 20)
+  expect_equal(round(100 * e$inclusion_error), 33)
   expect_equal(round(100 * e$exclusion_error), 43)
   expect_equal(e$correctly_included, 40)
   expect_equal(e$correctly_excluded, 20)
@@ -524,4 +526,18 @@ test_that("score_percentiles cuts the scores at the chosen percentiles", {
   expect_equal(p$band, c("P0 to P25", "P25 to P50", "P50 to P75", "P75 to P100"))
   expect_equal(sum(p$households), 100)
   expect_equal(nrow(score_percentiles(c(NA, 1:10), c(0, 1, NA))), 0)
+})
+
+test_that("the score floor: none by default, the sum or each criterion at 0, older cards floored", {
+  w <- data.frame(criterion = c("a", "b"), direction = c("inclusion", "exclusion"), weight = c(2, 3), stringsAsFactors = FALSE)
+  df <- data.frame(a = c(1, 0, 1, 0), b = c(1, 1, 0, 0))
+  score <- function(fl) tm("apply_scorecard")(df, tm("build_scorecard")(w, floor = fl))$score
+  expect_equal(score("none"), c(-1, -3, 2, 0))
+  expect_equal(score("total"), c(0, 0, 2, 0))
+  expect_equal(score("items"), c(2, 0, 2, 0))
+  old <- tm("build_scorecard")(w); old$floor <- NULL
+  expect_equal(tm("apply_scorecard")(df, old)$score, c(0, 0, 2, 0))
+  expect_equal(tm("score_floor_parse")(tm("score_floor_label")("items")), "items")
+  # eligible when above the threshold, below zero included
+  expect_equal(tm("apply_scorecard")(df, tm("build_scorecard")(w, threshold = -2))$eligible, c(TRUE, FALSE, TRUE, TRUE))
 })

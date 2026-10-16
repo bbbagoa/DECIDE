@@ -130,7 +130,9 @@ ok(js("!!document.querySelector('.wfp-verdict')"), "verdict card")
 # hidden outputs wait: the model step's estimates are not computed while the threshold step shows
 ok(identical(js("(document.querySelector('.shiny-react-output-container [id=\"scorecard_1-sc_estimates\"]')||{style:{}}).style.display"), "none"),
    "hidden step: sc_estimates suspended")
-ok(js("document.querySelectorAll('.sc-track').length") == 2, "two error tracks")
+ok(js("document.querySelectorAll('.sc-cm .sc-cm-rate').length") == 4 && grepl("(", js("document.querySelector('.sc-cm-cell.incl .sc-cm-count').textContent"), fixed = TRUE), "rates in the four cells")
+ok(js("document.querySelectorAll('#scorecard_1-score_hist_plot canvas').length") >= 1, "score distribution drawn")
+ok(grepl("AUC", js("document.querySelector('.sc-thr-setup').textContent")), "AUC in the parameters band")
 scroll(".sc-thr-setup"); shot2("d4a_threshold_top")
 setv("tol_upper", 30); wait(1.5)
 cat("INFO apply row:", js("document.querySelector('.sc-thr-setup').textContent"), "
@@ -140,6 +142,9 @@ click("thr_apply", 2)
 ok(grepl("30%", js("document.querySelector('.vd-metrics').textContent")), "tolerance applied to the verdict")
 app$run_js("var e=document.getElementById('scorecard_1-tol_rationale'); e.innerHTML='Upper bound 30% agreed with the programme team.'; e.dispatchEvent(new Event('input',{bubbles:true}))"); wait(1)
 shot2("d4_threshold")
+ok(js("document.querySelectorAll('.sc-cm .sc-cm-cell').length") == 4, "error matrix: four cells")
+ok(js("!!document.querySelector('.sc-thr-mid .sc-rationale') && !!document.querySelector('.sc-thr-mid .wfp-verdict')"), "rationale beside the verdict")
+scroll(".sc-cm"); shot2("d4b_matrix")
 for (k in 1:3) {
   app$run_js(sprintf("document.querySelectorAll('.sc-explore .tw-tabs-nav button')[%d].click()", k - 1)); wait(2)
   scroll(".sc-explore"); tw_shot(app, paste0("d4_explore", k))
@@ -173,6 +178,22 @@ f <- dl("download_report"); ok(!is.na(f) && any(grepl("design report|Targeting d
 f <- dl("download"); ok(is_zip(f), paste("scorecard workbook (xlsx):", basename(f %||% "")))
 f <- dl("download_xlsform"); ok(is_zip(f), paste("XLSForm (xlsx):", basename(f %||% "")))
 f <- dl("download_json"); ok(!is.na(f) && is.list(tryCatch(jsonlite::fromJSON(f), error = function(e) NULL)), "card (JSON)")
+# the score floor and the design errors reach every export
+html <- paste(readLines(dl("download_report"), warn = FALSE), collapse = "\n")
+ok(grepl("not floored", html) && grepl("all not vulnerable", html, fixed = TRUE), "report: floor and inclusion error over the not vulnerable")
+ok(grepl("Score distribution: all households", html, fixed = TRUE), "report: the score histogram")
+wb <- dl("download")
+dsg <- openxlsx::read.xlsx(wb, sheet = "Design")
+ok(identical(dsg$Value[dsg$Field == "Score floor"], "No floor"), paste("workbook: Score floor =", paste(dsg$Value[dsg$Field == "Score floor"], collapse = "")))
+incl_page <- js("(document.querySelector('.sc-cm-cell.incl .sc-cm-rate')||{}).textContent||''")
+incl_wb <- dsg$Value[dsg$Field == "Design inclusion error"]
+ok(length(incl_wb) == 1 && grepl(gsub("[()]", "", incl_page), incl_wb, fixed = TRUE), paste("workbook inclusion error", incl_wb, "= page", incl_page))
+back <- local({ suppressMessages(pkgload::load_all(tw_root, quiet = TRUE, export_all = TRUE)); read_scorecard_workbook(wb) })   # from the source
+ok(identical(back$floor, "none"), "workbook read back: no floor")
+xf <- openxlsx::read.xlsx(dl("download_xlsform"), sheet = "survey")
+ok(identical(xf$calculation[xf$name == "vuln_score"], "${vuln_score_raw}"), "XLSForm: score not floored")
+card <- jsonlite::fromJSON(dl("download_json"))
+ok(identical(card$floor %||% card$scorecard$floor, "none"), "card (JSON): floor none")
 
 # --- PMT
 setv("framework_mode", "pmt"); wait(2)

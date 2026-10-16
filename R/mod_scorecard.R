@@ -160,7 +160,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
                    "stepwise", "stepwise_ic",
                    "corr_cutoff", "tol_lower", "tol_upper", "tol_rationale", "caseload_pct", "vuln_area",
                    "framework_mode", "rank_label", "anchor", "cov_area",
-                   "pmt_welfare", "pmt_unit", "pmt_size", "pmt_line_mode", "pmt_line", "pmt_share")
+                   "pmt_welfare", "pmt_unit", "pmt_size", "pmt_line_mode", "pmt_line", "pmt_share", "score_floor")
 
     workspace_register(workspace, "scorecard",
       snapshot = function() {
@@ -176,7 +176,8 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
              exceed_note = exceed_note(), stability = stability(),
              model_params = shiny::reactiveValuesToList(model_params),
              allowed_blocked = allowed_blocked(), allowed_reason = allowed_reason(), pmt_applied = pmt_applied(),
-             fw_applied = fw_applied(), pmt_numeric = pmt_numeric_sel(), tol_applied = tol_applied())
+             fw_applied = fw_applied(), pmt_numeric = pmt_numeric_sel(), tol_applied = tol_applied(),
+             floor_applied = floor_applied())
       },
       restore = function(s) {
         restoring(s)
@@ -253,6 +254,9 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
           updateSelectInput(session, "stepwise", selected = "backward")
         }
         if (!is.null(i$tol_rationale)) update_rich_text(session, "tol_rationale", i$tol_rationale)
+        # designs saved before the option were floored at zero
+        fl <- s$floor_applied %||% (if (!is.null(s$threshold)) "total" else "none")
+        floor_applied(fl); updateSelectInput(session, "score_floor", selected = fl)
         if (!is.null(s$threshold)) {
           thr_pending(s$threshold)
           set_threshold(s$threshold)
@@ -1932,7 +1936,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
           }),
           effects = if (!isTRUE(f$method %in% c("pca", "lda"))) safe(effects()),
           comparison = if (!pmt()) safe(live_bench()$table),
-          threshold = thr_applied(), threshold_note = thr_msg(),
+          threshold = thr_applied(), threshold_note = thr_msg(), score_floor = score_floor(draft_scorecard()),
           tolerance = c(lower, upper), rationale = input$tol_rationale,
           bands = safe({ sc_ <- scored()$score
             lapply(c(Quartiles = 4L, Quintiles = 5L), function(n) { b <- score_bands(sc_, n)
@@ -1959,7 +1963,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
         plots <- design_report_plots(lang = report_lang(),
           weights = wts, roc = rc$curve, roc_point = pt,
           score = if (!is.null(s) && !is.null(r)) s$score[r], vulnerable = if (!is.null(y) && !is.null(r)) y[r] == 1,
-          threshold = thr_applied())
+          threshold = thr_applied(), all_score = if (!is.null(s)) s$score)
         # Every chart of the design page, as static figures.
         kept <- if (is.null(screened())) character(0) else screened()$criterion[screened()$retained]
         b <- safe(live_bench())
@@ -2003,7 +2007,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
       build_scorecard(wts, outcome = if (no_outcome()) NULL else if (pmt()) sprintf("PMT: log welfare per person (%s)", oc()) else input$outcome_col,
                       outcome_positive = if (no_outcome()) NULL else opos(),
                       threshold = thr_applied() %||% thr_pending() %||% 0,
-                      kind = card_kind(), pmt = pmt_card())
+                      kind = card_kind(), pmt = pmt_card(), floor = floor_applied())
     })
 
     scored <- reactive({
@@ -2023,14 +2027,13 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
     score_max <- reactive({
       df <- assessment_df(); w <- tryCatch(current_weights(), error = function(e) NULL)
       if (is.null(df) || is.null(w) || !nrow(w)) return(10)
-      m <- suppressWarnings(max(apply_scorecard(df, build_scorecard(w, threshold = 0, kind = card_kind()))$score, na.rm = TRUE))
+      m <- suppressWarnings(max(apply_scorecard(df, build_scorecard(w, threshold = 0, kind = card_kind(), floor = floor_applied()))$score, na.rm = TRUE))
       if (is.finite(m) && m > 0) ceiling(m * 100) / 100 else 10
     })
     score_min <- reactive({
-      if (!pmt()) return(0)
       df <- assessment_df(); w <- tryCatch(current_weights(), error = function(e) NULL)
       if (is.null(df) || is.null(w) || !nrow(w)) return(0)
-      m <- suppressWarnings(min(apply_scorecard(df, build_scorecard(w, threshold = 0, kind = "pmt"))$score, na.rm = TRUE))
+      m <- suppressWarnings(min(apply_scorecard(df, build_scorecard(w, threshold = 0, kind = card_kind(), floor = floor_applied()))$score, na.rm = TRUE))
       if (is.finite(m)) min(0, floor(m * 100) / 100) else 0
     })
     # Every programmatic move of the slider goes through here: nothing that
@@ -2051,6 +2054,9 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
     # buttons (minimise errors, Youden, caseload, poverty line) apply theirs.
     thr_applied <- reactiveVal(NULL)
     tol_applied <- reactiveVal(as.numeric(TOL_DEFAULT))
+    # below zero: kept (none), the sum floored (total) or each criterion (items)
+    floor_applied <- reactiveVal("none")
+    floor_now <- function() { f <- input$score_floor %||% floor_applied(); if (f %in% names(SCORE_FLOORS)) f else "none" }
     observeEvent(input$thr_apply, {
       req(input$thr_apply > 0)   # a React button sends 0 at start
       t <- suppressWarnings(as.numeric(input$threshold))
@@ -2058,14 +2064,14 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
       need_ok(length(t) == 1 && is.finite(t), "Set the threshold first.")
       need_ok(isTRUE(is.finite(lo) && is.finite(up) && lo >= 0 && up > lo && up < 50),
               "The tolerance band needs a lower bound below the upper one, and an upper bound below 50%.")
-      thr_applied(t); tol_applied(c(lo, up))
+      thr_applied(t); tol_applied(c(lo, up)); floor_applied(floor_now())
     })
     # Threshold or tolerance changed but not applied (React: the Apply row)
     thr_stale <- reactive({
       t <- suppressWarnings(as.numeric(input$threshold)); a <- thr_applied()
       tol_now <- c(suppressWarnings(as.numeric(input$tol_lower %||% tol_applied()[1])), suppressWarnings(as.numeric(input$tol_upper %||% tol_applied()[2])))
       same_t <- length(t) == 1 && !is.null(a) && isTRUE(all.equal(t, a))
-      !(same_t && isTRUE(all.equal(tol_now, tol_applied())))
+      !(same_t && isTRUE(all.equal(tol_now, tol_applied())) && identical(floor_now(), floor_applied()))
     })
     apply_balanced <- function(announce = TRUE) {
       s <- scored(); y <- outcome_binary(); r <- eval_rows()
@@ -2165,6 +2171,13 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
                    value_name = "% selected", pct = TRUE, legend = FALSE, rotate = 0)
       o$xAxis$name <- "Criteria met by the household"; o$xAxis$nameLocation <- "middle"; o$xAxis$nameGap <- 26
       o
+    })
+
+    # every household's score: histogram, density and the threshold (dotted);
+    # bars right of the threshold are the eligible households
+    output$score_hist_plot <- render_echart({
+      s <- scored(); req(length(s$score))
+      ec_histogram(s$score, thr_applied() %||% 0, W("Scorecard score"), density = TRUE, split = TRUE, dotted = TRUE)
     })
 
     output$rank_plot <- render_echart({
@@ -2908,6 +2921,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
           "Outcome" = sc$outcome %||% "",
           "Vulnerable level" = sc$outcome_positive %||% "",
           "Eligibility threshold" = sprintf("score > %s", fmt5(sc$threshold %||% 0)),
+          "Score floor" = score_floor_label(score_floor(sc)),
           "Country office" = user_setup$country_office %||% "",
           "Designed on" = fmt_date(sc$created %||% Sys.Date()),
           "Review due" = "Every 2-3 years in stable contexts, annually in highly dynamic ones (WFP Targeting OGN, 2021), or when new assessment data arrives.",

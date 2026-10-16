@@ -35,3 +35,4 @@
 .tw-ds-stats { display: flex; flex-wrap: wrap; gap: .25rem .75rem; font-size: .74rem; font-variant-numeric: tabular-nums; }
 .tw-ds-stats em { font-style: normal; color: var(--bs-secondary-color); margin-right: .15rem; }
 .tw-ds-top { font-size: .74rem; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
+.tw-ds-inf { color: #c5192d; font-weight: 600; }

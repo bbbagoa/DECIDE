@@ -100,23 +100,36 @@ ec_mirrored <- function(score, vulnerable, threshold = NULL, xtitle = "Score",
 }
 
 #' A histogram of a score with the threshold drawn
+#' @param density Add the density curve (scaled to the counts).
+#' @param split Bars above the threshold (eligible) in `colour`, the others grey.
 #' @noRd
-ec_histogram <- function(x, threshold = NULL, xtitle = "Score", bins = 30, colour = "#0A6EB4") {
+ec_histogram <- function(x, threshold = NULL, xtitle = "Score", bins = 30, colour = "#0A6EB4",
+                         density = FALSE, split = FALSE, dotted = FALSE) {
   x <- x[is.finite(x)]
   if (!length(x)) return(NULL)
   br <- unique(pretty(range(x), n = bins))
   if (length(br) < 2) br <- c(min(x) - 0.5, min(x) + 0.5)
   n <- as.integer(table(cut(x, br, include.lowest = TRUE)))
   mid <- (utils::head(br, -1) + br[-1]) / 2
+  thr <- length(threshold) == 1 && is.finite(threshold)
+  col <- function(k) if (split && thr && mid[k] <= threshold) "#8a96a3" else colour
   s <- list(type = "bar", name = "Households", barWidth = "96%", itemStyle = list(color = colour),
-            data = lapply(seq_along(n), function(k) list(value = list(mid[k], n[k]),
+            data = lapply(seq_along(n), function(k) list(value = list(mid[k], n[k]), itemStyle = list(color = col(k)),
                                                          tip = sprintf("Score %s to %s<br><b>%s</b> households", fmt5(br[k]), fmt5(br[k + 1]), format(n[k], big.mark = ",")))))
-  if (length(threshold) == 1 && is.finite(threshold))
-    s$markLine <- ec_markline(list(list(xAxis = threshold)), sprintf("threshold %s", fmt5(threshold)))
+  if (thr) s$markLine <- ec_markline(list(list(xAxis = threshold)), sprintf("threshold %s", fmt5(threshold)), dotted = dotted)
+  series <- list(s)
+  if (density && length(unique(x)) > 1) {
+    # the kernel density in households per bin, so it sits on the bars
+    d <- stats::density(x, n = 128, from = min(br), to = max(br))
+    k <- length(x) * diff(br)[1]
+    series[[2]] <- list(type = "line", name = "Density", smooth = TRUE, showSymbol = FALSE, silent = TRUE,
+                        lineStyle = list(color = "#26bde2", width = 2.2), itemStyle = list(color = "#26bde2"),
+                        data = lapply(seq_along(d$x), function(i) list(round(d$x[i], 4), round(d$y[i] * k, 3))))
+  }
   list(grid = ec_grid(top = 32), tooltip = ec_tip(),
        xAxis = list(type = "value", name = xtitle, nameLocation = "middle", nameGap = 26, min = min(br), max = max(br)),
        yAxis = list(type = "value", name = "Households", nameLocation = "middle", nameGap = 40),
-       series = list(s))
+       series = series)
 }
 
 #' Bars by category, one series per group (grouped), vertical or horizontal

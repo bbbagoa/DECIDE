@@ -45,7 +45,8 @@ data_summary <- function(df, max_levels = 12, bins = 24, labels = NULL) {
     # the values themselves only for numbers and dates (quantiles, histogram)
     v <- if (is.numeric(x) || inherits(x, c("Date", "POSIXt"))) x[!is.na(x)] else NULL
     if (inherits(x, c("Date", "POSIXt"))) {
-      d <- as.numeric(as.Date(v))
+      d <- as.numeric(as.Date(v)); d <- d[is.finite(d)]
+      if (!length(d)) return(c(out, list(kind = "empty")))
       out$kind <- "date"
       out$range <- format(as.Date(range(d), origin = "1970-01-01"))
       out$hist <- summary_hist(d, bins, as_date = TRUE)
@@ -53,6 +54,10 @@ data_summary <- function(df, max_levels = 12, bins = 24, labels = NULL) {
     }
     if (is.numeric(v) && out$distinct > max_levels) {
       out$kind <- "number"
+      # Inf / -Inf (a ratio divided by 0) are counted apart: figures and
+      # histogram on the finite values (seq() fails on an infinite range)
+      fin <- is.finite(v)
+      if (!all(fin)) { out$infinite <- sum(!fin); v <- v[fin] }
       q <- stats::quantile(v, c(0, .25, .5, .75, 1), names = FALSE, type = 7)
       out$stats <- list(min = q[1], q1 = q[2], median = q[3], mean = mean(v), q3 = q[4], max = q[5],
                         sd = if (length(v) > 1) stats::sd(v) else NA_real_)

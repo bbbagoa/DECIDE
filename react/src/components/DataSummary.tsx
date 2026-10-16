@@ -25,7 +25,7 @@ type Level = { value: string; n: number };
 type Hist = { edges: (number | string)[]; counts: number[]; date: boolean };
 type Var = {
   name: string; label?: string | null; kind: "category" | "number" | "date" | "text" | "id" | "empty";
-  missing: number; missing_pct: number; distinct: number;
+  missing: number; missing_pct: number; distinct: number; infinite?: number;
   levels?: Level[]; other?: number; top?: Level[]; range?: string[]; hist?: Hist;
   stats?: { min: number; q1: number; median: number; mean: number; q3: number; max: number; sd: number | null };
 };
@@ -143,6 +143,7 @@ function VarCard({ v, rows, t }: { v: Var; rows: number; t: (s: string) => strin
           {v.missing ? `${pct(v.missing_pct)} ${t("missing")}` : t("no missing value")}
         </span>
         {v.kind !== "empty" && <span>{v.distinct.toLocaleString("en-US")} {t("distinct")}</span>}
+        {v.infinite ? <span className="tw-ds-inf" title={t("Infinite values (a division by zero?), left out of the figures")}>{v.infinite.toLocaleString("en-US")} {t("infinite")}</span> : null}
       </div>
       {v.kind === "category" && v.levels && (
         <div className="tw-ds-levels">

@@ -135,10 +135,11 @@ xlsform_draft <- function(sc, cuts = list(), areas = NULL, labels = character(0)
     f <- if (identical(it$type, "numeric")) sprintf("%s * %s%s", if (excl) "-1" else "1", q, paste0(" * ", w))
          else if (excl && rk) sprintf("if(%s = '1', 0, %s)", q, w)
          else sprintf("if(%s = '1', %s, 0)", q, if (excl) paste0("-", w) else w)
+    if (identical(score_floor(sc), "items")) f <- sprintf("if((%s) < 0, 0, %s)", f, f)
     add("calculate", pts[i], calculation = f)
   }
   add("calculate", "vuln_score_raw", calculation = if (length(pts)) paste(sprintf("${%s}", pts), collapse = " + ") else "0")
-  add("calculate", "vuln_score", calculation = if (pm) "${vuln_score_raw}" else "if(${vuln_score_raw} < 0, 0, ${vuln_score_raw})")
+  add("calculate", "vuln_score", calculation = if (pm || !identical(score_floor(sc), "total")) "${vuln_score_raw}" else "if(${vuln_score_raw} < 0, 0, ${vuln_score_raw})")
   add("calculate", "eligible", calculation = sprintf("if(${vuln_score} > %s, 1, 0)", num(sc$threshold %||% 0)))
   band <- function(cut) {
     cut <- sort(unique(cut[is.finite(cut)]))

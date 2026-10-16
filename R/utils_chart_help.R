@@ -26,6 +26,9 @@ CHART_HELP <- list(
   roc_plot = list(
     shows = "How well the score ranks households: for every possible threshold, the share of vulnerable households selected (up) against the share of non-vulnerable ones selected (right).",
     read = "The closer the curve hugs the top-left corner, the better; the diagonal is random selection. The area under it (AUC) sums this up: 0.5 random, above 0.7 useful, above 0.8 good. The dot is the current threshold."),
+  score_hist_plot = list(
+    shows = "How the score spreads over all the households: a histogram, its density curve and the threshold as a dotted line. Bars right of the line are the eligible households.",
+    read = "A threshold in a dip of the curve separates households cleanly; one on a peak puts many households with almost the same score on either side, so small changes to it move many of them."),
   score_plot = list(
     shows = "The score of vulnerable households (above the axis) and of the others (below), each as a share of its own group, on the same score bins. The dashed line is the threshold.",
     read = "The less the two shapes overlap, the better the score separates the groups. Vulnerable households left of the line are excluded by mistake; non-vulnerable ones right of it are included by mistake."),

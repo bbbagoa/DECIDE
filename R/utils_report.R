@@ -205,7 +205,7 @@ design_report_md <- function(x, figures = character(0)) {
         if (!is.null(ld)) for (j in seq_len(ncol(ld))) tab[[sprintf("Loading axis %d", j)]] <- round(ld[match(w$criterion, rownames(ld)), j], 3)
         add("### Index weights", "", md_table(tab), "",
             if (nof) "Score = the points of every criterion met in the vulnerable direction (an inclusion criterion met, an exclusion criterion not met). Points are the index coefficients scaled so the largest is 10."
-            else "Score = sum of the points of the criteria met, floored at zero. Points are the index coefficients scaled so the largest is 10.", "")
+            else paste("Score = sum of the points of the criteria met.", score_floor_sentence(x$score_floor), "Points are the index coefficients scaled so the largest is 10."), "")
         fig("pca_scree", "pca_circle")
       } else if (identical(ix$type, "count")) {
         add("### Deprivation count", "",
@@ -244,7 +244,7 @@ design_report_md <- function(x, figures = character(0)) {
           Criterion = w$criterion, Direction = w$direction, `Index coefficient` = round(w$coefficient, 4),
           Points = round(w$weight, 2),
           `Correlation with the index` = if (length(st)) round(unname(st[w$criterion]), 3) else NA, check.names = FALSE)), "",
-          "Score = sum of the points of the criteria met, floored at zero. Points are the discriminant coefficients scaled so the largest is 10.", "")
+          paste("Score = sum of the points of the criteria met.", score_floor_sentence(x$score_floor), "Points are the discriminant coefficients scaled so the largest is 10."), "")
         fig("lda_structure")
       }
       fig("weights", "comparison_roc")
@@ -258,7 +258,7 @@ design_report_md <- function(x, figures = character(0)) {
         p = md_p(w$p_value), Direction = w$direction, Points = round(w$weight, 2),
         Verifiable = yn(w$verifiable, nrow(w)),
         `Community validated` = yn(w$validated, nrow(w)), check.names = FALSE)), "",
-        "Score = sum of the points of the inclusion criteria met minus those of the exclusion criteria met, floored at zero.", "")
+        paste("Score = sum of the points of the inclusion criteria met minus those of the exclusion criteria met.", score_floor_sentence(x$score_floor)), "")
       fig("weights", "comparison_roc")
     }
     # hyperparameters tuned by cross-validation, and the decision tree's rules
@@ -345,13 +345,14 @@ design_report_md <- function(x, figures = character(0)) {
         if (shiny::isTruthy(x$exceed_note)) c("", "**Adopted although errors are beyond the tolerance, because:**", "",
                                              paste(">", gsub("\n", "\n> ", x$exceed_note, fixed = TRUE))),
         "", "### Design error matrix", "", "@@MATRIX@@", "",
-        sprintf("- **Inclusion error** %s = %s / %s: of everyone selected, the share who did not need assistance.",
-                md_pct(e$inclusion_error), e$included_not_in_need, e$correctly_included + e$included_not_in_need),
+        sprintf("- **Inclusion error** %s = %s / %s: of the households not in need, the share the score makes eligible.",
+                md_pct(e$inclusion_error), e$included_not_in_need, e$included_not_in_need + e$correctly_excluded),
         sprintf("- **Exclusion error** %s = %s / %s: of everyone who needed assistance, the share left out.",
                 md_pct(e$exclusion_error), e$excluded_in_need, e$correctly_included + e$excluded_in_need),
         "", "Valid for direct household-level (Tier 1) assistance only.", "")
     if (!is.null(x$verdict)) add("### Verdict (Targeting Advisory 2/2025)", "",
       sprintf("**%s**", x$verdict$interpretation), "", sprintf("Action: %s", x$verdict$action), "")
+    fig("score_hist")
     fig("roc", "scores")
     fig("box", "met")
     fig("drivers", "coverage")
@@ -566,7 +567,7 @@ design_report_methods <- function(x) {
       points = "Coefficients rescaled so the strongest criterion is worth **10 points**, rounded to whole numbers (minimum 1): points = round(10 |b| / max |b|).",
       equal = "Every inclusion criterion is worth **1 point** and every exclusion criterion subtracts 1; the model only decides which criteria are kept and their direction.",
       ""),
-      " **Score** = sum of the points of the inclusion criteria a household meets, minus those of the exclusion criteria it meets, floored at zero.")
+      " **Score** = sum of the points of the inclusion criteria a household meets, minus those of the exclusion criteria it meets. ", score_floor_sentence(x$score_floor))
 
     if (!is.null(m$fit_stats)) item("Model fit",
        "AIC measures fit penalised for the number of criteria (lower is better when comparing fits on the same data). ",
@@ -594,8 +595,8 @@ design_report_methods <- function(x) {
 
   item("Design errors and verdict",
        "On the evaluation households, eligibility (score above the threshold) is crossed with the outcome. ",
-       "**Inclusion error** = eligible but not vulnerable / all eligible; **exclusion error** = vulnerable but not eligible / all vulnerable ",
-       "(Targeting Advisory 2/2025; WFP Targeting OGN 2021, p. 59). Each is compared with the tolerance band ",
+       "**Inclusion error** = eligible but not vulnerable / all not vulnerable; **exclusion error** = vulnerable but not eligible / all vulnerable ",
+       "(adapted from Targeting Advisory 2/2025 and the WFP Targeting OGN 2021, p. 59, which divide the inclusion error by all eligible households: at the design stage both errors compare the eligibility the score gives with the vulnerability measured). Each is compared with the tolerance band ",
        sprintf("(%.0f%% - %.0f%%): below the lower bound is acceptable, above the upper bound calls for redesign, and the combination gives the verdict from the Advisory's decision table. ",
                100 * (x$tolerance[1] %||% .05), 100 * (x$tolerance[2] %||% .2)),
        "These are design errors, valid for direct household-level (Tier 1) assistance; implementation errors are measured separately on PDM data.")
@@ -613,6 +614,7 @@ design_report_captions <- function() {
     pca_scree = "Variation explained by each axis (cumulative % on the right)", pca_circle = "Variables: correlation circle, axes 1 and 2",
     lda_structure = "Correlation of each criterion with the index",
     roc = "ROC curve with the chosen threshold", scores = "Score distribution by outcome",
+    score_hist = "Score distribution: all households, density and threshold",
     box = "Score by vulnerability", drivers = "What actually drives the score",
     met = "Criteria met, eligible vs not", coverage = "Coverage by criterion",
     pmt_decile = "Selected by decile of measured welfare per person (D1 the poorest)",
@@ -675,10 +677,11 @@ report_error_matrix <- function(e, threshold = NULL, outcome = NULL, outcome_pos
   n_not <- e$excluded_in_need + e$correctly_excluded
   n_vuln <- e$correctly_included + e$excluded_in_need
   n_novuln <- e$included_not_in_need + e$correctly_excluded
+  # each cell's share of its column: of the vulnerable, of the not vulnerable
   cell <- function(count, row_total, label, err = FALSE) sprintf(
     '<td class="%s"><div class="m-label">%s</div><div class="m-count">%s</div><div class="m-share">%s %s \u00b7 %s %s</div></td>',
     if (err) "m-cell m-err" else "m-cell", tr(label), num(count),
-    pct(count, row_total), tr("of row"), pct(count, e$n), tr("of all"))
+    pct(count, row_total), tr("of column"), pct(count, e$n), tr("of all"))
   tot <- function(x) sprintf('<td class="m-tot"><div class="m-count">%s</div><div class="m-share">%s</div></td>', num(x), pct(x, e$n))
   paste0(
     '<div class="err-matrix-wrap"><table class="err-matrix"><thead>',
@@ -689,11 +692,11 @@ report_error_matrix <- function(e, threshold = NULL, outcome = NULL, outcome_pos
     '</th><th>', tr(col_labels[2]), '</th></tr></thead><tbody>',
     '<tr><th class="m-row">', tr(row_labels[1]),
     if (!is.null(threshold)) sprintf('<div class="m-sub">%s > %s</div>', tr("score"), fmt5(threshold)) else "", '</th>',
-    cell(e$correctly_included, n_elig, "Correctly included"),
-    cell(e$included_not_in_need, n_elig, "Inclusion error", err = TRUE), tot(n_elig), '</tr>',
+    cell(e$correctly_included, n_vuln, "Correctly included"),
+    cell(e$included_not_in_need, n_novuln, "Inclusion error", err = TRUE), tot(n_elig), '</tr>',
     '<tr><th class="m-row">', tr(row_labels[2]), '</th>',
-    cell(e$excluded_in_need, n_not, "Exclusion error", err = TRUE),
-    cell(e$correctly_excluded, n_not, "Correctly excluded"), tot(n_not), '</tr>',
+    cell(e$excluded_in_need, n_vuln, "Exclusion error", err = TRUE),
+    cell(e$correctly_excluded, n_novuln, "Correctly excluded"), tot(n_not), '</tr>',
     '<tr class="m-total"><th class="m-row">', tr("Total"), '</th>', tot(n_vuln), tot(n_novuln),
     sprintf('<td class="m-tot m-grand"><div class="m-count">%s</div></td>', num(e$n)), '</tr>',
     '</tbody></table></div>')
