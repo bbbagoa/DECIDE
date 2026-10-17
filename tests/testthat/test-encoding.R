@@ -11,7 +11,7 @@ enc_sample <- function() {
     check.names = FALSE, stringsAsFactors = FALSE
   )
 }
-read_back <- function(path, ext) TargetWise:::read_import_file(path, ext)
+read_back <- function(path, ext) DECIDE:::read_import_file(path, ext)
 expect_same_text <- function(got, want) {
   expect_equal(names(got), names(want))
   for (k in c("R\u00e9gion", "village", "note")) {
@@ -69,13 +69,13 @@ test_that("special characters survive every import format", {
 })
 
 test_that("text in another encoding is converted value by value", {
-  u <- TargetWise:::utf8_text
+  u <- DECIDE:::utf8_text
   latin <- iconv("S\u00e9gou", "UTF-8", "CP1252")
   Encoding(latin) <- "unknown"
   x <- u(c(latin, "K\u00e9dougou", NA, "plain"))
   expect_equal(x, c("S\u00e9gou", "K\u00e9dougou", NA, "plain"))
   expect_true(all(validUTF8(x[!is.na(x)])))
-  f <- TargetWise:::utf8_frame(data.frame("\ufeffid" = 1, v = factor(latin), check.names = FALSE))
+  f <- DECIDE:::utf8_frame(data.frame("\ufeffid" = 1, v = factor(latin), check.names = FALSE))
   expect_equal(names(f), c("id", "v"))
   expect_equal(levels(f$v), "S\u00e9gou")
 })
@@ -83,13 +83,13 @@ test_that("text in another encoding is converted value by value", {
 test_that("special characters reach the reports and Excel exports intact", {
   want <- enc_sample()
   f <- withr::local_tempfile(fileext = ".html")
-  TargetWise:::report_write_page(f, "# R\u00e9sum\u00e9\n\nS\u00e9gou, \u0627\u0644\u0645\u0648\u0635\u0644, caf\u00e9 \u20ac5",
+  DECIDE:::report_write_page(f, "# R\u00e9sum\u00e9\n\nS\u00e9gou, \u0627\u0644\u0645\u0648\u0635\u0644, caf\u00e9 \u20ac5",
                                  title = "Test", record = "Test")
   html <- paste(readLines(f, encoding = "UTF-8"), collapse = "\n")
   expect_match(html, "S\u00e9gou, \u0627\u0644\u0645\u0648\u0635\u0644, caf\u00e9 \u20ac5", fixed = TRUE)
   expect_match(html, '<meta charset="utf-8">', fixed = TRUE)
   x <- withr::local_tempfile(fileext = ".xlsx")
-  TargetWise:::write_xlsx_readonly(want, x)
+  DECIDE:::write_xlsx_readonly(want, x)
   back <- readxl::read_excel(x)
   expect_equal(back$village, want$village)
   expect_equal(names(back), names(want))

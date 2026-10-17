@@ -255,7 +255,10 @@ template_from_items <- function(items, keep_comments = FALSE) {
   })
 }
 
-TEMPLATE_FORMAT <- "TargetWise monitoring template"
+TEMPLATE_FORMAT <- "DECIDE monitoring template"
+#' Older templates carry the app's earlier name
+#' @noRd
+TEMPLATE_FORMATS_OLD <- "TargetWise monitoring template"
 
 #' A saved template as a JSON file, to share with colleagues or another office
 #'
@@ -278,7 +281,7 @@ template_json <- function(t) {
 #' @noRd
 read_template_json <- function(txt) {
   j <- tryCatch(jsonlite::fromJSON(txt, simplifyVector = FALSE), error = function(e) NULL)
-  if (!is.list(j) || !identical(j$format, TEMPLATE_FORMAT)) stop("This file is not a TargetWise monitoring template.", call. = FALSE)
+  if (!is.list(j) || !isTRUE(j$format %in% c(TEMPLATE_FORMAT, TEMPLATE_FORMATS_OLD))) stop("This file is not a DECIDE monitoring template.", call. = FALSE)
   one <- function(v, default = "") if (is.null(v) || !length(v)) default else as.character(v[[1]])
   num <- function(l) { v <- vapply(l %||% list(), function(x) if (is.null(x)) NA_real_ else as.numeric(x), numeric(1)); stats::setNames(v, names(l)) }
   items <- lapply(j$items %||% list(), function(it) {

@@ -16,11 +16,11 @@ tw_state <- new.env(parent = emptyenv())
 #' or NA when it runs from source (`load_all()`)
 #' @noRd
 tw_build_stamp <- function() {
-  b <- tryCatch(utils::packageDescription("TargetWise", fields = "Built"), error = function(e) NA_character_)
+  b <- tryCatch(utils::packageDescription("DECIDE", fields = "Built"), error = function(e) NA_character_)
   if (length(b) != 1 || is.na(b)) NA_character_ else b
 }
 
-#' TRUE when TargetWise was reinstalled after this R session loaded it: the
+#' TRUE when DECIDE was reinstalled after this R session loaded it: the
 #' session would run the old code (and break when it reads the new files)
 #' @noRd
 tw_updated_since_load <- function() {
@@ -38,5 +38,5 @@ tw_resource_version <- function() {
   t <- if (is.na(b)) NA_character_ else regmatches(b, regexpr("[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}", b))
   stamp <- if (length(t) == 1 && !is.na(t)) t else format(Sys.time(), "%Y-%m-%d %H:%M:%S")
   d <- gsub("[^0-9]", "", stamp)
-  paste(as.character(utils::packageVersion("TargetWise")), substr(d, 1, 8), substr(d, 9, 14), sep = ".")
+  paste(as.character(utils::packageVersion("DECIDE")), substr(d, 1, 8), substr(d, 9, 14), sep = ".")
 }

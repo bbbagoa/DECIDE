@@ -1,4 +1,4 @@
 library(testthat)
-library(TargetWise)
+library(DECIDE)
 
-test_check("TargetWise")
+test_check("DECIDE")

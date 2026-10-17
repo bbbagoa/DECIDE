@@ -1,6 +1,6 @@
 test_that("stratum weights correct the exclusion error of a beneficiary/non-beneficiary PDM", {
-  sw <- TargetWise:::pdm_stratum_weights
-  tmet <- TargetWise:::targeting_metrics
+  sw <- DECIDE:::pdm_stratum_weights
+  tmet <- DECIDE:::targeting_metrics
   # 200 beneficiaries surveyed (150 eligible), 200 non-beneficiaries (60 eligible);
   # the area has 5,000 beneficiary and 20,000 non-beneficiary households.
   benef <- rep(c(TRUE, FALSE), each = 200)
@@ -15,7 +15,7 @@ test_that("stratum weights correct the exclusion error of a beneficiary/non-bene
 })
 
 test_that("per-area weights use each area's own sizes; missing sizes give NA", {
-  sw <- TargetWise:::pdm_stratum_weights
+  sw <- DECIDE:::pdm_stratum_weights
   benef <- c(TRUE, TRUE, FALSE, TRUE, FALSE, FALSE)
   area <- c("A", "A", "A", "B", "B", "B")
   w <- sw(benef, area, data.frame(unit = c("A", "B"), beneficiaries = c(100, 50), non_beneficiaries = c(300, NA)))
@@ -24,7 +24,7 @@ test_that("per-area weights use each area's own sizes; missing sizes give NA", {
 })
 
 test_that("scorecard eligibility on PDM data refuses missing criteria", {
-  f <- TargetWise:::pdm_scorecard_eligibility
+  f <- DECIDE:::pdm_scorecard_eligibility
   sc <- list(threshold = 1, items = list(
     list(criterion = "a", direction = "inclusion", weight = 2, column = NA),
     list(criterion = "b", direction = "inclusion", weight = 1, column = "b_reg")))

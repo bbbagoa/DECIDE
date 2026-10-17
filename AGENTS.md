@@ -1,12 +1,12 @@
-# Agent Guide for TargetWise
+# Agent Guide for DECIDE
 
-This document is intended for AI coding agents working on the `TargetWise` project. It describes the project's purpose, architecture, technology stack, development workflow, and conventions as they actually exist in the codebase today.
+This document is intended for AI coding agents working on the `DECIDE` project. It describes the project's purpose, architecture, technology stack, development workflow, and conventions as they actually exist in the codebase today.
 
 ---
 
 ## Project Overview
 
-**TargetWise** is an R-based Shiny dashboard for humanitarian targeting analysis. It is designed to help analysts identify and prioritize vulnerable households by importing large household-level datasets (Excel, SPSS, or Stata), mapping them geographically, and providing interactive summaries, data-quality checks, and an audit trail for modifications.
+**DECIDE** is an R-based Shiny dashboard for humanitarian targeting analysis. It is designed to help analysts identify and prioritize vulnerable households by importing large household-level datasets (Excel, SPSS, or Stata), mapping them geographically, and providing interactive summaries, data-quality checks, and an audit trail for modifications.
 
 The project is structured as a **Golem package** — an R package that bundles a Shiny application. This means it uses standard R package conventions (`DESCRIPTION`, `NAMESPACE`, `R/`, `inst/`, `man/`) and is deployed as a package rather than a single standalone Shiny script.
 
@@ -20,7 +20,7 @@ Key business concepts in the app:
 
 ## Branding (branch `decide-branding`)
 
-The product is shown as **DECIDE** ("Fairly select the most vulnerable"); the R package, settings folder, environment variables and saved formats keep the name TargetWise. The look follows the WFP UI Kit (uikit.wfp.org, npm `@wfp/ui`): WFP blue `#007DBC`, banner blue `#085387`, kit greys. Fonts, all bundled in `www/fonts` (OFL, `OFL-*.txt`) and declared at the top of `wfp-ui.css`: Open Sans for all text; Barlow Bold, tracked out, for the name DECIDE only (`.tw-decide`); IBM Plex Mono for code, formulas and identifiers (`code`, `.tw-mono`, the calculator's formula / code boxes); Noto Sans Arabic as the fallback for Arabic text (fetched only when Arabic appears). Reports embed Open Sans and Barlow (`report_font_face()`). The six letters carry the phases of the targeting cycle, one colour each (`react/src/components/Decide.tsx`, `decide_name_html()` in `R/utils_helpers.R`): a hue ramp at equal brightness, D Design blue `#0A78C2`, E Estimate teal `#0E9A8F`, C Clean green `#3E8E3A`, I Identify gold `#C8901A`, D Document coral `#D45A35`, E Evaluate violet `#7B5CC9` (lighter versions on dark grounds). The wordmark: pearl letters, the I in gold, each on a short bar of its phase colour (`decide_colours()`). The navbar shows each entry's letters (CSS `data-l`, so labels read as before). Favicon: a white D on banner blue.
+The product is shown as **DECIDE** ("Fairly select the most vulnerable"); the R package is `DECIDE` too (it was `TargetWise`): its data folder is copied over from the TargetWise one on first start (`get_session_dir()`), `DECIDE_*` environment variables are read first and `TARGETWISE_*` still work (`tw_env()`), and monitoring templates of the old format are still read (`TEMPLATE_FORMATS_OLD`). The look follows the WFP UI Kit (uikit.wfp.org, npm `@wfp/ui`): WFP blue `#007DBC`, banner blue `#085387`, kit greys. Fonts, all bundled in `www/fonts` (OFL, `OFL-*.txt`) and declared at the top of `wfp-ui.css`: Open Sans for all text; Barlow Bold, tracked out, for the name DECIDE only (`.tw-decide`); IBM Plex Mono for code, formulas and identifiers (`code`, `.tw-mono`, the calculator's formula / code boxes); Noto Sans Arabic as the fallback for Arabic text (fetched only when Arabic appears). Reports embed Open Sans and Barlow (`report_font_face()`). The six letters carry the phases of the targeting cycle, one colour each (`react/src/components/Decide.tsx`, `decide_name_html()` in `R/utils_helpers.R`): a hue ramp at equal brightness, D Design blue `#0A78C2`, E Estimate teal `#0E9A8F`, C Clean green `#3E8E3A`, I Identify gold `#C8901A`, D Document coral `#D45A35`, E Evaluate violet `#7B5CC9` (lighter versions on dark grounds). The wordmark: pearl letters, the I in gold, each on a short bar of its phase colour (`decide_colours()`). The navbar shows each entry's letters (CSS `data-l`, so labels read as before). Favicon: a white D on banner blue.
 
 ## Technology Stack
 
@@ -58,7 +58,7 @@ See `DESCRIPTION` for the declared `Imports` and `renv.lock` / `manifest.json` f
 ## Project Structure
 
 ```text
-TargetWise/
+DECIDE/
 ├── R/                          # R package source code
 │   ├── app_ui.R                # Main UI definition (bslib page_navbar + tabs)
 │   ├── app_server.R            # Main server logic: import orchestration, tab reveal, session manager
@@ -312,7 +312,7 @@ devtools::test()          # run the suite
 usethis::use_test("<name>")  # add a new test file
 ```
 
-Note: some tests source helpers directly (e.g. `TargetWise:::harmonize_pages`), so the package must be installed/loaded for the internal-symbol tests to resolve.
+Note: some tests source helpers directly (e.g. `DECIDE:::harmonize_pages`), so the package must be installed/loaded for the internal-symbol tests to resolve.
 
 ### Package check and build
 
@@ -443,7 +443,7 @@ The visual layer is token-driven and lives in two stylesheets under `inst/app/ww
 - **MODA** can feed any dataset: put `mod_moda_import_ui(ns("moda"))` beside the file input and send `mod_moda_import_server("moda")$data()` through the same take-the-data function as the file (Design, PDM, targeting process do this).
 - **New session** (session toolbar) saves, then reloads with `?fresh=1` (`tw-fresh` handler in `busy.js`), which skips the restore prompt.
 - **Report charts**: category shares go through `rp_share_charts()` (up to three donuts on one row, bars for the rest); report maps call `fit_to_points()`. The data summary falls back to `socioeconomic_indicators()` when no vulnerability is mapped.
-- **Monitoring templates** (`mod_monitoring.R`, `R/utils_monitoring_draft.R`): saved per user in app settings (`monitoring_templates`): `template_from_items(keep_comments =)` (charts without data, the officer's comments), `t$texts` (context, findings, recommendations), `t$rounds` (`monitoring_round()`). Shared as JSON only (`template_json()` / `read_template_json()`, format "TargetWise monitoring template"), never as an R object. `items_from_template()` redraws each chart on the dataset of the same name, else the first loaded dataset where its columns exist; the rest are reported as skipped.
+- **Monitoring templates** (`mod_monitoring.R`, `R/utils_monitoring_draft.R`): saved per user in app settings (`monitoring_templates`): `template_from_items(keep_comments =)` (charts without data, the officer's comments), `t$texts` (context, findings, recommendations), `t$rounds` (`monitoring_round()`). Shared as JSON only (`template_json()` / `read_template_json()`, format "DECIDE monitoring template"), never as an R object. `items_from_template()` redraws each chart on the dataset of the same name, else the first loaded dataset where its columns exist; the rest are reported as skipped.
 - **Reports**: the selection report is `write_selection_report()` (`R/utils_selection_report.R`, map via leaflet, points capped at 20,000); its sections come from the same `selection_sections()` as the Excel summary. Monitoring report items carry `width` ("half" pairs two consecutive items into one `.pair` block); order and width are edited by drag and drop (`www/sortable.js`). Chart specs support `type = "crosstab"` with `pct` (row/col/total/count) and `crosstab_test()` (chi-square, Cramer's V).
 - **Charts**: every plotly output is rendered with `render_wfp_plotly()` (not `plotly::renderPlotly()`), which pipes the chart through `wfp_plotly()` — Commissioner font, token colorway, transparent surfaces, neutral gridlines, dark hover labels, no modebar. It only fills layout keys the chart hasn't set, so per-chart margins/axes still win; don't repeat `paper_bgcolor`/`config(displayModeBar)` boilerplate in new charts.
 - **Loading feedback**: there is deliberately no whole-page `waiter_on_busy()`. Shiny's `.recalculating` class drives a per-output fade + ring spinner from `wfp-ui.css`; reserve `waiter_show()` / `Waiter$new()` for operations that block the session (imports, setup validation, session save/load, data corrections, reset). Analyses that need a user action first show `empty_state(title, subtitle, icon)` via a `uiOutput` until they have run (see Duplicates / Missing Data).
@@ -459,7 +459,7 @@ The visual layer is token-driven and lives in two stylesheets under `inst/app/ww
 - **Area levels**: offer only mapped levels. `cascade_pickers()` hides the picker of an unmapped level (`tw-input-visible` message, `www/stepsummary.js`); level pickers use `mapped_level_choices()`. Builders offer `analysis_cols()` (no identifiers, names, phone numbers, free text).
 - **Accordions open one section at a time** everywhere (`side_steps()` names its first section open; `multiple = FALSE` with a single `open`, bslib refuses several). A folded section says what it holds in its header (`www/stepsummary.js`: choices of its selects and text inputs, "k of n set" for groups of plain selects). Keep the page's main action out of the folding sections (`side_actions()`), as Targeting Design does with "Use this scorecard".
 - **Sidebars**: build them with `side_steps(side_step("1. Title", "icon", ...), ...)` and `side_actions(...)` for the buttons, on `bslib::sidebar(class = "wfp-side")` (no sidebar title): the same numbered, folding sections everywhere.
-- **Background tasks**: `bg_run(label, job, args, on_done, on_error)` (`R/utils_background.R`) runs a top-level job function (e.g. `design_fit_job`, `import_job`) in one warm `callr::r_session` per browser session; the waiter gets a cross (`waiter_content(cancel_id =)`) that kills it. Jobs run in the worker as `TargetWise:::<job>(args)`, i.e. from the INSTALLED package; send only the columns needed. Outside a running app (tests) or with `TARGETWISE_BACKGROUND=false` they run inline. shinytest2 apps also load the installed package: install before a browser check.
+- **Background tasks**: `bg_run(label, job, args, on_done, on_error)` (`R/utils_background.R`) runs a top-level job function (e.g. `design_fit_job`, `import_job`) in one warm `callr::r_session` per browser session; the waiter gets a cross (`waiter_content(cancel_id =)`) that kills it. Jobs run in the worker as `DECIDE:::<job>(args)`, i.e. from the INSTALLED package; send only the columns needed. Outside a running app (tests) or with `TARGETWISE_BACKGROUND=false` they run inline. shinytest2 apps also load the installed package: install before a browser check.
 - **Fuzzy matching**: `fuzzy_match_groups()` is sorted-neighbourhood + `stringdist` (never all pairs). Monitoring drafts only put complaints / community presets on data that looks like it (`draft_topic_ok()`).
 - **Numbers**: convert with `as_number(x)`, never `as.numeric(as.character(x))` (0.2 s per call on 100k numeric rows; `as_number` skips the text round trip for numeric columns). `run_app()` turns the JIT compiler off while the app runs (it spent ~9 s compiling the server closures); the package is byte-compiled at install.
 - **Too many options**: a variable drawn as categories (map colours, table / chart builders, monitoring charts) goes through `too_many_options(x, label)` (`MAX_OPTIONS` = 30, `R/utils_overview.R`) and is refused with its message, never lumped or drawn with dozens of colours.
@@ -491,7 +491,7 @@ The visual layer is token-driven and lives in two stylesheets under `inst/app/ww
 - **No secrets in repository**: MODA API tokens are entered at runtime via a password input and are never persisted — `save_session()` explicitly nulls the token before the credentials are encrypted and written.
 - **Session persistence** (`R/utils_session.R`): session `.rds` files are encrypted with `sodium`. The encryption key is derived in one of two ways:
   - If `TARGETWISE_SESSION_PASSPHRASE` is set, the key is derived from it (portable across machines that share the passphrase).
-  - Otherwise a **per-install random key** (`sodium::keygen()`) is generated on first use and stored under `tools::R_user_dir("TargetWise", "data")/session.key`. Sessions then only decrypt on the machine that created them.
+  - Otherwise a **per-install random key** (`sodium::keygen()`) is generated on first use and stored under `tools::R_user_dir("DECIDE", "data")/session.key`. Sessions then only decrypt on the machine that created them.
   - `TARGETWISE_SESSION_DIR` overrides the storage location (useful for tests / ephemeral hosts).
 - **Audit logging**: data-quality edits, deletions, location-name normalizations, and outlier corrections are appended to a reactive `modification_log` and can be exported to Excel/CSV.
 - **File upload limits**: `shiny.maxRequestSize` is set to 2 GB in both `app.R` and `dev/run_dev.R`; the import module enforces the same 2 GB cap.
@@ -503,7 +503,7 @@ The visual layer is token-driven and lives in two stylesheets under `inst/app/ww
 
 - Primary target is **Posit Connect** (`connect.posit.cloud`), as evidenced by `manifest.json`, `rsconnect/` deployment records, and `dev/03_deploy.R`.
 - `dev/03_deploy.R` also lists Docker, ShinyProxy, ShinyApps.io, and Shiny Server options via Golem helpers, but these have not been generated in the repository.
-- The deployment record `rsconnect/documents/app.R/connect.posit.cloud/bbbagoa/TargetWise.dcf` points to an existing Posit Cloud content item.
+- The deployment record `rsconnect/documents/app.R/connect.posit.cloud/bbbagoa/DECIDE.dcf` points to an existing Posit Cloud content item.
 
 ---
 

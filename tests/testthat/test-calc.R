@@ -1,4 +1,4 @@
-tm <- function(f) utils::getFromNamespace(f, "TargetWise")
+tm <- function(f) utils::getFromNamespace(f, "DECIDE")
 
 df <- data.frame(size = c(6, 2, NA, 9), head = c("Female", "Male", "Female", " Male "),
                  dep = c(4, 1, 2, 3), work = c(2, 1, 0, 3), stringsAsFactors = FALSE)
@@ -56,12 +56,12 @@ test_that("an R code block computes a column and refuses anything unsafe", {
 test_that("one yes/no per answer: a reference left out, missing kept, non-categories refused", {
   d <- data.frame(roof = c("Metal", "Thatch", "Metal", NA, "Tile", "Metal"), id = 1:6,
                   water = c("Tap", "Well", "Tap", "Tap", "", "Well"))
-  r <- TargetWise:::calc_dummies(d, c("roof", "id", "water"), max_answers = 5)
+  r <- DECIDE:::calc_dummies(d, c("roof", "id", "water"), max_answers = 5)
   expect_equal(r$names, c("roof_Thatch", "roof_Tile", "water_Well"))   # Metal and Tap are the references
   expect_equal(r$values[[1]], c(0L, 1L, 0L, NA, 0L, 0L))
   expect_true(is.na(r$values[[3]][5]))                                  # a blank answer is missing
   expect_equal(r$skipped, "id")
-  all <- TargetWise:::calc_dummies(d, "roof", reference = FALSE, coding = "yesno")
+  all <- DECIDE:::calc_dummies(d, "roof", reference = FALSE, coding = "yesno")
   expect_equal(all$names, c("roof_Metal", "roof_Thatch", "roof_Tile"))
   expect_equal(all$values[[1]], c("Yes", "No", "Yes", NA, "No", "Yes"))
 })

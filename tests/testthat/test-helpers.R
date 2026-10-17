@@ -30,14 +30,14 @@ test_that("parse_total_pages extracts last page from ONA Link header", {
     '<https://api.moda.wfp.org/api/v1/data/123.json?page=2&page_size=4>; rel="next", ',
     '<https://api.moda.wfp.org/api/v1/data/123.json?page=10&page_size=4>; rel="last"'
   )
-  expect_equal(TargetWise:::parse_total_pages(link), 10L)
+  expect_equal(DECIDE:::parse_total_pages(link), 10L)
 })
 
 test_that("parse_total_pages returns NA when Link header is missing", {
-  expect_equal(TargetWise:::parse_total_pages(NULL), NA_integer_)
-  expect_equal(TargetWise:::parse_total_pages(""), NA_integer_)
+  expect_equal(DECIDE:::parse_total_pages(NULL), NA_integer_)
+  expect_equal(DECIDE:::parse_total_pages(""), NA_integer_)
   expect_equal(
-    TargetWise:::parse_total_pages('<.../data/123?page=2>; rel="next"'),
+    DECIDE:::parse_total_pages('<.../data/123?page=2>; rel="next"'),
     NA_integer_
   )
 })
@@ -47,7 +47,7 @@ test_that("harmonize_pages reconciles mixed character/numeric columns", {
     data.frame(a = 1:2, b = c("x", "y"), stringsAsFactors = FALSE),
     data.frame(a = c("3", "4"), b = c("z", "w"), stringsAsFactors = FALSE)
   )
-  out <- TargetWise:::harmonize_pages(pages)
+  out <- DECIDE:::harmonize_pages(pages)
   expect_type(out[[1]]$a, "double")
   expect_type(out[[2]]$a, "double")
   expect_type(out[[1]]$b, "character")
@@ -133,12 +133,12 @@ test_that("fuzzy_match_groups returns 0 for every fully-unique key set", {
 test_that("waiter content survives an apostrophe in the message", {
   # waiter drops this HTML into a single-quoted JS string, so a raw ' would
   # end the string and throw a SyntaxError that kills the script block.
-  html <- as.character(TargetWise:::waiter_content("Chargement de l'assistance"))
+  html <- as.character(DECIDE:::waiter_content("Chargement de l'assistance"))
   expect_false(grepl("'", html, fixed = TRUE))
   expect_true(grepl("l&#39;assistance", html, fixed = TRUE))
 
   # The cancel button's inline onclick is quoted the same way and must survive.
-  with_btn <- as.character(TargetWise:::waiter_content("Working", ns = function(x) paste0("mod-", x)))
+  with_btn <- as.character(DECIDE:::waiter_content("Working", ns = function(x) paste0("mod-", x)))
   expect_false(grepl("'", with_btn, fixed = TRUE))
 
   # Still one line, since waiter cannot cope with embedded newlines either.

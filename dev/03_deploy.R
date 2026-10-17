@@ -44,8 +44,9 @@ rsconnect::writeManifest()
 
 ## In command line.
 rsconnect::deployApp(
-  appName = desc::desc_get_field("Package"),
-  appTitle = desc::desc_get_field("Package"),
+  # the existing content item keeps its name (and address); the title is the new one
+  appName = rsconnect::deployments(".")$name %||% desc::desc_get_field("Package"),
+  appTitle = "DECIDE",
   appFiles = c(
     # Add any additional files unique to your app here.
     "R/",

@@ -1,4 +1,4 @@
-tm <- function(f) utils::getFromNamespace(f, "TargetWise")
+tm <- function(f) utils::getFromNamespace(f, "DECIDE")
 
 # Same planted-effect design as test-scorecard.R, plus a redundant criterion
 # that stepwise selection should be able to drop.
@@ -127,14 +127,14 @@ test_that("implementation errors use the implementation table, not the design on
 })
 
 test_that("p-values band and the model tables export", {
-  pl <- TargetWise:::p_level
+  pl <- DECIDE:::p_level
   expect_equal(pl(c(0.0001, 0.005, 0.03, 0.07, 0.5, NA)), c("p001", "p01", "p05", "p10", "ns", "na"))
   co <- data.frame(criterion = c("a", "b"), coefficient = c(0.5, -0.4), std_error = c(0.1, 0.2),
                    odds_ratio = exp(c(0.5, -0.4)), or_low = c(1.3, 0.45), or_high = c(2, 0.99),
                    p_value = c(0.0001, 0.04), direction = c("inclusion", "exclusion"), weight = c(2, 1))
-  wb <- TargetWise:::model_tables_workbook(coefficients = co)
+  wb <- DECIDE:::model_tables_workbook(coefficients = co)
   expect_equal(openxlsx::sheets(wb), "Model")
-  html <- as.character(TargetWise:::coefficients_html(co))
+  html <- as.character(DECIDE:::coefficients_html(co))
   expect_match(html, "wfp-p-p001")
   expect_match(html, "wfp-p-p05")
 })
@@ -145,7 +145,7 @@ test_that("weight of evidence and boosted stumps give additive cards in the righ
   a <- rbinom(n, 1, 0.4); b <- rbinom(n, 1, 0.4)
   y <- rbinom(n, 1, plogis(-0.5 + 1.2 * a - 1.0 * b))
   df <- data.frame(y = ifelse(y == 1, "Food insecure", "Food secure"), a = a, b = b)
-  fit <- TargetWise:::fit_scorecard_advanced
+  fit <- DECIDE:::fit_scorecard_advanced
   w <- fit(df, "y", c("a", "b"), "Food insecure", method = "woe")
   expect_equal(w$weights$direction[match(c("a", "b"), w$weights$criterion)], c("inclusion", "exclusion"))
   expect_true(all(is.na(w$weights$p_value)))
@@ -163,17 +163,17 @@ test_that("variable-selection profile, correlation and per-model effects line up
   a <- rbinom(n, 1, 0.4); b <- ifelse(runif(n) < 0.9, a, 1 - a); cc <- rbinom(n, 1, 0.3)
   y <- rbinom(n, 1, plogis(-0.4 + 1.1 * a - 0.8 * cc))
   df <- data.frame(y = ifelse(y == 1, "Food insecure", "Food secure"), a = a, b = b, cc = cc)
-  prof <- TargetWise:::criteria_profile(df, c("a", "cc"), y)
+  prof <- DECIDE:::criteria_profile(df, c("a", "cc"), y)
   expect_equal(prof$criterion, c("a", "cc"))
   expect_gt(prof$gap[1], 0); expect_lt(prof$gap[2], 0)
-  cm <- TargetWise:::criteria_cor(df, c("a", "b", "cc"))
+  cm <- DECIDE:::criteria_cor(df, c("a", "b", "cc"))
   expect_gt(cm["a", "b"], 0.7)
-  expect_match(as.character(TargetWise:::correlation_html(cm, 0.7)), "is-high")
-  eff <- TargetWise:::model_effects(df, "y", c("a", "cc"), "Food insecure")
+  expect_match(as.character(DECIDE:::correlation_html(cm, 0.7)), "is-high")
+  eff <- DECIDE:::model_effects(df, "y", c("a", "cc"), "Food insecure")
   # every model but the indices (PCA, LDA), whose weights are not log-odds effects
-  expect_equal(length(unique(eff$model)), sum(!TargetWise:::scorecard_model_choices() %in% c("pca", "lda")))
+  expect_equal(length(unique(eff$model)), sum(!DECIDE:::scorecard_model_choices() %in% c("pca", "lda")))
   expect_true(all(eff$effect[eff$criterion == "a"] > 0, na.rm = TRUE))
-  expect_match(as.character(TargetWise:::effects_html(eff)), "wfp-eff-neg")
+  expect_match(as.character(DECIDE:::effects_html(eff)), "wfp-eff-neg")
 })
 
 test_that("machine-learning models give additive points in the right direction", {
@@ -182,7 +182,7 @@ test_that("machine-learning models give additive points in the right direction",
   a <- rbinom(n, 1, 0.4); b <- rbinom(n, 1, 0.4)
   y <- rbinom(n, 1, plogis(-0.3 + 1.4 * a - 1.2 * b))
   df <- data.frame(y = ifelse(y == 1, "Food insecure", "Food secure"), a = a, b = b)
-  fit <- TargetWise:::fit_scorecard_advanced
+  fit <- DECIDE:::fit_scorecard_advanced
   for (m in c("rf", "xgb", "nb", "nnet")) {
     pkg <- c(rf = "ranger", xgb = "xgboost", nb = "e1071", nnet = "nnet")[[m]]
     if (!requireNamespace(pkg, quietly = TRUE)) next
@@ -221,12 +221,12 @@ test_that("criteria asked to different subgroups still fit: a missing answer cou
                    b = ifelse(runif(n) < 0.5, "Yes", "No"), c = ifelse(runif(n) < 0.5, "Yes", "No"))
   df$b[1:150] <- NA                 # asked to half the households
   df$c[151:300] <- NA               # asked to the other half: no household answered both
-  f <- TargetWise:::fit_scorecard_advanced(df, "out", c("a", "b", "c"), outcome_positive = "Vulnerable")
+  f <- DECIDE:::fit_scorecard_advanced(df, "out", c("a", "b", "c"), outcome_positive = "Vulnerable")
   expect_equal(f$n, n)
   expect_equal(unname(f$filled[c("b", "c")]), c(150L, 150L))
-  g <- TargetWise:::fit_scorecard_model(df, "out", c("a", "b", "c"), outcome_positive = "Vulnerable")
+  g <- DECIDE:::fit_scorecard_model(df, "out", c("a", "b", "c"), outcome_positive = "Vulnerable")
   expect_equal(g$n, n)
-  expect_error(TargetWise:::fit_scorecard_advanced(df, "out", "a", outcome_positive = "Vulnerable", weights = rep(NA, n)),
+  expect_error(DECIDE:::fit_scorecard_advanced(df, "out", "a", outcome_positive = "Vulnerable", weights = rep(NA, n)),
                "survey weight column is empty")
 })
 
@@ -236,10 +236,10 @@ test_that("stepwise selection runs backward, forward or both", {
                    s1 = ifelse(runif(n) < 0.2 + 0.5 * y, "Yes", "No"), s2 = ifelse(runif(n) < 0.3 + 0.4 * y, "Yes", "No"),
                    n1 = ifelse(runif(n) < 0.5, "Yes", "No"), n2 = ifelse(runif(n) < 0.5, "Yes", "No"))
   for (d in c("backward", "forward", "both")) {
-    f <- TargetWise:::fit_scorecard_advanced(df, "out", c("s1", "s2", "n1", "n2"), outcome_positive = "V",
+    f <- DECIDE:::fit_scorecard_advanced(df, "out", c("s1", "s2", "n1", "n2"), outcome_positive = "V",
                                              stepwise = "bic", stepwise_dir = d)
     expect_true(all(c("s1", "s2") %in% f$weights$criterion), info = d)
     expect_equal(f$stepwise_dir, d)
   }
-  expect_match(TargetWise:::stepwise_note("aic", "forward"), "starting from no criterion")
+  expect_match(DECIDE:::stepwise_note("aic", "forward"), "starting from no criterion")
 })

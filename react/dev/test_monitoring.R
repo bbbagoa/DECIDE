@@ -150,7 +150,7 @@ click(app, "monitoring_1-tpl_save"); tw_idle(app); Sys.sleep(1)
 app$set_inputs(`monitoring_1-tpl_name` = "E2E template"); click(app, "monitoring_1-tpl_save_go"); tw_idle(app); Sys.sleep(1)
 j <- app$get_download("monitoring_1-tpl_export")
 js <- jsonlite::fromJSON(j, simplifyVector = FALSE)
-ok(identical(js$format, "TargetWise monitoring template") || grepl("TargetWise monitoring template", paste(readLines(j, warn = FALSE), collapse = "")),
+ok(identical(js$format, "DECIDE monitoring template") || grepl("DECIDE monitoring template", paste(readLines(j, warn = FALSE), collapse = "")),
    sprintf("template exported as JSON (%d items)", length(js$items)))
 
 # --- calibrate a vulnerability ranking: registration data, a ranking adopted in Selection

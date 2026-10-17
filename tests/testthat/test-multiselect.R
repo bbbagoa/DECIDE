@@ -1,4 +1,4 @@
-tw <- function(f) utils::getFromNamespace(f, "TargetWise")
+tw <- function(f) utils::getFromNamespace(f, "DECIDE")
 
 test_that("select-multiple answers are recognised, look-alikes are not", {
   ms <- tw("looks_multiselect")
@@ -45,8 +45,8 @@ test_that("file imports split select-multiples and leave the demo data as it is"
   data.table::fwrite(data.frame(id = 1:3, assets = c("radio bike", "none", "radio")), f)
   got <- tw("read_import_file")(f, "csv")
   expect_equal(got$assets_bike, c("Yes", "No", "No"))
-  for (p in c(system.file("extdata", "registration_demo.csv", package = "TargetWise"),
-              system.file("extdata", "assessment_demo.csv", package = "TargetWise"),
+  for (p in c(system.file("extdata", "registration_demo.csv", package = "DECIDE"),
+              system.file("extdata", "assessment_demo.csv", package = "DECIDE"),
               testthat::test_path("fixtures", "mini_targeting.csv"))) {
     raw <- data.table::fread(p, data.table = FALSE)
     expect_equal(names(tw("read_import_file")(p, "csv")), names(raw), info = basename(p))

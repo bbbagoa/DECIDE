@@ -9,7 +9,7 @@
 #'
 #' @noRd
 app_sys <- function(...) {
-  system.file(..., package = "TargetWise")
+  system.file(..., package = "DECIDE")
 }
 
 

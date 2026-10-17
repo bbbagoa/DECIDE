@@ -1,5 +1,5 @@
 /* ==========================================================================
-   TargetWise — soft-modern UI refresh
+   DECIDE — soft-modern UI refresh
    --------------------------------------------------------------------------
    A single, token-driven stylesheet. Light is the default; dark mode is
    activated by [data-bs-theme="dark"] (set by bslib's dark-mode toggle, wired
@@ -2338,7 +2338,7 @@ table.dataTable tbody tr.selected > td a { color: #fff !important; }
 .wfp-pdm-grid .shiny-input-container { width: 100% !important; }
 
 /* Welcome page tagline */
-/* Welcome tagline: its own line, amber, as wide as the TargetWise title;
+/* Welcome tagline: its own line, amber, as wide as the DECIDE title;
    the amber rule below sets it apart from the description */
 .wfp-hero .wfp-hero-tagline { margin: .15rem 0 .9rem; color: #f7b825; font-size: 1.447rem; font-weight: 700;
   line-height: 1.2; letter-spacing: 0; }
@@ -2423,13 +2423,13 @@ table.dataTable tr.dtrg-group td { background: var(--surface-3) !important; font
 .wfp-drag { cursor: grab; color: var(--text-muted); display: inline-flex; padding: 0 .1rem; }
 .wfp-drag:active { cursor: grabbing; }
 
-/* Welcome: WFP logo | TargetWise on one line, the tagline under both. */
+/* Welcome: WFP logo | DECIDE on one line, the tagline under both. */
 .wfp-hero .wfp-hero-brand { display: flex; align-items: center; justify-content: center; gap: 1.25rem; margin-bottom: .5rem; flex-wrap: wrap; }
 .wfp-hero .wfp-hero-logo { height: clamp(44px, 5vw, 62px); width: auto; display: block; }
 .wfp-hero .wfp-hero-divider { width: 1px; align-self: stretch; min-height: 44px; background: rgba(255, 255, 255, .45); }
 .wfp-hero .wfp-hero-brand h1 { margin: 0; line-height: 1; }
 
-/* Navbar brand: WFP logo | TargetWise. */
+/* Navbar brand: WFP logo | DECIDE. */
 .navbar-brand .brand-divider { display: inline-block; width: 1px; height: 26px; margin: 0 12px; vertical-align: middle;
   background: rgba(255, 255, 255, .45); }
 @media (max-width: 1200px) { .navbar-brand .brand-divider { display: none; } }

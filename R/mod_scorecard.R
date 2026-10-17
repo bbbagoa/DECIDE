@@ -2959,8 +2959,8 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
           "Recommended action" = v$action,
           "Assessment source" = assessment_source() %||% "unknown",
           "Built at" = fmt_datetime(),
-          "Built with" = paste0("DECIDE (TargetWise package) ",
-                                tryCatch(as.character(utils::packageVersion("TargetWise")),
+          "Built with" = paste0("DECIDE ",
+                                tryCatch(as.character(utils::packageVersion("DECIDE")),
                                          error = function(e) ""))
         )
         if (pmt() && !is.null(fitted()$pmt)) {

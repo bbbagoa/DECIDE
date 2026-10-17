@@ -1,4 +1,4 @@
-tm <- function(f) utils::getFromNamespace(f, "TargetWise")
+tm <- function(f) utils::getFromNamespace(f, "DECIDE")
 
 test_that("markdown tables escape pipes and keep one row per record", {
   md <- tm("md_table")(data.frame(a = c("x|y", NA), b = c(1.23456, 2)))
@@ -95,22 +95,22 @@ test_that("without vulnerability mapped, the data summary shows socio-economic i
 })
 
 test_that("downloads carry the country office in their name and header", {
-  expect_match(TargetWise:::export_file_name("Targeting_design_report", "html", country = "C\u00f4te d'Ivoire"),
+  expect_match(DECIDE:::export_file_name("Targeting_design_report", "html", country = "C\u00f4te d'Ivoire"),
                "^Targeting_design_report_Cote_d_Ivoire_[0-9]{4}-[0-9]{2}-[0-9]{2}_[0-9]{2}h[0-9]{2}[.]html$")
-  expect_match(TargetWise:::export_file_name("Targeting_Scorecard", "xlsx", country = ""), "^Targeting_Scorecard_[0-9]{4}-")
+  expect_match(DECIDE:::export_file_name("Targeting_Scorecard", "xlsx", country = ""), "^Targeting_Scorecard_[0-9]{4}-")
   s <- shiny::MockShinySession$new()
   s$userData$country_office <- "Mali"
   f <- withr::local_tempfile(fileext = ".html")
   shiny::withReactiveDomain(s, {
-    expect_equal(TargetWise:::country_office_now(), "Mali")
-    expect_match(TargetWise:::export_file_name("X", "html"), "^X_Mali_")
-    TargetWise:::report_write_page(f, "# T", title = "T", record = "R", meta = c("Country office" = ""))
+    expect_equal(DECIDE:::country_office_now(), "Mali")
+    expect_match(DECIDE:::export_file_name("X", "html"), "^X_Mali_")
+    DECIDE:::report_write_page(f, "# T", title = "T", record = "R", meta = c("Country office" = ""))
   })
   expect_match(paste(readLines(f, encoding = "UTF-8"), collapse = "\n"), "Mali", fixed = TRUE)
 })
 
 test_that("the vulnerability framework chart is 100% stacked with the overall line", {
-  b <- TargetWise:::rp_stacked_share(c("A", "B"), c(0.6, 0.3), 45)
+  b <- DECIDE:::rp_stacked_share(c("A", "B"), c(0.6, 0.3), 45)
   expect_s3_class(b, "billboarder")
   expect_true(isTRUE(b$x$bb_opts$data$groups[[1]] |> length() == 2) || length(b$x$bb_opts$data$groups) > 0)
   expect_equal(b$x$bb_opts$grid$y$lines[[1]]$value, 45)

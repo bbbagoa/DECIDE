@@ -1,4 +1,4 @@
-tm <- function(f) utils::getFromNamespace(f, "TargetWise")
+tm <- function(f) utils::getFromNamespace(f, "DECIDE")
 
 test_that("statistical bounds and the allowed range combine into reasons", {
   v <- c(1:9, 60, NA)

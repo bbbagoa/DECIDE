@@ -140,12 +140,12 @@ test_that("other analytical mappings are excluded from name detection", {
 
 test_that("exported workbooks are locked and per-area file names are safe", {
   f <- tempfile(fileext = ".xlsx")
-  TargetWise:::write_xlsx_readonly(data.frame(a = 1:2), f, "Data")
+  DECIDE:::write_xlsx_readonly(data.frame(a = 1:2), f, "Data")
   x <- paste(readLines(unz(f, "xl/worksheets/sheet1.xml"), warn = FALSE), collapse = "")
   expect_match(x, "sheetProtection")
   w <- paste(readLines(unz(f, "xl/workbook.xml"), warn = FALSE), collapse = "")
   expect_match(w, "workbookProtection")
-  expect_equal(TargetWise:::area_file_suffix(c("Nord-Kivu", "Sud Kivu", "Sud/Kivu", NA, "")),
+  expect_equal(DECIDE:::area_file_suffix(c("Nord-Kivu", "Sud Kivu", "Sud/Kivu", NA, "")),
                c("Nord-Kivu", "Sud_Kivu", "Sud_Kivu_1", "area", "area_1"))
 })
 
@@ -153,75 +153,75 @@ test_that("the per-area summary goes down to the lowest mapped level", {
   df <- data.frame(a1 = c("N", "N", "S"), a4 = c("x", "y", "z"), v = c("v1", "v2", "v3"), sz = c(5, 7, 3))
   st <- list(admin1 = "a1", admin4 = "a4", village = "v", hh_size = "sz")
   s <- list(eligible = c(TRUE, TRUE, FALSE), prioritized = c(TRUE, FALSE, FALSE))
-  out <- TargetWise:::selection_by_area(df, st, s)
+  out <- DECIDE:::selection_by_area(df, st, s)
   expect_equal(names(out)[1:3], c("Admin 1", "Admin 4", "Village"))
   expect_equal(out$Served, c(1, 0, 0))
   expect_equal(out$`Excluded by design`, c(0, 1, 0))
 })
 
 test_that("area file names add the parent only when names clash", {
-  expect_equal(TargetWise:::area_short_names(c("N / Beni / Kasenga", "S / Uvira / Kasenga", "S / Uvira / Luvungi")),
+  expect_equal(DECIDE:::area_short_names(c("N / Beni / Kasenga", "S / Uvira / Kasenga", "S / Uvira / Luvungi")),
                c("Beni_Kasenga", "Uvira_Kasenga", "Luvungi"))
-  expect_equal(TargetWise:::area_short_names(c("Ituri", "Nord-Kivu")), c("Ituri", "Nord-Kivu"))
+  expect_equal(DECIDE:::area_short_names(c("Ituri", "Nord-Kivu")), c("Ituri", "Nord-Kivu"))
 })
 
 test_that("the report's area summary rolls up to a readable level with a total", {
   by_area <- data.frame(`Admin 1` = c("N", "N", "S"), `Admin 2` = c("a", "b", "c"),
                         Households = c(10, 20, 30), Eligible = c(5, 10, 15), Served = c(4, 10, 12),
                         `Excluded by design` = c(1, 0, 3), `People served` = c(20, 50, 60), check.names = FALSE)
-  sm <- TargetWise:::area_summary(by_area, max_units = 2)          # 3 Admin 2 units > 2: falls back to Admin 1
+  sm <- DECIDE:::area_summary(by_area, max_units = 2)          # 3 Admin 2 units > 2: falls back to Admin 1
   expect_equal(attr(sm, "level"), "Admin 1")
   expect_equal(sm$Served, c(14, 12, 26))
   expect_equal(tail(sm[[1]], 1), "Total")
-  expect_equal(attr(TargetWise:::area_summary(by_area), "level"), "Admin 2")
+  expect_equal(attr(DECIDE:::area_summary(by_area), "level"), "Admin 2")
 })
 
 test_that("the beneficiary profile reads mapped fields and found columns", {
   df <- data.frame(sex = c("F", "F", "M", "F"), res = c("IDP", "Host", "Refugee", "IDP"),
                    dis = c("yes", "no", "no", "yes"), chronic_illness = c("oui", "non", "non", "non"),
                    marital_status = c("married", "widow", "married", "single"), size = c(5, 3, 7, 4))
-  bp <- TargetWise:::beneficiary_profile(df, list(hhh_sex = "sex", residency = "res", disability = "dis", hh_size = "size"))
+  bp <- DECIDE:::beneficiary_profile(df, list(hhh_sex = "sex", residency = "res", disability = "dis", hh_size = "size"))
   expect_setequal(names(bp$vars), c("sex", "residency", "marital", "disability", "chronic"))
   # Categories are charts; tiles only carry what has no chart.
   labs <- vapply(bp$tiles, `[[`, character(1), "label")
   expect_equal(labs, "Household size")
   expect_equal(bp$tiles[[1]]$value, "4.8")
-  expect_null(TargetWise:::beneficiary_profile(df[0, ], list()))
+  expect_null(DECIDE:::beneficiary_profile(df[0, ], list()))
 })
 
 test_that("the area summary groups Admin 2 under Admin 1 with subtotals and a total", {
   by_area <- data.frame(`Admin 1` = c("N", "N", "S"), `Admin 2` = c("a", "b", "c"),
                         Households = c(10, 20, 30), Eligible = c(5, 10, 15), Served = c(4, 10, 12),
                         `Excluded by design` = c(1, 0, 3), `People served` = c(20, 50, 60), check.names = FALSE)
-  ga <- TargetWise:::area_summary_grouped(by_area)
+  ga <- DECIDE:::area_summary_grouped(by_area)
   expect_equal(ga$.kind, c("group", "unit", "unit", "group", "unit", "total"))
   expect_equal(ga$Area, c("N", "b", "a", "S", "c", "Total"))
   expect_equal(ga$Served[ga$.kind == "group"], c(14, 12))
   expect_equal(ga$Served[ga$.kind == "total"], 26)
-  html <- TargetWise:::area_summary_html(ga)
+  html <- DECIDE:::area_summary_html(ga)
   expect_match(html, 'class="a-total"')
 })
 
 test_that("selection rates compare groups and name the widest gap", {
   df <- data.frame(sex = rep(c("F", "M"), each = 20), size = rep(c(2, 8), 20))
   sel <- c(rep(TRUE, 15), rep(FALSE, 5), rep(TRUE, 5), rep(FALSE, 15))
-  rt <- TargetWise:::selection_rates(df, list(hhh_sex = "sex", hh_size = "size"), sel)
+  rt <- DECIDE:::selection_rates(df, list(hhh_sex = "sex", hh_size = "size"), sel)
   r <- rt[rt$variable == "Head of household", ]
   expect_equal(r$rate[r$category == "female-headed"], 0.75)
   expect_equal(r$rate[r$category == "male-headed"], 0.25)
   expect_equal(attr(rt, "overall"), 0.5)
-  expect_match(TargetWise:::selection_rate_insights(rt)[1], "female-headed households are selected at 75%")
+  expect_match(DECIDE:::selection_rate_insights(rt)[1], "female-headed households are selected at 75%")
 })
 
 test_that("a tie between groups is said as such, not as a group against itself", {
   rt <- data.frame(variable = "Residency", category = c("host", "IDP"), households = c(10, 10), selected = c(10, 10), rate = c(1, 1))
-  expect_match(TargetWise:::selection_rate_insights(rt), "same rate")
+  expect_match(DECIDE:::selection_rate_insights(rt), "same rate")
 })
 
 test_that("the areas covered are written plainly", {
-  expect_equal(TargetWise:::areas_covered_text(list()), "All areas")
-  expect_equal(TargetWise:::areas_covered_text(list(admin1 = c("Ituri", "Nord-Kivu"), admin2 = NULL, admin3 = "Mutwanga")),
+  expect_equal(DECIDE:::areas_covered_text(list()), "All areas")
+  expect_equal(DECIDE:::areas_covered_text(list(admin1 = c("Ituri", "Nord-Kivu"), admin2 = NULL, admin3 = "Mutwanga")),
                "Admin 1: Ituri, Nord-Kivu; Admin 3: Mutwanga")
-  expect_equal(TargetWise:::scope_text(list(list(col = "Province", values = "Ituri"))), "Province: Ituri")
-  expect_equal(TargetWise:::scope_text(list()), "All areas")
+  expect_equal(DECIDE:::scope_text(list(list(col = "Province", values = "Ituri"))), "Province: Ituri")
+  expect_equal(DECIDE:::scope_text(list()), "All areas")
 })

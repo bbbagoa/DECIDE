@@ -1,5 +1,5 @@
 test_that("formatted report text keeps formatting and loses anything that can run", {
-  rich_html <- TargetWise:::rich_html
+  rich_html <- DECIDE:::rich_html
   expect_equal(rich_html(""), "")
   expect_equal(rich_html("<p><br></p>"), "")
   # plain text from older sessions: escaped, line breaks kept
@@ -21,14 +21,14 @@ test_that("formatted report text keeps formatting and loses anything that can ru
 })
 
 test_that("formatted text reads as plain text for Excel and the audit trail", {
-  rich_text <- TargetWise:::rich_text
+  rich_text <- DECIDE:::rich_text
   expect_equal(rich_text("<p>One &amp; <b>two</b></p><ul><li>a</li><li>b</li></ul>"), "One & two\n- a\n- b")
   expect_equal(rich_text("plain"), "plain")
   expect_equal(rich_text(NULL), "")
 })
 
 test_that("report items draw in the chosen chart style", {
-  tm <- function(f) utils::getFromNamespace(f, "TargetWise")
+  tm <- function(f) utils::getFromNamespace(f, "DECIDE")
   d <- data.frame(x = c("A", "B", "C"), group = "All", value = c(5, 3, 2), n = c(5, 3, 2))
   for (st in c("auto", "bar", "column", "donut", "pie", "line", "area")) {
     b <- tm("monitoring_item_chart")(list(data = d, spec = list(type = "count", x = "v", style = st)))

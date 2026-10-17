@@ -1,4 +1,4 @@
-tm <- function(f) utils::getFromNamespace(f, "TargetWise")
+tm <- function(f) utils::getFromNamespace(f, "DECIDE")
 
 # A synthetic assessment where the truth is known: vulnerability is driven by
 # two inclusion criteria and suppressed by one exclusion criterion, and two
@@ -507,8 +507,8 @@ test_that("a workbook that is not a scorecard is refused with a reason", {
 })
 
 test_that("balanced_threshold minimises the larger of the two design errors", {
-  bt <- utils::getFromNamespace("balanced_threshold", "TargetWise")
-  de <- utils::getFromNamespace("design_errors", "TargetWise")
+  bt <- utils::getFromNamespace("balanced_threshold", "DECIDE")
+  de <- utils::getFromNamespace("design_errors", "DECIDE")
   set.seed(3)
   y <- rbinom(600, 1, 0.45)
   s <- round(pmax(0, 3 * y + rnorm(600, 0, 1.6)), 1)

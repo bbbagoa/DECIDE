@@ -15,7 +15,7 @@ test_that("a profile round-trips through JSON without losing the mapping", {
     admin2 = "Territoire", v_score = "Scoring_total", v_groups = "Scoring_Class",
     weight = "", disability = NULL, force_numeric = c("Scoring_total")
   )
-  p <- TargetWise:::profile_from_settings(settings, name = "DRC round 3")
+  p <- DECIDE:::profile_from_settings(settings, name = "DRC round 3")
 
   expect_equal(p$name, "DRC round 3")
   expect_equal(p$mapping$unique_id, "instanceID")
@@ -24,7 +24,7 @@ test_that("a profile round-trips through JSON without losing the mapping", {
   expect_true(is.na(p$mapping$disability))
   expect_equal(p$force_numeric, "Scoring_total")
 
-  back <- TargetWise:::profile_from_json(TargetWise:::profile_to_json(p))
+  back <- DECIDE:::profile_from_json(DECIDE:::profile_to_json(p))
   expect_equal(back$mapping$unique_id, "instanceID")
   expect_equal(back$mapping$admin2, "Territoire")
   expect_true(is.na(back$mapping$weight))
@@ -32,12 +32,12 @@ test_that("a profile round-trips through JSON without losing the mapping", {
 })
 
 test_that("match_profile separates what it can place from what it cannot", {
-  p <- TargetWise:::profile_from_settings(
+  p <- DECIDE:::profile_from_settings(
     list(unique_id = "instanceID", admin1 = "Province", v_score = "OldScoreName"),
     name = "last-round"
   )
   # The form was renamed between rounds: OldScoreName is gone.
-  m <- TargetWise:::match_profile(p, c("instanceID", "Province", "NewScoreName"))
+  m <- DECIDE:::match_profile(p, c("instanceID", "Province", "NewScoreName"))
 
   expect_equal(m$applied_n, 2L)
   expect_equal(sort(names(m$mapping)), c("admin1", "unique_id"))
@@ -50,26 +50,26 @@ test_that("match_profile separates what it can place from what it cannot", {
 test_that("profiles are stored, listed and deleted per user", {
   local_profile_dir()
 
-  a <- TargetWise:::profile_from_settings(list(unique_id = "id_a"), name = "Mali CFM")
-  b <- TargetWise:::profile_from_settings(list(unique_id = "id_b"), name = "Mali CFM")
-  TargetWise:::save_profile(a, user = "alice@wfp.org")
-  TargetWise:::save_profile(b, user = "bob@wfp.org")
+  a <- DECIDE:::profile_from_settings(list(unique_id = "id_a"), name = "Mali CFM")
+  b <- DECIDE:::profile_from_settings(list(unique_id = "id_b"), name = "Mali CFM")
+  DECIDE:::save_profile(a, user = "alice@wfp.org")
+  DECIDE:::save_profile(b, user = "bob@wfp.org")
 
-  expect_equal(TargetWise:::list_profiles("alice@wfp.org")$name, "Mali_CFM")
-  expect_equal(TargetWise:::load_profile("Mali CFM", "alice@wfp.org")$mapping$unique_id, "id_a")
-  expect_equal(TargetWise:::load_profile("Mali CFM", "bob@wfp.org")$mapping$unique_id, "id_b")
-  expect_null(TargetWise:::load_profile("Mali CFM", "carla@wfp.org"))
+  expect_equal(DECIDE:::list_profiles("alice@wfp.org")$name, "Mali_CFM")
+  expect_equal(DECIDE:::load_profile("Mali CFM", "alice@wfp.org")$mapping$unique_id, "id_a")
+  expect_equal(DECIDE:::load_profile("Mali CFM", "bob@wfp.org")$mapping$unique_id, "id_b")
+  expect_null(DECIDE:::load_profile("Mali CFM", "carla@wfp.org"))
 
-  TargetWise:::delete_profile("Mali CFM", "alice@wfp.org")
-  expect_equal(nrow(TargetWise:::list_profiles("alice@wfp.org")), 0)
-  expect_equal(nrow(TargetWise:::list_profiles("bob@wfp.org")), 1)
+  DECIDE:::delete_profile("Mali CFM", "alice@wfp.org")
+  expect_equal(nrow(DECIDE:::list_profiles("alice@wfp.org")), 0)
+  expect_equal(nrow(DECIDE:::list_profiles("bob@wfp.org")), 1)
 })
 
 test_that("a non-profile JSON file is rejected rather than half-applied", {
-  expect_error(TargetWise:::profile_from_json('{"hello":"world"}'),
-               "not a TargetWise setup profile")
+  expect_error(DECIDE:::profile_from_json('{"hello":"world"}'),
+               "not a DECIDE setup profile")
   expect_error(
-    TargetWise:::profile_from_json('{"schema":99,"mapping":{"unique_id":"x"}}'),
+    DECIDE:::profile_from_json('{"schema":99,"mapping":{"unique_id":"x"}}'),
     "newer version"
   )
 })

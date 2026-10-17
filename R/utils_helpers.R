@@ -640,8 +640,7 @@ wfp_country_offices <- function() {
 #' letters equals the bar below, so the letters sit on the centre of what
 #' they are aligned with (the WFP logo). Styled inline: the same in the app,
 #' the startup splash and the standalone reports (the React page draws the
-#' same, react/src/components/Decide.tsx). The R package keeps the name
-#' TargetWise (saved sessions, settings, deployment).
+#' same, react/src/components/Decide.tsx).
 #' @param dark The colours for a dark ground (navbar, splash, report band).
 #' @noRd
 decide_name_html <- function(dark = TRUE) {
@@ -742,7 +741,7 @@ tw_guard <- function(what, expr) {
   tryCatch(expr, error = function(e) {
     if (inherits(e, c("shiny.silent.error", "validation"))) stop(e)
     msg <- conditionMessage(e)
-    message(sprintf("[TargetWise] %s failed: %s", what, msg))
+    message(sprintf("[DECIDE] %s failed: %s", what, msg))
     try(waiter::waiter_hide(), silent = TRUE)
     shiny::showNotification(sprintf("%s did not complete: %s", what, msg), type = "error", duration = NULL)
     invisible(NULL)

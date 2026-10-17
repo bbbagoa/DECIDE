@@ -10,14 +10,14 @@
 # Produces, under dist/:
 #
 # 1. dist/repo/  A CRAN-like repository with the source package and the
-#    Windows binary of TargetWise only. Publish its contents anywhere
+#    Windows binary of DECIDE only. Publish its contents anywhere
 #    users can reach over HTTP (e.g. a public GitHub Pages repository holding
 #    only this folder); then anyone installs with
-#      install.packages("TargetWise",
+#      install.packages("DECIDE",
 #                       repos = c("<url>", "https://cloud.r-project.org"))
 #    and the app's update check reads <url>/src/contrib/PACKAGES.
 #
-# 2. dist/TargetWise_<version>_offline_windows_R<x.y>.zip
+# 2. dist/DECIDE_<version>_offline_windows_R<x.y>.zip
 #    Everything needed to install with NO internet and NO GitHub account:
 #    the package and every dependency as Windows binaries in a local
 #    repository, plus install.R and a short READ-ME. Share it by USB, email
@@ -71,7 +71,7 @@ release_build <- function(include_r = FALSE, cran = "https://cloud.r-project.org
   tools::write_PACKAGES(off_bin, type = "win.binary")
 
   writeLines(c(
-    "# Install TargetWise from this folder -- no internet needed.",
+    "# Install DECIDE from this folder -- no internet needed.",
     "# In R (or RStudio): File > Change dir... to this folder, then run",
     "#   source(\"install.R\")",
     "here <- normalizePath(getwd(), winslash = \"/\")",
@@ -80,15 +80,15 @@ release_build <- function(include_r = FALSE, cran = "https://cloud.r-project.org
     sprintf("if (getRversion() < \"%s\" || getRversion() >= \"%s\")", rver,
             paste(R.version$major, as.integer(strsplit(R.version$minor, ".", fixed = TRUE)[[1]][1]) + 1, sep = ".")),
     sprintf("  warning(\"This bundle was built for R %s.x; you have R \", getRversion(), \". Install R %s if installation fails.\")", rver, rver),
-    "install.packages(\"TargetWise\", repos = repo, type = \"win.binary\",",
+    "install.packages(\"DECIDE\", repos = repo, type = \"win.binary\",",
     "                 dependencies = c(\"Depends\", \"Imports\", \"LinkingTo\"))",
     sprintf("install.packages(c(%s), repos = repo, type = \"win.binary\")",
             paste0("\"", optional, "\"", collapse = ", ")),
-    "message(\"Done. Start the app with: TargetWise::run_app()\")"
+    "message(\"Done. Start the app with: DECIDE::run_app()\")"
   ), file.path(bundle, "install.R"))
 
   writeLines(c(
-    sprintf("TargetWise %s -- offline installer for Windows (R %s)", ver, rver),
+    sprintf("DECIDE %s -- offline installer for Windows (R %s)", ver, rver),
     "",
     "Nothing here needs an internet connection or a GitHub account.",
     "",
@@ -98,7 +98,7 @@ release_build <- function(include_r = FALSE, cran = "https://cloud.r-project.org
     "   directory to it: in R, File > Change dir...; in RStudio, Session > Set",
     "   Working Directory > Choose Directory.",
     "3. Run:   source(\"install.R\")",
-    "4. Start the app any time with:   TargetWise::run_app()",
+    "4. Start the app any time with:   DECIDE::run_app()",
     "",
     "To update, install a newer bundle the same way; your saved sessions are kept."
   ), file.path(bundle, "READ-ME.txt"))

@@ -4,7 +4,7 @@ test_that("the chart builder draws every chart type as an ECharts option", {
   d <- data.frame(age = round(runif(n, 18, 80)), score = rnorm(n, 50, 10),
                   sex = sample(c("Male", "Female"), n, TRUE), status = sample(c("Resident", "IDP", "Returnee"), n, TRUE),
                   stringsAsFactors = FALSE)
-  gb <- function(...) TargetWise:::gb_echart(d, ...)
+  gb <- function(...) DECIDE:::gb_echart(d, ...)
   json <- function(o) jsonlite::toJSON(o, auto_unbox = TRUE, null = "null", na = "null")
   cases <- list(
     list("age", NULL, NULL, "hist", "bar"), list("age", NULL, "sex", "hist", "bar"), list("age", NULL, "sex", "box", "boxplot"),
@@ -25,7 +25,7 @@ test_that("the chart builder draws every chart type as an ECharts option", {
   tot <- Reduce(`+`, lapply(r$option$series, function(s) vapply(s$data, function(e) e$value, 0)))
   expect_equal(tot, rep(100, 3), tolerance = 0.2)
   # a grouped two-category chart is one panel per group
-  r <- TargetWise:::gb_echart(transform(d, region = sample(c("A", "B", "C", "D"), n, TRUE)), "status", "sex", "region", "stack")
+  r <- DECIDE:::gb_echart(transform(d, region = sample(c("A", "B", "C", "D"), n, TRUE)), "status", "sex", "region", "stack")
   expect_length(r$option$grid, 4)
   # axes typed in the dialog bound the value axis; scatters are capped
   r <- gb("status", "score", NULL, "box", axes = list(ymin = 0, ymax = 100))
@@ -37,13 +37,13 @@ test_that("the chart builder draws every chart type as an ECharts option", {
 
 test_that("the cross-tab frame keeps the totals and gives shares for percentages", {
   d <- data.frame(a = rep(c("x", "y"), c(30, 70)), b = rep(c("u", "v"), 50), stringsAsFactors = FALSE)
-  ct <- TargetWise:::contingency(d, "a", "b", NULL, "row")
-  f <- TargetWise:::ct_frame(ct, "A", "Share of each row (%)")
+  ct <- DECIDE:::contingency(d, "a", "b", NULL, "row")
+  f <- DECIDE:::ct_frame(ct, "A", "Share of each row (%)")
   expect_equal(names(f$data), c("row", "c1", "c2", "c3"))
   expect_equal(unlist(f$labels[c("c1", "c2", "c3")]), c(c1 = "u", c2 = "v", c3 = "Total"))
   expect_equal(f$data$c3, c(1, 1, 1))
   expect_equal(f$formats$c1, "pct1")
   expect_null(f$styles$c3)                       # the totals are not shaded
-  n <- TargetWise:::ct_frame(TargetWise:::contingency(d, "a", NULL, NULL, "n"), "A", "Households")
+  n <- DECIDE:::ct_frame(DECIDE:::contingency(d, "a", NULL, NULL, "n"), "A", "Households")
   expect_equal(n$data$c1, c(70, 30, 100))            # most frequent first
 })

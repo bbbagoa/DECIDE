@@ -31,14 +31,14 @@ bg_worker <- function(root) {
 }
 
 #' @noRd
-#' The source folder when TargetWise runs from source (pkgload::load_all()),
+#' The source folder when DECIDE runs from source (pkgload::load_all()),
 #' else NULL. Another R process (the background worker) must then load that
-#' folder too: `TargetWise:::` there would otherwise be the installed copy,
+#' folder too: `DECIDE:::` there would otherwise be the installed copy,
 #' an older version.
 #' @noRd
 tw_source_path <- function() {
-  if (!requireNamespace("pkgload", quietly = TRUE) || !pkgload::is_dev_package("TargetWise")) return(NULL)
-  p <- getNamespaceInfo("TargetWise", "path")
+  if (!requireNamespace("pkgload", quietly = TRUE) || !pkgload::is_dev_package("DECIDE")) return(NULL)
+  p <- getNamespaceInfo("DECIDE", "path")
   if (file.exists(file.path(p, "DESCRIPTION"))) normalizePath(p, winslash = "/") else NULL
 }
 
@@ -52,7 +52,7 @@ bg_enabled <- function() {
 #'
 #' @param label What the waiter says ("Fitting the model...").
 #' @param job A top-level package function taking one list argument (it is
-#'   called in the worker as `TargetWise:::<name>(args)`, so it must not be a
+#'   called in the worker as `DECIDE:::<name>(args)`, so it must not be a
 #'   closure over the session).
 #' @param args One list, sent to the worker (keep it small: only the columns
 #'   the task needs).
@@ -87,7 +87,7 @@ bg_run <- function(label, job, args, on_done, on_error = function(msg) NULL,
   call <- eval(parse(text = sprintf(paste0(
     "function(a, log, src) { if (!is.null(src) && !isTRUE(getOption('tw.source_loaded'))) {",
     " suppressMessages(pkgload::load_all(src, quiet = TRUE, export_all = TRUE, helpers = FALSE)); options(tw.source_loaded = TRUE) };",
-    " TargetWise:::bg_call(\"%s\", a, log) }"), job_name)), envir = globalenv())
+    " DECIDE:::bg_call(\"%s\", a, log) }"), job_name)), envir = globalenv())
   log_file <- tempfile("tw-job-", fileext = ".log"); seen <- 0L
   # the worker's steps and R messages, as they come
   relay <- function() {
@@ -156,7 +156,7 @@ bg_run <- function(label, job, args, on_done, on_error = function(msg) NULL,
 bg_call <- function(job_name, a, log) {
   old <- options(tw.log_file = log); on.exit(options(old), add = TRUE)
   line <- function(state, text) cat(sprintf("%s\t\t%s\n", state, gsub("[\t\r\n]+", " ", trimws(text))), file = log, append = TRUE)
-  fn <- if (is.function(job_name)) job_name else get(job_name, envir = asNamespace("TargetWise"))
+  fn <- if (is.function(job_name)) job_name else get(job_name, envir = asNamespace("DECIDE"))
   withCallingHandlers(fn(a),
     message = function(m) { line("r", conditionMessage(m)); invokeRestart("muffleMessage") },
     warning = function(w) line("rwarn", paste("Warning:", conditionMessage(w))))

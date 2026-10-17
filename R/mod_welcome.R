@@ -38,7 +38,7 @@ mod_welcome_ui <- function(tr = function(x) x) {
   }
 
   app_version <- tryCatch(
-    as.character(utils::packageVersion("TargetWise")),
+    as.character(utils::packageVersion("DECIDE")),
     error = function(e) "development"
   )
 
@@ -50,7 +50,7 @@ mod_welcome_ui <- function(tr = function(x) x) {
       tags$div(
         class = "wfp-hero text-center",
         tags$div(class = "wfp-eyebrow", tr("WFP Vulnerability Analysis and Mapping")),
-        # WFP logo | TargetWise, the tagline below both.
+        # WFP logo | DECIDE, the tagline below both.
         tags$div(
           class = "wfp-hero-brand",
           tags$img(src = "www/wfp-logo-standard-white-en.png", alt = "World Food Programme", class = "wfp-hero-logo"),
@@ -266,5 +266,5 @@ mod_welcome_server <- function(input, output, session) {
   observeEvent(input$go_import, { req(input$go_import > 0); tw_nav("select", "import_panel") })
   observeEvent(input$go_monitor, { req(input$go_monitor > 0); tw_nav("select", "pdm_panel") })
   output$welcome_meta <- shinyreact::reactive_output(list(
-    version = tryCatch(as.character(utils::packageVersion("TargetWise")), error = function(e) "development")))
+    version = tryCatch(as.character(utils::packageVersion("DECIDE")), error = function(e) "development")))
 }

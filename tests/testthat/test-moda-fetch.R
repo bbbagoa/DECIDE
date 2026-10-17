@@ -33,7 +33,7 @@ run_until <- function(done, secs = 30) {
 test_that("the MODA engine gets every page, in order, retrying a failed one", {
   srv <- fake_moda(); on.exit(srv$stop())
   out <- new.env(); out$pages <- NULL; out$err <- NULL; out$prog <- 0
-  TargetWise:::moda_fetch_pages(
+  DECIDE:::moda_fetch_pages(
     page_url = function(pg) paste0(srv$url, "?page=", pg, "&page_size=1000"),
     token = "t", page_size = 1000L,
     progress = function(done, total, rows) out$prog <- out$prog + 1,
@@ -51,12 +51,12 @@ test_that("the MODA engine gets every page, in order, retrying a failed one", {
 })
 
 test_that("a network failure ends with a message, not an R error", {
-  expect_equal(TargetWise:::curl_error_text(structure("Timeout was reached", class = c("curl_error_operation_timedout", "curl_error", "character"))),
+  expect_equal(DECIDE:::curl_error_text(structure("Timeout was reached", class = c("curl_error_operation_timedout", "curl_error", "character"))),
                "Timeout was reached")
-  expect_equal(TargetWise:::curl_error_text(simpleError("boom")), "boom")
+  expect_equal(DECIDE:::curl_error_text(simpleError("boom")), "boom")
   out <- new.env(); out$err <- NULL
   port <- httpuv::randomPort()                              # nothing listens there
-  TargetWise:::moda_fetch_pages(
+  DECIDE:::moda_fetch_pages(
     page_url = function(pg) sprintf("http://127.0.0.1:%d/x?page=%d", port, pg),
     token = "t", retries = 1L,
     finished = function(pages) out$err <- "finished?",
@@ -68,7 +68,7 @@ test_that("a network failure ends with a message, not an R error", {
 test_that("cancelling stops the download", {
   srv <- fake_moda(n = 50000); on.exit(srv$stop())
   out <- new.env(); out$msg <- NULL; out$stop <- FALSE
-  TargetWise:::moda_fetch_pages(
+  DECIDE:::moda_fetch_pages(
     page_url = function(pg) paste0(srv$url, "?page=", pg, "&page_size=1000"),
     token = "t", page_size = 1000L,
     progress = function(done, total, rows) if (done >= 2) out$stop <- TRUE,
@@ -81,16 +81,16 @@ test_that("cancelling stops the download", {
 
 test_that("the first API key is remembered for the session, per server, in memory only", {
   s <- shiny::MockShinySession$new()
-  expect_null(TargetWise:::api_key_get(s))
-  TargetWise:::api_key_set(s, "  KEY-1  ")
-  expect_equal(TargetWise:::api_key_get(s), "KEY-1")
-  TargetWise:::api_key_set(s, "")                      # a blank field does not erase it
-  expect_equal(TargetWise:::api_key_get(s), "KEY-1")
-  TargetWise:::api_key_set(s, "KOBO", "kobo")
-  expect_equal(TargetWise:::api_key_get(s, "kobo"), "KOBO")
-  expect_equal(TargetWise:::api_key_get(s), "KEY-1")
-  TargetWise:::api_key_set(s, "KEY-2")                 # the user can change it
-  expect_equal(TargetWise:::api_key_get(s), "KEY-2")
+  expect_null(DECIDE:::api_key_get(s))
+  DECIDE:::api_key_set(s, "  KEY-1  ")
+  expect_equal(DECIDE:::api_key_get(s), "KEY-1")
+  DECIDE:::api_key_set(s, "")                      # a blank field does not erase it
+  expect_equal(DECIDE:::api_key_get(s), "KEY-1")
+  DECIDE:::api_key_set(s, "KOBO", "kobo")
+  expect_equal(DECIDE:::api_key_get(s, "kobo"), "KOBO")
+  expect_equal(DECIDE:::api_key_get(s), "KEY-1")
+  DECIDE:::api_key_set(s, "KEY-2")                 # the user can change it
+  expect_equal(DECIDE:::api_key_get(s), "KEY-2")
 })
 
 test_that("the form is identified before the download: title, submissions, or why not", {
@@ -114,15 +114,15 @@ test_that("the form is identified before the download: title, submissions, or wh
   on.exit(srv$kill())
   base <- sprintf("http://127.0.0.1:%d/forms", port)
   ok <- NULL
-  for (i in 1:40) { ok <- TargetWise:::moda_form_info("123", "GOOD", base = base); if (!is.na(ok$status %||% 200L)) break; Sys.sleep(0.25) }
+  for (i in 1:40) { ok <- DECIDE:::moda_form_info("123", "GOOD", base = base); if (!is.na(ok$status %||% 200L)) break; Sys.sleep(0.25) }
   expect_true(ok$ok)
   expect_equal(ok$title, "Enqu\u00eate PDM S\u00e9gou")
   expect_equal(ok$submissions, 2500)
-  expect_equal(TargetWise:::moda_form_label(ok, "123"), "Enqu\u00eate PDM S\u00e9gou (form 123)")
-  bad_key <- TargetWise:::moda_form_info("123", "BAD", base = base)
+  expect_equal(DECIDE:::moda_form_label(ok, "123"), "Enqu\u00eate PDM S\u00e9gou (form 123)")
+  bad_key <- DECIDE:::moda_form_info("123", "BAD", base = base)
   expect_false(bad_key$ok); expect_equal(bad_key$status, 401L); expect_match(bad_key$message, "refused the API key")
-  no_form <- TargetWise:::moda_form_info("999", "GOOD", base = base)
+  no_form <- DECIDE:::moda_form_info("999", "GOOD", base = base)
   expect_equal(no_form$status, 404L); expect_match(no_form$message, "No form with ID 999")
-  down <- TargetWise:::moda_form_info("123", "GOOD", base = sprintf("http://127.0.0.1:%d/forms", httpuv::randomPort()))
+  down <- DECIDE:::moda_form_info("123", "GOOD", base = sprintf("http://127.0.0.1:%d/forms", httpuv::randomPort()))
   expect_false(down$ok); expect_true(is.na(down$status))
 })

@@ -1,45 +1,45 @@
-demo_df <- function() utils::read.csv(system.file("extdata", "assessment_demo.csv", package = "TargetWise"), stringsAsFactors = FALSE)
+demo_df <- function() utils::read.csv(system.file("extdata", "assessment_demo.csv", package = "DECIDE"), stringsAsFactors = FALSE)
 crit5t <- c("Targ_HHNoLight", "Targ_HHDepRatio2plus", "Targ_HHRemittance", "Targ_HHHousingTent", "Targ_HHOwnCattle2more")
 
 test_that("a decision tree gives an additive card and readable rules", {
   skip_if_not_installed("rpart")
   df <- demo_df()
-  expect_true("tree" %in% TargetWise:::scorecard_model_choices())
-  f <- TargetWise:::fit_scorecard_advanced(df, "FSI_CARI2_2class", crit5t, "Food insecure", method = "tree")
+  expect_true("tree" %in% DECIDE:::scorecard_model_choices())
+  f <- DECIDE:::fit_scorecard_advanced(df, "FSI_CARI2_2class", crit5t, "Food insecure", method = "tree")
   expect_true(nrow(f$weights) > 0)
   rl <- f$tree_rules
   expect_true(nrow(rl) >= 2)
   expect_true(all(grepl("= (yes|no)", rl$rule) | rl$rule == "All households"))
   expect_equal(sum(rl$households), f$n)
   expect_true(all(diff(rl$share_vulnerable) <= 0))                   # most vulnerable first
-  y <- TargetWise:::as_binary_outcome(df$FSI_CARI2_2class, "Food insecure")
-  sc <- TargetWise:::apply_scorecard(df, TargetWise:::build_scorecard(f$weights))$score
-  expect_gt(TargetWise:::roc_curve(sc, y)$auc, 0.6)
+  y <- DECIDE:::as_binary_outcome(df$FSI_CARI2_2class, "Food insecure")
+  sc <- DECIDE:::apply_scorecard(df, DECIDE:::build_scorecard(f$weights))$score
+  expect_gt(DECIDE:::roc_curve(sc, y)$auc, 0.6)
 })
 
 test_that("cross-validation tries the grid and keeps the best setting", {
   skip_if_not_installed("rpart")
   df <- demo_df()
-  f <- TargetWise:::fit_scorecard_advanced(df, "FSI_CARI2_2class", crit5t, "Food insecure", method = "tree", tune = TRUE, folds = 4)
+  f <- DECIDE:::fit_scorecard_advanced(df, "FSI_CARI2_2class", crit5t, "Food insecure", method = "tree", tune = TRUE, folds = 4)
   tn <- f$tuning
   expect_equal(tn$folds, 4)
-  expect_equal(nrow(tn$table), nrow(TargetWise:::ml_grid("tree", 5)))
+  expect_equal(nrow(tn$table), nrow(DECIDE:::ml_grid("tree", 5)))
   expect_equal(tn$best_auc, max(tn$table$cv_auc, na.rm = TRUE), tolerance = 1e-3)
   expect_equal(unname(unlist(tn$best)), unname(unlist(tn$table[1, c("cp", "maxdepth")])))
   expect_true(tn$best_auc > 0.5 && tn$best_auc <= 1)
   # nothing to tune: no tuning
-  expect_null(TargetWise:::fit_scorecard_advanced(df, "FSI_CARI2_2class", crit5t, "Food insecure", method = "logit", tune = TRUE)$tuning)
-  expect_null(TargetWise:::ml_grid("logit", 5))
-  for (m in intersect(TargetWise:::tunable_models(), TargetWise:::scorecard_model_choices()))
-    expect_false(is.null(TargetWise:::ml_grid(m, 5)), info = m)
+  expect_null(DECIDE:::fit_scorecard_advanced(df, "FSI_CARI2_2class", crit5t, "Food insecure", method = "logit", tune = TRUE)$tuning)
+  expect_null(DECIDE:::ml_grid("logit", 5))
+  for (m in intersect(DECIDE:::tunable_models(), DECIDE:::scorecard_model_choices()))
+    expect_false(is.null(DECIDE:::ml_grid(m, 5)), info = m)
 })
 
 test_that("the settings dialog turns tuning and automatic profiles on", {
   skip_if_not_installed("rpart")
   df <- demo_df()
-  shiny::testServer(TargetWise:::mod_scorecard_server,
+  shiny::testServer(DECIDE:::mod_scorecard_server,
                     args = list(uploaded_df = shiny::reactiveVal(NULL), user_setup = shiny::reactiveValues(),
-                                workspace = TargetWise:::workspace_new()), {
+                                workspace = DECIDE:::workspace_new()), {
     assessment_df(df)
     session$setInputs(outcome_col = "FSI_CARI2_2class", outcome_pos = "Food insecure", fw_validate = 1)
     id <- function(k, x) paste0("rv", k, "_", gsub("[^A-Za-z0-9]", "_", x))
@@ -66,9 +66,9 @@ test_that("the settings dialog turns tuning and automatic profiles on", {
 
 test_that("changing the PCA settings runs nothing: only Fit fits", {
   df <- demo_df()
-  shiny::testServer(TargetWise:::mod_scorecard_server,
+  shiny::testServer(DECIDE:::mod_scorecard_server,
                     args = list(uploaded_df = shiny::reactiveVal(NULL), user_setup = shiny::reactiveValues(),
-                                workspace = TargetWise:::workspace_new()), {
+                                workspace = DECIDE:::workspace_new()), {
     assessment_df(df)
     session$setInputs(outcome_col = "FSI_CARI2_2class", outcome_pos = "Food insecure", fw_validate = 1)
     id <- function(k, x) paste0("rv", k, "_", gsub("[^A-Za-z0-9]", "_", x))

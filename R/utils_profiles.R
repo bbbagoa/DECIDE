@@ -68,7 +68,7 @@ profile_from_settings <- function(settings, name = "profile", rules = NULL) {
     schema = PROFILE_SCHEMA,
     name = as.character(name)[1],
     created = format(Sys.time(), "%Y-%m-%dT%H:%M:%S%z"),
-    app_version = as.character(utils::packageVersion("TargetWise")),
+    app_version = as.character(utils::packageVersion("DECIDE")),
     mapping = mapping,
     force_numeric = as.character(force_numeric),
     # how each country writes its answers (field -> value -> standard), and
@@ -98,7 +98,7 @@ profile_from_json <- function(txt) {
   p <- jsonlite::fromJSON(txt, simplifyVector = TRUE,
                           simplifyDataFrame = FALSE, simplifyMatrix = FALSE)
   if (!is.list(p) || is.null(p$mapping)) {
-    stop("This file is not a TargetWise setup profile.", call. = FALSE)
+    stop("This file is not a DECIDE setup profile.", call. = FALSE)
   }
   if (!is.null(p$schema) && as.integer(p$schema) > PROFILE_SCHEMA) {
     stop("This profile was written by a newer version of the app.", call. = FALSE)

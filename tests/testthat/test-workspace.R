@@ -6,27 +6,27 @@ send_criteria <- function(session, candidates, crit) {
 }
 
 test_that("a saved session carries module work and puts it back", {
-  ws <- TargetWise:::workspace_new()
+  ws <- DECIDE:::workspace_new()
   val <- 0
-  TargetWise:::workspace_register(ws, "a", function() list(x = 1), function(s) val <<- s$x)
-  TargetWise:::workspace_register(ws, "empty", function() NULL, function(s) stop("never"))
-  snap <- TargetWise:::workspace_snapshot(ws)
+  DECIDE:::workspace_register(ws, "a", function() list(x = 1), function(s) val <<- s$x)
+  DECIDE:::workspace_register(ws, "empty", function() NULL, function(s) stop("never"))
+  snap <- DECIDE:::workspace_snapshot(ws)
   expect_equal(names(snap), "a")
 
   withr::local_envvar(TARGETWISE_SESSION_DIR = withr::local_tempdir())
-  TargetWise:::save_session(data.frame(a = 1), list(), data.frame(), name = "ws", workspace = snap)
-  TargetWise:::workspace_restore(ws, TargetWise:::load_session("ws")$workspace)
+  DECIDE:::save_session(data.frame(a = 1), list(), data.frame(), name = "ws", workspace = snap)
+  DECIDE:::workspace_restore(ws, DECIDE:::load_session("ws")$workspace)
   expect_equal(val, 1)
 })
 
 test_that("restoring a Targeting Design keeps the fitted model through the input round trip", {
-  df <- read.csv(system.file("extdata", "assessment_demo.csv", package = "TargetWise"))
+  df <- read.csv(system.file("extdata", "assessment_demo.csv", package = "DECIDE"))
   crit <- c("Targ_HHNoLight", "Targ_HHDepRatio2plus", "Targ_HHRemittance")
   args <- function(ws) list(uploaded_df = shiny::reactiveVal(NULL), user_setup = shiny::reactiveValues(),
                             workspace = ws)
-  ws1 <- TargetWise:::workspace_new()
+  ws1 <- DECIDE:::workspace_new()
   snap <- NULL
-  shiny::testServer(TargetWise:::mod_scorecard_server, args = args(ws1), {
+  shiny::testServer(DECIDE:::mod_scorecard_server, args = args(ws1), {
     assessment_df(df)
     session$setInputs(outcome_col = "FSI_CARI2_2class", outcome_pos = "Food insecure", fw_validate = 1)
     # Criteria go to the model once ticked and community-validated.
@@ -36,13 +36,13 @@ test_that("restoring a Targeting Design keeps the fitted model through the input
                       run_benchmarks = FALSE, fit_criteria = crit, run_fit = 1)
     session$setInputs(w_1 = 9, ver_2 = TRUE, threshold = 1.5)
     session$setInputs(apply_points = 1, thr_apply = 1)
-    snap <<- TargetWise:::workspace_snapshot(ws1)$scorecard
+    snap <<- DECIDE:::workspace_snapshot(ws1)$scorecard
   })
   expect_false(is.null(snap$fitted))
   expect_equal(snap$points$weight[1], 9)
 
-  ws2 <- TargetWise:::workspace_new()
-  shiny::testServer(TargetWise:::mod_scorecard_server, args = args(ws2), {
+  ws2 <- DECIDE:::workspace_new()
+  shiny::testServer(DECIDE:::mod_scorecard_server, args = args(ws2), {
     ws2$scorecard$restore(snap)
     session$flushReact()
     # the browser sends the restored inputs back one by one
@@ -63,7 +63,7 @@ test_that("restoring a Targeting Design keeps the fitted model through the input
 })
 
 test_that("a restored session says what it brought back", {
-  sc <- TargetWise:::session_contents
+  sc <- DECIDE:::session_contents
   got <- sc(list(uploaded_df = data.frame(a = 1:3),
                  user_setup = list(scorecard = list(items = list(1, 2), source = "design", adopted_at = "2026-09-01 10:00")),
                  workspace = list(scorecard = list(data = data.frame(x = 1:5), runs = list(1, 2)),
@@ -78,7 +78,7 @@ test_that("a restored session says what it brought back", {
 })
 
 test_that("the autosave fingerprint changes with the work, not with nothing", {
-  sig <- TargetWise:::workspace_signature
+  sig <- DECIDE:::workspace_signature
   a <- list(scorecard = list(data = data.frame(x = 1:3), threshold = 2))
   expect_identical(sig(a), sig(a))
   b <- a; b$scorecard$threshold <- 2.5
@@ -88,11 +88,11 @@ test_that("the autosave fingerprint changes with the work, not with nothing", {
 })
 
 test_that("only the ticked criteria go on to the model", {
-  df <- read.csv(system.file("extdata", "assessment_demo.csv", package = "TargetWise"))
+  df <- read.csv(system.file("extdata", "assessment_demo.csv", package = "DECIDE"))
   crit <- c("Targ_HHNoLight", "Targ_HHDepRatio2plus", "Targ_HHRemittance")
-  shiny::testServer(TargetWise:::mod_scorecard_server,
+  shiny::testServer(DECIDE:::mod_scorecard_server,
                     args = list(uploaded_df = shiny::reactiveVal(NULL), user_setup = shiny::reactiveValues(),
-                                workspace = TargetWise:::workspace_new()), {
+                                workspace = DECIDE:::workspace_new()), {
     assessment_df(df)
     session$setInputs(outcome_col = "FSI_CARI2_2class", outcome_pos = "Food insecure", fw_validate = 1)
     expect_equal(ready_criteria(), character(0))              # nothing sent yet
@@ -110,11 +110,11 @@ test_that("only the ticked criteria go on to the model", {
 })
 
 test_that("the stepwise dropdown and its criterion reach the fit", {
-  df <- read.csv(system.file("extdata", "assessment_demo.csv", package = "TargetWise"))
+  df <- read.csv(system.file("extdata", "assessment_demo.csv", package = "DECIDE"))
   crit <- c("Targ_HHNoLight", "Targ_HHDepRatio2plus", "Targ_HHRemittance")
-  shiny::testServer(TargetWise:::mod_scorecard_server,
+  shiny::testServer(DECIDE:::mod_scorecard_server,
                     args = list(uploaded_df = shiny::reactiveVal(NULL), user_setup = shiny::reactiveValues(),
-                                workspace = TargetWise:::workspace_new()), {
+                                workspace = DECIDE:::workspace_new()), {
     assessment_df(df)
     session$setInputs(outcome_col = "FSI_CARI2_2class", outcome_pos = "Food insecure", fw_validate = 1)
     send_criteria(session, screened()$criterion, crit)
@@ -129,12 +129,12 @@ test_that("the stepwise dropdown and its criterion reach the fit", {
 })
 
 test_that("a variable whose gap cannot be computed does not break the criteria table", {
-  df <- read.csv(system.file("extdata", "assessment_demo.csv", package = "TargetWise"))
+  df <- read.csv(system.file("extdata", "assessment_demo.csv", package = "DECIDE"))
   df$FSI_CARI2_2class[1:60] <- NA
   df$odd_Bin <- ifelse(seq_len(nrow(df)) <= 60, c("Yes", "No"), NA)   # answered only where the outcome is missing
-  shiny::testServer(TargetWise:::mod_scorecard_server,
+  shiny::testServer(DECIDE:::mod_scorecard_server,
                     args = list(uploaded_df = shiny::reactiveVal(NULL), user_setup = shiny::reactiveValues(),
-                                workspace = TargetWise:::workspace_new()), {
+                                workspace = DECIDE:::workspace_new()), {
     assessment_df(df)
     session$setInputs(outcome_col = "FSI_CARI2_2class", outcome_pos = "Food insecure", fw_validate = 1)
     expect_true("odd_Bin" %in% screened()$criterion)
@@ -146,11 +146,11 @@ test_that("a variable whose gap cannot be computed does not break the criteria t
 })
 
 test_that("the model comparison comes from the models chosen to compare", {
-  df <- read.csv(system.file("extdata", "assessment_demo.csv", package = "TargetWise"))
+  df <- read.csv(system.file("extdata", "assessment_demo.csv", package = "DECIDE"))
   crit <- c("Targ_HHNoLight", "Targ_HHDepRatio2plus", "Targ_HHRemittance")
-  shiny::testServer(TargetWise:::mod_scorecard_server,
+  shiny::testServer(DECIDE:::mod_scorecard_server,
                     args = list(uploaded_df = shiny::reactiveVal(NULL), user_setup = shiny::reactiveValues(),
-                                workspace = TargetWise:::workspace_new()), {
+                                workspace = DECIDE:::workspace_new()), {
     assessment_df(df)
     session$setInputs(outcome_col = "FSI_CARI2_2class", outcome_pos = "Food insecure", fw_validate = 1)
     send_criteria(session, screened()$criterion, crit)
@@ -167,10 +167,10 @@ test_that("the model comparison comes from the models chosen to compare", {
 })
 
 test_that("the tests wait for Run when a setting changes", {
-  df <- read.csv(system.file("extdata", "assessment_demo.csv", package = "TargetWise"))
-  shiny::testServer(TargetWise:::mod_scorecard_server,
+  df <- read.csv(system.file("extdata", "assessment_demo.csv", package = "DECIDE"))
+  shiny::testServer(DECIDE:::mod_scorecard_server,
                     args = list(uploaded_df = shiny::reactiveVal(NULL), user_setup = shiny::reactiveValues(),
-                                workspace = TargetWise:::workspace_new()), {
+                                workspace = DECIDE:::workspace_new()), {
     assessment_df(df)
     session$setInputs(outcome_col = "FSI_CARI2_2class", outcome_pos = "Food insecure", qs_alpha = 0.05, qs_adjust = "BH", fw_validate = 1)
     first <- qs_result()
@@ -183,12 +183,12 @@ test_that("the tests wait for Run when a setting changes", {
 })
 
 test_that("a changed tolerance needs a rationale, errors beyond it need an explanation", {
-  df <- read.csv(system.file("extdata", "assessment_demo.csv", package = "TargetWise"))
+  df <- read.csv(system.file("extdata", "assessment_demo.csv", package = "DECIDE"))
   crit <- c("Targ_HHNoLight", "Targ_HHDepRatio2plus", "Targ_HHRemittance")
   setup <- shiny::reactiveValues()
-  shiny::testServer(TargetWise:::mod_scorecard_server,
+  shiny::testServer(DECIDE:::mod_scorecard_server,
                     args = list(uploaded_df = shiny::reactiveVal(NULL), user_setup = setup,
-                                workspace = TargetWise:::workspace_new()), {
+                                workspace = DECIDE:::workspace_new()), {
     assessment_df(df)
     session$setInputs(outcome_col = "FSI_CARI2_2class", outcome_pos = "Food insecure", fw_validate = 1)
     send_criteria(session, screened()$criterion, crit)
@@ -209,11 +209,11 @@ test_that("a changed tolerance needs a rationale, errors beyond it need an expla
 })
 
 test_that("the design report carries each model's results: PCA, LDA and the others", {
-  df <- read.csv(system.file("extdata", "assessment_demo.csv", package = "TargetWise"))
+  df <- read.csv(system.file("extdata", "assessment_demo.csv", package = "DECIDE"))
   crit <- c("Targ_HHNoLight", "Targ_HHDepRatio2plus", "Targ_HHRemittance", "Targ_HHHousingTent")
-  shiny::testServer(TargetWise:::mod_scorecard_server,
+  shiny::testServer(DECIDE:::mod_scorecard_server,
                     args = list(uploaded_df = shiny::reactiveVal(NULL), user_setup = shiny::reactiveValues(),
-                                workspace = TargetWise:::workspace_new()), {
+                                workspace = DECIDE:::workspace_new()), {
     assessment_df(df)
     session$setInputs(outcome_col = "FSI_CARI2_2class", outcome_pos = "Food insecure", fw_validate = 1)
     send_criteria(session, screened()$criterion, crit)

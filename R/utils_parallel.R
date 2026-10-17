@@ -14,14 +14,14 @@ NULL
 tw_cores <- function() {
   n <- suppressWarnings(parallel::detectCores(logical = TRUE))
   if (is.na(n) || n < 1) n <- 1L
-  cap <- suppressWarnings(as.integer(Sys.getenv("TARGETWISE_CORES", "")))
+  cap <- suppressWarnings(as.integer(tw_env("CORES", "")))
   if (!is.na(cap) && cap >= 1) n <- min(n, cap)
   as.integer(n)
 }
 
 #' lapply over worker processes when it pays, else plain lapply
 #'
-#' Each worker loads the installed TargetWise; a worker that cannot makes the
+#' Each worker loads the installed DECIDE; a worker that cannot makes the
 #' whole call fall back to plain lapply, so the result never depends on the
 #' machine. When the app runs from source (pkgload), the work stays serial:
 #' the workers would run the installed copy, an older version.
@@ -31,11 +31,11 @@ tw_cores <- function() {
 tw_lapply <- function(X, FUN, big = TRUE) {
   k <- min(tw_cores(), length(X))
   # from source the workers would load the installed (older) package: serial
-  if (!big || k < 2 || identical(Sys.getenv("TARGETWISE_PARALLEL"), "false") || !is.null(tw_source_path())) return(lapply(X, FUN))
+  if (!big || k < 2 || identical(tw_env("PARALLEL"), "false") || !is.null(tw_source_path())) return(lapply(X, FUN))
   out <- tryCatch({
     cl <- parallel::makePSOCKcluster(k)
     on.exit(parallel::stopCluster(cl), add = TRUE)
-    parallel::clusterEvalQ(cl, { suppressPackageStartupMessages(loadNamespace("TargetWise")); NULL })
+    parallel::clusterEvalQ(cl, { suppressPackageStartupMessages(loadNamespace("DECIDE")); NULL })
     parallel::parLapply(cl, X, FUN)
   }, error = function(e) NULL)
   if (is.null(out)) lapply(X, FUN) else out

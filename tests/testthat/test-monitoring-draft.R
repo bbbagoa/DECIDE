@@ -1,4 +1,4 @@
-tm <- function(f) utils::getFromNamespace(f, "TargetWise")
+tm <- function(f) utils::getFromNamespace(f, "DECIDE")
 
 cfm <- data.frame(
   date = rep(c("2026-01-05", "2026-01-20", "2026-02-03", "2026-02-10"), 10),
@@ -98,11 +98,11 @@ test_that("the area map points carry the exclusion error of each area", {
 test_that("a draft does not take a registration list for complaints data", {
   reg <- data.frame(HHStatus = rep(c("Resident", "Returnee"), 30),
                     SvyDate = as.Date("2026-01-01") + 0:59, Province = rep(c("A", "B"), each = 30))
-  d <- TargetWise:::monitoring_draft("process", NULL, list(registration_demo.csv = reg))
+  d <- DECIDE:::monitoring_draft("process", NULL, list(registration_demo.csv = reg))
   expect_length(d$items, 0)
   cfm <- data.frame(complaint_type = rep(c("Exclusion", "Amount"), 30), status = rep(c("Resolved", "Open"), 30),
                     date_received = as.Date("2026-01-01") + 0:59)
-  d2 <- TargetWise:::monitoring_draft("process", NULL, list(cfm_log.csv = cfm))
+  d2 <- DECIDE:::monitoring_draft("process", NULL, list(cfm_log.csv = cfm))
   expect_true(length(d2$items) >= 2)
 })
 
@@ -124,8 +124,8 @@ test_that("a template survives its file, with its comments and rounds, and nothi
   expect_equal(lapply(b, `[[`, "data"), lapply(a, `[[`, "data"))  # the same charts on the same data
   expect_equal(b[[1]]$comment, items[[1]]$comment)                # the kept comment comes back
   expect_false(identical(b[[1]]$caption, b[[1]]$comment))         # with the new finding offered beside it
-  expect_error(tm("read_template_json")('{"name": "x"}'), "not a TargetWise monitoring template")
-  expect_error(tm("read_template_json")("not json"), "not a TargetWise monitoring template")
+  expect_error(tm("read_template_json")('{"name": "x"}'), "not a DECIDE monitoring template")
+  expect_error(tm("read_template_json")("not json"), "not a DECIDE monitoring template")
 })
 
 test_that("Monitoring saves a template with its texts, imports a shared one and drafts from it", {
@@ -133,14 +133,14 @@ test_that("Monitoring saves a template with its texts, imports a shared one and 
   drafted <- tm("monitoring_draft")("process", process = list(cfm.csv = cfm))$items
   drafted[[1]]$comment <- "<p>Exclusion complaints concentrate in Beni.</p>"
   shared <- tempfile(fileext = ".json")
-  shiny::testServer(TargetWise:::mod_monitoring_server, args = list(workspace = TargetWise:::workspace_new()), {
+  shiny::testServer(DECIDE:::mod_monitoring_server, args = list(workspace = DECIDE:::workspace_new()), {
     items(drafted)
     session$setInputs(context = "<p>Hotline and desks.</p>", findings = "", recommendations = "<p>Open a second desk.</p>")
     session$setInputs(tpl_name = "CFM", tpl_round = "January", tpl_keep_texts = TRUE, tpl_save_go = 1)
     t <- saved_templates()[["CFM"]]
     expect_equal(t$texts[["context"]], "<p>Hotline and desks.</p>")
     expect_equal(t$items[[1]]$comment, "<p>Exclusion complaints concentrate in Beni.</p>")
-    writeLines(TargetWise:::template_json(t), shared)
+    writeLines(DECIDE:::template_json(t), shared)
     session$setInputs(tpl_import = list(datapath = shared, name = "CFM_monitoring_template.json"))
     expect_true("CFM (2)" %in% names(saved_templates()))            # imported beside the original
     # next round: the imported template drafts the same charts on the new data

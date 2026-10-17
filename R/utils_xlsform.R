@@ -8,7 +8,7 @@
 #' vulnerability categories cut at the quartiles and quintiles of the score on
 #' the design data. It is a draft: the CO rewrites questions (criteria built in
 #' the calculator are asked as they are named) and checks it in the form
-#' builder before use. TargetWise recomputes eligibility at Selection anyway;
+#' builder before use. DECIDE recomputes eligibility at Selection anyway;
 #' the form's own score is a field check, hidden from enumerators.
 #'
 #' @param sc The adopted scorecard (`build_scorecard()` shape).

@@ -7,11 +7,11 @@ send_criteria <- function(session, candidates, crit) {
 }
 
 test_that("Targeting Design: the framework, points and threshold wait for their buttons", {
-  df <- read.csv(system.file("extdata", "assessment_demo.csv", package = "TargetWise"))
+  df <- read.csv(system.file("extdata", "assessment_demo.csv", package = "DECIDE"))
   crit <- c("Targ_HHNoLight", "Targ_HHDepRatio2plus", "Targ_HHRemittance")
-  shiny::testServer(TargetWise:::mod_scorecard_server,
+  shiny::testServer(DECIDE:::mod_scorecard_server,
                     args = list(uploaded_df = shiny::reactiveVal(NULL), user_setup = shiny::reactiveValues(),
-                                workspace = TargetWise:::workspace_new()), {
+                                workspace = DECIDE:::workspace_new()), {
     assessment_df(df)
     session$setInputs(outcome_col = "FSI_CARI2_2class", outcome_pos = "Food insecure")
     expect_null(screened())                                    # chosen, not validated

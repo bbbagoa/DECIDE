@@ -1,4 +1,4 @@
-# TargetWise
+# DECIDE
 
 *Reaching the most vulnerable.*
 
@@ -44,7 +44,7 @@ The app follows the targeting cycle in three phases, each working on its own dat
 ### Requirements
 
 - **R ≥ 4.6** (the package is developed and checked against R 4.6).
-- **Rtools (Windows), required to build the package.** Installing from GitHub (route A), with renv, or from a clone builds TargetWise from its source, and R cannot do that without Rtools. Install the Rtools that matches your R version (**Rtools 4.6 for R 4.6**) from <https://cran.r-project.org/bin/windows/Rtools/>, keeping the default options, then restart R and check:
+- **Rtools (Windows), required to build the package.** Installing from GitHub (route A), with renv, or from a clone builds DECIDE from its source, and R cannot do that without Rtools. Install the Rtools that matches your R version (**Rtools 4.6 for R 4.6**) from <https://cran.r-project.org/bin/windows/Rtools/>, keeping the default options, then restart R and check:
 
   ```r
   install.packages("pkgbuild")
@@ -77,14 +77,14 @@ When asked for a password or token, paste the token and press Enter. It is kept 
 **2. Install:**
 
 ```r
-pak::pak("bbbagoa/TargetWise")
+pak::pak("bbbagoa/DECIDE")
 ```
 
 `pak` finds the token saved in step 1 (or in `GITHUB_PAT`) by itself.
 
-Every dependency is installed from CRAN at the same time, and TargetWise itself is built with Rtools. The first installation takes a few minutes.
+Every dependency is installed from CRAN at the same time, and DECIDE itself is built with Rtools. The first installation takes a few minutes.
 
-- **A given version** (for example the one your office validated): `pak::pak("bbbagoa/TargetWise@v0.1.0")`, using a tag from the [Releases](https://github.com/bbbagoa/TargetWise/releases) page.
+- **A given version** (for example the one your office validated): `pak::pak("bbbagoa/DECIDE@v0.1.0")`, using a tag from the [Releases](https://github.com/bbbagoa/DECIDE/releases) page.
 - **The optional machine-learning models** (random forest, XGBoost, naive Bayes, neural network, SVM): `install.packages(c("ranger", "xgboost", "e1071", "nnet"))`.
 
 **Common errors**
@@ -95,7 +95,7 @@ Every dependency is installed from CRAN at the same time, and TargetWise itself 
 
 ### B. Offline installer (Windows, no internet)
 
-Ask the maintainer for the file `TargetWise_<version>_offline_windows_R<x.y>.zip`, shared by USB key, email or SharePoint. It contains the package and every package it depends on.
+Ask the maintainer for the file `DECIDE_<version>_offline_windows_R<x.y>.zip`, shared by USB key, email or SharePoint. It contains the package and every package it depends on.
 
 1. Install **R** of the version in the file name (e.g. R 4.6) if it is not installed. The bundle may include the R installer.
 2. Unzip the file anywhere.
@@ -105,7 +105,7 @@ Ask the maintainer for the file `TargetWise_<version>_offline_windows_R<x.y>.zip
 source("install.R")
 ```
 
-4. Start the app any time with `TargetWise::run_app()`.
+4. Start the app any time with `DECIDE::run_app()`.
 
 ### Updating
 
@@ -114,15 +114,15 @@ source("install.R")
 - **By email.** On the repository page, click **Watch → Custom → Releases** (needs a free GitHub account).
 - **Offline users** receive the new offline installer from the maintainer.
 
-**How to update.** Close the app, restart R, and run `pak::pak("bbbagoa/TargetWise")` again (route A; the token saved in step 1 is reused), or `source("install.R")` from the new offline bundle (route B). **Then restart R once more** before `TargetWise::run_app()`: an R session that had the old version loaded keeps running it. The app checks this itself: started from a session that loaded an older installation, it stops with *"TargetWise was updated after this R session loaded it. Restart R…"*. The browser cannot keep the old version either: the app's styles and scripts get new addresses with every installation.
+**How to update.** Close the app, restart R, and run `pak::pak("bbbagoa/DECIDE")` again (route A; the token saved in step 1 is reused), or `source("install.R")` from the new offline bundle (route B). **Then restart R once more** before `DECIDE::run_app()`: an R session that had the old version loaded keeps running it. The app checks this itself: started from a session that loaded an older installation, it stops with *"DECIDE was updated after this R session loaded it. Restart R…"*. The browser cannot keep the old version either: the app's styles and scripts get new addresses with every installation.
 
 ### For the maintainer: the access token
 
 The repository is private, so installing needs a token that can read it. Create one **fine-grained, read-only** token for the users:
 
 1. On GitHub: your photo › **Settings › Developer settings › Personal access tokens › Fine-grained tokens › Generate new token**.
-2. **Token name**: e.g. `TargetWise install (read-only)`. **Expiration**: a date that suits you (e.g. one year; you will have to give out a new one then). **Resource owner**: your account.
-3. **Repository access**: *Only select repositories* › `bbbagoa/TargetWise`.
+2. **Token name**: e.g. `DECIDE install (read-only)`. **Expiration**: a date that suits you (e.g. one year; you will have to give out a new one then). **Resource owner**: your account.
+3. **Repository access**: *Only select repositories* › `bbbagoa/DECIDE`.
 4. **Permissions › Repository permissions › Contents: Read-only** (GitHub adds *Metadata: Read-only* by itself). Nothing else.
 5. **Generate token**, copy it (it is shown once) and share it with the users through a private channel (not in an email to a list, not in the repository).
 
@@ -138,7 +138,7 @@ The repository ships an `renv.lock` with the exact package versions used in deve
 # in a clone of the repository
 install.packages("renv")
 renv::restore()        # installs the locked versions into a project library
-renv::install(".")     # installs TargetWise itself
+renv::install(".")     # installs DECIDE itself
 ```
 
 ---
@@ -146,7 +146,7 @@ renv::install(".")     # installs TargetWise itself
 ## Launching the app
 
 ```r
-library(TargetWise)
+library(DECIDE)
 run_app()
 ```
 
@@ -166,8 +166,8 @@ Uploads up to **2 GB** are accepted by default.
 Two synthetic datasets are installed with the package:
 
 ```r
-system.file("extdata", "assessment_demo.csv",   package = "TargetWise")  # 1,500 households, CARI outcome
-system.file("extdata", "registration_demo.csv", package = "TargetWise")  # 1,500 registered households
+system.file("extdata", "assessment_demo.csv",   package = "DECIDE")  # 1,500 households, CARI outcome
+system.file("extdata", "registration_demo.csv", package = "DECIDE")  # 1,500 registered households
 ```
 
 1. **Targeting Design**: load `assessment_demo.csv`. The outcome `FSI_CARI2_2class` is picked automatically.
@@ -304,7 +304,7 @@ Set these environment variables, for example in `.Renviron` or in your hosting p
 | Variable | Effect |
 |---|---|
 | `TARGETWISE_SESSION_PASSPHRASE` | Derive the session encryption key from this passphrase, so saved sessions open on any machine that shares it. Without it, a random per-install key is used. |
-| `TARGETWISE_SESSION_DIR` | Where encrypted sessions are stored. Default: `tools::R_user_dir("TargetWise", "data")`. |
+| `TARGETWISE_SESSION_DIR` | Where encrypted sessions are stored. Default: `tools::R_user_dir("DECIDE", "data")`. |
 | `TARGETWISE_REQUIRE_AUTH` | `true` on any shared deployment: the app refuses anonymous use and keeps one session store per signed-in user. |
 | `TARGETWISE_USER` | Fixed user name when the platform does not provide one (single-user installs). |
 | `TARGETWISE_EXPORT_PASSWORD` | Password needed to unlock the exported Excel files. Without it, exports are still locked against accidental edits but Excel's *Unprotect Sheet* opens them. |
@@ -337,13 +337,13 @@ Set these environment variables, for example in `.Renviron` or in your hosting p
 ## Deployment
 
 - **Posit Connect**: the repository contains `app.R` (which calls `pkgload::load_all()` then `run_app()`) and a `manifest.json`. Regenerate it with `rsconnect::writeManifest()` after any dependency change, then deploy with `rsconnect::deployApp()`; see `dev/03_deploy.R`.
-- **Shiny Server / ShinyProxy / Docker**: install the package in the image and run `TargetWise::run_app(options = list(host = "0.0.0.0", port = 3838))`. Behind ShinyProxy, the signed-in user is read from `SHINYPROXY_USERNAME`.
+- **Shiny Server / ShinyProxy / Docker**: install the package in the image and run `DECIDE::run_app(options = list(host = "0.0.0.0", port = 3838))`. Behind ShinyProxy, the signed-in user is read from `SHINYPROXY_USERNAME`.
 
 ---
 
 ## Development
 
-Developing, testing and building TargetWise need **Rtools** on Windows (see [Requirements](#requirements)).
+Developing, testing and building DECIDE need **Rtools** on Windows (see [Requirements](#requirements)).
 
 ```r
 # in a clone of the repository
@@ -353,7 +353,7 @@ devtools::test()                  # unit and app tests (testthat, shinytest2)
 devtools::check()                 # R CMD check
 ```
 
-Layout: a standard **golem** package with a **React client** (Posit's [shinyreact](https://posit-dev.github.io/shinyreact/)). The R server is unchanged in kind (modules, reactives, observers); the pages are React components in `react/`, built once into `inst/app/react/ui.js`, which ships in the package, so installing or running TargetWise never needs Node. Only changing the interface does:
+Layout: a standard **golem** package with a **React client** (Posit's [shinyreact](https://posit-dev.github.io/shinyreact/)). The R server is unchanged in kind (modules, reactives, observers); the pages are React components in `react/`, built once into `inst/app/react/ui.js`, which ships in the package, so installing or running DECIDE never needs Node. Only changing the interface does:
 
 ```sh
 cd react
@@ -387,12 +387,12 @@ dev/          development and deployment scripts
    release_build()                  # add include_r = TRUE to put the R installer in the bundle
    ```
 
-   This produces `dist/repo/`, a package repository with the source and Windows builds of this package only, and `dist/TargetWise_<version>_offline_windows_R<x.y>.zip`, the offline installer with every dependency (about 270 MB). The script stops if any dependency fails to download.
+   This produces `dist/repo/`, a package repository with the source and Windows builds of this package only, and `dist/DECIDE_<version>_offline_windows_R<x.y>.zip`, the offline installer with every dependency (about 270 MB). The script stops if any dependency fails to download.
 5. Push to `main` and create a GitHub release tagged `v0.2.0` with the `NEWS.md` section as description. The in-app notice reads the version from `DESCRIPTION` on GitHub, so users see it from their next start.
 6. Share the offline zip with offline users (attach it to the GitHub release as well).
-7. Optional: an organisation that cannot reach GitHub can host `dist/repo/` on its own server or shared drive and point the app at it with `TARGETWISE_RELEASES_URL`; users then install with `install.packages("TargetWise", repos = c("<that address>", "https://cloud.r-project.org"))`.
+7. Optional: an organisation that cannot reach GitHub can host `dist/repo/` on its own server or shared drive and point the app at it with `TARGETWISE_RELEASES_URL`; users then install with `install.packages("DECIDE", repos = c("<that address>", "https://cloud.r-project.org"))`.
 
-`AGENTS.md` documents the architecture and conventions in detail. Report issues or suggest changes at <https://github.com/bbbagoa/TargetWise/issues>; pull requests are welcome.
+`AGENTS.md` documents the architecture and conventions in detail. Report issues or suggest changes at <https://github.com/bbbagoa/DECIDE/issues>; pull requests are welcome.
 
 ---
 
@@ -400,13 +400,13 @@ dev/          development and deployment scripts
 
 **Author and maintainer:** Brice Baem BAGOA, Vulnerability Analysis and Mapping, World Food Programme.
 **Email:** [brice.bagoa@outlook.com](mailto:brice.bagoa@outlook.com)
-**GitHub:** <https://github.com/bbbagoa/TargetWise>
+**GitHub:** <https://github.com/bbbagoa/DECIDE>
 
 To cite:
 
-> BAGOA, B. B. (2026). *TargetWise: a workflow for humanitarian targeting design, selection and monitoring* (Version 0.1.0) [R package]. https://github.com/bbbagoa/TargetWise
+> BAGOA, B. B. (2026). *DECIDE: a workflow for humanitarian targeting design, selection and monitoring* (Version 0.1.0) [R package]. https://github.com/bbbagoa/DECIDE
 
-In R: `citation("TargetWise")`.
+In R: `citation("DECIDE")`.
 
 ---
 

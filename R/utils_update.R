@@ -19,7 +19,7 @@ NULL
 
 #' The GitHub repository the package is developed in
 #' @noRd
-update_repo <- function() "bbbagoa/TargetWise"
+update_repo <- function() "bbbagoa/DECIDE"
 
 #' The public release repository (built by dev/release.R). Override with
 #' TARGETWISE_RELEASES_URL, e.g. for an organisation's own server.
@@ -40,7 +40,7 @@ release_version <- function(url = release_repo_url(), timeout = 3) {
   if (!ok) return(NULL)
   d <- tryCatch(read.dcf(textConnection(rawToChar(res$content))), error = function(e) NULL)
   if (is.null(d) || !all(c("Package", "Version") %in% colnames(d))) return(NULL)
-  v <- d[d[, "Package"] == "TargetWise", "Version"]
+  v <- d[d[, "Package"] == "DECIDE", "Version"]
   if (!length(v)) return(NULL)
   tryCatch(max(package_version(unname(v))), error = function(e) NULL)
 }
@@ -63,7 +63,7 @@ github_token <- function() {
 remote_version <- function(repo = update_repo(), timeout = 3) {
   tok <- github_token()
   h <- curl::new_handle(timeout = timeout, connecttimeout = timeout)
-  hdr <- list(Accept = "application/vnd.github.raw", `User-Agent` = "TargetWise")
+  hdr <- list(Accept = "application/vnd.github.raw", `User-Agent` = "DECIDE")
   if (nzchar(tok)) hdr$Authorization <- paste("Bearer", tok)
   do.call(curl::handle_setheaders, c(list(h), hdr))
   res <- tryCatch(
@@ -90,7 +90,7 @@ update_status <- function(max_age_hours = 24) {
   if (identical(tolower(tw_env("UPDATE_CHECK", "true")), "false")) return(NULL)
   hit <- .update_cache$status
   if (!is.null(hit) && difftime(Sys.time(), .update_cache$at, units = "hours") < max_age_hours) return(hit)
-  installed <- tryCatch(utils::packageVersion("TargetWise"), error = function(e) NULL)
+  installed <- tryCatch(utils::packageVersion("DECIDE"), error = function(e) NULL)
   source <- "releases"
   latest <- release_version()          # only when a mirror is configured
   if (is.null(latest)) { latest <- remote_version(); source <- "github" }
@@ -110,7 +110,7 @@ update_notice <- function(status) {
     tags$div(class = "small", sprintf("You have %s. Close the app, then run in R:", status$installed)),
     tags$code(class = "small d-block mt-1",
               if (identical(status$source, "github")) sprintf('pak::pak("%s")', update_repo())
-              else sprintf('install.packages("TargetWise", repos = c("%s", "https://cloud.r-project.org"))',
+              else sprintf('install.packages("DECIDE", repos = c("%s", "https://cloud.r-project.org"))',
                            release_repo_url())),
     tags$div(class = "small mt-1", "Offline? Install the new offline bundle instead. What changed is listed in NEWS.md.")
   )

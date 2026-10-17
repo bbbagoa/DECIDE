@@ -105,7 +105,7 @@ moda_fetch_pages <- function(page_url, token, page_size = MODA_PAGE_SIZE, concur
     curl::handle_setopt(h, url = page_url(p), connecttimeout = 30L, followlocation = TRUE,
                         accept_encoding = "gzip, deflate",
                         low_speed_limit = 1000L, low_speed_time = as.integer(stall_s))
-    curl::handle_setheaders(h, Authorization = paste("Token", token), `User-Agent` = "TargetWise",
+    curl::handle_setheaders(h, Authorization = paste("Token", token), `User-Agent` = "DECIDE",
                             Accept = "application/json")
     handles[[as.character(p)]] <<- h
     st$inflight <- st$inflight + 1L
@@ -186,7 +186,7 @@ moda_form_info <- function(form_id, token, base = "https://api.moda.wfp.org/api/
   curl::handle_setopt(h, connecttimeout = 15L, timeout = as.integer(timeout), followlocation = TRUE,
                       accept_encoding = "gzip, deflate")
   curl::handle_setheaders(h, Authorization = paste("Token", token), Accept = "application/json",
-                          `User-Agent` = "TargetWise")
+                          `User-Agent` = "DECIDE")
   res <- tryCatch(curl::curl_fetch_memory(paste0(base, "/", utils::URLencode(trimws(form_id), reserved = TRUE)), handle = h),
                   error = function(e) e)
   if (inherits(res, "error"))

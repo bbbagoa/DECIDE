@@ -26,7 +26,7 @@ skip_if_no_app_driver <- function() {
 
 # The app the tests drive. From a source checkout (devtools::test()), an app
 # folder that loads this source: an app object would be run by a child process
-# that loads the INSTALLED TargetWise, mixing two versions. Background jobs run
+# that loads the INSTALLED DECIDE, mixing two versions. Background jobs run
 # inline for the same reason (the worker loads the installed package).
 smoke_app <- function(envir = parent.frame()) {
   root <- normalizePath(testthat::test_path("..", ".."), winslash = "/", mustWork = FALSE)
@@ -246,7 +246,7 @@ test_that("with only the id and one area level mapped, every tab opens without a
   skip_on_cran()
   app <- start_app("targeting-minimal")
   import_and_open_setup(app, testthat::test_path("fixtures", "mini_targeting.csv"))
-  keys <- TargetWise:::setup_keys()
+  keys <- DECIDE:::setup_keys()
   minimal <- stats::setNames(as.list(rep("", length(keys))), keys)
   minimal$unique_id <- "instanceID"; minimal$admin1 <- "Province"
   app$set_inputs(!!!stats::setNames(minimal, paste0("setup_1-", names(minimal))))
@@ -292,8 +292,8 @@ test_that("the country office's profile is offered on a fresh import", {
   skip_on_cran()
   store <- withr::local_tempdir()
   withr::local_envvar(c(TARGETWISE_SESSION_DIR = store, TARGETWISE_UPDATE_CHECK = "false"))
-  TargetWise:::app_setting_set("country_office", "Chad", NULL)
-  prof <- TargetWise:::profile_from_settings(
+  DECIDE:::app_setting_set("country_office", "Chad", NULL)
+  prof <- DECIDE:::profile_from_settings(
     c(fixture_mapping()[c("unique_id", "admin1", "admin2", "hhh_sex")], list(recode_maps = list(hhh_sex = list(Female = "Female", Male = "Male")),
                                                                               country_office = "Chad")), name = "chad-round-2")
   save_profile(prof, user = NULL)

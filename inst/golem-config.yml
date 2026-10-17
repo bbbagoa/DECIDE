@@ -1,5 +1,5 @@
 default:
-  golem_name: TargetWise
+  golem_name: DECIDE
   golem_version: 1.0
   app_prod: no
 

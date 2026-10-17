@@ -27,7 +27,7 @@ xlsform <- function() {
 }
 
 test_that("a MODA download comes out as plain columns: GPS, geolocation, multi-select, repeats", {
-  tw <- function(f) utils::getFromNamespace(f, "TargetWise")
+  tw <- function(f) utils::getFromNamespace(f, "DECIDE")
   pages <- tw("harmonize_pages")(ona_pages())
   df <- dplyr::bind_rows(pages)
   names(df) <- tw("make_unique_names")(tw("strip_prefix")(names(df)))
@@ -61,7 +61,7 @@ test_that("a MODA download comes out as plain columns: GPS, geolocation, multi-s
 })
 
 test_that("GPS-like text is only split when every answer is a valid point", {
-  sg <- utils::getFromNamespace("split_geopoints", "TargetWise")
+  sg <- utils::getFromNamespace("split_geopoints", "DECIDE")
   d <- data.frame(id = 1:3, loc = c("1.5 2.5", "3 4", NA), code = c("12 34", "56 78", "9 10"),
                   note = c("12.1 3.4", "hello", NA), bad = c("95 10", "1 2", NA), stringsAsFactors = FALSE)
   out <- sg(d)
@@ -74,7 +74,7 @@ test_that("GPS-like text is only split when every answer is a valid point", {
 })
 
 test_that("the import summary says what was done with the form", {
-  tw <- function(f) utils::getFromNamespace(f, "TargetWise")
+  tw <- function(f) utils::getFromNamespace(f, "DECIDE")
   pages <- tw("harmonize_pages")(ona_pages())
   df <- dplyr::bind_rows(pages)
   names(df) <- tw("make_unique_names")(tw("strip_prefix")(names(df)))
@@ -96,7 +96,7 @@ test_that("the import summary says what was done with the form", {
 })
 
 test_that("the label column follows the app language when the form has several", {
-  tw <- function(f) utils::getFromNamespace(f, "TargetWise")
+  tw <- function(f) utils::getFromNamespace(f, "DECIDE")
   f <- withr::local_tempfile(fileext = ".xlsx")
   wb <- openxlsx::createWorkbook()
   openxlsx::addWorksheet(wb, "survey"); openxlsx::addWorksheet(wb, "choices")

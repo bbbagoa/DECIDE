@@ -1,13 +1,16 @@
-#' Read a TargetWise setting from the environment
+#' Read a DECIDE setting from the environment
 #'
-#' Settings are named TARGETWISE_<NAME>. The names used before the app was
-#' renamed (TARGETING_MONITOR_<NAME>) are still read, so existing setups,
-#' deployments and session passphrases keep working.
+#' Settings are named DECIDE_<NAME>. The names used before the app was
+#' renamed (TARGETWISE_<NAME>, and before that TARGETING_MONITOR_<NAME>) are
+#' still read, so existing setups, deployments and session passphrases keep
+#' working.
 #' @noRd
 tw_env <- function(name, unset = "") {
-  v <- Sys.getenv(paste0("TARGETWISE_", name), unset = NA)
-  if (is.na(v)) v <- Sys.getenv(paste0("TARGETING_MONITOR_", name), unset = unset)
-  v
+  for (prefix in c("DECIDE_", "TARGETWISE_", "TARGETING_MONITOR_")) {
+    v <- Sys.getenv(paste0(prefix, name), unset = NA)
+    if (!is.na(v)) return(v)
+  }
+  unset
 }
 
 #' The authenticated user this Shiny session belongs to
@@ -64,14 +67,19 @@ require_auth <- function() {
 #' @noRd
 get_session_dir <- function(user = NULL) {
   env_dir <- tw_env("SESSION_DIR", "")
-  base <- if (nzchar(env_dir)) env_dir else tools::R_user_dir("TargetWise", which = "data")
-  # First start after the rename: bring the sessions, audit logs, settings
-  # and the encryption key over from the old folder, so no work is lost.
+  base <- if (nzchar(env_dir)) env_dir else tools::R_user_dir("DECIDE", which = "data")
+  # First start after a rename: bring the sessions, audit logs, settings and
+  # the encryption key over from the folder of the previous name (TargetWise,
+  # or before it TargetingMonitorApp), so no work is lost. A copy: the old
+  # folder stays for an older installation still in use.
   if (!nzchar(env_dir) && !dir.exists(base)) {
-    old <- tools::R_user_dir("TargetingMonitorApp", which = "data")
-    if (dir.exists(old)) {
-      dir.create(base, recursive = TRUE, showWarnings = FALSE)
-      file.copy(list.files(old, full.names = TRUE, all.files = TRUE, no.. = TRUE), base, recursive = TRUE)
+    for (prev in c("TargetWise", "TargetingMonitorApp")) {
+      old <- tools::R_user_dir(prev, which = "data")
+      if (dir.exists(old)) {
+        dir.create(base, recursive = TRUE, showWarnings = FALSE)
+        file.copy(list.files(old, full.names = TRUE, all.files = TRUE, no.. = TRUE), base, recursive = TRUE, copy.date = TRUE)
+        break
+      }
     }
   }
 

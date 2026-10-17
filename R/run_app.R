@@ -38,8 +38,8 @@ run_app <- function(
   # Updated since this R session loaded it: the session still holds the old
   # code, and mixing it with the new files breaks downloads. Stop and say so.
   if (tw_updated_since_load()) {
-    stop("TargetWise was updated after this R session loaded it. Restart R ",
-         "(RStudio / Positron: Session > Restart R), then run TargetWise::run_app() again.",
+    stop("DECIDE was updated after this R session loaded it. Restart R ",
+         "(RStudio / Positron: Session > Restart R), then run DECIDE::run_app() again.",
          call. = FALSE)
   }
 

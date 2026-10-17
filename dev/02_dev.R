@@ -47,7 +47,7 @@ usethis::use_test("app")
 # Documentation
 
 ## Vignette ----
-usethis::use_vignette("TargetWise")
+usethis::use_vignette("DECIDE")
 devtools::build_vignettes()
 
 ## Code Coverage----

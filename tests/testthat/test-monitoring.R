@@ -1,4 +1,4 @@
-tm <- function(f) utils::getFromNamespace(f, "TargetWise")
+tm <- function(f) utils::getFromNamespace(f, "DECIDE")
 
 pm <- data.frame(
   date = c("2026-01-05", "2026-01-20", "2026-02-03", "2026-02-10", "2026-02-11"),
@@ -68,18 +68,18 @@ test_that("the monitoring report carries the errors, charts, tables and comments
 test_that("a crosstab gives row, column and total percentages with a chi-square test", {
   df <- data.frame(sex = rep(c("F", "M"), c(60, 40)),
                    complaint = c(rep("yes", 45), rep("no", 15), rep("yes", 10), rep("no", 30)))
-  d <- TargetWise:::chart_aggregate(df, list(type = "crosstab", x = "sex", group = "complaint", pct = "row"))
+  d <- DECIDE:::chart_aggregate(df, list(type = "crosstab", x = "sex", group = "complaint", pct = "row"))
   expect_equal(d$value[d$x == "F" & d$group == "yes"], 75)
   expect_equal(sum(d$n), 100)
-  dc <- TargetWise:::chart_aggregate(df, list(type = "crosstab", x = "sex", group = "complaint", pct = "col"))
+  dc <- DECIDE:::chart_aggregate(df, list(type = "crosstab", x = "sex", group = "complaint", pct = "col"))
   expect_equal(dc$value[dc$x == "F" & dc$group == "yes"], round(100 * 45 / 55, 2))
-  tb <- TargetWise:::chart_table(d, list(type = "crosstab", x = "sex", pct = "row"))
+  tb <- DECIDE:::chart_table(d, list(type = "crosstab", x = "sex", pct = "row"))
   expect_equal(tb[tb$sex == "F", "yes"], "75.0% (45)")
   expect_equal(tb$Total[nrow(tb)], "100")
-  tt <- TargetWise:::crosstab_test(d)
+  tt <- DECIDE:::crosstab_test(d)
   expect_equal(tt$chi2, unname(suppressWarnings(stats::chisq.test(table(df$sex, df$complaint), correct = FALSE))$statistic))
-  expect_match(TargetWise:::crosstab_test_text(tt), "related")
-  expect_null(TargetWise:::crosstab_test(TargetWise:::chart_aggregate(df, list(type = "crosstab", x = "sex", group = "sex"))[1:2, ]))
+  expect_match(DECIDE:::crosstab_test_text(tt), "related")
+  expect_null(DECIDE:::crosstab_test(DECIDE:::chart_aggregate(df, list(type = "crosstab", x = "sex", group = "sex"))[1:2, ]))
 })
 
 test_that("two half-width items sit side by side in the monitoring report", {
@@ -87,11 +87,11 @@ test_that("two half-width items sit side by side in the monitoring report", {
   mk <- function(id, width, display = "chart", type = "count") {
     sp <- list(type = type, x = "area", group = if (type == "crosstab") "sex" else "", pct = "row")
     list(id = id, source = "process", dataset = "d.csv", title = paste("Item", id), comment = "note",
-         spec = sp, data = TargetWise:::chart_aggregate(df, sp), display = display, width = width)
+         spec = sp, data = DECIDE:::chart_aggregate(df, sp), display = display, width = width)
   }
   items <- list(mk("a", "half"), mk("b", "half", "table", "crosstab"), mk("c", "half"))
   f <- withr::local_tempfile(fileext = ".html")
-  TargetWise:::write_monitoring_report(f, list(items = items, kind = "Baseline"))
+  DECIDE:::write_monitoring_report(f, list(items = items, kind = "Baseline"))
   html <- paste(readLines(f, encoding = "UTF-8"), collapse = "\n")
   expect_equal(lengths(regmatches(html, gregexpr('class="pair"', html))), 1)   # a+b paired, c alone
   expect_false(grepl("@@FIG|@@PAIR", html))
@@ -103,9 +103,9 @@ test_that("the officer's formatted texts and comments reach the monitoring repor
   df <- data.frame(area = c("A", "A", "B"))
   sp <- list(type = "count", x = "area", group = "", style = "donut")
   it <- list(id = "a", source = "process", dataset = "d.csv", title = "Item", comment = "<p><i>seen</i> in <b>A</b></p>",
-             spec = sp, data = TargetWise:::chart_aggregate(df, sp), display = "chart", width = "half")
+             spec = sp, data = DECIDE:::chart_aggregate(df, sp), display = "chart", width = "half")
   f <- withr::local_tempfile(fileext = ".html")
-  TargetWise:::write_monitoring_report(f, list(items = list(it), context = "Plain\ntext",
+  DECIDE:::write_monitoring_report(f, list(items = list(it), context = "Plain\ntext",
                                                findings = '<p><span style="color: #c5192d">Low</span> coverage</p><script>x()</script>'))
   html <- paste(readLines(f, encoding = "UTF-8"), collapse = "\n")
   expect_match(html, '<div class="rich"><p>Plain<br>text</p></div>', fixed = TRUE)
