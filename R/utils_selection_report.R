@@ -93,14 +93,14 @@ write_selection_report <- function(file, x, lang = "en") {
     lab <- vapply(c("Served", "Excluded by design"), function(t) i18n_lookup(t, lang), character(1))
     d <- data.frame(area = top$Area, top$Served, top$`Excluded by design`)
     names(d)[2:3] <- lab
-    plots$area <- rp_hbars(d, stats::setNames(c("#0A6EB4", "#f7b825"), lab),
+    plots$area <- rp_hbars(d, stats::setNames(c("#007DBC", "#f7b825"), lab),
                            i18n_lookup("Households", lang), stacked = TRUE)
   }
   plots <- c(plots, sc$plots)
   if (!is.null(rt) && nrow(rt)) {
     d <- data.frame(group = paste(rt$variable, rt$category, sep = " \u00b7 "), rate = round(100 * rt$rate, 1))
     names(d)[2] <- i18n_lookup("Selected (%)", lang)
-    plots$rates <- rp_hbars(d, stats::setNames("#0A6EB4", names(d)[2]), i18n_lookup("Selected (%)", lang)) |>
+    plots$rates <- rp_hbars(d, stats::setNames("#007DBC", names(d)[2]), i18n_lookup("Selected (%)", lang)) |>
       billboarder::bb_legend(show = FALSE)
   }
   if (!is.null(x$map) && nrow(x$map)) plots$map <- selection_map(x$map, lang)
@@ -144,7 +144,7 @@ selection_kpis <- function(t, lang = "en") {
 #' @noRd
 selection_map <- function(d, lang = "en") {
   lv <- c("Served", "Excluded by design", "Not selected")
-  cols <- c("#0A6EB4", "#f7b825", "#8a96a3")
+  cols <- c("#007DBC", "#f7b825", "#8a96a3")
   d$status <- factor(d$status, levels = lv)
   pal <- leaflet::colorFactor(cols, levels = lv)
   labs <- vapply(lv, function(t) i18n_lookup(t, lang), character(1))

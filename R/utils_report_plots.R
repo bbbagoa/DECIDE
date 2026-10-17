@@ -10,9 +10,9 @@
 NULL
 
 # Shared look: WFP colours, legend below, light grid.
-rp_cols <- list(vuln = "#c5192d", not = "#3f7e44", incl = "#0A6EB4", excl = "#c5192d",
-                elig = "#0A6EB4", notelig = "#9aa5b1",
-                models = c("#0A6EB4", "#26bde2", "#f7b825", "#3f7e44", "#c5192d", "#6c757d", "#8a6100", "#5b3a8e", "#d9822b", "#1b9e77"))
+rp_cols <- list(vuln = "#c5192d", not = "#3f7e44", incl = "#007DBC", excl = "#c5192d",
+                elig = "#007DBC", notelig = "#9aa5b1",
+                models = c("#007DBC", "#26bde2", "#f7b825", "#3f7e44", "#c5192d", "#6c757d", "#8a6100", "#5b3a8e", "#d9822b", "#1b9e77"))
 
 rp_base <- function(height = 320) {
   billboarder::billboarder(width = "100%", height = height) |>
@@ -295,7 +295,7 @@ design_report_index_plots <- function(index, structure = NULL, lang = "en") {
   if (identical(index$type, "cluster")) {
     pr <- index$profiles[, index$rank, drop = FALSE]
     d <- data.frame(criterion = rownames(pr), round(100 * pr, 1), check.names = FALSE)
-    pal <- rep_len(c("#c5192d", "#f7b825", "#0A6EB4", "#26bde2", "#3f7e44", "#8a96a3", "#5b6b7c", "#b8c4d0"), ncol(pr))
+    pal <- rep_len(c("#c5192d", "#f7b825", "#007DBC", "#26bde2", "#3f7e44", "#8a96a3", "#5b6b7c", "#b8c4d0"), ncol(pr))
     out$cluster_profiles <- rp_hbars(d, stats::setNames(pal, names(d)[-1]), tr("% of households meeting it"))
     return(out)
   }
@@ -348,7 +348,7 @@ rp_corr_circle <- function(x, y, names, xlab, ylab) {
                      c(list("x_u"), as.list(round(cos(up), 4))), c(list("CircleU"), as.list(round(sin(up), 4))),
                      c(list("x_l"), as.list(round(cos(lo), 4))), c(list("CircleL"), as.list(round(sin(lo), 4)))),
       types = list(Criteria = "scatter", CircleU = "line", CircleL = "line"),
-      colors = list(Criteria = "#0A6EB4", CircleU = "#9aa5b1", CircleL = "#9aa5b1"),
+      colors = list(Criteria = "#007DBC", CircleU = "#9aa5b1", CircleL = "#9aa5b1"),
       labels = list(show = TRUE, format = list(Criteria = htmlwidgets::JS(sprintf(
         "function(v, id, i){ var n = %s; return n[i] !== undefined ? n[i] : ''; }", jsonlite::toJSON(as.character(names))))),
         colors = "#1f2a37")),
@@ -401,8 +401,8 @@ ranking_report_plots <- function(score, threshold, map = NULL, cov_area = NULL, 
 #' @noRd
 rp_group_scatter <- function(x, y, group, xlab = "", ylab = "") {
   lv <- sort(unique(group))
-  pal <- if (all(lv %in% c("Selected", "Not selected"))) c(Selected = "#0A6EB4", `Not selected` = "#b8c4d0")[lv]
-         else stats::setNames(rep_len(c("#c5192d", "#f7b825", "#0A6EB4", "#26bde2", "#3f7e44", "#8a96a3", "#5b6b7c", "#b8c4d0"), length(lv)), lv)
+  pal <- if (all(lv %in% c("Selected", "Not selected"))) c(Selected = "#007DBC", `Not selected` = "#b8c4d0")[lv]
+         else stats::setNames(rep_len(c("#c5192d", "#f7b825", "#007DBC", "#26bde2", "#3f7e44", "#8a96a3", "#5b6b7c", "#b8c4d0"), length(lv)), lv)
   xs <- stats::setNames(as.list(paste0("x_", seq_along(lv))), lv)
   cols <- unlist(lapply(seq_along(lv), function(i) {
     k <- group == lv[i]
@@ -537,7 +537,7 @@ design_report_extra_plots <- function(df = NULL, criteria = NULL, vulnerable = N
 
 # Donut of shares (category, n): the profile charts of the selection report.
 rp_donut <- function(d, height = 240) {
-  cols <- stats::setNames(rep_len(c("#0A6EB4", "#f7b825", "#26bde2", "#3f7e44", "#c5192d", "#8a96a3"), nrow(d)), d$category)
+  cols <- stats::setNames(rep_len(c("#007DBC", "#f7b825", "#26bde2", "#3f7e44", "#c5192d", "#8a96a3"), nrow(d)), d$category)
   # 80% hollow: the ring is a fifth of the radius; the largest share is
   # written in the middle.
   radius <- (height - 50) / 2
@@ -569,7 +569,7 @@ rp_share_charts <- function(vars, max_donuts = 3, lang = "en") {
     v <- vars[[nm]]
     d <- data.frame(category = v$category, share = round(100 * v$n / sum(v$n), 1))
     names(d)[2] <- lab
-    plots[[nm]] <- rp_hbars(d, stats::setNames("#0A6EB4", lab), lab) |> billboarder::bb_legend(show = FALSE)
+    plots[[nm]] <- rp_hbars(d, stats::setNames("#007DBC", lab), lab) |> billboarder::bb_legend(show = FALSE)
   }
   fig <- function(keys) c(sprintf("@@FIG:%s@@", paste(keys, collapse = ",")), "")
   # The donuts' row is filled up to three with bars, so a lone donut does not

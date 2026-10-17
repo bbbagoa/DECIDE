@@ -35,11 +35,11 @@ html, body { height: 100%; margin: 0; }
 .tw-rov-sec-body { padding: 0 1rem 1rem; }
 .tw-seg-r { background: rgba(128,128,128,.12); border-radius: 7px; padding: 2px; gap: 2px; }
 .tw-seg-r .btn { border: 0; border-radius: 5px !important; font-size: .7rem; font-weight: 600; padding: .18rem .55rem; color: var(--bs-secondary-color); background: transparent; }
-.tw-seg-r .btn.active { background: var(--bs-body-bg); color: var(--wfp-blue, #0A6EB4); box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+.tw-seg-r .btn.active { background: var(--bs-body-bg); color: var(--wfp-blue, #007DBC); box-shadow: 0 1px 2px rgba(0,0,0,.12); }
 .tw-select__control { min-height: 34px !important; border-color: var(--border, rgba(128,128,128,.3)) !important; background: var(--bs-body-bg) !important; }
 .tw-select__menu { background: var(--bs-body-bg) !important; color: var(--bs-body-color); }
 .tw-select__single-value, .tw-select__input-container { color: var(--bs-body-color) !important; }
-.tw-select__multi-value { background: rgba(10, 110, 180, .1) !important; }
+.tw-select__multi-value { background: rgba(0,125,188, .1) !important; }
 
 /* Audit trail and other plain tables */
 .tw-search { position: relative; margin: 0; }
@@ -50,3 +50,8 @@ html, body { height: 100%; margin: 0; }
 .tw-table thead th { position: sticky; top: 0; z-index: 1; background: var(--bs-tertiary-bg); cursor: pointer; user-select: none;
   white-space: nowrap; font-weight: 600; font-size: .75rem; text-transform: uppercase; letter-spacing: .02em; color: var(--bs-secondary-color); }
 .tw-table td { vertical-align: top; max-width: 420px; overflow-wrap: anywhere; }
+
+/* DECIDE: in light mode the navbar is the WFP UI Kit's banner blue (the bar
+   carries data-bs-theme="dark" for its white text, which would otherwise
+   give it the dark-mode gradient); dark mode keeps the dark one. */
+html:not([data-bs-theme="dark"]) .tw-navbar.navbar { background-image: linear-gradient(135deg, #085387 0%, #07456f 100%) !important; }

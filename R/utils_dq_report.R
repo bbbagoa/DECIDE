@@ -209,13 +209,13 @@ write_dq_report <- function(file, x, lang = "en") {
   if (is.null(cr)) {
     add("_No correction has been recorded on this data yet._", "")
   } else {
-    add(sprintf("%s entries in the audit trail; %s records deleted.", num(sum(cr$by_action)), num(cr$deleted)), "",
+    add(sprintf("%s entries in the activity log; %s records deleted.", num(sum(cr$by_action)), num(cr$deleted)), "",
         md_table(data.frame(Action = names(cr$by_action), Entries = as.integer(cr$by_action), check.names = FALSE)), "")
     rc <- cr$recent
     add("### The latest entries", "",
         md_table(data.frame(When = rc$timestamp, Action = sub("^Selection: ", "", rc$action),
                             Detail = substr(paste(rc$column, rc$new_value), 1, 120), check.names = FALSE)),
-        "_The full history is in the Audit Trail._", "")
+        "_The full history is in the Activity Log._", "")
   }
 
   if (length(x$variables_md)) add(x$variables_md)
@@ -230,7 +230,7 @@ write_dq_report <- function(file, x, lang = "en") {
     fd <- utils::head(f, 15)
     d <- data.frame(field = fd$field, empty = round(100 * fd$missing, 1))
     names(d)[2] <- i18n_lookup("Empty (%)", lang)
-    plots$missing <- rp_hbars(d, stats::setNames("#0A6EB4", names(d)[2]), i18n_lookup("Empty (%)", lang))
+    plots$missing <- rp_hbars(d, stats::setNames("#007DBC", names(d)[2]), i18n_lookup("Empty (%)", lang))
   }
   report_write_page(
     file, paste(L, collapse = "\n"), plots,
@@ -260,5 +260,5 @@ dq_tiles <- function(x) {
     tile("person", if (is.null(e)) "n/a" else as.character(sum(e$flag == "Review")), "Enumerators to review",
          if (is.null(e)) "no enumerator mapped" else sprintf("of %d", nrow(e))),
     tile("shelter", format(if (is.null(x$corrections)) 0 else sum(x$corrections$by_action), big.mark = ","),
-         "Corrections recorded", "in the audit trail"))
+         "Corrections recorded", "in the activity log"))
 }

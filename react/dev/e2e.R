@@ -41,9 +41,9 @@ tw_js <- function(app, x) app$get_js(x)
 #' Go to a page by its value, by clicking its navbar link (the React shell keeps
 #' the page it shows; setting input$main_nav alone does not move it). Labels as
 #' in react/src/App.tsx (English).
-TW_PAGES <- c(welcome_panel = "Welcome", scorecard_panel = "1. Targeting Design", import_panel = "Load registration data",
+TW_PAGES <- c(welcome_panel = "Welcome", scorecard_panel = "Targeting Design", import_panel = "Load registration data",
               overview_panel = "Overview", dq_panel = "Data Quality", spot_panel = "Spot Checking", ben_panel = "Selection",
-              pdm_panel = "3. Targeting Monitoring", modif_logs = "Audit Trail")
+              pdm_panel = "Targeting Monitoring", modif_logs = "Activity Log")
 tw_go <- function(app, page) {
   hit <- tw_js(app, sprintf(
     "(function(){var a=[].slice.call(document.querySelectorAll('.tw-navbar a')).filter(function(x){return x.textContent.trim()==='%s'})[0];if(a)a.click();return !!a})()",

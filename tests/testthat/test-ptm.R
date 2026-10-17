@@ -39,43 +39,79 @@ test_that("each area gets its own decision, and small areas are not judged", {
   expect_match(after$decision[after$area == "Bad"], "next round")
 })
 
-test_that("Monitoring draws the sample from the selection and measures the errors on the survey", {
+test_that("the sample list drawn in Selection goes to the field and comes back to Monitoring", {
   set.seed(7); N <- 3000
   reg <- data.frame(hh_id = sprintf("H%05d", 1:N), province = sample(c("North", "South"), N, TRUE),
+                    HHHName = paste("Name", 1:N), HHHSex = sample(c("M", "F"), N, TRUE), Phone = sprintf("0812%06d", 1:N),
                     stringsAsFactors = FALSE)
   served <- runif(N) < 0.35
   eligible <- served | runif(N) < 0.05                               # a few excluded by design
+  status <- ifelse(served, "selected", ifelse(eligible, "by_design", "not_selected"))
+  st <- list(unique_id = "hh_id", admin1 = "province", hhh_sex = "HHHSex")
+  d <- TargetWise:::ptm_draw(status, reg$province, list(mode = "fixed", n = 50), reserve = 0.1, seed = 1)
+  lists <- TargetWise:::ptm_sample_lists(reg, d, st)
+  # what the field team needs to find each household
+  expect_true(all(c("household_id", "eligibility", "sample_area", "province", "HHHName", "HHHSex", "Phone") %in% names(lists$main)))
+  expect_equal(nrow(lists$main), 200)                                # 2 areas x 2 groups x 50
+  expect_equal(nrow(lists$replacements), 20)
+  expect_false(any(c(lists$main$household_id, lists$replacements$household_id) %in% reg$hh_id[status == "by_design"]))
+  f <- tempfile(fileext = ".xlsx")
+  TargetWise:::save_workbook_readonly(TargetWise:::ptm_sample_workbook(lists, d$design, kind = "Baseline",
+                                        meta = list("Survey" = "Post-targeting survey / baseline", "Household ID column" = "hh_id",
+                                                    "Areas by" = "province")), f)
+  back <- TargetWise:::ptm_read_sample(f)
+  expect_equal(nrow(back$list), 220)
+  expect_equal(back$id_col, "hh_id")
+  expect_equal(sum(back$design$N[back$design$group == "selected"]), sum(served))
+
   setup <- shiny::reactiveValues(unique_id = "hh_id", admin1 = "province")
   log <- shiny::reactiveVal(data.frame(timestamp = character(0), uid = character(0), column = character(0), old_value = character(0),
                                        new_value = character(0), action = character(0), user = character(0), reason = character(0)))
   shiny::testServer(TargetWise:::mod_pdm_server,
-                    args = list(workspace = TargetWise:::workspace_new(), user_setup = setup, modification_log = log,
-                                selection = shiny::reactive(list(df = reg, served = served, eligible = eligible))), {
-    session$setInputs(ptm_level = "province", ptm_size_mode = "fixed", ptm_n = 50, ptm_reserve = 10, ptm_seed = 1, ptm_draw = 1)
-    sd <- sample_design()
-    expect_false(is.null(sd))
-    expect_equal(sum(sd$design$n), 200)                              # 2 areas x 2 groups x 50
-    expect_false(any(sd$list$household_id %in% reg$hh_id[eligible & !served]))   # excluded by design stay out
+                    args = list(workspace = TargetWise:::workspace_new(), user_setup = setup, modification_log = log), {
     # the survey: the main households, with their true eligibility (North mostly wrong)
-    main <- sd$list[sd$list$role == "main", ]
-    grp <- sd$group[sd$list$role == "main"]
-    truth <- grp == "Selected"
+    main <- lists$main
+    truth <- main$eligibility == "Eligible"
     north <- main$province == "North"
     truth[north] <- runif(sum(north)) < 0.5
     survey <- data.frame(hh_id = main$household_id, eligible_now = ifelse(truth, "Yes", "No"), stringsAsFactors = FALSE)
     pdm_df(survey)
+    session$setInputs(ptm_sample_file = list(datapath = f, name = "sample.xlsx"))
+    expect_false(is.null(sample_design()))
     session$setInputs(data_kind = "Baseline", benef_source = "design", ptm_id = "hh_id",
                       pdm_elig_source = "column", pdm_eligibility = "eligible_now",
                       pdm_weight_mode = "design", pdm_prioritized = "(none)", pdm_unit = "(none)",
                       tol_lower = 5, tol_upper = 20)
-    expect_equal(ptm_matched()$n, 100 * 2)
+    expect_equal(ptm_matched()$n, 200)
     session$setInputs(pdm_run = 1)
     r <- results()
     expect_false(is.null(r))
     expect_match(r$weighting, "sample design")
-    d <- r$decisions
-    expect_setequal(d$area, c("North", "South"))
-    expect_match(d$decision[d$area == "North"], "Pause|Review")
-    expect_match(d$decision[d$area == "South"], "Proceed")
+    dd <- r$decisions
+    expect_setequal(dd$area, c("North", "South"))
+    expect_match(dd$decision[dd$area == "North"], "Pause|Review")
+    expect_match(dd$decision[dd$area == "South"], "Proceed")
+  })
+})
+
+test_that("Monitoring calculates the food security indicators on the survey and takes them as eligibility", {
+  fcs <- utils::read.csv(testthat::test_path("fixtures", "wfp", "FCS_Sample_Survey.csv"), na.strings = c("n/a", ""))
+  set.seed(2)
+  fcs$received <- sample(c("Assisted", "Not assisted"), nrow(fcs), TRUE)
+  log <- shiny::reactiveVal(data.frame(timestamp = character(0), uid = character(0), column = character(0), old_value = character(0),
+                                       new_value = character(0), action = character(0), user = character(0), reason = character(0)))
+  shiny::testServer(TargetWise:::mod_pdm_server,
+                    args = list(workspace = TargetWise:::workspace_new(), user_setup = shiny::reactiveValues(), modification_log = log), {
+    pdm_df(fcs)
+    session$setInputs(`fsi-use_fcs` = TRUE, `fsi-fcs_threshold` = "21", `fsi-compute` = 1)
+    expect_true("FCS_PoorBorderline" %in% names(pdm_all()))
+    expect_equal(TargetWise:::guess_vulnerable_answer(c("Food insecure", "Food secure")), "Food insecure")
+    expect_equal(TargetWise:::guess_vulnerable_answer(c("Food secure", "Not food insecure", "Food insecure")[c(1, 3)]), "Food insecure")
+    session$setInputs(benef_source = "column", pdm_beneficiary = "received", pdm_benef_level = "Assisted",
+                      pdm_elig_source = "column", pdm_eligibility = "FCS_PoorBorderline", pdm_weight_mode = "none",
+                      pdm_prioritized = "(none)", pdm_unit = "(none)", tol_lower = 5, tol_upper = 20, pdm_run = 1)
+    r <- results()
+    expect_false(is.null(r))
+    expect_true(is.finite(r$metrics$inclusion_error))
   })
 })

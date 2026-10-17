@@ -6,6 +6,7 @@ import { ArrowRight, BookMarked, Database, Info, Scale, Signpost, Target, UserCh
 import { useShinyOutputValue } from "@/shiny";
 import { ActionButton } from "@/lib/inputs";
 import "./welcome.css";
+import { DecideName, PhaseWords } from "@/components/Decide";
 
 type T = (s: string) => string;
 
@@ -36,17 +37,19 @@ export function WelcomePage({ t }: { active: boolean; t: T }) {
   return (
     <div className="wfp-welcome tw-wl">
       <header className="wfp-hero text-center">
-        <div className="wfp-eyebrow">{t("WFP Vulnerability Analysis and Mapping")}</div>
         <div className="wfp-hero-brand">
           <img src="www/wfp-logo-standard-white-en.png" alt="World Food Programme" className="wfp-hero-logo" />
           <span className="wfp-hero-divider" />
-          <h1>TargetWise</h1>
+          <h1><DecideName dark /></h1>
         </div>
-        <div className="wfp-hero-tagline"><span>{t("Reaching the most vulnerable")}</span></div>
+        <div className="wfp-hero-tagline"><span>{t("Fairly select the most vulnerable")}</span></div>
+        {/* the six phases, each first letter in its colour */}
+        <div className="tw-wl-letters"><PhaseWords t={t} /></div>
         <div className="wfp-hero-rule" />
         <p className="wfp-hero-lead">
-          {t("A workflow for designing, applying and checking humanitarian targeting: build an evidence-based scorecard from assessment data, use it to select beneficiaries from registration data, then measure what actually reached households.")}
+          {t("A workflow for designing, applying and checking humanitarian targeting.")}
         </p>
+        <div className="wfp-eyebrow tw-wl-unit">{t("WFP Vulnerability Analysis and Mapping")}</div>
       </header>
 
       <section className="tw-wl-phases" aria-label={t("The three phases")}>

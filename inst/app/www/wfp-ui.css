@@ -10,28 +10,61 @@
    these tokens (via thematic) rather than hardcoded hexes.
    ========================================================================== */
 
-/* App-wide font: Commissioner, bundled in www/fonts (SIL Open Font License,
-   see fonts/OFL.txt) so the app renders identically offline. One variable
-   font file per script covers every weight from 300 to 800. */
+/* Fonts, all bundled in www/fonts (SIL Open Font License, fonts/OFL-*.txt) so
+   the app renders the same offline:
+   - Open Sans, WFP's typeface (WFP UI Kit), for all text; one variable file
+     per script covers weights 300 to 800;
+   - Barlow Bold for the name DECIDE only;
+   - IBM Plex Mono for code, formulas and identifiers;
+   - Noto Sans Arabic as the fallback for Arabic text (fetched only when
+     Arabic characters appear, e.g. in the data). */
 @font-face {
-  font-family: "Commissioner"; font-style: normal; font-weight: 300 800; font-display: swap;
-  src: url("fonts/commissioner-latin.woff2") format("woff2");
+  font-family: "Open Sans"; font-style: normal; font-weight: 300 800; font-stretch: 100%; font-display: swap;
+  src: url("fonts/open-sans-latin.woff2") format("woff2");
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 @font-face {
-  font-family: "Commissioner"; font-style: normal; font-weight: 300 800; font-display: swap;
-  src: url("fonts/commissioner-latin-ext.woff2") format("woff2");
-  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+  font-family: "Open Sans"; font-style: normal; font-weight: 300 800; font-stretch: 100%; font-display: swap;
+  src: url("fonts/open-sans-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
 }
+@font-face {
+  font-family: "Barlow"; font-style: normal; font-weight: 700; font-display: swap;
+  src: url("fonts/barlow-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "Barlow"; font-style: normal; font-weight: 700; font-display: swap;
+  src: url("fonts/barlow-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "IBM Plex Mono"; font-style: normal; font-weight: 400; font-display: swap;
+  src: url("fonts/ibm-plex-mono-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "IBM Plex Mono"; font-style: normal; font-weight: 400; font-display: swap;
+  src: url("fonts/ibm-plex-mono-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Noto Sans Arabic"; font-style: normal; font-weight: 400 700; font-display: swap;
+  src: url("fonts/noto-sans-arabic-arabic.woff2") format("woff2");
+  unicode-range: U+0600-06FF, U+0750-077F, U+0870-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC, U+102E0-102FB, U+10E60-10E7E, U+10EC2-10EC7, U+10EC9-10EEE, U+10EF0-10EFF, U+1EE00-1EE03, U+1EE05-1EE1F, U+1EE21-1EE22, U+1EE24, U+1EE27, U+1EE29-1EE32, U+1EE34-1EE37, U+1EE39, U+1EE3B, U+1EE42, U+1EE47, U+1EE49, U+1EE4B, U+1EE4D-1EE4F, U+1EE51-1EE52, U+1EE54, U+1EE57, U+1EE59, U+1EE5B, U+1EE5D, U+1EE5F, U+1EE61-1EE62, U+1EE64, U+1EE67-1EE6A, U+1EE6C-1EE72, U+1EE74-1EE77, U+1EE79-1EE7C, U+1EE7E, U+1EE80-1EE89, U+1EE8B-1EE9B, U+1EEA1-1EEA3, U+1EEA5-1EEA9, U+1EEAB-1EEBB, U+1EEF0-1EEF1;
+}
+code, pre, kbd, samp, .tw-mono { font-family: "IBM Plex Mono", ui-monospace, Consolas, monospace !important; }
+/* the variable calculator: formulas and R code are typed in the mono face */
+textarea[id$="-formula"], textarea[id$="-code"] { font-family: "IBM Plex Mono", ui-monospace, Consolas, monospace !important; font-size: 13px; }
 
 /* --------------------------------------------------------------------------
    1. Design tokens — light (default)
    -------------------------------------------------------------------------- */
 :root {
   /* WFP brand */
-  --wfp-blue: #0A6EB4;
-  --wfp-blue-600: #085a93;
-  --wfp-blue-700: #064a78;
+  --wfp-blue: #007DBC;
+  --wfp-blue-600: #085387;
+  --wfp-blue-700: #19486a;
   --wfp-amber: #f7b825;
 
   /* Radii & shape — restrained: 12px surfaces, 8px controls */
@@ -47,15 +80,15 @@
 
   /* Surfaces & borders */
   --surface: #ffffff;
-  --surface-2: #f5f8fc;       /* app background, sidebars */
-  --surface-3: #eef3f9;       /* subtle fills, table headers */
-  --border: rgba(10, 110, 180, 0.12);
-  --border-strong: rgba(10, 110, 180, 0.22);
-  --body-text: #1f2a37;
-  --text-muted: #5b6b7e;
+  --surface-2: #eff2f5;       /* app background, sidebars (WFP UI Kit ui-02) */
+  --surface-3: #f0f3f6;       /* subtle fills, table headers (ui-03) */
+  --border: rgba(0,125,188, 0.12);
+  --border-strong: rgba(0,125,188, 0.22);
+  --body-text: #031c2d;
+  --text-muted: #5a6872;
 
   /* Semantic accent tints (soft value-box backgrounds) */
-  --accent-primary: #0A6EB4;  --accent-primary-bg: rgba(10, 110, 180, 0.10);
+  --accent-primary: #007DBC;  --accent-primary-bg: rgba(0,125,188, 0.10);
   --accent-info:     #26bde2; --accent-info-bg:     rgba(38, 189, 226, 0.12);
   --accent-success:  #3f7e44; --accent-success-bg:  rgba(63, 126, 68, 0.12);
   --accent-warning:  #f7b825; --accent-warning-bg:  rgba(247, 184, 37, 0.16);
@@ -71,8 +104,8 @@
    -------------------------------------------------------------------------- */
 [data-bs-theme="dark"] {
   --wfp-blue: #2f9fe0;        /* brighter blue for dark contrast */
-  --wfp-blue-600: #0A6EB4;
-  --wfp-blue-700: #085a93;
+  --wfp-blue-600: #007DBC;
+  --wfp-blue-700: #085387;
   --wfp-amber: #f7b825;
 
   --surface: #10233b;
@@ -104,18 +137,18 @@
 body {
   background-color: var(--surface-2) !important;
   color: var(--body-text);
-  font-family: "Commissioner", "Segoe UI", system-ui, sans-serif !important;
+  font-family: "Open Sans", "Noto Sans Arabic", "Segoe UI", system-ui, sans-serif !important;
 }
 /* Force the app font on every surface (bslib/Bootswatch presets ship their own
-   font stacks; this guarantees Commissioner wins everywhere). */
+   font stacks; this guarantees Open Sans wins everywhere). */
 input, button, select, textarea, .form-control, .form-select,
 .navbar, .card, .modal-content, .bslib-value-box,
 .table, table.dataTable, .shiny-notification {
-  font-family: "Commissioner", "Segoe UI", system-ui, sans-serif !important;
+  font-family: "Open Sans", "Noto Sans Arabic", "Segoe UI", system-ui, sans-serif !important;
 }
 /* Also expose the font on the Bootstrap font variable for components that read it */
-:root { --bs-body-font-family: "Commissioner", "Segoe UI", system-ui, sans-serif; }
-[data-bs-theme="dark"] { --bs-body-font-family: "Commissioner", "Segoe UI", system-ui, sans-serif; }
+:root { --bs-body-font-family: "Open Sans", "Noto Sans Arabic", "Segoe UI", system-ui, sans-serif; }
+[data-bs-theme="dark"] { --bs-body-font-family: "Open Sans", "Noto Sans Arabic", "Segoe UI", system-ui, sans-serif; }
 
 /* Generic link focus ring (accessibility, brand-tinted) */
 a:focus-visible,
@@ -388,7 +421,7 @@ a:focus-visible,
 .navbar {
   min-height: 48px !important;
   background-color: var(--wfp-blue-600) !important; /* slightly deeper, refined */
-  box-shadow: 0 2px 10px rgba(10, 110, 180, 0.18);
+  box-shadow: 0 2px 10px rgba(0,125,188, 0.18);
 }
 .navbar-brand,
 .navbar-nav .nav-link,
@@ -825,11 +858,11 @@ table.dataTable thead th.sorting_desc:after { opacity: 0.35 !important; }
   --elev-2: 0 2px 4px rgba(15, 40, 70, .05), 0 8px 20px rgba(15, 40, 70, .07);
   --elev-3: 0 4px 8px rgba(15, 40, 70, .06), 0 20px 44px rgba(15, 40, 70, .12);
 
-  --ring: 0 0 0 3px rgba(10, 110, 180, .18);
-  --hairline: rgba(10, 110, 180, .10);
+  --ring: 0 0 0 3px rgba(0,125,188, .18);
+  --hairline: rgba(0,125,188, .10);
 
   /* One brand gradient, reused by the hero and the navbar. */
-  --grad-brand: linear-gradient(135deg, #0A6EB4 0%, #0d5c95 45%, #07456f 100%);
+  --grad-brand: linear-gradient(135deg, #007DBC 0%, #0d5c95 45%, #07456f 100%);
 }
 
 [data-bs-theme="dark"] {
@@ -1961,7 +1994,7 @@ textarea.form-control { min-height: 5rem; line-height: 1.45; }
 .wfp-corr-row { text-align: left; font-weight: 600; font-size: .82rem; white-space: nowrap; }
 .wfp-corr-idx { display: inline-block; min-width: 1.4rem; color: var(--text-muted); font-weight: 500; }
 .wfp-corr-key { display: inline-block; width: .8rem; height: .8rem; border-radius: 3px; margin: 0 .2rem 0 .5rem; vertical-align: -1px; }
-.wfp-corr-key.pos { background: rgba(10,110,180,.6); }
+.wfp-corr-key.pos { background: rgba(0,125,188,.6); }
 .wfp-corr-key.neg { background: rgba(197,25,45,.6); }
 .wfp-model-table tr.is-flagged td { background: var(--accent-warning-bg); }
 .wfp-model-table td .shiny-input-container { margin: 0 !important; }
@@ -2242,7 +2275,7 @@ table.dataTable tbody td .btn { font-size: .72rem; padding: .15rem .5rem; }
 .wfp-map-pop { display: flex; flex-direction: column; gap: .1rem; min-width: 150px; font-size: .78rem; color: #1f2a37; }
 .wfp-map-pop b { font-size: .84rem; }
 .wfp-map-pop span { color: #5b6b7e; }
-.wfp-map-pop strong { font-size: .95rem; color: #0A6EB4; }
+.wfp-map-pop strong { font-size: .95rem; color: #007DBC; }
 .wfp-map-label { font-family: inherit; font-size: .74rem; font-weight: 600; border-radius: 6px; padding: .15rem .45rem; }
 .leaflet-control-attribution { font-size: 9px; opacity: .7; }
 [data-bs-theme="dark"] .leaflet-control-scale-line { background: rgba(18, 24, 38, .75); color: #e6ebf2; border-color: #94a3b8; }
@@ -2314,10 +2347,13 @@ table.dataTable tbody tr.selected > td a { color: #fff !important; }
 
 /* Startup splash (waiterPreloader) */
 .tw-splash { display: flex; flex-direction: column; align-items: center; gap: .35rem; color: #fff; text-align: center;
-  font-family: Commissioner, 'Segoe UI', system-ui, sans-serif; animation: wfp-fade-in .4s ease-out; }
-.tw-splash-logo { height: 64px; margin-bottom: 1.1rem; opacity: .95; }
-.tw-splash-name { font-size: 3rem; font-weight: 800; letter-spacing: -.03em; line-height: 1; }
-.tw-splash-tagline { font-size: 1.56rem; font-weight: 600; color: #f7b825; margin-top: .35rem; }
+  font-family: "Open Sans", 'Segoe UI', system-ui, sans-serif; animation: wfp-fade-in .4s ease-out; }
+/* the lockup, as on the welcome page: WFP logo | DECIDE, centred on each other */
+.tw-splash-lockup { display: flex; align-items: center; justify-content: center; gap: 1.2rem; margin-bottom: .6rem; }
+.tw-splash-logo { height: 64px; opacity: .95; display: block; }
+.tw-splash-divider { width: 1px; height: 58px; background: rgba(255, 255, 255, .45); }
+.tw-splash-name { font-size: 3.4rem; line-height: 1; }
+.tw-splash-tagline { font-size: 1.05rem; font-weight: 400; color: rgba(255, 255, 255, .88); letter-spacing: .01em; margin-top: .45rem; }
 .tw-splash-bar { width: 220px; height: 3px; margin: 1.6rem 0 .6rem; border-radius: 3px; background: rgba(255,255,255,.18); overflow: hidden; }
 .tw-splash-bar span { display: block; width: 40%; height: 100%; border-radius: 3px; background: #f7b825;
   animation: tw-splash-slide 1.2s ease-in-out infinite; }
@@ -2634,8 +2670,8 @@ table.dataTable tr.dtrg-group td { background: var(--surface-3) !important; font
    pre-export checks (mod_monitoring.R).
    -------------------------------------------------------------------------- */
 .wfp-mon-draft { border: 1px solid var(--border); border-radius: var(--card-radius-sm, 8px); padding: .6rem .75rem; margin-bottom: .9rem; background: var(--surface); }
-.wfp-mon-suggest { margin-top: .35rem; padding: .35rem .55rem; border-radius: 6px; background: var(--accent-primary-bg, rgba(10, 110, 180, .08)); line-height: 1.35; }
-.wfp-mon-suggest .bi { color: var(--wfp-blue, #0A6EB4); }
+.wfp-mon-suggest { margin-top: .35rem; padding: .35rem .55rem; border-radius: 6px; background: var(--accent-primary-bg, rgba(0,125,188, .08)); line-height: 1.35; }
+.wfp-mon-suggest .bi { color: var(--wfp-blue, #007DBC); }
 .wfp-mon-checks li { margin-bottom: .25rem; }
 .wfp-mon-draft > summary { cursor: pointer; color: var(--body-text); }
 
@@ -2672,7 +2708,7 @@ table.dataTable tr.dtrg-group td { background: var(--surface-3) !important; font
 .tw-opt { display: flex; flex-direction: column; line-height: 1.25; min-width: 0; }
 .tw-opt-name { font-weight: 400; color: inherit; }
 .tw-opt-name.tw-strong { font-weight: 600; }
-.tw-opt-label { font-size: .74rem; font-style: italic; color: var(--wfp-blue, #0A6EB4); white-space: normal; }
+.tw-opt-label { font-size: .74rem; font-style: italic; color: var(--wfp-blue, #007DBC); white-space: normal; }
 [data-bs-theme="dark"] .tw-opt-label { color: #7cc4f5; }
 .selectize-dropdown .option.tw-opt-row { padding-top: .4rem; padding-bottom: .4rem; }
 .selectize-dropdown .option, .bootstrap-select .dropdown-menu li > a { border-bottom: 1px solid var(--border); }
@@ -2681,7 +2717,7 @@ table.dataTable tr.dtrg-group td { background: var(--surface-3) !important; font
 .bootstrap-select .dropdown-menu li > a:hover .tw-opt-label { color: inherit; opacity: .85; }
 .bootstrap-select .dropdown-menu li > a { padding-top: .35rem; padding-bottom: .35rem; }
 /* A variable's label under its name in the first column of a table (labels.js). */
-.tw-cell-label { display: block; font-size: .72rem; font-style: italic; font-weight: 400; color: var(--wfp-blue, #0A6EB4); line-height: 1.2; margin-top: .1rem; }
+.tw-cell-label { display: block; font-size: .72rem; font-style: italic; font-weight: 400; color: var(--wfp-blue, #007DBC); line-height: 1.2; margin-top: .1rem; }
 [data-bs-theme="dark"] .tw-cell-label { color: #7cc4f5; }
 td[data-tw], th[data-tw] { cursor: help; }
 
@@ -2709,7 +2745,7 @@ td[data-tw], th[data-tw] { cursor: help; }
 /* Variable setup: how sure a suggested column is */
 .tw-conf { display: inline-block; margin-left: 6px; padding: 0 7px; border-radius: 999px; font-size: 0.7rem; font-weight: 600; line-height: 1.5; vertical-align: 1px; cursor: help; }
 .tw-conf-high { background: rgba(63, 126, 68, 0.14); color: #2f6b34; }
-.tw-conf-medium { background: rgba(10, 110, 180, 0.12); color: #0a5a93; }
+.tw-conf-medium { background: rgba(0,125,188, 0.12); color: #0a5a93; }
 .tw-conf-low { background: rgba(224, 161, 0, 0.18); color: #8a6200; }
 .tw-conf-profile, .tw-conf-in-use { background: rgba(128, 128, 128, 0.15); color: var(--bs-body-color); }
 .tw-review-h { font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--bs-secondary-color); margin-bottom: 8px; }
@@ -2730,7 +2766,7 @@ td[data-tw], th[data-tw] { cursor: help; }
 /* A folded section says what it holds (www/stepsummary.js); open, it shows the inputs themselves */
 .accordion-button .tw-step-sum { margin-left: auto; margin-right: 10px; max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   font-size: 0.72rem; font-weight: 500; text-transform: none; letter-spacing: 0; color: var(--bs-secondary-color);
-  background: rgba(10, 110, 180, 0.08); padding: 1px 8px; border-radius: 999px; }
+  background: rgba(0,125,188, 0.08); padding: 1px 8px; border-radius: 999px; }
 .accordion-button:not(.collapsed) .tw-step-sum { display: none; }
 
 /* ---- Overview: one screen. Map on the left half, insights on the right;
@@ -2749,7 +2785,7 @@ td[data-tw], th[data-tw] { cursor: help; }
 .tw-ov-title { font-size: .78rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--text-muted); }
 .tw-ov-title .bi { color: var(--wfp-blue); }
 .tw-ov-chip { font-size: .74rem; padding: 1px 9px; border-radius: 999px; background: rgba(128, 128, 128, .12); color: var(--bs-body-color); }
-.tw-ov-chip.zoomed { background: rgba(10, 110, 180, .12); color: #0a5a93; }
+.tw-ov-chip.zoomed { background: rgba(0,125,188, .12); color: #0a5a93; }
 .tw-ov-follow { margin-left: auto; font-size: .76rem; }
 .tw-ov-follow .form-check { margin: 0; min-height: 0; }
 .tw-ov-follow .shiny-input-container { margin: 0; width: auto !important; }
@@ -2812,7 +2848,7 @@ td[data-tw], th[data-tw] { cursor: help; }
 .tw-ct-note { font-size: .72rem; color: var(--text-muted); margin-top: 6px; }
 /* map: zoom to a drawn rectangle */
 .tw-boxzoom a { display: flex !important; align-items: center; justify-content: center; color: #333; }
-.tw-boxzoom a.active { background: #0A6EB4; color: #fff; }
+.tw-boxzoom a.active { background: #007DBC; color: #fff; }
 .tw-tiles-col .tw-tile-top .bi { display: none; }
 .tw-figs-cards { margin-bottom: 6px; }
 .tw-figs-cards .tw-tile { flex: 1 1 130px; max-width: 200px; }
@@ -2890,7 +2926,7 @@ td[data-tw], th[data-tw] { cursor: help; }
 .bootstrap-select .dropdown-menu li:not(.selected) > a.active, .bootstrap-select .dropdown-menu li:not(.selected).active > a { background: transparent !important; color: inherit !important; }
 .bootstrap-select .dropdown-menu li:not(.selected) > a:hover { background: rgba(128, 128, 128, .05) !important; }
 .bootstrap-select .dropdown-menu li.selected > a, .bootstrap-select .dropdown-menu li.selected > a:hover {
-  font-weight: 600; color: var(--wfp-blue) !important; background: rgba(10, 110, 180, .08) !important; padding-right: 28px; }
+  font-weight: 600; color: var(--wfp-blue) !important; background: rgba(0,125,188, .08) !important; padding-right: 28px; }
 .bootstrap-select:not([multiple]) .dropdown-menu li.selected > a::after, .bootstrap-select .dropdown-menu:not(.show-tick) li.selected > a::after {
   content: "\2713"; position: absolute; right: 10px; top: 50%; transform: translateY(-50%); font-weight: 700; }
 [data-bs-theme="dark"] .bootstrap-select .dropdown-menu li.selected > a { color: #8cc7f0 !important; background: rgba(47, 159, 224, .14) !important; }
@@ -2915,12 +2951,23 @@ td[data-tw], th[data-tw] { cursor: help; }
 
 /* Connection lost (www/busy.js): replaces Shiny's grey page */
 #shiny-disconnected-overlay { display: none !important; }
-#tw-lost { position: fixed; inset: 0; z-index: 100000; background: rgba(10, 30, 50, .55);
+#tw-lost { position: fixed; inset: 0; z-index: 2147483000; background: rgba(10, 30, 50, .55);
            display: flex; align-items: center; justify-content: center; padding: 16px; }
-#tw-lost .tw-lost-card { max-width: 520px; background: var(--surface, #fff); color: var(--text, #1f2a37);
+#tw-lost .tw-lost-card { max-width: 520px; background: var(--bs-body-bg, #fff); color: var(--bs-body-color, #1f2a37);
+           border: 1px solid var(--border, rgba(128,128,128,.25));
            border-radius: 14px; padding: 1.4rem 1.6rem; box-shadow: 0 12px 40px rgba(0,0,0,.25); }
 #tw-lost .tw-lost-title { font-weight: 700; font-size: 1.1rem; margin-bottom: .6rem; color: #c5192d; }
-#tw-lost p { font-size: .9rem; margin-bottom: .7rem; }
+#tw-lost p { font-size: .9rem; margin-bottom: .7rem; color: inherit; }
+/* dark mode: a dark card with light text, the title in a red that reads on it */
+[data-bs-theme="dark"] #tw-lost { background: rgba(0, 0, 0, .65); }
+[data-bs-theme="dark"] #tw-lost .tw-lost-card { background: #1b2333 !important; color: #e6ebf2 !important; border-color: rgba(255,255,255,.14); }
+[data-bs-theme="dark"] #tw-lost .tw-lost-card p { color: #e6ebf2 !important; opacity: 1 !important; }
+[data-bs-theme="dark"] #tw-lost .tw-lost-title { color: #ff7a85 !important; }
+[data-bs-theme="dark"] #tw-lost strong { color: #fff !important; }
+/* light mode: the same card, light, with explicit colours */
+#tw-lost .tw-lost-card p { opacity: 1 !important; }
+html:not([data-bs-theme="dark"]) #tw-lost .tw-lost-card { background: #ffffff !important; color: #031c2d !important; }
+html:not([data-bs-theme="dark"]) #tw-lost .tw-lost-card p { color: #031c2d !important; }
 
 /* A quiet segmented toggle (Overview's Total / By area): a soft track, the
    chosen option raised on it, no outlines */
@@ -2931,7 +2978,7 @@ td[data-tw], th[data-tw] { cursor: help; }
   font-size: .7rem; font-weight: 600; line-height: 1.2; padding: .18rem .55rem; box-shadow: none; }
 .tw-seg .btn-group .btn:hover { color: var(--bs-body-color); background: transparent; }
 .tw-seg .btn-group .btn.active, .tw-seg .btn-group .btn.btn-outline-primary.active {
-  background: var(--bs-body-bg); color: var(--wfp-blue, #0A6EB4); box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+  background: var(--bs-body-bg); color: var(--wfp-blue, #007DBC); box-shadow: 0 1px 2px rgba(0,0,0,.12); }
 
 [data-bs-theme="dark"] .tw-seg .btn-group .btn:not(.active) { background: transparent; border: 0; }
 
@@ -2947,7 +2994,7 @@ td[data-tw], th[data-tw] { cursor: help; }
   background: transparent !important; box-shadow: none !important; color: inherit !important; font-weight: inherit; }
 .bootstrap-select .dropdown-menu li.selected > a:hover { background: rgba(128, 128, 128, .05) !important; }
 [data-bs-theme="dark"] .bootstrap-select .dropdown-menu li.selected > a:hover { background: rgba(255, 255, 255, .07) !important; }
-.bootstrap-select .dropdown-menu li.selected > a::after { color: var(--wfp-blue, #0A6EB4); }
+.bootstrap-select .dropdown-menu li.selected > a::after { color: var(--wfp-blue, #007DBC); }
 [data-bs-theme="dark"] .bootstrap-select .dropdown-menu li.selected > a::after { color: #8cc7f0; }
 table.dataTable td.tw-wide-cell, table.dataTable th.tw-wide-cell { min-width: 320px; white-space: normal; }
 

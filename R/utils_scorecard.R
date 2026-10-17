@@ -248,6 +248,11 @@ as_binary_criterion <- function(x) {
   }
   v <- as.character(x)
   v[!is.na(v) & trimws(v) == ""] <- NA
+  # Yes / Oui / 1 / yes in one column (several teams, languages): read as one
+  # yes/no answer, with the vocabulary of the setup's value standardisation
+  k <- tolower(trimws(v))
+  yes <- k %in% STD_VOCAB$yesno$Yes; no <- k %in% STD_VOCAB$yesno$No
+  if (any(yes) && any(no) && all(yes | no | is.na(v))) return(ifelse(yes, 1L, ifelse(no, 0L, NA_integer_)))
   u <- sort(unique(v[!is.na(v)]))
   if (length(u) != 2) return(NULL)
   as.integer(v == guess_positive_level(u))
@@ -1236,8 +1241,8 @@ scorecard_workbook <- function(scorecard, meta = list(), screening = NULL,
   wb <- openxlsx::createWorkbook()
 
   title <- openxlsx::createStyle(fontSize = 14, textDecoration = "bold",
-                                 fontColour = "#0A6EB4")
-  head_st <- openxlsx::createStyle(fgFill = "#0A6EB4", fontColour = "#FFFFFF",
+                                 fontColour = "#007DBC")
+  head_st <- openxlsx::createStyle(fgFill = "#007DBC", fontColour = "#FFFFFF",
                                    textDecoration = "bold", halign = "left",
                                    border = "TopBottom", borderColour = "#07456F")
   lab_st <- openxlsx::createStyle(textDecoration = "bold")

@@ -91,7 +91,7 @@ svg_wrap <- function(W, H, label, css, parts) {
          '" width="100%" style="max-width:', round(W), 'px;height:auto" preserveAspectRatio="xMidYMin meet" role="img" aria-label="',
          label, '"><style>', css, '</style>', paste(parts, collapse = ""), '</svg></div>')
 }
-svg_font <- function(w, px) sprintf("font:%s %spx Commissioner,system-ui,sans-serif", w, px)
+svg_font <- function(w, px) sprintf("font:%s %spx 'Open Sans',system-ui,sans-serif", w, px)
 svg_esc <- function(x) htmltools::htmlEscape(x)
 svg_short <- function(v, n) ifelse(nchar(v) > n, paste0(substr(v, 1, n - 1), "..."), v)
 
@@ -184,7 +184,7 @@ tree_svg <- function(ts, share_label = "vulnerable") {
     } else {
       v <- ts$var[i]
       parts <- c(parts,
-        sprintf('<rect x="%.1f" y="%.1f" width="%d" height="%d" rx="9" fill="#ffffff" stroke="#0A6EB4" stroke-width="1.4"><title>%s</title></rect>', cx, cy, bw, bh, svg_esc(v)),
+        sprintf('<rect x="%.1f" y="%.1f" width="%d" height="%d" rx="9" fill="#ffffff" stroke="#007DBC" stroke-width="1.4"><title>%s</title></rect>', cx, cy, bw, bh, svg_esc(v)),
         sprintf('<text x="%.1f" y="%.1f" text-anchor="middle" class="q">%s?</text>', cx + bw / 2, cy + 23, svg_esc(svg_short(v, 24))),
         sprintf('<text x="%.1f" y="%.1f" text-anchor="middle" class="small">%s households &#183; %s%% %s</text>', cx + bw / 2, cy + 42,
                 format(ts$n[i], big.mark = ","), round(100 * ts$share[i]), svg_esc(share_label)))
@@ -283,7 +283,7 @@ network_svg <- function(net, out_label = "Vulnerable") {
   parts <- vapply(seq_len(nrow(e)), function(i) {
     a <- pos(e$from[i]); b <- pos(e$to[i])
     sprintf('<line x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f" stroke="%s" stroke-width="%.2f" stroke-opacity="0.6"><title>%.3f</title></line>',
-            a[1], a[2], b[1], b[2], if (e$weight[i] >= 0) "#0A6EB4" else "#e0a100", 0.4 + 5 * abs(e$weight[i]) / mx, e$weight[i])
+            a[1], a[2], b[1], b[2], if (e$weight[i] >= 0) "#007DBC" else "#e0a100", 0.4 + 5 * abs(e$weight[i]) / mx, e$weight[i])
   }, character(1))
   node <- function(p, fill, txt = "") sprintf('<circle cx="%.1f" cy="%.1f" r="9" fill="%s" stroke="#1f2a37" stroke-width="0.8"/>%s', p[1], p[2], fill, txt)
   in_label <- function(k) {
@@ -320,7 +320,7 @@ importance_svg <- function(im, measure = "Importance") {
     x0 <- ((i - 1) %/% per) * cw; y <- top + ((i - 1) %% per) * rh
     parts <- c(parts,
       sprintf('<text x="%d" y="%.1f" text-anchor="end" class="lab"><title>%s</title>%s</text>', x0 + lw - 10, y + 14, svg_esc(im$criterion[i]), svg_esc(svg_short(im$criterion[i], 32))),
-      sprintf('<rect x="%d" y="%.1f" width="%.1f" height="14" rx="3" fill="#0A6EB4" fill-opacity="%.2f"/>', x0 + lw, y + 3, max(1, pw * im$importance[i] / 100), 0.35 + 0.65 * im$importance[i] / 100),
+      sprintf('<rect x="%d" y="%.1f" width="%.1f" height="14" rx="3" fill="#007DBC" fill-opacity="%.2f"/>', x0 + lw, y + 3, max(1, pw * im$importance[i] / 100), 0.35 + 0.65 * im$importance[i] / 100),
       sprintf('<text x="%.1f" y="%.1f" class="val">%s</text>', x0 + lw + pw * im$importance[i] / 100 + 6, y + 14, format(im$importance[i])))
   }
   svg_wrap(W, H, "Variable importance",
@@ -351,7 +351,7 @@ dendro_structure <- function(hc, k, leaves = 30) {
 dendrogram_svg <- function(dd) {
   if (is.null(dd) || !nrow(dd$joins)) return("")
   lf <- dd$leaves; jn <- dd$joins
-  pal <- c("#0A6EB4", "#f7b825", "#26bde2", "#3f7e44", "#c5192d", "#8e5ea2", "#5b6b7c", "#e67e22")
+  pal <- c("#007DBC", "#f7b825", "#26bde2", "#3f7e44", "#c5192d", "#8e5ea2", "#5b6b7c", "#e67e22")
   sw <- 30; base <- 300; top <- 20; H <- 360
   profs <- sort(unique(lf$profile))
   W <- max(nrow(lf) * sw + 90, 60 + length(profs) * 135)

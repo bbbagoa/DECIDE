@@ -64,6 +64,6 @@ tw_shot(app, "fsi_outcome")
 app$run_js("document.activeElement.blur()")
 # audit trail
 tw_go(app, "modif_logs"); wait(1.5)
-ok(grepl("Food security indicators calculated", js("document.querySelector('#audit_1-tab_mod_log').innerText")), "audit trail entry")
+ok(grepl("Food security indicators calculated", js("document.querySelector('#audit_1-tab_mod_log').innerText")), "activity log entry")
 cat("errors:", tw_errors(app), "\n")
 app$stop()

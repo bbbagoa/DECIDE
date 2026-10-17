@@ -69,35 +69,8 @@ mod_spot_checking_ui <- function(id) {
         bslib::nav_panel(
           value = "sample", title = tagList(bsicons::bs_icon("list-check"), " 1. Sample for checking"),
           # How the sample is drawn, above the list it produces.
-          tags$div(
-            class = "wfp-oneline bg-body-tertiary rounded-3 px-3 pt-2 mt-3",
-            tags$div(style = "flex: 0 1 230px;",
-                     radioButtons(ns("sc_mode"), "Interview mode",
-                                  choices = c("Face to face" = "face", "Remote (phone)" = "remote"), selected = "face", inline = TRUE)),
-            conditionalPanel(
-              condition = sprintf("input['%s'] === 'remote'", ns("sc_mode")),
-              tags$div(style = "flex: 0 1 200px;",
-                       selectInput(ns("sc_phone_col"), tagList("Phone column", info_tip("Only households with a valid phone number are sampled.")),
-                                   choices = character(0), width = "100%"))),
-            tags$div(style = "flex: 0 1 120px;",
-                     numericInput(ns("sc_sample_size"), "Sample size", value = 30, min = 1, max = 100000, step = 1, width = "100%")),
-            tags$div(style = "flex: 0 1 180px;",
-                     selectInput(ns("sc_per_unit"), "Applies to",
-                                 choices = c("The whole scope" = "all", "Each Admin 1" = "admin1", "Each Admin 2" = "admin2",
-                                             "Each Admin 3" = "admin3", "Each village" = "village"),
-                                 selected = "all", width = "100%")),
-            tags$div(style = "flex: 0 1 230px;",
-                     shinyWidgets::pickerInput(
-                       inputId = ns("sc_sample_method"), label = "Method",
-                       choices = c("Simple Random" = "random", "Systematic" = "systematic",
-                                   "PPS (size = hh size or weight)" = "pps"),
-                       selected = "random", width = "100%",
-                       options = shinyWidgets::pickerOptions(container = "body"))),
-            tags$div(style = "flex: 0 1 110px;",
-                     numericInput(ns("sc_seed"), "Seed", value = 12345, min = 1, step = 1, width = "100%")),
-            tags$div(class = "pb-3",
-                     actionButton(ns("sc_draw"), "Draw sample", class = "btn-primary", icon = icon("shuffle")))
-          ),
+          tags$div(class = "mt-3",
+                   actionButton(ns("sc_open"), "Draw the sample", class = "btn-primary", icon = icon("shuffle"))),
           bslib::card(
             class = "mt-3", full_screen = TRUE,
             bslib::card_header(
@@ -213,7 +186,7 @@ mod_spot_checking_server <- function(id, uploaded_df, user_setup, workspace = NU
     applied <- reactiveValues(
       admin1 = NULL, admin2 = NULL, admin3 = NULL, search = "",
       sample_size = 30, sample_method = "random", seed = 12345,
-      mode = "face", phone_col = NULL, per_unit = "all"
+      mode = "face", phone_col = NULL, per_unit = "all", reserve = 10
     )
 
     # Saved with the session: the applied sample and the back-check. The
@@ -232,12 +205,6 @@ mod_spot_checking_server <- function(id, uploaded_df, user_setup, workspace = NU
             shinyWidgets::updatePickerInput(session, paste0("sc_", lvl), selected = s$applied[[lvl]] %||% character(0))
           }
           updateTextInput(session, "sc_search", value = s$applied$search %||% "")
-          updateNumericInput(session, "sc_sample_size", value = s$applied$sample_size)
-          updateNumericInput(session, "sc_seed", value = s$applied$seed)
-          shinyWidgets::updatePickerInput(session, "sc_sample_method", selected = s$applied$sample_method)
-          updateRadioButtons(session, "sc_mode", selected = s$applied$mode %||% "face")
-          updateSelectInput(session, "sc_per_unit", selected = s$applied$per_unit %||% "all")
-          if (shiny::isTruthy(s$applied$phone_col)) updateSelectInput(session, "sc_phone_col", selected = s$applied$phone_col)
           verification_df(s$verification)
           # and after the back-check pickers have been refilled
           after_flush(session, function() {
@@ -248,15 +215,6 @@ mod_spot_checking_server <- function(id, uploaded_df, user_setup, workspace = NU
           })
         })
       })
-
-    observe({
-      df <- uploaded_df(); req(df)
-      cols <- names(df)
-      guess <- c(user_setup$phone_avail, grep("phone|tel|mobile|portable|numero", cols, ignore.case = TRUE, value = TRUE))
-      guess <- intersect(guess, cols)
-      updateSelectInput(session, "sc_phone_col", choices = c("Choose a column" = "", unique(c(guess, cols))),
-                        selected = isolate(input$sc_phone_col) %||% if (length(guess)) guess[1] else NULL)
-    })
 
     # Each admin level lists only the areas inside those picked above.
     cascade_pickers(session, input, c("sc_admin1", "sc_admin2", "sc_admin3"),
@@ -273,26 +231,65 @@ mod_spot_checking_server <- function(id, uploaded_df, user_setup, workspace = NU
       }
     })
 
-    observeEvent(list(input$sc_apply, input$sc_draw), ignoreInit = TRUE, {
-      # React buttons send 0 at start
-      req(sum(unlist(input$sc_apply), unlist(input$sc_draw)) > 0)
-      waiter::waiter_show(
-        html = waiter_content("Drawing the spot-check sample\u2026"),
-        color = "rgba(10, 30, 50, 0.65)"
-      )
-      on.exit(waiter::waiter_hide(), add = TRUE)
-
+    apply_filters <- function() {
       applied$admin1 <- input$sc_admin1
       applied$admin2 <- input$sc_admin2
       applied$admin3 <- input$sc_admin3
       applied$search <- input$sc_search
-      applied$sample_size <- max(1, as.integer(input$sc_sample_size))
-      applied$sample_method <- input$sc_sample_method
-      applied$seed <- as.integer(input$sc_seed)
+    }
+    observeEvent(input$sc_apply, {
+      req(input$sc_apply > 0)   # React buttons send 0 at start
+      apply_filters()
+      showNotification("Spot check filters applied.", type = "message")
+    })
+
+    # How the sample is drawn: a dialog, filled with what is applied.
+    observeEvent(input$sc_open, {
+      req(input$sc_open > 0)
+      df <- uploaded_df()
+      need_ok(!is.null(df), "Load and map the registration data first.")
+      cols <- names(df)
+      guess <- grep("phone|tel|mobile|portable|numero", cols, ignore.case = TRUE, value = TRUE)
+      guess <- unique(c(Filter(function(p) any(valid_phone(utils::head(df[[p]], 500))), guess), guess))
+      phone <- applied$phone_col %||% if (length(guess)) guess[1] else ""
+      lv <- c("The whole scope" = "all", "Each Admin 1" = "admin1", "Each Admin 2" = "admin2", "Each Admin 3" = "admin3", "Each village" = "village")
+      lv <- lv[lv == "all" | vapply(lv, function(k) shiny::isTruthy(user_setup[[k]]) && isTRUE(user_setup[[k]] %in% cols), logical(1))]
+      showModal(modalDialog(
+        title = tagList(bsicons::bs_icon("shuffle"), " Draw the spot-check sample"), size = "m", easyClose = TRUE,
+        tags$p(class = "small text-muted",
+               "Households to re-visit (or call) among those in scope (the areas and search of the sidebar), and replacements",
+               " for those who cannot be found. The list carries what is needed to find each household."),
+        radioButtons(ns("sc_mode"), "Interview mode", inline = TRUE,
+                     choices = c("Face to face" = "face", "Remote (phone)" = "remote"), selected = applied$mode %||% "face"),
+        conditionalPanel(sprintf("input['%s'] === 'remote'", ns("sc_mode")),
+                         selectInput(ns("sc_phone_col"), tagList("Phone column", info_tip("Only households with a valid phone number are sampled.")),
+                                     choices = c("Choose a column" = "", unique(c(guess, cols))), selected = phone, width = "100%")),
+        tags$div(class = "d-flex gap-2",
+                 numericInput(ns("sc_sample_size"), "Sample size", value = applied$sample_size, min = 1, max = 100000, step = 1, width = "100%"),
+                 selectInput(ns("sc_per_unit"), "Applies to", choices = lv, selected = applied$per_unit %||% "all", width = "100%")),
+        selectInput(ns("sc_sample_method"), "Method", width = "100%",
+                    choices = c("Simple random" = "random", "Systematic" = "systematic", "PPS (size = household size or weight)" = "pps"),
+                    selected = applied$sample_method %||% "random"),
+        tags$div(class = "d-flex gap-2",
+                 numericInput(ns("sc_reserve"), tagList("Replacements (%)", info_tip("Extra households drawn at random in each group, on their own sheet, to replace households that cannot be found, have moved or refuse.")),
+                              value = applied$reserve %||% 10, min = 0, max = 100, step = 5, width = "100%"),
+                 numericInput(ns("sc_seed"), "Seed", value = applied$seed, min = 1, step = 1, width = "100%")),
+        footer = tagList(modalButton("Cancel"),
+                         actionButton(ns("sc_draw"), "Draw", icon = icon("shuffle"), class = "btn-primary"))
+      ))
+    })
+    observeEvent(input$sc_draw, {
+      req(input$sc_draw > 0)
+      apply_filters()
+      applied$sample_size <- max(1, as.integer(input$sc_sample_size %||% 30))
+      applied$sample_method <- input$sc_sample_method %||% "random"
+      applied$seed <- as.integer(input$sc_seed %||% 12345)
       applied$mode <- input$sc_mode %||% "face"
       applied$phone_col <- input$sc_phone_col
       applied$per_unit <- input$sc_per_unit %||% "all"
-      showNotification("Spot check filters and sample applied.", type = "message")
+      applied$reserve <- max(0, as_number(input$sc_reserve %||% 10), na.rm = TRUE)
+      removeModal()
+      showNotification("Spot-check sample drawn.", type = "message")
     })
 
     observeEvent(input$sc_clear, {
@@ -307,8 +304,6 @@ mod_spot_checking_server <- function(id, uploaded_df, user_setup, workspace = NU
         shinyWidgets::updatePickerInput(session, lvl, selected = character(0))
       }
       updateTextInput(session, "sc_search", value = "")
-      updateNumericInput(session, "sc_sample_size", value = 30)
-      updateNumericInput(session, "sc_seed", value = 12345)
       applied$admin1 <- NULL
       applied$admin2 <- NULL
       applied$admin3 <- NULL
@@ -316,6 +311,7 @@ mod_spot_checking_server <- function(id, uploaded_df, user_setup, workspace = NU
       applied$sample_size <- 30
       applied$sample_method <- "random"
       applied$seed <- 12345
+      applied$reserve <- 10
       showNotification("Spot check filters cleared.", type = "message")
     })
 
@@ -379,14 +375,21 @@ mod_spot_checking_server <- function(id, uploaded_df, user_setup, workspace = NU
       }
       # "Sample size applies to" a level: the same number in every unit.
       unit_col <- if (!identical(applied$per_unit %||% "all", "all")) user_setup[[applied$per_unit]] else NULL
-      if (shiny::isTruthy(unit_col) && unit_col %in% names(df)) {
-        groups <- split(seq_len(nrow(df)), as.character(df[[unit_col]]))
-        idx <- sort(unlist(lapply(groups, function(g) g[draw(df[g, , drop = FALSE], n)]), use.names = FALSE))
-      } else {
-        idx <- draw(df, n)
-      }
-      df[idx, , drop = FALSE]
+      groups <- if (shiny::isTruthy(unit_col) && unit_col %in% names(df)) split(seq_len(nrow(df)), as.character(df[[unit_col]]))
+                else list(seq_len(nrow(df)))
+      main <- lapply(groups, function(g) g[draw(df[g, , drop = FALSE], n)])
+      # Replacements: drawn after every main household, so those stay the
+      # same; at random among the others of the same group.
+      share <- (applied$reserve %||% 0) / 100
+      repl <- Map(function(g, m) {
+        rest <- setdiff(g, m); r <- min(length(rest), ceiling(length(m) * share))
+        if (r > 0) rest[sample.int(length(rest), r)] else integer(0)
+      }, groups, main)
+      main <- sort(unlist(main, use.names = FALSE)); repl <- unlist(repl, use.names = FALSE)
+      cbind(`Sample role` = rep(c("Main", "Replacement"), c(length(main), length(repl))),
+            df[c(main, repl), , drop = FALSE], stringsAsFactors = FALSE)
     })
+    n_main <- function(smp) sum(smp[["Sample role"]] %in% "Main")
 
     output$sc_pool_note <- renderUI({
       if (!identical(applied$mode, "remote")) return(NULL)
@@ -408,7 +411,7 @@ mod_spot_checking_server <- function(id, uploaded_df, user_setup, workspace = NU
     output$sc_share <- renderText({
       req(sample_pool(), sampled_data())
       n <- nrow(sample_pool())
-      if (!n) "\u2014" else sprintf("%.1f%%", 100 * nrow(sampled_data()) / n)
+      if (!n) "\u2014" else sprintf("%.1f%%", 100 * n_main(sampled_data()) / n)
     })
 
     observeEvent(input$sc_go_verify, { req(input$sc_go_verify > 0); bslib::nav_select("sc_tabs", "verify", session = session) })
@@ -416,7 +419,7 @@ mod_spot_checking_server <- function(id, uploaded_df, user_setup, workspace = NU
     output$sc_sample_n <- renderText({
       need_ok(!is.null(tryCatch(sampled_data(), error = function(e) NULL)), "Draw the spot-check sample first.")
       req(sampled_data())
-      format(nrow(sampled_data()), big.mark = ",")
+      format(n_main(sampled_data()), big.mark = ",")
     })
 
     output$sc_agreement <- renderText({
@@ -427,7 +430,7 @@ mod_spot_checking_server <- function(id, uploaded_df, user_setup, workspace = NU
     # Identification columns only; everything else is behind Details.
     output$spot_table <- render_react_table({
       req(sampled_data())
-      record_table(sampled_data(), user_setup, session$ns, "spot_view")
+      record_table(sampled_data(), user_setup, session$ns, "spot_view", extra_cols = "Sample role")
     }, html = "Details", labels = list(Details = ""), empty = "No household in the sample: widen the areas or the search, then draw again.")
 
     observeEvent(input$spot_view, {
@@ -450,6 +453,7 @@ mod_spot_checking_server <- function(id, uploaded_df, user_setup, workspace = NU
           sprintf("Remote (phone): only valid numbers in %s", applied$phone_col %||% "?") else "Face to face",
         "Sample size" = if (identical(per, "all")) sprintf("%s households", applied$sample_size)
                         else sprintf("%s households per %s", applied$sample_size, per),
+        "Replacements" = sprintf("%s%% of each group, on their own sheet", applied$reserve %||% 0),
         "Random seed" = as.character(applied$seed),
         "Filters" = if (length(flt)) paste(flt, collapse = "; ") else "none")
     }
@@ -461,15 +465,13 @@ mod_spot_checking_server <- function(id, uploaded_df, user_setup, workspace = NU
       content = function(file) {
         smp <- sampled_data()
         pool <- sample_pool()
-        keys <- c("unique_id", "admin1", "admin2", "admin3", "admin4", "village", "hh_size", "hhh_sex")
-        id_cols <- unique(unlist(lapply(keys, function(k) { cl <- user_setup[[k]]; if (shiny::isTruthy(cl) && cl %in% names(smp)) cl })))
-        if (identical(applied$mode, "remote") && shiny::isTruthy(applied$phone_col) && applied$phone_col %in% names(smp)) {
+        role <- smp[["Sample role"]]; smp[["Sample role"]] <- NULL
+        # what is needed to find each household first: location, names, sex,
+        # age, size, phone (the one used for a remote check included)
+        id_cols <- ptm_identity_cols(smp, user_setup)
+        if (identical(applied$mode, "remote") && shiny::isTruthy(applied$phone_col) && applied$phone_col %in% names(smp))
           id_cols <- unique(c(id_cols, applied$phone_col))
-        }
-        smp <- smp[, c(id_cols, setdiff(names(smp), id_cols)), drop = FALSE]
-        field <- c("Visited (yes/no)", "Date of visit", "Checked by", "Comments")
-        for (f in field) smp[[f]] <- NA_character_
-        smp <- smp[, c(id_cols, field, setdiff(names(smp), c(id_cols, field))), drop = FALSE]
+        n_sel <- sum(role == "Main")
 
         wb <- openxlsx::createWorkbook()
         xl_summary_sheet(wb, "Summary", "Spot-check sample",
@@ -481,23 +483,31 @@ mod_spot_checking_server <- function(id, uploaded_df, user_setup, workspace = NU
                              "Exported by" = Sys.getenv("USERNAME", Sys.getenv("USER", "")),
                              sample_description(),
                              "Households in scope" = format(nrow(pool), big.mark = ","),
-                             "Households sampled" = format(nrow(smp), big.mark = ","),
-                             "Share sampled" = if (nrow(pool)) sprintf("%.1f%%", 100 * nrow(smp) / nrow(pool)) else "n/a"),
+                             "Households sampled" = format(n_sel, big.mark = ","),
+                             "Replacements" = format(sum(role == "Replacement"), big.mark = ","),
+                             "Share sampled" = if (nrow(pool)) sprintf("%.1f%%", 100 * n_sel / nrow(pool)) else "n/a"),
                            "For the field team" = c(
-                             "What to do" = "Re-visit (or call) each household, fill in the four highlighted columns, and re-ask the questions to verify.",
+                             "What to do" = "Re-visit (or call) each household of the Sample sheet, fill in the highlighted columns, and re-ask the questions to verify.",
+                             "Replacements" = "A household that cannot be found, has moved or refuses: take the next one of the Replacements sheet in the same area, and write which household it replaces.",
                              "Back-check" = "Load what the team collected in Spot Checking > Verification to measure how far the two rounds agree.",
                              "Keep" = "Do not change the household identifier: the comparison matches on it.")))
-        xl_data_sheet(wb, "Sample", sanitize_for_excel(smp))
-        # the columns the team fills in stand out
-        fcols <- match(field, names(smp))
-        openxlsx::addStyle(wb, "Sample", openxlsx::createStyle(fontSize = 10, textDecoration = "bold", fontColour = "#1F2A37",
-                                                               fgFill = "#F7B825", border = "bottom", borderColour = "#B88600"),
-                           rows = 1, cols = fcols, gridExpand = TRUE)
-        if (nrow(smp)) {
-          openxlsx::addStyle(wb, "Sample", openxlsx::createStyle(fontSize = 10, fgFill = "#FFF8E1"),
-                             rows = 2:(nrow(smp) + 1), cols = fcols, gridExpand = TRUE)
+        sheet <- function(name, d, field) {
+          for (f in field) d[[f]] <- NA_character_
+          d <- d[, c(id_cols, field, setdiff(names(d), c(id_cols, field))), drop = FALSE]
+          xl_data_sheet(wb, name, sanitize_for_excel(d))
+          # the columns the team fills in stand out
+          fcols <- match(field, names(d))
+          openxlsx::addStyle(wb, name, openxlsx::createStyle(fontSize = 10, textDecoration = "bold", fontColour = "#1F2A37",
+                                                             fgFill = "#F7B825", border = "bottom", borderColour = "#B88600"),
+                             rows = 1, cols = fcols, gridExpand = TRUE)
+          if (nrow(d)) openxlsx::addStyle(wb, name, openxlsx::createStyle(fontSize = 10, fgFill = "#FFF8E1"),
+                                          rows = 2:(nrow(d) + 1), cols = fcols, gridExpand = TRUE)
+          openxlsx::setColWidths(wb, name, cols = fcols, widths = 16)
         }
-        openxlsx::setColWidths(wb, "Sample", cols = fcols, widths = c(16, 14, 16, 36))
+        field <- c("Visited (yes/no)", "Date of visit", "Checked by", "Comments")
+        sheet("Sample", smp[role == "Main", , drop = FALSE], field)
+        if (any(role == "Replacement"))
+          sheet("Replacements", smp[role == "Replacement", , drop = FALSE], c("Replaces household", field))
         save_workbook_readonly(wb, file)
       }
     )
@@ -509,6 +519,7 @@ mod_spot_checking_server <- function(id, uploaded_df, user_setup, workspace = NU
     mod_data_summary_server("verif_summary", verification_df, "Verification data")
     verif_source <- reactiveVal(NA_character_)
     comparison <- reactiveVal(NULL)
+    verif_base <- reactiveVal(NULL)   # the records compared: the sample, or the whole list
 
     # --- Source A: uploaded file ---
     observeEvent(input$verif_file, {
@@ -533,7 +544,7 @@ mod_spot_checking_server <- function(id, uploaded_df, user_setup, workspace = NU
       req(df)
       verification_df(df)
       verif_source(sprintf("file %s", input$verif_file$name))
-      comparison(NULL)
+      comparison(NULL); verif_base(NULL)
     })
 
     # The key entered for an earlier MODA import is filled in.
@@ -561,7 +572,7 @@ mod_spot_checking_server <- function(id, uploaded_df, user_setup, workspace = NU
         on_success = function(result) {
           verification_df(result$df)
           verif_source(sprintf("MODA form %s", input$verif_form_id))
-          comparison(NULL)
+          comparison(NULL); verif_base(NULL)
           showNotification(
             paste0(format(nrow(result$df), big.mark = ","), " verification records downloaded."),
             type = "message"
@@ -630,7 +641,9 @@ mod_spot_checking_server <- function(id, uploaded_df, user_setup, workspace = NU
         return()
       }
       s <- sampled_data()
-      req(nrow(s) > 0, input$verif_key)
+      req(input$verif_key)
+      if (input$verif_key %in% names(s) && input$verif_key %in% names(v))
+        s <- s[which(s[["Sample role"]] %in% "Main" | as.character(s[[input$verif_key]]) %in% as.character(v[[input$verif_key]])), , drop = FALSE]
 
       w <- waiter::Waiter$new(html = waiter_content("Comparing rounds..."),
                               color = "rgba(10, 30, 50, 0.65)")
@@ -647,12 +660,26 @@ mod_spot_checking_server <- function(id, uploaded_df, user_setup, workspace = NU
         cols = input$verif_cols,
         numeric_tolerance = tol
       )
+      # A back-check of households drawn outside this page (or before a new
+      # draw): compare them with the same households in the whole list.
+      k <- input$verif_key
+      full <- uploaded_df()
+      whole <- !is.null(res) && res$matched_n == 0 && !is.null(full) && k %in% names(full) && k %in% names(v)
+      if (whole) {
+        s <- full[which(as.character(full[[k]]) %in% as.character(v[[k]])), , drop = FALSE]
+        res <- compare_verification(original = s, verification = v, key_col = k,
+                                    cols = intersect(input$verif_cols, names(s)), numeric_tolerance = tol)
+      }
       if (is.null(res)) {
         showNotification("The chosen key column is not present in both datasets.", type = "error")
         return()
       }
+      verif_base(s)
       comparison(res)
-      if (res$matched_n == 0) {
+      if (whole && res$matched_n > 0) {
+        showNotification(sprintf("None of these households is in the drawn sample: compared with the same %s households in the whole list.",
+                                 format(res$matched_n, big.mark = ",")), type = "message", duration = 10)
+      } else if (res$matched_n == 0) {
         showNotification(
           "No households matched on the chosen key. Check that the verification round carries the same identifier.",
           type = "warning", duration = 12
@@ -770,8 +797,10 @@ mod_spot_checking_server <- function(id, uploaded_df, user_setup, workspace = NU
       fmt <- function(n) format(n, big.mark = ",")
       remote <- identical(applied$mode, "remote")
       list(pool = if (is.null(pool)) NULL else fmt(nrow(pool)),
-           share = if (is.null(pool) || is.null(smp)) NULL else if (!nrow(pool)) "\u2014" else sprintf("%.1f%%", 100 * nrow(smp) / nrow(pool)),
-           sample = if (is.null(smp)) NULL else fmt(nrow(smp)),
+           share = if (is.null(pool) || is.null(smp)) NULL else if (!nrow(pool)) "\u2014" else sprintf("%.1f%%", 100 * n_main(smp) / nrow(pool)),
+           sample = if (is.null(smp)) NULL else fmt(n_main(smp)),
+           replacements = if (is.null(smp)) 0 else sum(smp[["Sample role"]] %in% "Replacement"),
+           settings = if (is.null(smp)) NULL else { d <- sample_description(); I(paste0(names(d), ": ", d)) },
            agreement = if (is.null(r) || is.na(r$overall_agreement)) NULL else sprintf("%.1f%%", 100 * r$overall_agreement),
            remote = remote, phone_col = applied$phone_col %||% "",
            in_scope = if (remote) safe(fmt(nrow(filtered_data()))),
@@ -805,7 +834,7 @@ mod_spot_checking_server <- function(id, uploaded_df, user_setup, workspace = NU
       if (is.null(r)) return(NULL)
       col <- function(k) { v <- as.character(user_setup[[k]] %||% "")[1]; if (is.na(v)) "" else v }
       groups <- c(Enumerator = col("enumerator_id"), "Admin 1" = col("admin1"), "Admin 2" = col("admin2"))
-      orig <- sampled_data()
+      orig <- verif_base() %||% sampled_data()
       ver <- verification_df()
       matched <- if (!is.null(orig) && !is.null(ver) && r$key_col %in% names(orig) && r$key_col %in% names(ver))
         intersect(as.character(orig[[r$key_col]]), as.character(ver[[r$key_col]]))
@@ -826,7 +855,7 @@ mod_spot_checking_server <- function(id, uploaded_df, user_setup, workspace = NU
           sample = list(method = paste0(methods[[applied$sample_method %||% "random"]],
                                         if (identical(applied$mode, "remote")) sprintf(", remote (phone, valid numbers in %s)", applied$phone_col) else ", face to face",
                                         if (!identical(applied$per_unit %||% "all", "all")) sprintf(", %s per %s", applied$sample_size, applied$per_unit) else ""),
-                        n = nrow(sampled_data()), population = nrow(sample_pool()),
+                        n = n_main(sampled_data()), population = nrow(sample_pool()),
                         seed = applied$seed, filters = if (length(flt)) paste(flt, collapse = "; ") else "none"),
           source = verif_source(), n_verification = if (is.null(verification_df())) NA else nrow(verification_df()),
           tolerance = input$verif_tolerance, comparison = comparison(), insights = verif_insights(),
@@ -844,7 +873,7 @@ mod_spot_checking_server <- function(id, uploaded_df, user_setup, workspace = NU
         sections <- list("Sample" = c("Country office" = user_setup$country_office %||% "not set",
                                       "Exported" = fmt_datetime(),
                                       sample_description(),
-                                      "Households sampled" = format(nrow(sampled_data()), big.mark = ",")))
+                                      "Households sampled" = format(n_main(sampled_data()), big.mark = ",")))
         if (is.null(r)) {
           sections[["Comparison"]] <- c("Status" = "No comparison has been run yet.")
         } else {

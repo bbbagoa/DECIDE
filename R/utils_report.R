@@ -56,13 +56,13 @@ design_report_md <- function(x, figures = character(0)) {
   nof <- isTRUE(x$no_outcome)
   if (nof) {
     add("# Vulnerability ranking report", "",
-        sprintf("_Generated %s by TargetWise._", x$generated %||% fmt_datetime()), "",
+        sprintf("_Generated %s by DECIDE._", x$generated %||% fmt_datetime()), "",
         "This document records how households were ranked without an outcome indicator, from the data to the ranking",
         "and its threshold, so the ranking can be reviewed, reproduced and challenged.", "",
         "## Key results", "", "@@RANK_CARDS@@", "")
   } else {
     add("# Targeting design report", "",
-        sprintf("_Generated %s by TargetWise._", x$generated %||% fmt_datetime()), "",
+        sprintf("_Generated %s by DECIDE._", x$generated %||% fmt_datetime()), "",
         "This document records every step from the assessment data to the scorecard, so the design can be",
         "reviewed, reproduced and challenged.", "")
     if (!is.null(x$errors)) add("## Key results", "", "@@ERRORS@@", "")
@@ -780,7 +780,7 @@ report_write_page <- function(file, md, plots = list(), captions = character(0),
     report_inline_deps(deps), '</head><body>',
     '<header class="band"><div class="wrap band-inner">',
     '<div class="band-logo">', report_logo(), '</div>',
-    '<div class="band-title"><div class="eyebrow">', "TargetWise", ' <span class="eyebrow-tag">', tr("Reaching the most vulnerable"), '</span></div>',
+    '<div class="band-title"><div class="eyebrow">', decide_name_html(), ' <span class="eyebrow-tag">', tr(DECIDE_LINE), '</span></div>',
     '<h1>', tr(title), '</h1>',
     '<div class="sub">', if (!is.na(co)) paste0(esc(co), ' \u00b7 '), tr(record), '</div></div>',
     '<dl class="band-meta">',
@@ -904,7 +904,7 @@ report_inline_deps <- function(deps) {
 #' @noRd
 design_report_css <- function() {
   "
-  :root { --blue:#0A6EB4; --ink:#1f2a37; --muted:#5b6b7e; --line:#dfe6ee; --tint:#f3f6fa; }
+  :root { --blue:#007DBC; --ink:#1f2a37; --muted:#5b6b7e; --line:#dfe6ee; --tint:#f3f6fa; }
   .tw-figs { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; margin: 12px 0 22px; }
   .tw-figs:not(.tw-figs-cards) { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); }
   .tw-glance { border-left: 4px solid var(--blue); background: var(--tint); border-radius: 0 10px 10px 0; padding: 12px 18px; margin: 8px 0 18px; }
@@ -935,7 +935,7 @@ design_report_css <- function() {
   .tw-figs .tw-tile-value { font-size: 20px; font-weight: 700; }
   .tw-figs .tw-tile-sub { font-size: 11px; color: var(--muted); }
   * { box-sizing: border-box; }
-  body { margin:0; font-family: Commissioner, 'Segoe UI', system-ui, sans-serif; color: var(--ink);
+  body { margin:0; font-family: 'Open Sans', 'Segoe UI', system-ui, sans-serif; color: var(--ink);
          font-size: 15px; line-height: 1.6; background: #fff; }
   .wrap { width: 80%; margin: 0 auto; padding: 0 12px; }
   .band-inner { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 28px; }
@@ -1032,17 +1032,17 @@ design_report_css <- function() {
   @media (max-width: 900px) { .pair { grid-template-columns: 1fr; } }
   .fig-body { overflow-x: auto; }
   .tw-more-row { display: none; }
-  .tw-more-btn { margin: 4px 0 14px; padding: 4px 12px; border: 1px solid #c9d6e3; border-radius: 6px; background: #fff; color: #0A6EB4; font: inherit; font-size: 12.5px; cursor: pointer; }
+  .tw-more-btn { margin: 4px 0 14px; padding: 4px 12px; border: 1px solid #c9d6e3; border-radius: 6px; background: #fff; color: #007DBC; font: inherit; font-size: 12.5px; cursor: pointer; }
   .tw-more-btn:hover { background: #f1f6fb; }
   @media print { .tw-more-row { display: table-row !important; } .tw-more-btn { display: none; } }
   .fig-row.n2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .fig-row.n3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .rich { margin: 0 0 14px; padding: 8px 14px; border-left: 3px solid #0A6EB4; background: #f6f9fc; border-radius: 0 8px 8px 0; }
+  .rich { margin: 0 0 14px; padding: 8px 14px; border-left: 3px solid #007DBC; background: #f6f9fc; border-radius: 0 8px 8px 0; }
   .rich p, .rich div { margin: 0 0 6px; } .rich h3, .rich h4 { margin: 6px 0; } .rich ul, .rich ol { margin: 0 0 6px; }
   .fig { margin: 0; padding: 6px 4px 4px; border: 0; background: transparent; }
   .fig figcaption:empty { display: none; }
   .fig figcaption { text-align: left; color: var(--ink); font-weight: 600; font-size: 13px; margin-bottom: 6px; }
-  .fig .bb text { font-family: Commissioner, 'Segoe UI', sans-serif; fill: #3c4a5c; }
+  .fig .bb text { font-family: 'Open Sans', 'Segoe UI', sans-serif; fill: #3c4a5c; }
   .fig .bb .bb-chart-arc text { fill: #fff; font-weight: 600; }
   .fig .bb-legend-item text { font-size: 12px; }
   .corr-wrap { overflow-x: auto; }
@@ -1093,10 +1093,14 @@ design_report_css <- function() {
 #' The bundled font, embedded so the report is fully self-contained offline
 #' @noRd
 report_font_face <- function() {
-  f <- app_sys("app/www/fonts/commissioner-latin.woff2")
-  if (!nzchar(f) || !file.exists(f)) return("")
-  b64 <- gsub("[\r\n]", "", jsonlite::base64_enc(readBin(f, "raw", file.info(f)$size)))
-  sprintf('@font-face { font-family: Commissioner; font-weight: 300 800; src: url(data:font/woff2;base64,%s) format("woff2"); }', b64)
+  one <- function(file, family, weight) {
+    f <- app_sys(file.path("app/www/fonts", file))
+    if (!nzchar(f) || !file.exists(f)) return("")
+    b64 <- gsub("[\r\n]", "", jsonlite::base64_enc(readBin(f, "raw", file.info(f)$size)))
+    sprintf('@font-face { font-family: "%s"; font-weight: %s; src: url(data:font/woff2;base64,%s) format("woff2"); }', family, weight, b64)
+  }
+  # the text face, and the name's (DECIDE in the header band)
+  paste0(one("open-sans-latin.woff2", "Open Sans", "300 800"), one("barlow-latin.woff2", "Barlow", "700"))
 }
 
 

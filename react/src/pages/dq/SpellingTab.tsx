@@ -1,7 +1,7 @@
 // Spelling & Integrity (R/mod_dq_spelling.R): the name columns are checked
 // on Check names; a record is edited or deleted in the server's dialogs.
 import { Download, Pencil, Search, SpellCheck, Trash2 } from "lucide-react";
-import { useShinyOutputValue } from "@/shiny";
+import { useShinyInputValue, useShinyOutputValue } from "@/shiny";
 import { ActionButton, DownloadButton, SelectInput } from "@/lib/inputs";
 import { EmptyState } from "@/components/Figures";
 import { Card } from "@/lib/layout";
@@ -11,11 +11,13 @@ import { ns, Toolbar, type T } from "./common";
 export function SpellingTab({ t }: { t: T }) {
   const m = useShinyOutputValue<{ n: number; total: number; pct: number }>(ns("dq_names_metric"));
   const empty = useShinyOutputValue<"pick" | "clean" | null>(ns("dq_names_empty"));
+  const sel = useShinyInputValue<number[] | null>(ns("dq_names_redflags_rows_selected"))?.length ?? 0;
   return (
     <>
       <Toolbar
         actions={<>
           <ActionButton id={ns("btn_open_edit")} label={t("Edit selected")} icon={<Pencil size={13} />} />
+          <ActionButton id={ns("btn_delete_selected")} label={`${t("Delete selected")}${sel ? ` (${sel})` : ""}`} icon={<Trash2 size={13} />} variant="outline-danger" />
           <ActionButton id={ns("btn_delete_all_missing")} label={t("Delete rows with missing names")} icon={<Trash2 size={13} />} variant="outline-danger" />
           <DownloadButton id={ns("download_audit")} label={t("Export")} icon={<Download size={13} />} variant="outline-secondary" />
         </>}>
@@ -38,7 +40,7 @@ export function SpellingTab({ t }: { t: T }) {
       {/* kept mounted (its selection is an input); shown when there is something to list */}
       <div style={{ display: m && m.n > 0 ? undefined : "none" }}>
         <Card title={t("Records with missing or suspicious names")} icon={<SpellCheck size={15} />} full>
-          <p className="tw-dq-note">{t("Select a record, then Edit selected to correct its names or delete it. Every change goes to the audit trail.")}</p>
+          <p className="tw-dq-note">{t("Select one record and Edit selected to correct its names, or select several (tick them) and Delete selected. Every change goes to the activity log.")}</p>
           <DataTable id={ns("dq_names_redflags")} compact />
         </Card>
       </div>

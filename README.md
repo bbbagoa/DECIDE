@@ -4,7 +4,7 @@
 
 **An R package and Shiny application for humanitarian targeting: design the targeting on assessment data, select beneficiaries on registration data, and check the selection on a post-targeting survey before distribution (or on post-distribution monitoring data).**
 
-It follows the WFP *Targeting and Prioritization Operational Guidance Note* (2021) and the WFP APP-FA Targeting Advisories 1/2025 (outcome indicators are not criteria), 2/2025 (design vs implementation errors) and 3/2025 (ROC curves and thresholds). It is built for large registries (millions of rows), keeps an audit trail of every change, and documents each step in a self-contained report that serves as evidence for review and audit.
+It follows the WFP *Targeting and Prioritization Operational Guidance Note* (2021) and the WFP APP-FA Targeting Advisories 1/2025 (outcome indicators are not criteria), 2/2025 (design vs implementation errors) and 3/2025 (ROC curves and thresholds). It is built for large registries (millions of rows), keeps an activity log of every change, and documents each step in a self-contained report that serves as evidence for review and audit.
 
 ---
 
@@ -189,7 +189,7 @@ A stepper across the top shows where you are: *Data → Vulnerability Framework 
 
 1. **Vulnerability Framework.** Choose the food-security outcome and the level that means *vulnerable*. CARI-type variables with two levels are proposed first.
 
-   **No food-security indicator in the data yet?** The **Food security indicators** button (with the data buttons, beside MODA and the calculator) calculates them from the survey's raw answers, exactly as WFP's standardized scripts do ([RAM Resources Scripts](https://github.com/WFP-VAM/RAMResourcesScripts/tree/main/Indicators), October 2025): the **FCS** (with 21/35 or 28/42 thresholds), the **rCSI** (IPC phases), **livelihood coping** (LCS-FS and LCS-EN), the **food expenditure share** and **CARI** (with FES, or with ECMEN from the MEB and SMEB you enter). Only the indicators whose variables, named as in the WFP data dictionary, are in the data can be ticked; the dialog lists what is missing. Each indicator adds WFP's columns plus a yes/no version to use as the outcome (e.g. `CARI_FES_2class`), and the calculation is recorded in the audit trail and the design report.
+   **No food-security indicator in the data yet?** The **Food security indicators** button (with the data buttons, beside MODA and the calculator) calculates them from the survey's raw answers, exactly as WFP's standardized scripts do ([RAM Resources Scripts](https://github.com/WFP-VAM/RAMResourcesScripts/tree/main/Indicators), October 2025): the **FCS** (with 21/35 or 28/42 thresholds), the **rCSI** (IPC phases), **livelihood coping** (LCS-FS and LCS-EN), the **food expenditure share** and **CARI** (with FES, or with ECMEN from the MEB and SMEB you enter). Only the indicators whose variables, named as in the WFP data dictionary, are in the data can be ticked; the dialog lists what is missing. Each indicator adds WFP's columns plus a yes/no version to use as the outcome (e.g. `CARI_FES_2class`), and the calculation is recorded in the activity log and the design report.
    **Welfare measured instead (consumption or expenditure)?** Choose *Welfare measure: proxy means test (PMT)*, the World Bank's method (Grosh & Baker 1995; Grosh et al. 2008). Pick the welfare variable (per household with the household size, or per person) and the poverty line per person, or the poorest share of households; the page checks the data requirements (sample size, welfare above zero, poverty rate, extreme values, households per proxy). Yes/no criteria are tested against being poor, and numeric proxies (household size, rooms) can be added. The settings sit on one line and apply once you click **Validate**. Models: least squares on log welfare per person, quantile regression at the poverty rate (usually lowers under-coverage; Brown, Ravallion & van de Walle 2018), ridge and lasso (cross-validated shrinkage), and random forest or XGBoost regressions (McBride & Nichols 2018), each validated on held-out households and comparable side by side. Accuracy is reported in PMT terms: leakage, under-coverage, coverage of the poor, targeting accuracy, targeting differential and the CGH indicator, with charts of selection by welfare decile, the errors as the cut-off moves, and residuals. Points are 100 x each coefficient (one point is about 1% less predicted welfare; numbers score per unit, a missing number takes the average), the threshold starts at the poverty line, and the page shows the predicted welfare per person each threshold stands for. Expect exclusion errors of 40-60% at typical coverage: the app says so and suggests the remedies.
 
    **No outcome indicator?** Choose *No outcome indicator: build a vulnerability ranking* (after a sudden shock, or with data from a partner or a registry). The criteria are then chosen rather than tested, and the model step offers **deprivation counting** (Alkire-Foster), a **PCA or MCA index** turned towards an *anchor criterion* you name as a clear sign of vulnerability, or **household profiles** from latent class analysis, k-means or Ward clustering (tick the profiles to target; the points reproduce them, with their fidelity shown). No inclusion or exclusion error can be measured: the threshold step shows internal consistency (Cronbach's alpha) and the stability of the selection over 20 resamples, and adoption needs the rationale. The result is called a **vulnerability ranking** (in the exports, the report and Beneficiary Selection). Validity figures stand in for errors: stability and rank agreement across resamples, Cronbach's alpha, profile separation (silhouette, entropy, a comparison of 2 to 8 profiles) and what the selection concentrates, by area too. Once PDM or verification data carry an outcome, **Monitoring > PDM > Calibrate the ranking** measures its errors and suggests a better threshold.
@@ -232,7 +232,7 @@ Available on the Targeting Design data card and on the registration import page.
 - **Formula**: numeric variables such as a dependency ratio, e.g. `(n_children + n_elderly) / pmax(n_adults, 1)`. Only column names and a whitelist of arithmetic and recoding functions are accepted.
 - **Bulk binarise**: apply one rule to many similar columns at once. Pick the columns by name (*Select matching*), set the rule and a prefix (e.g. `Targ_`), and each column becomes a 0/1 variable. The preview lists every new variable with its prevalence.
 
-Every variable created on the registration data is written to the **Audit Trail**, and variables created on the assessment data appear in the design report.
+Every variable created on the registration data is written to the **Activity Log**, and variables created on the assessment data appear in the design report.
 
 ### Phase 2: Beneficiary Selection
 
@@ -247,7 +247,7 @@ Every variable created on the registration data is written to the **Audit Trail*
    - Add eligibility rules, then **prioritise** (total caseload, or caseload per area, most vulnerable first).
 
    Eligible households cut by prioritisation are reported as **excluded by design**, not as exclusion errors. The export contains the selected list, the excluded-by-design list and the full metadata.
-7. **Audit Trail**: every modification, exportable to Excel/CSV.
+7. **Activity Log**: every modification, exportable to Excel/CSV.
 
 ### Phase 3: Targeting Monitoring
 
@@ -261,7 +261,7 @@ With a PDM extract (or a survey not drawn in the app), map the eligibility (grou
 
 Every upload (registration data, assessment data, PDM or verification survey, targeting-process datasets, spot-check re-collected data) has a **Data summary** button: every variable with its type, missing values, its categories with their shares or its distribution (a small histogram, minimum, median, mean, maximum, standard deviation), searchable and filterable by type, and exportable to Excel. It is computed when you click, on the data as it is then. The import summary has the same button.
 
-**Download data** (on the import page) and **Download the cleaned data** (Data Quality sidebar) save the registration data as it is after cleaning: Excel (read-only), SPSS (.sav) or Stata (.dta) with the variable labels, or Parquet. Each download is recorded in the audit trail.
+**Download data** (on the import page) and **Download the cleaned data** (Data Quality sidebar) save the registration data as it is after cleaning: Excel (read-only), SPSS (.sav) or Stata (.dta) with the variable labels, or Parquet. Each download is recorded in the activity log.
 
 ## Data requirements
 
@@ -321,7 +321,7 @@ Set these environment variables, for example in `.Renviron` or in your hosting p
 - **Sessions** hold the registration data, the variable mapping and the audit log, plus the work done in each phase: the whole Targeting Design (assessment data, calculated variables, selection, every model run, edited points, review ticks, threshold and rationale), the Beneficiary Selection settings, the spot-check sample and back-check, and the PDM analysis. Each phase is **its own session**: Save writes one file per phase that holds work (Targeting Design, Beneficiary Selection, Targeting Monitoring), and Load brings one back without touching the others, so a selection save never rewrites the design dataset. The adopted scorecard and the eligibility rules travel with the sessions that use them; sessions saved before the split load as they are. Datasets are stored as Parquet inside the session (about 7x smaller). They are **encrypted with libsodium** before being written to disk. They autosave once there is something worth saving, and can be restored on start-up.
 - **MODA/ONA API tokens are never saved.**
 - On shared servers, put the app behind the platform's authentication (Posit Connect, Shiny Server Pro, ShinyProxy) and set `TARGETWISE_REQUIRE_AUTH=true`.
-- Every data change (corrections, deletions, created variables) is written to the audit trail.
+- Every data change (corrections, deletions, created variables) is written to the activity log.
 
 ---
 

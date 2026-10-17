@@ -93,6 +93,9 @@ test_that("binary criteria are recognised however they are coded", {
   expect_equal(f(c("Oui", "Non")), c(1L, 0L))
   # Blank strings are missing, not a third level.
   expect_equal(f(c("Yes", "", "No")), c(1L, NA, 0L))
+  # Several teams' spellings of yes and no in one column (a raw registration list).
+  expect_equal(f(c("Yes", "Oui", "1", "yes", "No", "Non", "0", NA)), c(1L, 1L, 1L, 1L, 0L, 0L, 0L, NA))
+  expect_null(f(c("Yes", "No", "Maybe")))
   # Three levels or a continuous column is not a criterion.
   expect_null(f(c("a", "b", "c")))
   expect_null(f(c(1, 5, 9)))

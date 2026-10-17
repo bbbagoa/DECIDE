@@ -88,7 +88,9 @@ test_that("checks block only what cannot be worked around", {
   expect_false(any(TargetWise:::mapping_checks(d, map)$level == "block"))
   expect_true(any(TargetWise:::mapping_checks(d, list(admin1 = "Province"))$level == "block"))     # no id
   d2 <- d; d2$instanceID[2] <- d2$instanceID[1]
-  expect_match(paste(TargetWise:::mapping_checks(d2, map)$message, collapse = " "), "repeated")
+  rep_id <- TargetWise:::mapping_checks(d2, map)
+  expect_true(any(rep_id$level == "warn" & grepl("repeated", rep_id$message)))     # reported, cleaned in Duplicates
+  expect_false(any(rep_id$level == "block"))
   gap <- TargetWise:::mapping_checks(d, list(unique_id = "instanceID", admin1 = "Province", admin3 = "Zonesante"))
   expect_true(any(gap$level == "block" & gap$field == "admin2"))                 # levels from the top
   d3 <- d; d3$lat[1:3] <- 0; d3$lon[1:3] <- 0; d3$lat[4] <- 35

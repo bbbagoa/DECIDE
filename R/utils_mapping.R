@@ -325,7 +325,7 @@ guess_mapping <- function(df, labels = NULL, sample_n = 3000) {
 
 #' Checks on what the mapped columns contain
 #'
-#' "block" stops the setup (no identifier, repeated or missing identifiers,
+#' "block" stops the setup (no identifier, missing identifiers,
 #' area levels not mapped from the top); "warn" is reported, kept in the audit
 #' trail and does not stop anything.
 #' @param map Named list field -> column ("" or NULL when not mapped).
@@ -345,7 +345,8 @@ mapping_checks <- function(df, map) {
     if (blank) add("unique_id", "block", sprintf("%s households have no identifier.", share(blank)))
     if (anyDuplicated(v[!(is.na(v) | !nzchar(trimws(as.character(v))))])) {
       d <- sum(duplicated(v[!is.na(v)]))
-      add("unique_id", "block", sprintf("%s identifiers are repeated: resolve them in the source file or choose another identifier column.", share(d)))
+      # a warning: finding and resolving them is what Data Quality > Duplicates is for
+      add("unique_id", "warn", sprintf("%s identifiers are repeated: review them in Data Quality > Duplicates.", share(d)))
     }
   }
   # areas: from the top, and each level finer than the one above

@@ -69,7 +69,7 @@ st2 <- tw_js(app, "document.querySelector('.tw-imp-status').innerText")
 ncols <- function(s) as.integer(gsub(",", "", sub("^.*?([0-9,]+) columns.*$", "\\1", gsub("\n", " ", s), perl = TRUE)))
 ok(ncols(st2) == ncols(st) + 1L, paste("column count +1:", gsub("\n", " | ", st2)))
 tw_go(app, "modif_logs"); Sys.sleep(1.5)
-ok(grepl("big_household", tw_js(app, "document.querySelector('.tw-audit').innerText")), "variable created is in the audit trail")
+ok(grepl("big_household", tw_js(app, "document.querySelector('.tw-audit').innerText")), "variable created is in the activity log")
 
 # --- session toolbar: Save opens its dialog (and nothing opened at start)
 tw_click(app, "session_manager_1-btn_save_session"); Sys.sleep(1.5); tw_idle(app)

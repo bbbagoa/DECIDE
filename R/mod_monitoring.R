@@ -111,11 +111,11 @@ mod_monitoring_ui <- function(id) {
 
 #' @noRd
 mod_monitoring_server <- function(id, workspace = NULL, country_office = reactive(NULL), modification_log = NULL,
-                                  user_setup = NULL, selection = NULL) {
+                                  user_setup = NULL) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
     pdm <- mod_pdm_server("pdm", workspace, country_office = country_office, modification_log = modification_log,
-                          user_setup = user_setup, selection = selection)
+                          user_setup = user_setup)
 
     items <- reactiveVal(list())
     add_item <- function(it) {

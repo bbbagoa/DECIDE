@@ -98,14 +98,14 @@ app_server <- function(input, output, session) {
       version = 5,
       bg = if (dark) "#0b1a2e" else "#ffffff",
       fg = if (dark) "#e6ebf2" else "#1f2a37",
-      primary = "#0A6EB4",
+      primary = "#007DBC",
       secondary = "#f7b825",
       success = if (dark) "#5aa661" else "#3f7e44",
       info = if (dark) "#4fd0ef" else "#26bde2",
       warning = "#f7b825",
       danger = if (dark) "#e8536a" else "#c5192d",
       base_font = app_font(),
-      code_font = app_font()
+      code_font = "'IBM Plex Mono', ui-monospace, Consolas, monospace"
       # No Bootswatch preset for dark: "darkly" brought its own paddings, font
       # sizes and input heights, so every switch reshaped the page. Dark is
       # the same theme with dark colours (and the tokens in wfp-ui.css).
@@ -384,7 +384,7 @@ app_server <- function(input, output, session) {
   # Each module registers its work here so a saved session carries it.
   workspace <- workspace_new()
   mod_spot_checking_server("spot_checking_1", uploaded_df, user_setup, workspace)
-  ben_sel <- mod_ben_selection_server("ben_selection_1", uploaded_df, user_setup, workspace, modification_log)
+  mod_ben_selection_server("ben_selection_1", uploaded_df, user_setup, workspace, modification_log)
   # The scorecard is built on the assessment data currently loaded, and stores
   # the finished card on user_setup so it travels in the setup profile and can
   # be applied by Beneficiary Selection.
@@ -392,7 +392,7 @@ app_server <- function(input, output, session) {
   # PDM accuracy works off its own uploaded extract, so it takes no app state.
   # Targeting Monitoring: the PDM analysis, targeting process and the report.
   mod_monitoring_server("monitoring_1", workspace, country_office = reactive(user_setup$country_office),
-                        modification_log = modification_log, user_setup = user_setup, selection = ben_sel$frame)
+                        modification_log = modification_log, user_setup = user_setup)
 
   ## ===================================================================================
   #  ------------------- Data Quality Panel Server Side
@@ -405,7 +405,10 @@ app_server <- function(input, output, session) {
   ## ===================================================================================
   #  ------------------- Audit Trail Server Side
   ## -----------------------------------------------------------------------------------
-  mod_audit_server("audit_1", modification_log)
+  # Undo for the changes made to the data in this session (an import or a
+  # restored session starts afresh: loaded work cannot be undone)
+  undo <- undo_tracker(uploaded_df, modification_log, original_df)
+  mod_audit_server("audit_1", modification_log, undo)
 
   # Variable calculator on the registration data; every column it creates is
   # recorded in the audit trail.

@@ -285,7 +285,7 @@ dq_duplicates_server <- function(input, output, session, ns, core) {
       tags$hr(),
       checkboxGroupInput(ns("dup_cmp_del"), "Records to delete", inline = TRUE,
                          choices = stats::setNames(rows, heads)),
-      textInput(ns("dup_cmp_reason"), "Reason (written to the audit trail)", width = "100%",
+      textInput(ns("dup_cmp_reason"), "Reason (written to the activity log)", width = "100%",
                 placeholder = "e.g. same household registered twice"),
       footer = tagList(modalButton("Close"),
                        actionButton(ns("dup_cmp_delete"), "Delete ticked records", class = "btn-outline-danger", icon = icon("trash")))
@@ -303,15 +303,7 @@ dq_duplicates_server <- function(input, output, session, ns, core) {
     cols <- intersect(a$data_cols, names(full))
     uid <- user_setup$unique_id
     has_uid <- shiny::isTruthy(uid) && uid %in% names(full)
-    cand <- if (has_uid) which(as.character(full[[uid]]) %in% as.character(d[[uid]])) else seq_len(nrow(full))
-    fp <- function(x) do.call(paste, c(lapply(x[cols], function(v) { v <- as.character(v); v[is.na(v)] <- "\001"; v }),
-                                       list(sep = "\037")))
-    kc <- fp(full[cand, , drop = FALSE])
-    hit <- integer(0)
-    for (k in fp(d)) {
-      j <- which(kc == k & !(cand %in% hit))[1]
-      if (!is.na(j)) hit <- c(hit, cand[j])
-    }
+    hit <- rows_in_full(full, d, if (has_uid) uid, cols)
     if (!length(hit)) {
       showNotification("These records are no longer in the data (edited or deleted since the analysis).", type = "warning")
       return(invisible(FALSE))
@@ -339,7 +331,7 @@ dq_duplicates_server <- function(input, output, session, ns, core) {
       tags$p(sprintf("%d record(s) will be removed from the data.", length(rows))),
       if (any(whole)) tags$div(class = "alert alert-warning small",
                                sprintf("%d group(s) would lose every record. Keep at least one per group unless all are wrong.", sum(whole))),
-      textInput(ns("dup_reason"), "Reason (written to the audit trail)", width = "100%",
+      textInput(ns("dup_reason"), "Reason (written to the activity log)", width = "100%",
                 placeholder = "e.g. same household registered twice"),
       easyClose = TRUE,
       footer = tagList(modalButton("Cancel"), actionButton(ns("dup_delete_ok"), "Delete", class = "btn-danger"))

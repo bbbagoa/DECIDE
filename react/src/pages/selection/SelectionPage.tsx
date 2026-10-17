@@ -10,13 +10,13 @@
 import { useRef, type ReactNode } from "react";
 import {
   CalendarX, ChartBar, CircleAlert, CircleCheck, CircleMinus, Download, FileSpreadsheet, FileText, Filter, Info, Layers, List, MapPin,
-  SlidersHorizontal, User, Users, UsersRound, Venus, X,
+  Shuffle, SlidersHorizontal, User, Users, UsersRound, Venus, X,
 } from "lucide-react";
 import { useShinyInputValue, useShinyOutputError, useShinyOutputValue } from "@/shiny";
 import {
   ActionButton, CheckboxInput, DownloadButton, HostedUI, NumericInput, RadioInput, SelectInput, SliderInput, TextInput, TextOutput,
 } from "@/lib/inputs";
-import { Card, Notice, SideActions, SidebarLayout, Steps, Tabs } from "@/lib/layout";
+import { Card, SideActions, SidebarLayout, Steps, Tabs } from "@/lib/layout";
 import { Chart } from "@/lib/chart";
 import { useOutputVisibility } from "@/lib/visibility";
 import { DataTable } from "@/lib/table";
@@ -58,10 +58,11 @@ export function SelectionPage({ t }: { active: boolean; t: T }) {
   const a3 = useShinyInputValue<string[] | string | null>(ns("ben_admin3"));
   const nAreas = [a1, a2, a3].reduce<number>((s, x) => s + (Array.isArray(x) ? x.length : x ? 1 : 0), 0);
 
+  // the sidebar: what is covered, then what comes out of the selection
   const sidebar = (
     <>
       <Steps steps={[{
-        key: "areas", title: `1. ${t("Areas covered")}`, icon: <MapPin size={15} />,
+        key: "areas", title: t("Areas covered"), icon: <MapPin size={15} />,
         summary: nAreas ? `${nAreas} ${t("chosen")}` : t("Every area"),
         content: (
           <>
@@ -75,28 +76,28 @@ export function SelectionPage({ t }: { active: boolean; t: T }) {
         ),
       }]} />
       <SideActions>
-        <PendingNote pending={pending} t={t} />
-        <div className="d-flex gap-2">
-          <ActionButton id={ns("ben_apply")} label={t("Apply selection")} icon={<Filter size={14} />} variant="primary" className="flex-fill" />
-          <ActionButton id={ns("ben_clear")} icon={<X size={14} />} variant="outline-secondary" title={t("Clear the selection criteria")} />
-        </div>
-        <ActionButton id={ns("export_open")} label={t("Export selection (Excel)")} icon={<Download size={14} />} className="w-100 mt-2" />
+        <div className="tw-sel-side-cap">{t("Outputs")}</div>
+        <ActionButton id={ns("export_open")} label={t("Export selection (Excel)")} icon={<Download size={14} />} className="w-100" />
         <DownloadButton id={ns("selection_report")} label={t("Selection report (HTML)")} icon={<FileText size={14} />} className="w-100 mt-2" />
-        <div className="mt-2"><VarCalc ns={ns("calc")} t={t} block /></div>
+        <ActionButton id={ns("mon_open")} label={t("Draw a monitoring sample")} icon={<Shuffle size={14} />} className="w-100 mt-2"
+                      title={t("Households to survey for a post-targeting survey / baseline or a PDM, with replacements")} />
+        <div className="tw-sel-side-cap mt-3">{t("Tools")}</div>
+        <VarCalc ns={ns("calc")} t={t} block />
       </SideActions>
     </>
   );
 
   return (
-    <SidebarLayout width={300} sidebar={sidebar} className="tw-sel">
+    <SidebarLayout width={280} sidebar={sidebar} className="tw-sel">
       <div className="tw-sel-main">
         {meta && !meta.ready && (
           <EmptyState title={t("Load the registration data and map its variables first.")} />
         )}
-        <Kpis t={t} />
+        <ParamBar t={t} meta={meta} gates={gates} approach={a} pending={pending} />
         <SelectionNote t={t} />
-        <Tabs id={ns("ben_tabs")} value="design" tabs={[
-          { value: "design", label: t("Selection design"), icon: <SlidersHorizontal size={14} />, content: <Design t={t} meta={meta} gates={gates} approach={a} pending={pending} /> },
+        <Kpis t={t} />
+        <Tabs id={ns("ben_tabs")} value="summary" tabs={[
+          { value: "summary", label: t("Summary by area"), icon: <MapPin size={14} />, content: <AreaSummary t={t} /> },
           { value: "composition", label: t("Composition"), icon: <ChartBar size={14} />, content: <Composition t={t} meta={meta} /> },
           { value: "list", label: t("Beneficiary list"), icon: <List size={14} />, content: <BenList t={t} /> },
         ]} />
@@ -107,22 +108,37 @@ export function SelectionPage({ t }: { active: boolean; t: T }) {
 
 /* ------------------------------------------------------------------ KPIs */
 
+type Fig = { hh: number; people: number | null };
+type Figs = { total: Fig; eligible: Fig; served: Fig; cut: Fig } | null;
+
+/** Every figure in households and people (output$ben_figs). Served is shown
+ *  as a share of the eligible (coverage of the need) and of all households. */
 function Kpis({ t }: { t: T }) {
-  const kpi = (id: string, label: string, icon: ReactNode, tone: string) => (
+  const f = useShinyOutputValue<Figs>(ns("ben_figs"));
+  // the figures go over the whole selection: they wait while the page is hidden
+  const here = useRef<HTMLDivElement>(null);
+  useOutputVisibility(ns("ben_figs"), here);
+  const pct = (a: number, b: number) => (b > 0 ? `${((100 * a) / b).toFixed(1).replace(/\.0$/, "")}%` : "—");
+  const kpi = (id: string, label: string, icon: ReactNode, tone: string, x: Fig | undefined, share?: ReactNode) => (
     <div className="tw-sel-kpi">
       <span className={`tw-sel-kpi-icon tone-${tone}`}>{icon}</span>
       <div className="min-w-0">
         <div className="tw-sel-kpi-label">{label}</div>
-        <div className="tw-sel-kpi-value"><TextOutput id={ns(id)} /></div>
+        <div className="tw-sel-kpi-value"><span id={ns(id)}>{x ? num(x.hh) : "—"}</span> <small>{t("households")}</small></div>
+        {x?.people != null && <div className="tw-sel-kpi-people">{num(x.people)} {t("people")}</div>}
+        {share && <div className="tw-sel-kpi-share">{share}</div>}
       </div>
     </div>
   );
   return (
-    <div className="tw-sel-kpis">
-      {kpi("ben_total", t("Selected households"), <Users size={18} />, "primary")}
-      {kpi("ben_indiv", t("Selected individuals"), <UsersRound size={18} />, "secondary")}
-      {kpi("ben_eligible", t("Eligible by design"), <CircleCheck size={18} />, "info")}
-      {kpi("ben_cut", t("Excluded by design"), <CircleMinus size={18} />, "warning")}
+    <div className="tw-sel-kpis" ref={here}>
+      {kpi("ben_all", t("In the data"), <Layers size={18} />, "secondary", f?.total, t("areas covered"))}
+      {kpi("ben_eligible", t("Eligible by design"), <CircleCheck size={18} />, "info", f?.eligible,
+           f && `${pct(f.eligible.hh, f.total.hh)} ${t("of all households")}`)}
+      {kpi("ben_total", t("Selected (served)"), <Users size={18} />, "primary", f?.served,
+           f && <><b>{pct(f.served.hh, f.eligible.hh)}</b> {t("of eligible")} · {pct(f.served.hh, f.total.hh)} {t("of all households")}</>)}
+      {kpi("ben_cut", t("Excluded by design"), <CircleMinus size={18} />, "warning", f?.cut,
+           f && `${pct(f.cut.hh, f.eligible.hh)} ${t("of eligible (unmet need)")}`)}
     </div>
   );
 }
@@ -147,133 +163,127 @@ function SelectionNote({ t }: { t: T }) {
   );
 }
 
-function PendingNote({ pending, t }: { pending: string[]; t: T }) {
-  if (!pending.length) return null;
+/* --------------------------------------------------------- settings bar */
+
+/** One group of the bar: a caption, then its fields side by side. Hidden, not
+ *  unmounted, so the server's updates reach the inputs inside. */
+function Group({ off = false, n, label, children, className, why }: {
+  off?: boolean; n: number; label: string; children: ReactNode; className?: string; why?: string;
+}) {
   return (
-    <Notice kind="warning" className="tw-sel-pending">
-      {t("Not applied yet")}: {pending.map(t).join(", ")}. {t("Apply the selection to use them.")}
-    </Notice>
+    <section className={`tw-sel-bar-group${off ? " is-off" : ""}${className ? ` ${className}` : ""}`} aria-disabled={off} title={off ? why : undefined}>
+      <div className="tw-sel-bar-cap"><span className="tw-sel-step-num">{n}</span>{label}</div>
+      <div className="tw-sel-bar-fields" inert={off}>{children}</div>
+      {off && <div className="tw-sel-bar-offnote">{why}</div>}
+    </section>
   );
 }
 
-/* ---------------------------------------------------------------- design */
-
-function Design({ t, meta, gates, approach, pending }: { t: T; meta?: Meta; gates: string[]; approach?: Approach; pending: string[] }) {
+function ParamBar({ t, meta, gates, approach, pending }: { t: T; meta?: Meta; gates: string[]; approach?: Approach; pending: string[] }) {
   const value = approach?.value ?? "hybrid";
   const isSelf = value === "self";
   const mode = useShinyInputValue<string>(ns("ben_prio_mode")) ?? "none";
   const useSc = useShinyInputValue<boolean>(ns("use_scorecard"));
   const card = meta?.card ?? null;
   const cardOn = !!card && useSc !== false;
-
-  const steps: { key: string; title: string; show: boolean; body: ReactNode }[] = [
-    {
-      key: "approach", title: t("Approach"), show: true, body: (
-        <>
+  const show = { rules: gates.includes("criteria"), score: gates.includes("score"), community: gates.includes("community"), prio: !isSelf };
+  const why = t("Not used by this approach");
+  return (
+    <div className="tw-sel-bar">
+      <div className="tw-sel-bar-row">
+        <Group n={1} label={t("Approach")} className="tw-sel-bar-approach">
           <SelectInput id={ns("ben_approach")} value="hybrid" clearable={false}
                        choices={(meta?.approaches ?? []).map((x) => ({ value: x.value, label: t(x.label) }))} />
-          {approach && <p className="small text-muted mb-2">{t(approach.description)}</p>}
-          <div hidden={value !== "hybrid"}>
-            <RadioInput id={ns("ben_combine")} label={t("Criteria and score combine as")} value="both"
-                        choices={[{ value: "both", label: t("Both (criteria AND score)") }, { value: "either", label: t("Either (criteria OR score)") }]} />
+          <div hidden={value !== "hybrid"} title={t("Both: criteria AND score. Either: criteria OR score.")}>
+            <RadioInput id={ns("ben_combine")} value="both" buttons
+                        choices={[{ value: "both", label: t("Both") }, { value: "either", label: t("Either") }]} />
           </div>
-        </>
-      ),
-    },
-    {
-      key: "rules", title: t("Eligibility rules"), show: gates.includes("criteria"), body: (
-        <>
-          <p className="small text-muted mb-2">{t("Combine conditions on any column, e.g. (A and B) or C.")}</p>
-          <ActionButton id={ns("btn_rules")} label={t("Edit eligibility rules")} icon={<SlidersHorizontal size={14} />} />
-          <div className="small text-muted mt-2"><TextOutput id={ns("rules_summary")} /></div>
-        </>
-      ),
-    },
-    {
-      key: "score", title: t("Score"), show: gates.includes("score"), body: (
-        <>
-          <div hidden={!card}>
+        </Group>
+
+        <Group off={!show.rules} why={why} n={2} label={t("Eligibility rules")}>
+          <ActionButton id={ns("btn_rules")} label={t("Edit rules")} icon={<SlidersHorizontal size={14} />} variant="outline-primary" />
+          <span className="tw-sel-bar-sub"><TextOutput id={ns("rules_summary")} /></span>
+        </Group>
+
+        <Group off={!show.score} why={why} n={3} label={card ? t(card.word.charAt(0).toUpperCase() + card.word.slice(1)) : t("Vulnerability score")}
+               className="tw-sel-bar-score">
+          {!card && <div className="tw-sel-bar-sub">{t("No scorecard or ranking in use: adopt one in Targeting Design, or load one below.")}</div>}
+          <div hidden={!card} className="tw-sel-bar-card">
             <CheckboxInput key={`use-${card?.fp ?? "none"}`} id={ns("use_scorecard")} value asSwitch
-                           label={card ? `${t("Apply the")} ${t(card.word)} (${card.n} ${t("criteria")})` : ""} />
+                           label={card ? `${t("Use it")} (${card.n} ${t("criteria")})` : ""} />
             <div hidden={!cardOn}>
-              <NumericInput id={ns("scorecard_threshold")} label={t("Eligible when score is above")}
-                            value={card?.threshold ?? null} min={0} step={0.1} />
+              <SliderInput id={ns("scorecard_threshold")} label={t("Eligible when the score is above")}
+                           min={0} max={100} step={0.1} value={card?.threshold ?? 0} />
+              <div className="tw-sel-bar-agreed">
+                <span>{t("Agreed threshold")}: <b>{card?.threshold ?? "—"}</b></span>
+                <ActionButton id={ns("sc_rematch")} icon={<Layers size={14} />} variant="outline-secondary" title={t("Match columns")} />
+              </div>
             </div>
-            <ScorecardNote t={t} />
-            <ActionButton id={ns("sc_rematch")} label={t("Match columns")} icon={<Layers size={14} />} className="mt-1" />
           </div>
-          {!card && (
-            <p className="small text-muted mb-2">
-              {t("No scorecard or vulnerability ranking in use. Build one under Targeting Design (with an outcome indicator, or without one for a ranking) and adopt it, or load one exported from there.")}
-            </p>
-          )}
-          <div hidden={cardOn}>
-            <SliderInput id={ns("ben_score_min")} label={t("Minimum vulnerability score")} min={0} max={100} value={0} />
-            <SliderInput id={ns("ben_score_max")} label={t("Maximum vulnerability score")} min={0} max={100} value={100} />
+          <div hidden={cardOn} className="tw-sel-bar-range">
+            <SliderInput id={ns("ben_score_range")} label={card ? t("Score range") : t("Vulnerability score range")}
+                         min={0} max={100} value={[0, 100]} />
           </div>
-          <HostedUI id={ns("scorecard_ui")} />
-        </>
-      ),
-    },
-    {
-      key: "community", title: t("Community decision"), show: gates.includes("community"), body: (
-        <>
-          <SelectInput id={ns("ben_comm_col")} label={t("Column recording the community's decision")} value="" clearable={false}
+          <div className="tw-sel-bar-load"><HostedUI id={ns("scorecard_ui")} /></div>
+        </Group>
+
+        <Group off={!show.community} why={why} n={4} label={t("Community decision")}>
+          <SelectInput id={ns("ben_comm_col")} label={t("Column")} value="" clearable={false}
                        choices={[{ value: "", label: t("Choose a column") }]} />
-          <SelectInput id={ns("ben_comm_vals")} label={t("Value(s) meaning selected")} multiple actions />
-        </>
-      ),
-    },
-    {
-      key: "prio", title: t("Prioritisation"), show: !isSelf, body: (
-        <>
-          <RadioInput id={ns("ben_prio_mode")} value="none"
-                      choices={[{ value: "none", label: t("None: serve all eligible") }, { value: "caseload", label: t("Total caseload") },
-                                { value: "per_unit", label: t("Caseload per area") }]} />
-          <div hidden={mode === "none"}>
-            <RadioInput id={ns("ben_prio_count")} label={t("Caseload counted in")} inline value="people"
-                        choices={[{ value: "people", label: t("People (beneficiaries)") }, { value: "households", label: t("Households") }]} />
-            <div hidden={mode !== "caseload"}>
-              <NumericInput id={ns("ben_prio_n")} label={t("Caseload to serve")} min={1} step={1} />
-              <TextInput id={ns("ben_prio_rationale")} label={t("Rationale (required)")} area rows={2}
-                         placeholder={t("e.g. Caseload set by the funding available for the first round.")} />
+          <SelectInput id={ns("ben_comm_vals")} label={t("Means selected")} multiple actions />
+        </Group>
+
+        <Group off={!show.prio} why={why} n={5} label={t("Prioritisation")} className="tw-sel-bar-prio">
+          <RadioInput id={ns("ben_prio_mode")} value="none" buttons
+                      choices={[{ value: "none", label: t("All eligible") }, { value: "caseload", label: t("Caseload") },
+                                { value: "per_unit", label: t("Per area") }]} />
+          {/* counted in (dropdown) and the caseload beside it; the rationale below */}
+          <div hidden={mode === "none"} className="tw-sel-bar-caseload">
+            <SelectInput id={ns("ben_prio_count")} value="people" clearable={false} className="tw-sel-bar-count"
+                         choices={[{ value: "people", label: t("People") }, { value: "households", label: t("Households") }]} />
+            <div hidden={mode !== "caseload"} className="tw-sel-bar-n">
+              <NumericInput id={ns("ben_prio_n")} placeholder={t("Caseload")} min={1} step={1} />
             </div>
-            <div hidden={mode !== "per_unit"}>
-              <SelectInput id={ns("ben_quota_unit")} label={t("Per")} value="admin1" clearable={false}
+            <div hidden={mode !== "per_unit"} className="tw-sel-bar-n">
+              <SelectInput id={ns("ben_quota_unit")} value="admin1" clearable={false}
                            choices={[{ value: "admin1", label: "Admin 1" }, { value: "admin2", label: "Admin 2" },
                                      { value: "admin3", label: "Admin 3" }, { value: "admin4", label: "Admin 4" }]} />
-              <ActionButton id={ns("quota_open")} label={t("Set the caseload per area...")} icon={<FileSpreadsheet size={14} />} className="w-100 mb-2" />
-              <QuotaSummary t={t} />
-            </div>
-            <div className="text-muted small mt-1">
-              {t("Most vulnerable first (highest score). Eligible households cut here are excluded by design: reported separately, not counted as exclusion errors.")}
             </div>
           </div>
-        </>
-      ),
-    },
-  ];
-  let k = 0;
+          <div hidden={mode !== "caseload"}>
+            <TextInput id={ns("ben_prio_rationale")} area rows={3} placeholder={t("Rationale (required), e.g. caseload set by the funding available for the first round.")} />
+          </div>
+          <div hidden={mode !== "per_unit"}>
+            <ActionButton id={ns("quota_open")} label={t("Set the caseload per area...")} icon={<FileSpreadsheet size={14} />} variant="outline-primary" />
+          </div>
+        </Group>
+      </div>
+
+      {/* what the settings mean, and what is not applied yet */}
+      <div className="tw-sel-bar-foot">
+        {approach && <span className="text-muted"><Info size={13} /> {t(approach.description)}</span>}
+        {show.score && card && <ScorecardNote t={t} />}
+        {show.prio && mode === "per_unit" && <QuotaSummary t={t} />}
+        {mode !== "none" && show.prio && (
+          <span className="text-muted">{t("Most vulnerable first. Eligible households cut here are excluded by design: reported separately, not counted as exclusion errors.")}</span>)}
+        {pending.length > 0 && (
+          <span className="tw-sel-bar-pending">{t("Not applied yet")}: {pending.map(t).join(", ")}.</span>)}
+        <div className="tw-sel-bar-go">
+          <ActionButton id={ns("ben_apply")} label={t("Apply selection")} icon={<Filter size={14} />} variant="primary" />
+          <ActionButton id={ns("ben_clear")} icon={<X size={14} />} variant="outline-secondary" title={t("Clear the selection criteria")} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Households and people by area, at the level chosen (output$sel_by_area). */
+function AreaSummary({ t }: { t: T }) {
   return (
-    <>
-      <div className="tw-sel-design">
-        {steps.map((s) => (
-          // hidden, not unmounted: the server's updates must reach the inputs inside
-          <section key={s.key} className="tw-sel-step" hidden={!s.show}>
-            <div className="tw-sel-step-head"><span className="tw-sel-step-num">{s.show ? ++k : ""}</span>{s.title}</div>
-            {s.body}
-          </section>
-        ))}
-      </div>
-      <div className="tw-sel-foot">
-        <span className="small text-muted"><Info size={14} /> {pending.length
-          ? `${t("Not applied yet")}: ${pending.map(t).join(", ")}.`
-          : t("The design and the filters take effect together when you apply the selection.")}</span>
-        <button type="button" className="btn btn-outline-primary btn-sm" onClick={() => document.getElementById(ns("ben_apply"))?.click()}>
-          <Filter size={14} /> {t("Apply selection")}
-        </button>
-      </div>
-    </>
+    <Card title={t("Summary by area")} icon={<MapPin size={15} />} full className="mt-3"
+          actions={<SelectInput id={ns("sum_level")} clearable={false} className="tw-sel-sumlevel" />}>
+      <DataTable id={ns("sel_by_area")} compact />
+    </Card>
   );
 }
 
@@ -346,11 +356,18 @@ function Composition({ t, meta }: { t: T; meta?: Meta }) {
       )}
       {/* the mix chart needs eligibility or groups mapped: otherwise one line, and the area chart takes the row */}
       {mixNote && <div className="small text-muted"><Info size={13} /> {t(mixNote)}</div>}
-      <div className={mixNote ? undefined : "tw-sel-grid2"}>
-        <div hidden={!!mixNote}>
-          <Card title={t("Eligibility and vulnerability mix")} icon={<ChartBar size={15} />} full><Chart id={ns("ben_validation_plot")} /></Card>
-        </div>
-        <Card title={t("By area: served, excluded by design, not eligible")} icon={<MapPin size={15} />} full><Chart id={ns("ben_area_plot")} /></Card>
+      {/* the areas, three ways, on one line */}
+      <div className="tw-sel-grid3">
+        <Card title={t("Households by area")} icon={<MapPin size={15} />} full
+              help={help("Served, excluded by design (eligible but cut by prioritisation) and not eligible, in each area.")}><Chart id={ns("ben_area_plot")} /></Card>
+        <Card title={t("Coverage by area")} icon={<ChartBar size={15} />} full
+              help={help("Of eligible served: the share of the need covered (100% = every eligible household served). Of all households: the share of the area's population served.")}>
+          <Chart id={ns("ben_cov_plot")} />
+        </Card>
+        <Card title={t("Selected households by sex of the head")} icon={<Venus size={15} />} full><Chart id={ns("ben_sex_plot")} /></Card>
+      </div>
+      <div hidden={!!mixNote}>
+        <Card title={t("Eligibility and vulnerability mix")} icon={<ChartBar size={15} />} full><Chart id={ns("ben_validation_plot")} /></Card>
       </div>
       <Card title={t("Who is selected, compared with who is not")} icon={<Users size={15} />} full>
         {!prof ? null : prof.message ? <div className="small text-muted">{t(prof.message)}</div> : (

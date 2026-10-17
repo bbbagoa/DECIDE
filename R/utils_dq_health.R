@@ -48,17 +48,18 @@ dq_health <- function(df, setup) {
         if (k) "review" else "ok")
   }
 
-  # empty, one-letter or placeholder area names (digits are fine: "Site 3")
-  areas <- unlist(Filter(Negate(is.null), lapply(c("admin1", "admin2", "admin3", "admin4", "village"), col)))
-  out[[4]] <- if (!length(areas)) row("Names and spelling", "Spelling & Integrity", "No area mapped", "na") else {
-    bad <- Reduce(`|`, lapply(areas, function(a) { v <- trimws(as.character(df[[a]]))
-      is.na(v) | nchar(v) < 2 | tolower(v) %in% c("none", "null", "test", "n/a", "na", "unknown", "---", ".", "-") }))
-    b <- sum(bad)
+  # people's names (household head, beneficiary...): the Spelling & Integrity
+  # rules (empty, one letter, digits, placeholders) on the name columns found
+  nm <- name_cols_guess(df, setup)
+  out[[4]] <- if (!length(nm)) row("Names and spelling", "Spelling & Integrity", "No name column found (choose them in Spelling & Integrity)", "na") else {
+    b <- nrow(find_bad_names(df, nm))
     row("Names and spelling", "Spelling & Integrity",
-        if (b) sprintf("%s records with an empty or placeholder area name", num(b)) else "Area names look complete",
+        if (b) sprintf("%s records with an empty, too short, placeholder or digit-containing name (%s)", num(b), paste(nm, collapse = ", "))
+        else sprintf("Names look complete (%s)", paste(nm, collapse = ", ")),
         if (b) "review" else "ok")
   }
 
+  areas <- unlist(Filter(Negate(is.null), lapply(c("admin1", "admin2", "admin3", "admin4", "village"), col)))
   # spelling variants of the same area name (one typo apart)
   out[[5]] <- if (!length(areas)) row("Location names", "Location names normalization", "No area mapped", "na") else {
     v <- sum(vapply(areas, function(a) {
@@ -83,6 +84,61 @@ dq_health <- function(df, setup) {
     }
   }
   do.call(rbind, out)
+}
+
+#' Columns holding people's names: text columns named like a name (name,
+#' nom, prenom, surname...), not the mapped areas, not the survey staff
+#' @noRd
+name_cols_guess <- function(df, setup) {
+  mapped <- unlist(lapply(c("unique_id", "admin1", "admin2", "admin3", "admin4", "village", "enumerator_id"), function(k) {
+    v <- as.character(setup[[k]] %||% "")[1]; if (!is.na(v) && nzchar(v)) v }))
+  cols <- setdiff(names(df), mapped)
+  cols <- cols[grepl("name|nom|prenom|surname|beneficiaire", cols, ignore.case = TRUE) & !grepl("^@?_", cols) &
+               !grepl("enum|agent|surveyor|interview|supervis|admin|village|site|province|territ|zone|aire|region|district|commune|locali", cols, ignore.case = TRUE)]
+  Filter(function(cl) is.character(df[[cl]]) || is.factor(df[[cl]]), cols)
+}
+
+#' Data small enough for the health check to run by itself when its tab
+#' opens (rows x columns); above it the page asks for a click.
+#' 5 million cells by default (e.g. 100,000 records x 50 columns);
+#' TARGETWISE_HEALTH_AUTO_CELLS sets another size.
+#' @noRd
+health_auto_cells <- function() {
+  v <- suppressWarnings(as.numeric(tw_env("HEALTH_AUTO_CELLS", "")))
+  if (length(v) == 1 && !is.na(v) && v >= 0) v else 5e6
+}
+
+#' What the health check shows beside its rows: completeness, the columns
+#' that miss most, interviews per day and records per area
+#' @return list(records, variables, completeness, dup_share, missing
+#'   (data.frame var, pct), daily (data.frame day, n) or NULL, areas
+#'   (data.frame area, n) or NULL, area_level)
+#' @noRd
+dq_health_overview <- function(df, setup) {
+  col <- function(k) { cl <- setup[[k]]; if (length(cl) == 1 && !is.na(cl) && nzchar(cl) && cl %in% names(df)) cl else NULL }
+  n <- nrow(df)
+  miss <- vapply(df, function(v) { if (!n) return(0); m <- is.na(v); if (is.character(v)) m <- m | !nzchar(trimws(v)) | v == "NULL"; mean(m) }, numeric(1))
+  top <- utils::head(sort(miss[miss > 0], decreasing = TRUE), 12)
+  id <- col("unique_id")
+  dup <- if (is.null(id)) NA_real_ else { v <- df[[id]]; mean(!is.na(v) & (duplicated(v) | duplicated(v, fromLast = TRUE))) }
+  daily <- NULL
+  dc <- col("date")
+  if (!is.null(dc)) {
+    d <- suppressWarnings(as.Date(df[[dc]]))
+    if (any(!is.na(d))) { tb <- table(d[!is.na(d)]); daily <- data.frame(day = names(tb), n = as.integer(tb), stringsAsFactors = FALSE) }
+  }
+  areas <- NULL; lvl <- ""
+  for (k in c("admin1", "admin2")) {
+    a <- col(k)
+    if (!is.null(a)) {
+      tb <- sort(table(as.character(df[[a]]), useNA = "no"), decreasing = TRUE)
+      areas <- data.frame(area = utils::head(names(tb), 15), n = utils::head(as.integer(tb), 15), stringsAsFactors = FALSE)
+      lvl <- a; break
+    }
+  }
+  list(records = n, variables = ncol(df), completeness = if (length(miss)) 1 - mean(miss) else 1, dup_share = dup,
+       missing = data.frame(var = names(top), pct = round(100 * unname(top), 1), stringsAsFactors = FALSE),
+       daily = daily, areas = areas, area_level = lvl)
 }
 
 #' One insight card of a Data Quality tab, as data for the React page

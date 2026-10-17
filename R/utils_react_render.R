@@ -217,7 +217,7 @@ plotly_to_echarts <- function(p) {
     rng <- range(z, na.rm = TRUE)
     out$xAxis <- list(type = "category", data = xs, name = ax_title(lay$xaxis), nameLocation = "middle", nameGap = 28)
     out$yAxis <- list(type = "category", data = ys, name = ax_title(lay$yaxis))
-    cols <- if (rng[1] >= 0) c("#e8f1f9", "#0A6EB4") else c("#c5192d", "#f4f6f8", "#0A6EB4")
+    cols <- if (rng[1] >= 0) c("#e8f1f9", "#007DBC") else c("#c5192d", "#f4f6f8", "#007DBC")
     out$visualMap <- list(min = rng[1], max = rng[2], calculable = TRUE, orient = "horizontal", left = "center",
                           bottom = 0, inRange = list(color = cols))
     out$series <- list(list(type = "heatmap", data = d, label = list(show = length(d) <= 150, formatter = "fn:hmap")))

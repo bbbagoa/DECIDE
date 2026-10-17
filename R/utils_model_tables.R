@@ -218,7 +218,7 @@ comparison_html <- function(tab, runs = NULL) {
 #' @noRd
 model_tables_workbook <- function(screening = NULL, coefficients = NULL, comparison = NULL) {
   wb <- openxlsx::createWorkbook()
-  head_st <- openxlsx::createStyle(fgFill = "#0A6EB4", fontColour = "#FFFFFF",
+  head_st <- openxlsx::createStyle(fgFill = "#007DBC", fontColour = "#FFFFFF",
                                    textDecoration = "bold", border = "Bottom")
   fills <- c(p001 = "#1E6B2A", p01 = "#3F7E44", p05 = "#CFE6D1", p10 = "#FDF0D5", ns = "#EEF1F4")
   fonts <- c(p001 = "#FFFFFF", p01 = "#FFFFFF", p05 = "#1E4B24", p10 = "#8A6100", ns = "#5B6B7E")
@@ -322,7 +322,7 @@ correlation_html <- function(cm, cutoff = 0.8) {
     r <- cm[i, j]
     if (is.na(r)) return(tags$td(class = "wfp-corr-cell", ""))
     a <- min(abs(r), 1)
-    bg <- if (r >= 0) sprintf("rgba(10,110,180,%.2f)", 0.75 * a) else sprintf("rgba(197,25,45,%.2f)", 0.75 * a)
+    bg <- if (r >= 0) sprintf("rgba(0,125,188,%.2f)", 0.75 * a) else sprintf("rgba(197,25,45,%.2f)", 0.75 * a)
     tags$td(class = paste("wfp-corr-cell", if (a >= cutoff) "is-high" else "", if (a >= 0.45) "is-dark" else ""),
             style = sprintf("background:%s", bg), title = sprintf("%s \u00d7 %s: r = %.2f", nm[i], nm[j], r),
             sprintf("%.2f", r))
@@ -538,7 +538,7 @@ design_guide_modal <- function() {
              "Write the rationale before adopting: it is printed in the design report and is required by Advisory 2/2025."),
         step(7, "Adoption and report", "what Beneficiary Selection will apply",
              "Adopt the card to make it the one Beneficiary Selection uses, then export the design report (HTML), the scorecard (Excel) and its JSON for other tools.",
-             "Adoption freezes this exact design: criteria, points and threshold. Any later change withdraws the adoption until the card is adopted again, and the audit trail records both.",
+             "Adoption freezes this exact design: criteria, points and threshold. Any later change withdraws the adoption until the card is adopted again, and the activity log records both.",
              "The list is only as accountable as its card: a card that changed after approval must never select households silently.",
              "The design report is one self-contained HTML file (charts inlined, works offline): data, outcome, criteria, selection, model, points, threshold, errors, verdict and methods. The scorecard is fingerprinted to detect any change.",
              "Targeting OGN (2021) ch. 6 (documentation and accountability).",

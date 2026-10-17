@@ -113,7 +113,7 @@ loc_bars_option <- function(g) {
            label = list(show = g$count[i] / tot[[j]] >= 0.12))
     })
     list(type = "bar", stack = "names", name = if (k == 1) "Most common spelling" else sprintf("Variant %d", k - 1),
-         itemStyle = list(color = if (k == 1) "#0A6EB4" else LOC_VARIANT_COLOURS[(k - 2) %% 3 + 1]),
+         itemStyle = list(color = if (k == 1) "#007DBC" else LOC_VARIANT_COLOURS[(k - 2) %% 3 + 1]),
          label = list(show = TRUE, position = "inside", formatter = "{b}", fontSize = 10, color = "#fff"),
          data = rows)
   })

@@ -425,7 +425,7 @@ dq_outliers_server <- function(input, output, session, ns, core) {
     validate(need(shiny::isTruthy(user_setup$enumerator_id), "Map the enumerator to see who the flags come from."))
     df <- dq_filtered_data()
     req(user_setup$enumerator_id %in% names(df))
-    rate_plot(df[[user_setup$enumerator_id]], "#0A6EB4", "No enumerator data to display")
+    rate_plot(df[[user_setup$enumerator_id]], "#007DBC", "No enumerator data to display")
   })
 
   # --- most extreme values: insights, table, actions ----------------------------
@@ -684,7 +684,7 @@ dq_outliers_server <- function(input, output, session, ns, core) {
       body,
       tags$p(class = "text-muted small mt-2",
              sprintf("%d value(s) of '%s' %s.", length(prop$idx), prop$var_col, method_label(prop$method))),
-      textInput(ns("ol_reason"), "Reason (written to the audit trail)", width = "100%",
+      textInput(ns("ol_reason"), "Reason (written to the activity log)", width = "100%",
                 placeholder = "e.g. confirmed with the field team"),
       easyClose = TRUE,
       footer = tagList(modalButton("Cancel"),
@@ -874,11 +874,11 @@ dq_hist_option <- function(v, name, bounds = numeric(0), allowed = numeric(0)) {
   if (whole) tip <- sprintf("%s: <b>%s</b> households", format(h$mids), format(h$counts, big.mark = ","))
   ml <- c(lapply(bounds, function(x) list(xAxis = x, lineStyle = list(color = "#c5192d", type = "dashed", width = 1.5),
                                           label = list(formatter = format(signif(x, 4)), color = "#c5192d", fontSize = 10))),
-          lapply(allowed, function(x) list(xAxis = x, lineStyle = list(color = "#0A6EB4", type = "dotted", width = 2),
-                                           label = list(formatter = format(signif(x, 4)), color = "#0A6EB4", fontSize = 10))))
+          lapply(allowed, function(x) list(xAxis = x, lineStyle = list(color = "#007DBC", type = "dotted", width = 2),
+                                           label = list(formatter = format(signif(x, 4)), color = "#007DBC", fontSize = 10))))
   # the axis takes in the lines; round ends, so its labels stay plain numbers
   lo <- floor(min(c(h$breaks, bounds, allowed))); hi <- ceiling(max(c(h$breaks, bounds, allowed)))
-  s <- list(type = "bar", barWidth = "96%", itemStyle = list(color = "rgba(10,110,180,0.6)"),
+  s <- list(type = "bar", barWidth = "96%", itemStyle = list(color = "rgba(0,125,188,0.6)"),
             data = lapply(seq_along(h$mids), function(i) list(value = list(h$mids[i], h$counts[i]), tip = tip[i])))
   if (length(ml)) s$markLine <- list(silent = TRUE, symbol = "none", data = ml)
   list(grid = list(left = 8, right = 16, top = 34, bottom = 8, containLabel = TRUE),
@@ -905,7 +905,7 @@ dq_box_option <- function(g, v, name) {
        yAxis = list(type = "value", name = name, scale = TRUE),
        series = list(
          list(type = "boxplot", name = name, data = lapply(st, function(x) x$stats),
-              itemStyle = list(color = "rgba(10,110,180,0.15)", borderColor = "#0A6EB4")),
+              itemStyle = list(color = "rgba(0,125,188,0.15)", borderColor = "#007DBC")),
          list(type = "scatter", name = "Beyond the whiskers", symbolSize = 5, itemStyle = list(color = "#c5192d", opacity = 0.6),
               data = if (is.null(out)) list() else lapply(seq_len(nrow(out)), function(k) list(out$i[k], out$y[k])))))
 }

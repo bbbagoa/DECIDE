@@ -35,7 +35,7 @@ Server: `R/mod_ben_selection.R` (logic unchanged). Client: `SelectionPage.tsx`,
       (`scorecard_threshold`, set to the card's threshold when a new card
       arrives), mapping note (`scorecard_note`, JSON: all mapped / n not mapped, ranking or outcome, card older than 2 years), Match columns
       (`sc_rematch`, crosswalk dialog); without a card (or switched off):
-      min / max vulnerability score sliders (`ben_score_min/max`, range from the
+      one vulnerability score range slider (`ben_score_range`, was `ben_score_min/max`, range from the
       data); file loader (`sc_file`, hosted in `scorecard_ui`) -> crosswalk dialog
     - Community decision (community): column (`ben_comm_col`), values (`ben_comm_vals`)
     - Prioritisation (all but self-targeting): none / total caseload / caseload
@@ -96,3 +96,8 @@ Server: `R/mod_ben_selection.R` (logic unchanged). Client: `SelectionPage.tsx`,
 - React buttons send an initial 0: `ben_apply`, `ben_clear`, `export_open`,
   `btn_rules`, `quota_open`, `sc_rematch` observers start with `req(input$x > 0)`.
 - `mod_ben_selection_ui()` is kept for `legacy_pages()` but no longer drawn.
+
+
+## Layout (2026-10)
+
+The design steps are one settings bar across the top (`ParamBar`: five steps numbered 1-5, 20% each; a step the approach does not use is frozen (`is-off`, `inert`), not hidden; the scorecard loader in the score step; descriptions, scorecard note, pending note and Apply / Clear in its footer). Below: the applied selection in words, the KPIs, then tabs Summary by area (`sel_by_area`, level `sum_level`), Composition, Beneficiary list. The sidebar holds the areas covered and the outputs (export, report, monitoring sample, calculator).

@@ -52,7 +52,7 @@ ec_markline <- function(at, label = NULL, color = EC_REF, dotted = FALSE) {
 #' @noRd
 ec_lollipop <- function(criterion, value, direction, tip, xtitle) {
   cats <- as.character(criterion)
-  cols <- c(inclusion = "#0A6EB4", exclusion = "#c5192d")
+  cols <- c(inclusion = "#007DBC", exclusion = "#c5192d")
   labs <- c(inclusion = "Inclusion", exclusion = "Exclusion")
   ser <- list(); leg <- character(0)
   for (d in names(cols)) {
@@ -103,7 +103,7 @@ ec_mirrored <- function(score, vulnerable, threshold = NULL, xtitle = "Score",
 #' @param density Add the density curve (scaled to the counts).
 #' @param split Bars above the threshold (eligible) in `colour`, the others grey.
 #' @noRd
-ec_histogram <- function(x, threshold = NULL, xtitle = "Score", bins = 30, colour = "#0A6EB4",
+ec_histogram <- function(x, threshold = NULL, xtitle = "Score", bins = 30, colour = "#007DBC",
                          density = FALSE, split = FALSE, dotted = FALSE) {
   x <- x[is.finite(x)]
   if (!length(x)) return(NULL)
@@ -223,7 +223,7 @@ ec_roc <- function(curve, here = NULL, auc = NA_real_, name = "Scorecard") {
   cur <- ec_thin(curve)
   tips <- sprintf("Threshold &gt; %s<br>Recall <b>%.1f%%</b><br>False positive rate <b>%.1f%%</b>",
                   fmt5(round(cur$threshold, 2)), 100 * cur$tpr, 100 * cur$fpr)
-  o <- ec_lines(list(list(name = name, x = cur$fpr, y = cur$tpr, color = "#0A6EB4", width = 3, tips = tips)),
+  o <- ec_lines(list(list(name = name, x = cur$fpr, y = cur$tpr, color = "#007DBC", width = 3, tips = tips)),
                 "False positive rate (1 - specificity)", "Recall (sensitivity)", 1, 1)
   o$series[[1]]$markLine <- list(silent = TRUE, symbol = "none", label = list(show = FALSE),
                                  lineStyle = list(type = "dashed", color = "#9aa5b1", width = 1.2),
@@ -288,7 +288,7 @@ ec_heat <- function(xcats, ycats, z, tip_fmt = "%s<br>%s: <b>%.0f%%</b> meet it"
        xAxis = list(type = "category", data = I(xcats), splitArea = list(show = FALSE)),
        yAxis = list(type = "category", data = I(ycats), axisLabel = list(interval = 0)),
        visualMap = list(min = 0, max = 100, calculable = FALSE, orient = "horizontal", left = "center", bottom = 0,
-                        itemHeight = 120, inRange = list(color = I(c("rgba(10,110,180,0.06)", "#0A6EB4"))),
+                        itemHeight = 120, inRange = list(color = I(c("rgba(0,125,188,0.06)", "#007DBC"))),
                         text = I(c("100%", "0%"))),
        series = list(list(type = "heatmap", data = d,
                           # dark figures with a light halo: readable on pale and dark cells

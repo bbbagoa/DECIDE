@@ -35,7 +35,7 @@ rich_text_input <- function(id = NULL, label = NULL, value = "", placeholder = "
     btn("underline", "type-underline", "Underline"), btn("strikeThrough", "type-strikethrough", "Strikethrough"),
     sep,
     tags$label(class = "tw-rt-color", title = "Text colour", bsicons::bs_icon("fonts"),
-               tags$input(type = "color", `data-cmd` = "foreColor", value = "#0A6EB4")),
+               tags$input(type = "color", `data-cmd` = "foreColor", value = "#007DBC")),
     tags$label(class = "tw-rt-color", title = "Highlight", bsicons::bs_icon("highlighter"),
                tags$input(type = "color", `data-cmd` = "hiliteColor", value = "#fff3bf")),
     sep,

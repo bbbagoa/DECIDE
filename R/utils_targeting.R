@@ -457,6 +457,23 @@ guess_positive_answer <- function(lv) {
   lv[1]
 }
 
+#' Which of two answers means "vulnerable" (an eligibility or outcome column)
+#'
+#' A yes-like answer (`eligibility_flag()`), else one naming deprivation
+#' (food insecure, poor, borderline, crisis, high...) without a negation,
+#' else the first.
+#' @noRd
+guess_vulnerable_answer <- function(lv) {
+  f <- eligibility_flag(lv)
+  if (any(f %in% TRUE)) return(lv[which(f %in% TRUE)[1]])
+  low <- tolower(lv)
+  neg <- grepl("^(non|not|no|pas|sans)[ _-]|^non|not ", low)
+  pos <- grepl("insecur|poor|pauvre|borderline|limite|crisis|crise|emergen|urgence|vulnerab|high|elev|severe|modera", low) & !neg
+  if (any(pos)) return(lv[which(pos)[1]])
+  if (any(neg)) return(lv[which(!neg)[1]])
+  lv[1]
+}
+
 #' Calibrate a vulnerability ranking on data that carry an outcome
 #'
 #' The ranking was built without an outcome, so its errors were unknown. On a

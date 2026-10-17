@@ -125,35 +125,77 @@ ptm_decision <- function(level, before = TRUE) {
     "Not enough data to judge")
 }
 
-#' The verification sample as a read-only workbook: the list to visit (main
-#' and reserve), the design, and how to use it
+#' The columns that let a field team find a household: identifier, areas,
+#' names, sex, age and size of the household, phone numbers, GPS
 #' @noRd
-ptm_sample_workbook <- function(sample_df, design, meta = list()) {
+ptm_identity_cols <- function(df, settings) {
+  col <- function(k) { v <- as.character(settings[[k]] %||% "")[1]; if (!is.na(v) && nzchar(v) && v %in% names(df)) v }
+  base <- unlist(lapply(c("unique_id", names(AREA_LEVELS)), col))
+  used <- unlist(lapply(c("enumerator_id", "date", "weight", "v_score", "v_groups", "eligibility", "phone_avail"), col))
+  free <- setdiff(names(df), c(base, used))
+  free <- free[!grepl("^@?_", free) & !grepl("enum|agent|surveyor|interview|supervis|admin|village|site", free, ignore.case = TRUE)]
+  who <- grep("name|nom|prenom|surname", free, ignore.case = TRUE, value = TRUE)
+  # a "has a phone" yes/no column is not a number to call
+  phones <- Filter(function(p) {
+    d <- gsub("[^0-9]", "", as.character(utils::head(stats::na.omit(df[[p]]), 200)))
+    length(d) > 0 && mean(nchar(d) >= 8) > 0.5
+  }, grep("phone|tel|mobile|portable|contact", free, ignore.case = TRUE, value = TRUE))
+  bio <- unlist(lapply(c("hhh_sex", "hhh_age", "hh_size", "residency"), col))
+  gps <- unlist(lapply(c("lat", "lon"), col))
+  unique(c(base, utils::head(who, 3), bio, utils::head(phones, 2), gps))
+}
+
+#' The lists the field team takes: the households to survey and, apart, the
+#' replacements, each with its eligibility and what is needed to find it
+#' @param d A `ptm_draw()` result on the rows of `df`.
+#' @noRd
+ptm_sample_lists <- function(df, d, settings) {
+  id_col <- as.character(settings$unique_id)[1]
+  keep <- setdiff(ptm_identity_cols(df, settings), id_col)
+  r <- d$rows
+  out <- data.frame(household_id = as.character(df[[id_col]][r$row]),
+                    eligibility = ifelse(r$group == "selected", "Eligible", "Not eligible"),
+                    sample_area = r$area, df[r$row, keep, drop = FALSE],
+                    check.names = FALSE, stringsAsFactors = FALSE)
+  rownames(out) <- NULL
+  main <- r$role == "main"
+  list(main = cbind(out[main, , drop = FALSE], `Interview status` = NA_character_),
+       replacements = cbind(replacement_order = r$order[!main], out[!main, , drop = FALSE],
+                            `Replaces household_id` = NA_character_))
+}
+
+#' The sample as a read-only workbook: how to use it, the households to
+#' survey, the replacements, the design (for the weights) and the settings.
+#' Targeting Monitoring reads it back with `ptm_read_sample()`.
+#' @noRd
+ptm_sample_workbook <- function(lists, design, meta = list(), kind = "Baseline") {
+  pdm <- identical(kind, "PDM")
   wb <- openxlsx::createWorkbook()
   openxlsx::addWorksheet(wb, "How to use")
   guide <- data.frame(
-    Step = c("What this is", "Who to visit", "Replacements", "What to ask", "After the survey", "Why before distribution"),
+    Step = c("What this is", "Who to visit", "Replacements", "What to ask", "After the survey", "When"),
     Explanation = c(
-      "A random sample of the households the targeting selected and of those it did not select, drawn area by area, to measure implementation errors before any assistance is distributed.",
-      "Visit every household of the Sample sheet with role 'main'. Do not tell the enumerators or the households which group a household is in.",
-      "If a main household cannot be found or refuses, replace it with the next 'reserve' household of the SAME area and group, in order, and record the replacement.",
-      "The questions needed to apply the eligibility criteria (the scorecard or the rules) and the household identifier (column 'household_id'), so each interview can be matched back to this list.",
-      "Load the survey in Targeting Monitoring (Post-targeting survey), match it on household_id: the group comes from this list and each household is weighted by the size of its group in its area (Design sheet).",
-      "Errors found now can still be fixed: review the list of an area, or pause its distribution. After distribution nothing can be undone, and the assistance itself may change the answers."),
+      paste("A random sample of the households the targeting found eligible and of those it found not eligible, drawn area by area,",
+            "to measure implementation errors (inclusion and exclusion errors)."),
+      "Visit every household of the Sample sheet. Do not tell the households which group they are in.",
+      paste("If a household cannot be found, has moved or refuses, take the next household of the Replacements sheet with the SAME",
+            "sample_area and eligibility, in replacement_order, and write the household it replaces in 'Replaces household_id'."),
+      paste("The questions needed to apply the eligibility criteria (the scorecard or the rules), and the household_id,",
+            "so each interview can be matched back to this list."),
+      paste("In Targeting Monitoring > Implementation errors: load the survey data (step 1), then upload THIS workbook in step 2",
+            "(From the sample list) and choose the survey's household ID column. Keep the workbook as it is: the Design sheet gives the weights."),
+      if (pdm) "After the distribution (PDM): errors found become lessons for the next round."
+      else "Before the distribution: errors found can still be fixed (review the list of an area, or pause its distribution)."),
     stringsAsFactors = FALSE)
   write_data(wb, "How to use", guide)
-  openxlsx::setColWidths(wb, "How to use", cols = 1:2, widths = c(26, 110))
+  openxlsx::setColWidths(wb, "How to use", cols = 1:2, widths = c(22, 110))
   openxlsx::addStyle(wb, "How to use", openxlsx::createStyle(wrapText = TRUE, valign = "top"), rows = 2:(nrow(guide) + 1), cols = 2, gridExpand = TRUE)
-  openxlsx::addWorksheet(wb, "Sample")
-  write_data(wb, "Sample", sample_df)
-  openxlsx::freezePane(wb, "Sample", firstRow = TRUE)
-  openxlsx::setColWidths(wb, "Sample", cols = seq_along(sample_df), widths = "auto")
-  openxlsx::addWorksheet(wb, "Design")
+  xl_data_sheet(wb, "Sample", sanitize_for_excel(lists$main))
+  xl_data_sheet(wb, "Replacements", sanitize_for_excel(lists$replacements))
   d <- design
-  d$group <- ifelse(d$group == "selected", "Selected", "Not selected")
-  names(d) <- c("Area", "Group", "Households in the group", "To survey", "Reserve")
-  write_data(wb, "Design", d)
-  openxlsx::setColWidths(wb, "Design", cols = 1:5, widths = "auto")
+  d$group <- ifelse(d$group == "selected", "Eligible", "Not eligible")
+  names(d) <- c("Area", "Eligibility", "Households in the group", "To survey", "Replacements")
+  xl_data_sheet(wb, "Design", d)
   if (length(meta)) {
     openxlsx::addWorksheet(wb, "Settings")
     write_data(wb, "Settings", data.frame(Field = names(meta), Value = vapply(meta, function(v) paste(v, collapse = ", "), ""),
@@ -161,4 +203,38 @@ ptm_sample_workbook <- function(sample_df, design, meta = list()) {
     openxlsx::setColWidths(wb, "Settings", cols = 1:2, widths = c(34, 80))
   }
   wb
+}
+
+#' Read a sample workbook back (Targeting Monitoring, step 2)
+#'
+#' The Sample and Replacements sheets give each household its group and
+#' area, the Design sheet the size of each group (the weights).
+#' @return The sample design: list(list, group ("Selected" / "Not selected"),
+#'   area, design, id_col, level, drawn_at, kind, file).
+#' @noRd
+ptm_read_sample <- function(path, name = basename(path)) {
+  sheets <- readxl::excel_sheets(path)
+  rd <- function(s) as.data.frame(readxl::read_excel(path, sheet = s, col_types = "text"), stringsAsFactors = FALSE)
+  lst <- rd(if ("Sample" %in% sheets) "Sample" else sheets[1])
+  if ("Replacements" %in% sheets) {
+    r <- rd("Replacements"); common <- intersect(names(lst), names(r))
+    lst <- rbind(lst[common], r[common])
+  }
+  if (!all(c("household_id", "eligibility") %in% names(lst)))
+    stop("this is not a sample list drawn in Beneficiary Selection (it needs the columns household_id and eligibility)")
+  lst <- lst[!is.na(lst$household_id) & nzchar(trimws(lst$household_id)), , drop = FALSE]
+  lst$household_id <- trimws(lst$household_id)
+  el <- tolower(trimws(lst$eligibility))
+  grp <- ifelse(el %in% c("eligible", "selected"), "Selected", ifelse(el %in% c("not eligible", "not selected"), "Not selected", NA))
+  design <- if ("Design" %in% sheets) {
+    ds <- rd("Design")
+    data.frame(area = ds[[1]], group = ifelse(tolower(trimws(ds[[2]])) %in% c("eligible", "selected"), "selected", "not_selected"),
+               N = as_number(ds[[3]]), n = as_number(ds[[4]]), reserve = as_number(ds[[5]]), stringsAsFactors = FALSE)
+  }
+  meta <- if ("Settings" %in% sheets) { s <- rd("Settings"); stats::setNames(as.character(s[[2]]), s[[1]]) } else character(0)
+  m <- function(k) if (k %in% names(meta) && !is.na(meta[[k]])) meta[[k]] else ""
+  level <- m("Areas by"); if (grepl("^one group", level)) level <- ""
+  list(list = lst, group = grp, area = if ("sample_area" %in% names(lst)) lst$sample_area else rep("All", nrow(lst)),
+       design = design, id_col = if (nzchar(m("Household ID column"))) m("Household ID column") else "household_id",
+       level = level, drawn_at = m("Drawn at"), kind = if (grepl("^PDM", m("Survey"))) "PDM" else "Baseline", file = name)
 }

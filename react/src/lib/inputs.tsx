@@ -370,6 +370,13 @@ export function SliderInput({ id, label, min, max, step, value, help, className,
       <div className="tw-slider">
         {range ? (
           <div className="tw-slider-dual">
+            {/* one track, the chosen range filled, two handles on the same line */}
+            <div className="tw-slider-track" aria-hidden>
+              <div className="tw-slider-fill" style={{
+                left: `${lim.max > lim.min ? (100 * (cur[0] - lim.min)) / (lim.max - lim.min) : 0}%`,
+                right: `${lim.max > lim.min ? 100 - (100 * (cur[1] - lim.min)) / (lim.max - lim.min) : 0}%`,
+              }} />
+            </div>
             <input type="range" className="form-range" min={lim.min} max={lim.max} step={lim.step} value={cur[0]}
                    onChange={(e) => setV([Math.min(Number(e.target.value), cur[1]), cur[1]])} aria-label="From" />
             <input type="range" className="form-range" min={lim.min} max={lim.max} step={lim.step} value={cur[1]}

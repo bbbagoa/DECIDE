@@ -2,7 +2,7 @@
 #'
 #' Phase 3 of the targeting cycle: monitoring. The preferred source is a
 #' post-targeting survey (or baseline): a sample of selected and non-selected
-#' households drawn from the selection (step 0, `ptm_draw()`) and surveyed
+#' households drawn in Beneficiary Selection (`ptm_draw()`), surveyed
 #' BEFORE the distribution, so an area whose list is wrong can be reviewed
 #' or its distribution paused (`ptm_area_decisions()`). A Post-Distribution
 #' Monitoring extract can still be analysed, as the least preferred option:
@@ -38,29 +38,10 @@ mod_pdm_ui <- function(id, explore = NULL) {
     sidebar = bslib::sidebar(
       width = 330, class = "wfp-mon-sidebar",
       bslib::accordion(
-        id = ns("setup"), multiple = FALSE, open = "sample",
+        id = ns("setup"), multiple = FALSE, open = "data",
         # Implementation errors are best measured after the selection and
         # before the distribution, on a sample of selected and non-selected
         # households: problems can then still be fixed.
-        panel("sample", "0. Verification sample", "shuffle",
-              tags$p(class = "small text-muted mb-2",
-                     "Draw households the targeting selected and households it did not, area by area, from the current selection",
-                     " (Beneficiary Selection). Survey them before any distribution: errors found then can still be corrected."),
-              selectInput(ns("ptm_level"), "Area level", choices = NULL, width = "100%"),
-              radioButtons(ns("ptm_size_mode"), "Households per group and area", inline = TRUE,
-                           choices = c("From a margin of error" = "margin", "A fixed number" = "fixed"), selected = "margin"),
-              conditionalPanel(sprintf("input['%s'] === 'margin'", ns("ptm_size_mode")),
-                               numericInput(ns("ptm_margin"), tagList("Margin of error (%)", info_tip("For each group of each area, enough households to estimate a share within this margin at 95% confidence (about 96 households at 10%, fewer in small groups).")),
-                                            value = 10, min = 3, max = 25, step = 1, width = "100%")),
-              conditionalPanel(sprintf("input['%s'] === 'fixed'", ns("ptm_size_mode")),
-                               numericInput(ns("ptm_n"), "Households per group", value = 60, min = 10, step = 10, width = "100%")),
-              tags$div(class = "d-flex gap-2",
-                       numericInput(ns("ptm_reserve"), tagList("Reserve (%)", info_tip("Extra households drawn in each group to replace those who cannot be found.")),
-                                    value = 10, min = 0, max = 50, step = 5, width = "100%"),
-                       numericInput(ns("ptm_seed"), "Seed", value = 123, min = 1, step = 1, width = "100%")),
-              actionButton(ns("ptm_draw"), "Draw the sample", icon = icon("shuffle"), class = "btn-primary btn-sm w-100"),
-              downloadButton(ns("ptm_download"), "Sample list (Excel)", class = "btn-outline-secondary btn-sm w-100 mt-2"),
-              uiOutput(ns("ptm_status"))),
         panel("data", "1. Survey data", "cloud-upload",
               # Before distribution (recommended) or after it (PDM); the
               # choice names the data in the results, the exports and the report.
@@ -76,9 +57,10 @@ mod_pdm_ui <- function(id, explore = NULL) {
         panel("areas", "Areas covered", "geo-alt", mod_area_scope_ui(ns("scope"), title = NULL)),
         panel("benef", "2. Selected or assisted households", "person-check",
               radioButtons(ns("benef_source"), NULL,
-                           choices = c("From the sample list (match the household ID)" = "design", "A column in the data" = "column"),
+                           choices = c("From the sample list (upload it, match the household ID)" = "design", "A column in the data" = "column"),
                            selected = "design"),
               conditionalPanel(sprintf("input['%s'] === 'design'", ns("benef_source")),
+                               uiOutput(ns("ptm_sample_ui")),
                                pick("ptm_id", "Household ID in the survey"),
                                uiOutput(ns("ptm_match"))),
               conditionalPanel(sprintf("input['%s'] === 'column'", ns("benef_source")),
@@ -173,13 +155,25 @@ mod_pdm_ui <- function(id, explore = NULL) {
 #' @import shiny
 #' @noRd
 mod_pdm_server <- function(id, workspace = NULL, country_office = reactive(NULL), modification_log = NULL,
-                           user_setup = NULL, selection = NULL) {
+                           user_setup = NULL) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
     # Kept whole; the analysis runs on the areas covered (see mod_area_scope).
     pdm_all <- reactiveVal(NULL)
     mod_data_summary_server("summary", pdm_all, "Verification survey / PDM data")
+    # WFP food security indicators on the survey, as on the assessment: the
+    # yes / no versions can say who was eligible (step 3)
+    mod_fs_indicators_server("fsi", pdm_all, function(df) { pdm_all(df); refresh_pickers() },
+                             log = modification_log, phase = "Monitoring")
+    # new columns: every picker lists them, keeping what is chosen
+    refresh_pickers <- function() {
+      cols <- names(pdm_all())
+      for (k in c("pdm_eligibility", "pdm_beneficiary", "ptm_id"))
+        shinyWidgets::updatePickerInput(session, k, choices = c("Choose a column" = "", cols), selected = isolate(input[[k]]) %||% "")
+      for (k in c("pdm_prioritized", "pdm_unit", "pdm_weight"))
+        shinyWidgets::updatePickerInput(session, k, choices = c("(none)", cols), selected = isolate(input[[k]]) %||% "(none)")
+    }
     scope <- mod_area_scope_server("scope", pdm_all, workspace, "pdm_scope", modification_log, "Monitoring")
     pdm_scoped <- reactive(scope$filter(pdm_all()))
     pdm_df <- function(value) if (missing(value)) pdm_scoped() else pdm_all(value)
@@ -195,7 +189,7 @@ mod_pdm_server <- function(id, workspace = NULL, country_office = reactive(NULL)
                             benef_source = input$benef_source,
                             pop_scope = input$pop_scope, pop_benef = input$pop_benef,
                             pop_nonbenef = input$pop_nonbenef, pop_units = pop_units(),
-                            benef_level = input$pdm_benef_level,
+                            benef_level = input$pdm_benef_level, elig_level = input$pdm_elig_level,
                             tol = c(input$tol_lower, input$tol_upper)))
       },
       restore = function(s) {
@@ -219,90 +213,47 @@ mod_pdm_server <- function(id, workspace = NULL, country_office = reactive(NULL)
         updateNumericInput(session, "pop_nonbenef", value = o$pop_nonbenef %||% NA)
         if (!is.null(o$pop_units)) pop_units(o$pop_units)
         if (!is.null(o$benef_level)) after_flush(session, function() updateRadioButtons(session, "pdm_benef_level", selected = o$benef_level))
+        if (!is.null(o$elig_level)) after_flush(session, function() updateRadioButtons(session, "pdm_elig_level", selected = o$elig_level))
         if (length(o$tol) == 2) {
           updateNumericInput(session, "tol_lower", value = o$tol[1])
           updateNumericInput(session, "tol_upper", value = o$tol[2])
         }
       })
 
-    # --- The verification sample (before the survey) -------------------------
+    # --- The sample list (drawn in Beneficiary Selection) ----------------------
+    # The workbook Beneficiary Selection exports: each household's group and
+    # area, and the Design sheet (group sizes, for the weights).
     sample_design <- reactiveVal(NULL)
-    level_cols <- reactive({
-      if (is.null(user_setup)) return(character(0))
-      lv <- c(admin1 = "Admin 1", admin2 = "Admin 2", admin3 = "Admin 3", admin4 = "Admin 4", village = "Village")
-      cols <- vapply(names(lv), function(k) { v <- as.character(user_setup[[k]] %||% "")[1]; if (is.na(v)) "" else v }, "")
-      stats::setNames(cols[nzchar(cols)], sprintf("%s \u00b7 %s", lv[nzchar(cols)], cols[nzchar(cols)]))
-    })
-    observe({
-      ch <- level_cols()
-      updateSelectInput(session, "ptm_level", choices = c("(one group for all areas)" = "", ch),
-                        selected = isolate(input$ptm_level) %||% (if (length(ch)) unname(ch[1]) else ""))
-    })
-    observeEvent(input$ptm_draw, {
-      req(input$ptm_draw > 0)   # a React button sends 0 at start
-      fr <- tryCatch(if (is.null(selection)) NULL else selection(), error = function(e) NULL)
-      need_ok(!is.null(fr) && NROW(fr$df) > 0, "Load and map the registration data, then apply the selection in Beneficiary Selection first.")
-      need_ok(any(fr$served %in% TRUE), "The selection serves no household yet: apply it in Beneficiary Selection first.")
-      id_col <- user_setup$unique_id
-      need_ok(shiny::isTruthy(id_col) && id_col %in% names(fr$df), "Map the household identifier in the setup first: each interview is matched back on it.")
-      df <- fr$df
-      status <- ifelse(fr$served %in% TRUE, "selected", ifelse(fr$eligible %in% TRUE, "by_design", "not_selected"))
-      lvl <- input$ptm_level
-      area <- if (shiny::isTruthy(lvl) && lvl %in% names(df)) df[[lvl]] else NULL
-      size <- list(mode = input$ptm_size_mode %||% "margin", margin = (input$ptm_margin %||% 10) / 100, n = input$ptm_n %||% 60)
-      d <- ptm_draw(status, area, size, reserve = (input$ptm_reserve %||% 10) / 100, seed = input$ptm_seed %||% 123)
-      need_ok(!is.null(d$rows) && nrow(d$rows) > 0, "Nothing to draw: no selected or non-selected household.")
-      keep <- unique(unlist(lapply(c("admin1", "admin2", "admin3", "admin4", "village", "hhh_name", "lon", "lat"), function(k) {
-        v <- as.character(user_setup[[k]] %||% "")[1]; if (!is.na(v) && nzchar(v) && v %in% names(df)) v })))
-      lst <- data.frame(household_id = as.character(df[[id_col]][d$rows$row]), df[d$rows$row, setdiff(keep, id_col), drop = FALSE],
-                        role = d$rows$role, order = d$rows$order, check.names = FALSE, stringsAsFactors = FALSE)
-      sample_design(list(list = lst, group = ifelse(d$rows$group == "selected", "Selected", "Not selected"),
-                         area = d$rows$area, design = d$design, id_col = id_col,
-                         level = if (is.null(area)) "" else lvl, drawn_at = fmt_datetime(),
-                         settings = list(size = size, reserve = input$ptm_reserve %||% 10, seed = input$ptm_seed %||% 123),
-                         excluded_by_design = sum(status == "by_design")))
-      audit_add(modification_log, "Monitoring", "Verification sample drawn",
-                sprintf("%s households to survey (+%s reserve) in %d area(s); %s excluded by design left out of the frame",
-                        format(sum(d$design$n), big.mark = ","), format(sum(d$design$reserve), big.mark = ","),
-                        length(unique(d$design$area)), format(sum(status == "by_design"), big.mark = ",")))
-    })
-    output$ptm_status <- renderUI({
-      sd <- sample_design()
-      if (is.null(sd)) return(tags$div(class = "small text-muted mt-2", "No sample drawn yet."))
-      d <- sd$design
-      tags$div(class = "small mt-2",
-               bsicons::bs_icon("check-circle-fill", class = "text-success"),
-               sprintf(" Drawn %s: %s households to survey (%s selected, %s not selected) and %s in reserve, %d area(s).",
-                       sd$drawn_at, format(sum(d$n), big.mark = ","), format(sum(d$n[d$group == "selected"]), big.mark = ","),
-                       format(sum(d$n[d$group == "not_selected"]), big.mark = ","), format(sum(d$reserve), big.mark = ","),
-                       length(unique(d$area))))
-    })
-    output$ptm_download <- download_handler(
-      filename = function() export_file_name("Verification_sample", "xlsx", "%Y-%m-%d_%Hh%M"),
-      content = function(file) {
-        sd <- sample_design(); req(sd)
-        field <- sd$list
-        analyst <- cbind(sd$list, group = sd$group, stringsAsFactors = FALSE)
-        wb <- ptm_sample_workbook(field, sd$design, meta = list(
-          "Drawn at" = sd$drawn_at, "Areas by" = if (nzchar(sd$level)) sd$level else "one group for all areas",
-          "Size" = if (identical(sd$settings$size$mode, "fixed")) paste(sd$settings$size$n, "households per group")
-                   else sprintf("margin of error %.0f%% at 95%% confidence", 100 * sd$settings$size$margin),
-          "Reserve" = paste0(sd$settings$reserve, "%"), "Seed" = sd$settings$seed,
-          "Excluded by design (not in the frame)" = format(sd$excluded_by_design, big.mark = ",")))
-        openxlsx::addWorksheet(wb, "Groups (analyst only)")
-        write_data(wb, "Groups (analyst only)", analyst)
-        save_workbook_readonly(wb, file)
+    observeEvent(input$ptm_sample_file, {
+      f <- input$ptm_sample_file; req(f)
+      tw_guard("Reading the sample list", {
+        need_ok(tolower(tools::file_ext(f$name)) %in% c("xlsx", "xls"),
+                "Upload the sample list as exported by Beneficiary Selection (Excel).")
+        sd <- ptm_read_sample(f$datapath, f$name)
+        sample_design(sd)
+        updateRadioButtons(session, "benef_source", selected = "design")
+        updateRadioButtons(session, "data_kind", selected = sd$kind)
+        if (is.null(sd$design)) updateRadioButtons(session, "pdm_weight_mode", selected = "population")
+        df <- pdm_all()
+        if (!is.null(df)) {
+          idg <- if (sd$id_col %in% names(df)) sd$id_col else find_guess(names(df), c("household_id", "hh_id", "hhid", "unique", "id"))
+          shinyWidgets::updatePickerInput(session, "ptm_id", selected = idg)
+        }
+        audit_add(modification_log, "Monitoring", "Sample list loaded",
+                  sprintf("%s (%s households, %s eligible)", f$name, format(nrow(sd$list), big.mark = ","),
+                          format(sum(sd$group == "Selected", na.rm = TRUE), big.mark = ",")))
       })
-    observe({
-      gate_button("ptm_download", !is.null(sample_design()), "Draw the sample first.")
     })
+    output$ptm_sample_ui <- renderUI(fileInput(ns("ptm_sample_file"), NULL, width = "100%", accept = c(".xlsx", ".xls"),
+                                               placeholder = "The sample list (Excel)"))
+    outputOptions(output, "ptm_sample_ui", suspendWhenHidden = FALSE)
     output$kind_note <- renderUI({
       if (identical(input$data_kind, "PDM")) return(tags$div(class = "alert alert-warning small py-2",
         bsicons::bs_icon("exclamation-triangle"),
         " The least preferred option: after distribution nothing can be undone, vulnerability may have changed, and the assistance itself",
         " may have changed the answers to some criteria (assets bought, debts paid). Use it when no survey could be done before distribution."))
       tags$div(class = "small text-muted mb-2", bsicons::bs_icon("info-circle"),
-               " A survey of selected and non-selected households after the selection and before the distribution (the sample drawn in step 0):",
+               " A survey of eligible and not eligible households after the selection and before the distribution (the sample drawn in Beneficiary Selection):",
                " problems in an area can still be fixed, or its distribution paused.")
     })
     # Survey households matched to the sample list on their identifier
@@ -313,7 +264,7 @@ mod_pdm_server <- function(id, workspace = NULL, country_office = reactive(NULL)
       list(flag = ifelse(is.na(m), NA, sd$group[m] == "Selected"), area = sd$area[m], n = sum(!is.na(m)), of = nrow(df))
     })
     output$ptm_match <- renderUI({
-      if (is.null(sample_design())) return(tags$div(class = "small text-warning", "Draw the sample in step 0 first, or use a column in the data."))
+      if (is.null(sample_design())) return(tags$div(class = "small text-warning", "Upload the sample list first, or use a column in the data."))
       mt <- ptm_matched(); if (is.null(mt)) return(NULL)
       tags$div(class = paste("small", if (mt$n < mt$of) "text-warning" else "text-success"),
                sprintf("%s of %s surveyed households found in the sample list.", format(mt$n, big.mark = ","), format(mt$of, big.mark = ",")),
@@ -335,6 +286,26 @@ mod_pdm_server <- function(id, workspace = NULL, country_office = reactive(NULL)
       if (length(lv) == 2 && !isTRUE(isolate(input$pdm_benef_level) %in% lv))
         updateRadioButtons(session, "pdm_benef_level", selected = guess_positive_answer(lv))
     })
+    # The eligibility column: with two answers, the officer says which one
+    # means vulnerable (guessed: yes-like, else "food insecure", "poor"...).
+    elig_levels <- reactive({
+      df <- pdm_df(); e <- input$pdm_eligibility
+      if (is.null(df) || !shiny::isTruthy(e) || !e %in% names(df)) return(NULL)
+      two_levels(df[[e]])
+    })
+    observeEvent(elig_levels(), {
+      lv <- elig_levels()
+      if (length(lv) == 2 && !isTRUE(isolate(input$pdm_elig_level) %in% lv))
+        updateRadioButtons(session, "pdm_elig_level", selected = guess_vulnerable_answer(lv))
+    })
+    elig_col_flag <- function(df) {
+      x <- df[[input$pdm_eligibility]]
+      lv <- elig_levels()
+      if (length(lv) != 2) return(eligibility_flag(x))
+      pos <- if (isTRUE(input$pdm_elig_level %in% lv)) input$pdm_elig_level else guess_vulnerable_answer(lv)
+      v <- trimws(as.character(x))
+      ifelse(is.na(v) | !nzchar(v), NA, v == pos)
+    }
     # TRUE = received, FALSE = not, NA = not answered; NULL when the column
     # does not have two answers.
     benef_flag <- function(df) {
@@ -499,7 +470,7 @@ mod_pdm_server <- function(id, workspace = NULL, country_office = reactive(NULL)
       }
       from_design <- identical(input$benef_source %||% "design", "design")
       if (from_design) {
-        need_ok(!is.null(sample_design()), "Draw the verification sample first (step 0), or take the selection status from a column.")
+        need_ok(!is.null(sample_design()), "Upload the sample list drawn in Beneficiary Selection (step 2), or take the selection status from a column.")
         need_ok(!is.null(ptm_matched()) && ptm_matched()$n > 0, "Choose the household ID column: no surveyed household matches the sample list yet.")
       } else if (!shiny::isTruthy(input$pdm_beneficiary)) {
         showNotification("Choose the beneficiary column first.", type = "warning")
@@ -543,7 +514,7 @@ mod_pdm_server <- function(id, workspace = NULL, country_office = reactive(NULL)
           }
           ev$mask
         },
-        { req(input$pdm_eligibility); eligibility_flag(df[[input$pdm_eligibility]]) })
+        { req(input$pdm_eligibility); elig_col_flag(df) })
 
       if (all(is.na(elig))) {
         showNotification(
@@ -563,6 +534,10 @@ mod_pdm_server <- function(id, workspace = NULL, country_office = reactive(NULL)
       mode <- input$pdm_weight_mode %||% "none"
       if (identical(mode, "design") && !from_design) {
         showNotification("Weights from the sample design need the selection status from the sample list (step 2).", type = "warning", duration = 10)
+        return()
+      }
+      if (identical(mode, "design") && is.null(sample_design()$design)) {
+        showNotification("This sample list has no Design sheet: type the population sizes in step 4 instead.", type = "warning", duration = 10)
         return()
       }
       wcol <- input$pdm_weight
@@ -731,7 +706,7 @@ mod_pdm_server <- function(id, workspace = NULL, country_office = reactive(NULL)
       if (is.null(pdm_df())) {
         return(empty_state(
           "No survey data loaded",
-          "Draw the verification sample (step 0), survey it before distribution, then load the survey in step 1 and set up steps 2 to 4. A PDM extract can be loaded instead.",
+          "Draw the sample in Beneficiary Selection, survey it, then load the survey in step 1 and the sample list in step 2. A PDM with a beneficiary column can be loaded instead.",
           icon = "clipboard-data"
         ))
       }
@@ -892,7 +867,7 @@ mod_pdm_server <- function(id, workspace = NULL, country_office = reactive(NULL)
       colnames(cov) <- c(r$unit_col, "Eligible (w)", "Reached (w)", "Coverage")
       cov
     }, formats = list(`Eligible (w)` = "int", `Reached (w)` = "int", Coverage = "pct1"),
-    styles = list(Coverage = list(bar = "#0A6EB4")))
+    styles = list(Coverage = list(bar = "#007DBC")))
 
     # --- Export -----------------------------------------------------------
     output$pdm_download <- download_handler(
@@ -967,7 +942,11 @@ mod_pdm_server <- function(id, workspace = NULL, country_office = reactive(NULL)
              ch <- value_choices(lv, input$pdm_beneficiary)
              list(n = length(lv), choices = lapply(seq_along(ch), function(i) list(value = unname(ch[i]), label = names(ch)[i] %||% unname(ch[i]))))
            },
-           elig = elig_note())
+           elig = elig_note(),
+           elig_levels = if (!is.null(elig_levels())) {
+             lv <- elig_levels(); ch <- value_choices(lv, input$pdm_eligibility)
+             list(n = length(lv), choices = lapply(seq_along(ch), function(i) list(value = unname(ch[i]), label = names(ch)[i] %||% unname(ch[i]))))
+           })
     })
     # The facts the page draws: data, sample, match, results, decisions.
     output$pdm_state <- shinyreact::reactive_output({
@@ -977,9 +956,9 @@ mod_pdm_server <- function(id, workspace = NULL, country_office = reactive(NULL)
       dd <- r$decisions
       list(
         data = if (!is.null(pdm_all())) list(source = pdm_source() %||% "Data loaded", rows = NROW(df), cols = NCOL(df)),
-        sample = if (!is.null(sd)) list(drawn_at = sd$drawn_at, n = sum(d$n), selected = sum(d$n[d$group == "selected"]),
-                                        not_selected = sum(d$n[d$group == "not_selected"]), reserve = sum(d$reserve),
-                                        areas = length(unique(d$area))),
+        sample = if (!is.null(sd)) list(file = sd$file %||% "", drawn_at = sd$drawn_at %||% "", n = sum(sd$group %in% "Selected") + sum(sd$group %in% "Not selected"),
+                                        selected = sum(sd$group %in% "Selected"), not_selected = sum(sd$group %in% "Not selected"),
+                                        areas = length(unique(sd$area)), design = !is.null(d)),
         match = if (!is.null(mt)) list(n = mt$n, of = mt$of),
         results = if (!is.null(r)) list(
           kind = r$kind, inclusion = m$inclusion_error, exclusion = m$exclusion_error, coverage = m$coverage_rate,

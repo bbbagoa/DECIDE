@@ -54,7 +54,7 @@ write_overview_report <- function(file, df, settings, x, lang = "en") {
     plots$days <- rp_base(260) |>
       billboarder::bb_barchart(wide, stacked = length(areas) > 1) |>
       billboarder::bb_x_axis(type = "category", tick = list(culling = list(max = 12), multiline = FALSE)) |>
-      rp_colors(stats::setNames(rep_len(c("#0A6EB4", "#26bde2", "#f7b825", "#3f7e44", "#c5192d", "#8a96a3"), length(areas)), areas)) |>
+      rp_colors(stats::setNames(rep_len(c("#007DBC", "#26bde2", "#f7b825", "#3f7e44", "#c5192d", "#8a96a3"), length(areas)), areas)) |>
       billboarder::bb_legend(show = length(areas) > 1)
     caps[["days"]] <- if (length(areas) > 1) sprintf("Households registered per day, by %s", cl$area_label %||% "area") else "Households registered per day"
     if (!is.null(en)) {
@@ -104,7 +104,7 @@ write_overview_report <- function(file, df, settings, x, lang = "en") {
     }
     if (!is.null(v$score)) {
       s <- data.frame(score = v$score$category, Households = round(v$score$n, 1))
-      plots$score <- rp_base(240) |> billboarder::bb_barchart(s) |> rp_colors(c(Households = "#0A6EB4")) |>
+      plots$score <- rp_base(240) |> billboarder::bb_barchart(s) |> rp_colors(c(Households = "#007DBC")) |>
         billboarder::bb_legend(show = FALSE) |> billboarder::bb_x_axis(tick = list(multiline = FALSE))
       caps[["score"]] <- "Distribution of the vulnerability score"
       add("@@FIG:score@@", "")
@@ -231,7 +231,7 @@ overview_map_points <- function(df, settings, max_points = 20000) {
 #' @noRd
 overview_map <- function(d) {
   lv <- names(sort(table(d$group), decreasing = TRUE))
-  cols <- rep_len(c("#0A6EB4", "#f7b825", "#c5192d", "#3f7e44", "#26bde2", "#8a96a3"), length(lv))
+  cols <- rep_len(c("#007DBC", "#f7b825", "#c5192d", "#3f7e44", "#26bde2", "#8a96a3"), length(lv))
   pal <- leaflet::colorFactor(cols, levels = lv)
   esri_basemap(leaflet::leaflet(d, width = "100%", height = 460)) |>
     leaflet::addCircleMarkers(~lon, ~lat, radius = 3.5, stroke = FALSE, fillOpacity = 0.8, fillColor = ~pal(group), label = ~group) |>

@@ -1,7 +1,7 @@
 # Test data for react/dev/test_dq.R: the demo registration data with an
 # enumerator (enum_03 interviews in under 10 minutes), interview start and
 # end times, gaps in the head's age, status and children, and 5 records registered twice (a new id, the rest identical:
-# the setup refuses repeated ids).
+# the setup warns about repeated ids).
 write_dq_test_data <- function(file) {
   set.seed(1)
   d <- utils::read.csv(file.path(tw_root, "inst/extdata/registration_demo.csv"), check.names = FALSE)

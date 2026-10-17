@@ -21,6 +21,31 @@ find_bad_names <- function(data, target_cols) {
 }
 
 
+#' Find records back in the full data by id AND content
+#'
+#' So deleting one of two records sharing an id removes that one, and one of
+#' two exact copies removes exactly one (a filtered view loses the row
+#' numbers of the full data).
+#' @param full The full data.
+#' @param d The records to find (rows of a view of `full`).
+#' @param uid The id column, or NULL.
+#' @param cols The columns compared (default: those of `d` found in `full`).
+#' @return Row numbers in `full`, one per record of `d` found.
+#' @noRd
+rows_in_full <- function(full, d, uid = NULL, cols = intersect(names(d), names(full))) {
+  has_uid <- !is.null(uid) && length(uid) == 1 && !is.na(uid) && nzchar(uid) && uid %in% names(full) && uid %in% names(d)
+  cand <- if (has_uid) which(as.character(full[[uid]]) %in% as.character(d[[uid]])) else seq_len(nrow(full))
+  fp <- function(x) do.call(paste, c(lapply(x[cols], function(v) { v <- as.character(v); v[is.na(v)] <- "\001"; v }),
+                                     list(sep = "\037")))
+  kc <- fp(full[cand, , drop = FALSE])
+  hit <- integer(0)
+  for (k in fp(d)) {
+    j <- which(kc == k & !(cand %in% hit))[1]
+    if (!is.na(j)) hit <- c(hit, cand[j])
+  }
+  hit
+}
+
 #' Helper to guess column names based on keywords
 #'
 #' @param cols Character vector of column names.
@@ -491,13 +516,13 @@ index_note <- function(ix) {
 
 #' The app font, served from the package
 #'
-#' Commissioner (SIL Open Font License) ships in inst/app/www/fonts and is
+#' Open Sans, WFP's typeface (SIL Open Font License), ships in inst/app/www/fonts and is
 #' declared with @font-face in wfp-ui.css, so the app looks the same with no
 #' internet connection. bslib::font_google() downloaded it at run time, which
 #' fails offline on a machine that never cached it.
 #' @noRd
 app_font <- function() {
-  "Commissioner, 'Segoe UI', system-ui, -apple-system, Roboto, sans-serif"
+  "'Open Sans', 'Noto Sans Arabic', 'Segoe UI', system-ui, -apple-system, Roboto, sans-serif"
 }
 
 #' Round every decimal number to 5 places (data frames, lists or vectors)
@@ -607,22 +632,68 @@ wfp_country_offices <- function() {
     "Yemen", "Zambia", "Zimbabwe")
 }
 
+#' The product name, DECIDE, as HTML
+#'
+#' Pearl letters (the I in ochre: Identify, the moment a household is
+#' selected), each standing on a short bar in the colour of its phase of the
+#' targeting cycle, so the name reads as six steps. The space above the
+#' letters equals the bar below, so the letters sit on the centre of what
+#' they are aligned with (the WFP logo). Styled inline: the same in the app,
+#' the startup splash and the standalone reports (the React page draws the
+#' same, react/src/components/Decide.tsx). The R package keeps the name
+#' TargetWise (saved sessions, settings, deployment).
+#' @param dark The colours for a dark ground (navbar, splash, report band).
+#' @noRd
+decide_name_html <- function(dark = TRUE) {
+  k <- decide_colours(dark)
+  one <- function(i, l) {
+    fill <- if (l == "I" && i == 4) k$accent else k$letter
+    paste0('<span style="display:inline-flex;flex-direction:column;align-items:stretch;gap:.09em">',
+           '<span style="background-image:linear-gradient(180deg,', fill[1], ' 0%,', fill[2], ' 60%,', fill[3], ' 100%);',
+           '-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent;',
+           'filter:drop-shadow(0 .03em .03em rgba(0,0,0,', k$shadow, '))">', l, '</span>',
+           '<span style="display:block;height:.075em;border-radius:.04em;background:', k$bars[i], '"></span></span>')
+  }
+  l <- strsplit("DECIDE", "")[[1]]
+  paste0('<span class="tw-decide" aria-label="DECIDE" style="display:inline-flex;align-items:flex-start;gap:.11em;',
+         'padding-top:.165em;font-family:Barlow,Open Sans,sans-serif;font-weight:700;line-height:1;white-space:nowrap;vertical-align:middle">',
+         paste0(vapply(seq_along(l), function(i) one(i, l[i]), ""), collapse = ""), '</span>')
+}
+
+#' The name's colours: the letters' gradient, the gold I, and the six phase
+#' bars, a ramp around the colour wheel at equal brightness (blue, teal,
+#' green, gold, coral, violet, which leads back to blue: the cycle)
+#' @noRd
+decide_colours <- function(dark = TRUE) {
+  if (dark) list(letter = c("#FFFFFF", "#F1F6FB", "#C9DCEC"), accent = c("#FFE6A6", "#F5C451", "#DCA22E"), shadow = ".32",
+                 bars = c("#5BB8F0", "#4FD1C5", "#8BD17C", "#F5C451", "#F28C6B", "#B79CF2"))
+  else list(letter = c("#2A5B82", "#19486A", "#031C2D"), accent = c("#E8B54A", "#C8901A", "#A06F0E"), shadow = ".12",
+            bars = c("#0A78C2", "#0E9A8F", "#3E8E3A", "#C8901A", "#D45A35", "#7B5CC9"))
+}
+
+#' The product's line, under the name
+#' @noRd
+DECIDE_LINE <- "Fairly select the most vulnerable"
+
 #' The splash shown while the app starts
 #'
-#' WFP logo, the name, the tagline and a slim progress line. Serialised to
-#' one line with apostrophes encoded, as waiter needs (see waiter_content()).
+#' The same lockup as the navbar and the welcome page (WFP logo, a rule,
+#' DECIDE centred on the logo), the line, and a slim progress line.
+#' Serialised to one line with apostrophes encoded, as waiter needs (see
+#' waiter_content()).
 #' @noRd
 startup_splash <- function() {
   content <- tags$div(
     class = "tw-splash",
-    tags$img(src = "www/wfp-logo-standard-white-en.png", alt = "WFP", class = "tw-splash-logo"),
-    tags$div(class = "tw-splash-name", "TargetWise"),
-    tags$div(class = "tw-splash-tagline", "Reaching the most vulnerable"),
+    tags$div(class = "tw-splash-lockup",
+             tags$img(src = "www/wfp-logo-standard-white-en.png", alt = "WFP", class = "tw-splash-logo"),
+             tags$span(class = "tw-splash-divider"),
+             tags$div(class = "tw-splash-name", HTML(decide_name_html()))),
+    tags$div(class = "tw-splash-tagline", DECIDE_LINE),
     tags$div(class = "tw-splash-bar", tags$span()),
-    tags$div(class = "tw-splash-sub", "Preparing your workspace\u2026")
+    tags$div(class = "tw-splash-sub", "Preparing your workspace…")
   )
-  one_line <- gsub("[
-]+", " ", paste(as.character(content), collapse = " "))
+  one_line <- gsub("[\r\n]+", " ", paste(as.character(content), collapse = " "))
   HTML(gsub("'", "&#39;", one_line, fixed = TRUE))
 }
 

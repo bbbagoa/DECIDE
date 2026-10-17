@@ -25,6 +25,7 @@ type T = (s: string) => string;
 type Kpis = {
   pool: string | null; share: string | null; sample: string | null; agreement: string | null;
   remote: boolean; phone_col: string; in_scope: string | null; reachable: string | null;
+  replacements: number; settings: string[] | null;
 };
 type VerifState = {
   loaded: boolean; n: string; source: string; shared: number; compared: boolean;
@@ -112,28 +113,16 @@ function Kpi({ icon, label, value, sub, tone = "primary" }: { icon: ReactNode; l
 /* ------------------------------------------------------------ 1. sample */
 
 function SampleTab({ t }: { t: T }) {
-  const mode = useShinyInputValue<string>(ns("sc_mode")) ?? "face";
+  // the settings are in the server's dialog (sc_open); here, what is applied
+  const k = useShinyOutputValue<Kpis>(ns("sc_kpis"));
   return (
     <>
-      <div className={`tw-spot-band tw-align tw-align-bottom${mode === "remote" ? " has-help" : ""}`}>
-        <RadioInput id={ns("sc_mode")} label={t("Interview mode")} buttons value="face"
-                    choices={[{ value: "face", label: t("Face to face") }, { value: "remote", label: t("Remote (phone)") }]} />
-        {/* kept mounted: the server fills its choices when the data arrives */}
-        <div style={{ display: mode === "remote" ? undefined : "none" }} className="tw-spot-band-wide">
-          <SelectInput id={ns("sc_phone_col")} label={t("Phone column")} clearable={false}
-                       help={t("Only households with a valid phone number are sampled.")} />
-        </div>
-        <NumericInput id={ns("sc_sample_size")} label={t("Sample size")} value={30} min={1} max={100000} step={1} className="tw-spot-band-num" />
-        <SelectInput id={ns("sc_per_unit")} label={t("Applies to")} value="all" clearable={false} className="tw-spot-band-wide"
-                     choices={[{ value: "all", label: t("The whole scope") }, { value: "admin1", label: t("Each Admin 1") },
-                               { value: "admin2", label: t("Each Admin 2") }, { value: "admin3", label: t("Each Admin 3") },
-                               { value: "village", label: t("Each village") }]} />
-        <SelectInput id={ns("sc_sample_method")} label={t("Method")} value="random" clearable={false} className="tw-spot-band-wide"
-                     choices={[{ value: "random", label: t("Simple Random") }, { value: "systematic", label: t("Systematic") },
-                               { value: "pps", label: t("PPS (size = hh size or weight)") }]} />
-        <NumericInput id={ns("sc_seed")} label={t("Seed")} value={12345} min={1} step={1} className="tw-spot-band-num" />
-        <div className="tw-spot-band-go">
-          <ActionButton id={ns("sc_draw")} label={t("Draw sample")} icon={<Shuffle size={14} />} variant="primary" />
+      <div className="tw-spot-band tw-align tw-align-bottom">
+        <ActionButton id={ns("sc_open")} label={t("Draw the sample")} icon={<Shuffle size={14} />} variant="primary" />
+        <div className="small text-muted">
+          {k?.settings?.length
+            ? <>{k.settings.join(" · ")}{k.replacements ? ` · ${k.replacements} ${t("replacements")}` : ""}</>
+            : t("Choose the mode, size, method and replacements, then draw.")}
         </div>
       </div>
 
@@ -143,7 +132,7 @@ function SampleTab({ t }: { t: T }) {
               <ActionButton id={ns("sc_go_verify")} label={t("Continue to verification")} icon={<ArrowRight size={14} />} />
             </>}>
         <p className="small text-muted mb-2">
-          {t("Export this list, re-visit these households, then load what the team collected in the Verification tab.")}
+          {t("Export this list (households to visit, and replacements on their own sheet), re-visit these households, then load what the team collected in the Verification tab.")}
         </p>
         <DataTable id={ns("spot_table")} />
       </Card>

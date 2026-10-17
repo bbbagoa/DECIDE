@@ -56,6 +56,7 @@ mod_dq_ui <- function(id) {
             dq_health_ui(ns),
             dq_spelling_ui(ns),
             dq_location_ui(ns),
+            dq_values_ui(ns),
             dq_missing_ui(ns),
             dq_outliers_ui(ns),
             dq_duplicates_ui(ns),
@@ -277,6 +278,7 @@ mod_dq_server <- function(id, uploaded_df, user_setup, modification_log, origina
   dq_health_server(input, output, session, ns, core)
   dq_spelling_server(input, output, session, ns, core)
   dq_location_server(input, output, session, ns, core)
+  dq_values_server(input, output, session, ns, core)
   dq_missing_server(input, output, session, ns, core)
   dq_outliers_server(input, output, session, ns, core)
   dq_duplicates_server(input, output, session, ns, core)
@@ -347,7 +349,7 @@ mod_dq_server <- function(id, uploaded_df, user_setup, modification_log, origina
 #' @param value_fmt Formatter of the value axis ("fn:pct", "fn:num"...).
 #' @param bar_labels Show the values at the end of the bars, with this formatter.
 #' @noRd
-dq_hbar <- function(cats, values, color = "#0A6EB4", tips = NULL, x_name = NULL, lines = NULL, band = NULL,
+dq_hbar <- function(cats, values, color = "#007DBC", tips = NULL, x_name = NULL, lines = NULL, band = NULL,
                     x_min = NULL, x_max = NULL, value_fmt = NULL, bar_labels = NULL, max_height = 900) {
   n <- length(cats)
   col <- rep_len(color, n)
@@ -399,7 +401,7 @@ dq_heatmap <- function(x, y, z, name = "", tip_suffix = "", label_fmt = NULL, ma
                  axisLabel = list(interval = 0, width = 150, overflow = "truncate")),
     visualMap = list(min = 0, max = hi, calculable = TRUE, orient = "horizontal", left = "center", bottom = 0,
                      itemHeight = 120, itemWidth = 10, text = list(format(round(hi), big.mark = ","), "0"),
-                     inRange = list(color = c("#eef5fb", "#7fb3d5", "#0A6EB4"))),
+                     inRange = list(color = c("#eef5fb", "#7fb3d5", "#007DBC"))),
     series = list(list(type = "heatmap", name = name, data = d,
                        label = list(show = !is.null(label_fmt) && length(d) <= 300, formatter = label_fmt, fontSize = 10),
                        itemStyle = list(borderColor = "rgba(128,128,128,0.15)", borderWidth = 1))))

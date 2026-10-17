@@ -74,7 +74,7 @@ test_that("a restored session says what it brought back", {
   expect_true(any(grepl("2 model run(s), scorecard adopted 2026-09-01", got, fixed = TRUE)))
   expect_true(any(grepl("PDM data (4 rows) with implementation errors", got, fixed = TRUE)))
   expect_true(any(grepl("3 report item", got)))
-  expect_true(any(grepl("Audit trail: 7 entries", got)))
+  expect_true(any(grepl("Activity log: 7 entries", got)))
 })
 
 test_that("the autosave fingerprint changes with the work, not with nothing", {

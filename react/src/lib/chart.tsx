@@ -9,7 +9,7 @@ import type * as Echarts from "echarts";
 import { useOutputVisibility } from "./visibility";
 import { useShinyOutputError, useShinyOutputStatus, useShinyOutputValue } from "@/shiny";
 
-export const WFP_COLOURS = ["#0A6EB4", "#26bde2", "#f7b825", "#3f7e44", "#c5192d", "#8a96a3", "#5b6b7c", "#7fb3d5", "#fbd679", "#8bc28f"];
+export const WFP_COLOURS = ["#007DBC", "#26bde2", "#f7b825", "#3f7e44", "#c5192d", "#8a96a3", "#5b6b7c", "#7fb3d5", "#fbd679", "#8bc28f"];
 
 function theme(dark: boolean) {
   const text = dark ? "#c9d1dc" : "#5b6b7c", strong = dark ? "#e8edf3" : "#1f2a37", line = "rgba(128,128,128,0.2)";
@@ -17,7 +17,7 @@ function theme(dark: boolean) {
     splitLine: { lineStyle: { color: line } }, nameTextStyle: { color: text, fontSize: 11 } };
   return {
     color: WFP_COLOURS, backgroundColor: "transparent",
-    textStyle: { fontFamily: "Commissioner, system-ui, sans-serif", color: text },
+    textStyle: { fontFamily: "'Open Sans', system-ui, sans-serif", color: text },
     title: { textStyle: { color: strong, fontSize: 13, fontWeight: 600 } },
     legend: { textStyle: { color: text, fontSize: 11 }, itemWidth: 10, itemHeight: 10, icon: "roundRect" },
     tooltip: { backgroundColor: "#1f2a37", borderWidth: 0, textStyle: { color: "#fff", fontSize: 12 }, extraCssText: "border-radius:6px;box-shadow:0 4px 14px rgba(0,0,0,.25);" },
@@ -26,7 +26,7 @@ function theme(dark: boolean) {
     bar: { itemStyle: { borderRadius: 2 }, label: { color: text, textBorderWidth: 0, textBorderColor: "transparent" } },
     line: { symbolSize: 5, lineStyle: { width: 2 }, label: { color: text, textBorderWidth: 0, textBorderColor: "transparent" } },
     scatter: { label: { color: text, textBorderWidth: 0, textBorderColor: "transparent" } },
-    boxplot: { itemStyle: { color: dark ? "rgba(10,110,180,.25)" : "rgba(10,110,180,.12)", borderColor: "#0A6EB4" } },
+    boxplot: { itemStyle: { color: dark ? "rgba(0,125,188,.25)" : "rgba(0,125,188,.12)", borderColor: "#007DBC" } },
     pie: { itemStyle: { borderColor: dark ? "#10233b" : "#fff", borderWidth: 1 }, label: { color: text, textBorderWidth: 0 } },
   };
 }

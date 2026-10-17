@@ -123,8 +123,12 @@ dq_spelling_server <- function(input, output, session, ns, core) {
     picked <- length(name_cols()) > 0
     bad <- if (picked) tryCatch(bad_data_reactive(), error = function(e) NULL)
     has_rows <- is.data.frame(bad) && nrow(bad) > 0
-    gate_button("btn_open_edit", picked && length(input$dq_names_redflags_rows_selected) > 0,
-                if (!picked) "Pick the name columns to audit first." else "Select a record in the table first.")
+    nsel <- length(input$dq_names_redflags_rows_selected)
+    gate_button("btn_open_edit", picked && nsel == 1,
+                if (!picked) "Pick the name columns to audit first."
+                else if (nsel > 1) "Select one record to edit (several are selected)." else "Select a record in the table first.")
+    gate_button("btn_delete_selected", picked && nsel > 0,
+                if (!picked) "Pick the name columns to audit first." else "Select the records to delete in the table first.")
     gate_button("btn_delete_all_missing", has_rows,
                 if (!picked) "Pick the name columns to audit first." else "No record with a missing name.")
   })
@@ -141,7 +145,47 @@ dq_spelling_server <- function(input, output, session, ns, core) {
       v <- user_setup[[k]]; if (shiny::isTruthy(v) && v %in% names(df)) v
     })))
     df[, unique(c(keep, cols)), drop = FALSE]
-  }, page_size = 50, selection = "single", height = 460)
+  }, page_size = 50, selection = "multiple", height = 460)
+
+  # Several records selected: delete them at once (a reason first), each found
+  # back by id AND content, so a record sharing its id with another is the
+  # only one removed.
+  selected_rows <- function() {
+    i <- input$dq_names_redflags_rows_selected
+    bd <- tryCatch(bad_data_reactive(), error = function(e) NULL)
+    if (!length(i) || is.null(bd)) return(integer(0))
+    i[i >= 1 & i <= nrow(bd)]
+  }
+  observeEvent(input$btn_delete_selected, {
+    req(input$btn_delete_selected > 0)
+    n <- length(selected_rows())
+    need_ok(n > 0, "Select the records to delete in the table first.")
+    showModal(modalDialog(
+      title = sprintf("Delete %d selected record%s", n, if (n == 1) "" else "s"),
+      tags$p(sprintf("The %d record%s selected will be removed from the data. Each deletion goes to the activity log.", n, if (n == 1) "" else "s")),
+      textAreaInput(ns("reason_delete_selected"), "Reason (required)", rows = 2, width = "100%",
+                    placeholder = "e.g. Test records, or households registered by mistake"),
+      footer = tagList(modalButton("Cancel"),
+                       actionButton(ns("btn_confirm_delete_selected"), "Delete", class = "btn-danger"))))
+  })
+  observeEvent(input$btn_confirm_delete_selected, tw_guard("Deleting the records", {
+    reason <- trimws(input$reason_delete_selected %||% "")
+    need_ok(nzchar(reason), "Give a reason for the deletion first.")
+    bd <- bad_data_reactive(); rows <- selected_rows()
+    need_ok(length(rows) > 0, "Select the records to delete in the table first.")
+    full <- uploaded_df(); uid <- user_setup$unique_id
+    hit <- rows_in_full(full, bd[rows, , drop = FALSE], uid)
+    need_ok(length(hit) > 0, "These records are no longer in the data (edited or deleted since).")
+    ids <- if (shiny::isTruthy(uid) && uid %in% names(full)) as.character(full[[uid]][hit]) else as.character(hit)
+    uploaded_df(full[-hit, , drop = FALSE])
+    modification_log(rbind(modification_log(), data.frame(
+      timestamp = format(Sys.time(), "%Y-%m-%d %H:%M:%S"), uid = ids, column = "ALL_RECORD",
+      old_value = "ACTIVE", new_value = "DELETED", action = "Delete record",
+      user = session$user %||% "Admin", reason = reason, stringsAsFactors = FALSE)))
+    removeModal()
+    react_table_select("dq_names_redflags", NULL)
+    showNotification(sprintf("%d record%s deleted and logged.", length(hit), if (length(hit) == 1) "" else "s"), type = "warning")
+  }))
 
   ## ------ Metric for % of bad names
 

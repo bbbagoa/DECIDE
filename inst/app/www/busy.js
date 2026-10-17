@@ -250,11 +250,15 @@
   if (window.Shiny) Shiny.addCustomMessageHandler("tw-saved-at", function (m) { savedAt = m && m.at; });
   $(document).on("shiny:disconnected", function () {
     if (document.getElementById("tw-lost")) return;
+    // a loading screen left up (the startup splash, "Working...") would sit
+    // over the message or grey it out: close them first
+    try { if (window.waiter && window.waiter.hide) window.waiter.hide(); } catch (e) {}
+    document.querySelectorAll(".waiter-overlay, .tw-busy").forEach(function (el) { el.remove(); });
     var d = document.createElement("div");
     d.id = "tw-lost";
     d.innerHTML =
       '<div class="tw-lost-card">' +
-      '<div class="tw-lost-title">The connection to TargetWise was lost</div>' +
+      '<div class="tw-lost-title">The connection to DECIDE was lost</div>' +
       '<p>This happens when the computer goes to sleep, the network drops, or the browser puts an inactive tab to sleep.' +
       ' The page no longer reaches R, so nothing on it will respond.</p>' +
       '<p>' + (savedAt ? 'Your work was saved automatically at <strong>' + savedAt + '</strong>.' :

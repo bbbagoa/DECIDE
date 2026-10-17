@@ -49,22 +49,25 @@ p1 <- kpi(0)
 ok(p1 != "1,500" && nzchar(p1), paste("Apply filters the scope:", p1))
 click(ns("sc_clear"))
 ok(kpi(0) == "1,500", "Clear brings every household back")
-set(`spot_checking_1-sc_sample_size` = 12, `spot_checking_1-sc_sample_method` = "systematic", `spot_checking_1-sc_per_unit` = "admin1")
-click(ns("sc_draw"))
+# the settings are in a dialog (Shiny inputs): open it, set, Draw
+draw <- function(...) {
+  click(ns("sc_open"))
+  app$wait_for_js(sprintf("!!document.querySelector('.modal.show #%s')", ns("sc_draw")), timeout = 15000)
+  if (length(list(...))) app$set_inputs(..., wait_ = FALSE)
+  Sys.sleep(1); app$click(ns("sc_draw")); Sys.sleep(1.5); tw_idle(app)
+}
+draw(`spot_checking_1-sc_sample_size` = 12, `spot_checking_1-sc_sample_method` = "systematic", `spot_checking_1-sc_per_unit` = "admin1")
 ok(kpi(2) == "36", paste("12 per Admin 1 (3 provinces), systematic:", kpi(2), "share", kpi(1)))
-set(`spot_checking_1-sc_per_unit` = "all", `spot_checking_1-sc_sample_method` = "random", `spot_checking_1-sc_sample_size` = 30)
-click(ns("sc_draw"))
+ok(!js("!!document.querySelector('.modal.show')"), "the dialog closes after Draw")
+draw(`spot_checking_1-sc_per_unit` = "all", `spot_checking_1-sc_sample_method` = "random", `spot_checking_1-sc_sample_size` = 30)
 ok(kpi(2) == "30", paste("back to 30:", kpi(2)))
+ok(grepl("3 replacements", txt(".tw-spot-band")), paste("settings line:", substr(txt(".tw-spot-band"), 1, 160)))
 
-# ---- remote mode: the phone column shows, the note says how many are reachable
-app$run_js("Array.from(document.querySelectorAll('.tw-spot .tw-seg .btn')).find(b=>b.textContent.includes('Remote')).click()"); Sys.sleep(1)
-ok(js(sprintf("!!document.getElementById('%s__ctl') && document.getElementById('%s__ctl').offsetParent !== null", ns("sc_phone_col"), ns("sc_phone_col"))),
-   "the phone column picker shows in remote mode")
-click(ns("sc_draw"))
+# ---- remote mode: the note says how many are reachable
+draw(`spot_checking_1-sc_mode` = "remote")
 ok(grepl("Remote check", txt(".tw-spot .tw-notice")), paste("remote note:", substr(txt(".tw-spot .tw-notice"), 1, 120)))
 tw_shot(app, "spot_remote")
-app$run_js("Array.from(document.querySelectorAll('.tw-spot .tw-seg .btn')).find(b=>b.textContent.includes('Face')).click()"); Sys.sleep(1)
-click(ns("sc_draw"))
+draw(`spot_checking_1-sc_mode` = "face")
 
 # ---- record details
 app$run_js(sprintf("document.querySelector('#%s .wfp-details-btn').click()", ns("spot_table"))); Sys.sleep(1.5); tw_idle(app)
@@ -74,6 +77,10 @@ app$run_js("document.querySelector('.modal.show .btn[data-dismiss], .modal.show 
 # ---- sample export
 f <- tryCatch(app$get_download(ns("download_spot")), error = function(e) NA)
 ok(!is.na(f) && file.exists(f) && grepl("xlsx$", f), paste("sample export:", basename(f)))
+sample_file <- f
+ok(identical(openxlsx::getSheetNames(f)[2:3], c("Sample", "Replacements")) &&
+   nrow(openxlsx::read.xlsx(f, "Sample")) == 30 && nrow(openxlsx::read.xlsx(f, "Replacements")) == 3,
+   "the export has the 30 households and 3 replacements on their own sheet")
 
 # ---- verification: Continue, load a re-collected file, compare
 click(ns("sc_go_verify"))
@@ -103,6 +110,17 @@ f <- tryCatch(app$get_download(ns("verif_report")), error = function(e) NA)
 ok(!is.na(f) && file.exists(f) && any(grepl("Back-check|back-check|agreement", readLines(f, warn = FALSE))), paste("verification report:", basename(f), if (!is.na(f)) file.size(f)))
 f <- tryCatch(app$get_download(ns("verif_download")), error = function(e) NA)
 ok(!is.na(f) && file.exists(f) && grepl("xlsx$", f), paste("comparison workbook:", basename(f)))
+
+# a back-check of households outside the drawn sample: compared with the whole list
+sh <- openxlsx::getSheetNames(sample_file)
+smp <- unlist(lapply(sh, function(x) tryCatch(as.character(openxlsx::read.xlsx(sample_file, x)$instanceID), error = function(e) NULL)))
+other <- d[!d$instanceID %in% smp, ][1:60, ]
+vf2 <- file.path(tempdir(), "backcheck_other.csv"); data.table::fwrite(other, vf2)
+app$upload_file(`spot_checking_1-verif_file` = vf2); Sys.sleep(2); tw_idle(app)
+click(ns("verif_run"))
+ok(length(smp) > 0 && grepl("^60$", js(sprintf("(document.querySelector('#%s .tw-kpi-value, .tw-spot [data-kpi=matched]')||{}).textContent||''", ns("verif_kpis")))) ||
+   grepl("60", txt(".tw-spot")), paste("outside the sample: matched against the whole list (sample ids read:", length(smp), ")"))
+ok(rows_in(ns("verif_disc_table")) > 0, paste("outside the sample: discordances", rows_in(ns("verif_disc_table"))))
 
 # ---- dark mode
 app$run_js("document.querySelector('.tw-mode-btn').click()"); Sys.sleep(1.5)

@@ -1,13 +1,13 @@
 // Enumerator Performance (R/mod_dq_enumerator.R): each enumerator against the
 // team (speed, empty answers, daily load), flagged with the reason in words.
 // "See their interviews" and Details open the server's dialogs.
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { BarChart3, ClipboardCheck, Download, Flag, Info, Table2, UserRoundCheck, Users } from "lucide-react";
 import { useSetShinyInput, useShinyOutputValue } from "@/shiny";
 import { DownloadButton } from "@/lib/inputs";
 import { useOutputVisibility } from "@/lib/visibility";
 import { EmptyState } from "@/components/Figures";
-import { Card, Tabs } from "@/lib/layout";
+import { Card, Dialog, Notice, Tabs } from "@/lib/layout";
 import { Chart } from "@/lib/chart";
 import { DataTable } from "@/lib/table";
 import { Kpis, ns, Note, type T } from "./common";
@@ -24,6 +24,8 @@ function FlaggedCards({ t }: { t: T }) {
   useOutputVisibility(ns("enum_flagged_ui"), box);
   const f = useShinyOutputValue<Flagged | null>(ns("enum_flagged_ui"));
   const open = useSetShinyInput<string | null>(ns("enum_open"), null, { debounceMs: 0, priority: "event" });
+  const [dlg, setDlg] = useState<string | null>(null);
+  const d = useShinyOutputValue<{ id: string; n: number; why: string } | null>(ns("enum_dialog"));
   const r = f?.rules;
   return (
     <div ref={box} className="d-flex flex-column gap-2">
@@ -45,11 +47,17 @@ function FlaggedCards({ t }: { t: T }) {
             <div key={e.id} className="tw-dq-insight tw-dq-enum-card">
               <div className="tw-dq-enum-head"><strong>{e.id}</strong><small>{e.interviews.toLocaleString("en-US")} {t("interviews")}</small></div>
               <ul className="tw-dq-enum-reasons">{e.reasons.map((x) => <li key={x}>{x}</li>)}</ul>
-              <button type="button" className="btn btn-link p-0 tw-link align-self-start" onClick={() => open(e.id)}>{t("See their interviews")}</button>
+              <button type="button" className="btn btn-link p-0 tw-link align-self-start" onClick={() => { open(e.id); setDlg(e.id); }}>{t("See their interviews")}</button>
             </div>
           ))}
         </div>
       )}
+      {/* their interviews, in the page's own table (Details opens one record) */}
+      <Dialog open={!!dlg} onClose={() => setDlg(null)} size="xl"
+              title={<><UserRoundCheck size={16} /> {dlg}{d?.id === dlg ? `: ${d.n.toLocaleString("en-US")} ${t("interviews")}` : ""}</>}>
+        {d?.id === dlg && d?.why ? <Notice kind="warning" className="mb-2">{d.why}</Notice> : null}
+        <DataTable id={ns("enum_recs")} compact />
+      </Dialog>
     </div>
   );
 }

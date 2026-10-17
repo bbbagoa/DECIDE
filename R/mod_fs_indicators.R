@@ -21,14 +21,14 @@ mod_fs_indicators_server <- function(id, get_data, set_data, log = NULL, created
     observeEvent(input$open, {
       req(input$open > 0)   # a React button sends 0 at start
       df <- get_data()
-      need_ok(!is.null(df), "Load the assessment data first: the indicators are calculated from it.")
+      need_ok(!is.null(df), "Load the data first: the indicators are calculated from it.")
       showModal(fsi_dialog(ns, fsi_status(df), names(df)))
     })
 
     observeEvent(input$compute, tw_guard("Calculating the indicators", {
       req(input$compute > 0)
       df <- get_data()
-      need_ok(!is.null(df), "Load the assessment data first.")
+      need_ok(!is.null(df), "Load the data first.")
       st <- fsi_status(df)
       which <- names(FSI_DEFS)[vapply(names(FSI_DEFS), function(k) isTRUE(st[[k]]$ok) && isTRUE(input[[paste0("use_", k)]]), logical(1))]
       need_ok(length(which) > 0, "Tick at least one indicator to calculate.")
@@ -101,8 +101,8 @@ fsi_dialog <- function(ns, st, cols) {
                      actionButton(ns("compute"), "Calculate", icon = icon("calculator"), class = "btn-primary")),
     tags$p(class = "small",
            "Calculated as in WFP's standardized scripts (RAM, October 2025 versions), from the variables named in the WFP data dictionary. ",
-           "An indicator can be ticked only when its variables are in the assessment data. The new columns are added to the data; ",
-           "each has a yes / no version you can choose as the outcome. ",
+           "An indicator can be ticked only when its variables are in the data. The new columns are added to the data; ",
+           "each has a yes / no version you can choose as the outcome (Targeting Design) or as who was eligible (Monitoring). ",
            tags$a(href = FSI_SOURCE, target = "_blank", "WFP scripts and dictionary")),
     tags$div(class = "tw-fsi-list", lapply(names(FSI_DEFS), row)),
     tags$hr(),

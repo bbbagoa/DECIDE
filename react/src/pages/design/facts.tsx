@@ -68,7 +68,7 @@ export function BlockedNote({ t }: { t: T }) {
           ) : null}
           <Show when={ov.length > 0} className="sc-allow">
             <strong><LockOpen size={14} /> {t("Allow some of them anyway")}</strong>
-            <p className="small text-muted mb-1">{t("The blocking rules read column names and can be wrong. You decide: an allowed column joins the candidates, and the choice and its reason go to the audit trail and the report.")}</p>
+            <p className="small text-muted mb-1">{t("The blocking rules read column names and can be wrong. You decide: an allowed column joins the candidates, and the choice and its reason go to the activity log and the report.")}</p>
             {some && b.allowed.length ? (
               <div className="small">
                 <Check size={13} className="sc-ok-icon" /> {t("Allowed:")}
@@ -80,7 +80,7 @@ export function BlockedNote({ t }: { t: T }) {
             {/* sent again (new stamp): the picker shows the allowed columns, as the Shiny redraw did */}
             <SelectInput key={some ? b.stamp : 0} id={ns("allow_blocked")} multiple actions choices={ov}
                          value={some ? b.allowed.map((a) => a.col) : []} label={t("Columns to allow")} placeholder={t("Choose blocked columns to allow")} />
-            <TextInput id={ns("allow_reason")} label={<>{t("Note (why)")} <Tip>{t("A short explanation, recorded for the columns allowed now: it goes to the audit trail and the design report.")}</Tip></>}
+            <TextInput id={ns("allow_reason")} label={<>{t("Note (why)")} <Tip>{t("A short explanation, recorded for the columns allowed now: it goes to the activity log and the design report.")}</Tip></>}
                        placeholder={t("e.g. a household characteristic despite its name; observable by the registration team here")} />
             <div><ActionButton id={ns("allow_apply")} label={t("Allow as criteria")} icon={<LockOpen size={13} />} /></div>
           </Show>
@@ -225,7 +225,7 @@ function TargetTick({ j, value, stamp, label, report }: { j: number; value: bool
 
 const tint = (d: number) => {
   const a = Math.min(Math.abs(d) / 0.4, 1) * 0.55;
-  return d >= 0 ? `rgba(10, 110, 180, ${a.toFixed(2)})` : `rgba(247, 184, 37, ${a.toFixed(2)})`;
+  return d >= 0 ? `rgba(0,125,188, ${a.toFixed(2)})` : `rgba(247, 184, 37, ${a.toFixed(2)})`;
 };
 
 /** The household profiles (cluster methods): tick the ones to target, then refit the points */
@@ -270,7 +270,7 @@ export function ProfilesCard({ t }: { t: T }) {
                     </td>
                     <td style={{ minWidth: 120 }}>
                       <div className="d-flex align-items-center gap-2">
-                        <div className="wfp-prof-bar flex-grow-1"><span style={{ width: `${Math.round((100 * r.v) / p.vmax)}%`, background: "#0A6EB4" }} /></div>
+                        <div className="wfp-prof-bar flex-grow-1"><span style={{ width: `${Math.round((100 * r.v) / p.vmax)}%`, background: "#007DBC" }} /></div>
                         <span className="small">{r.v.toFixed(2)}</span>
                       </div>
                     </td>

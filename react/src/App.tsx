@@ -1,4 +1,4 @@
-// The TargetWise shell: navbar, pages, theme, language. Page values match the
+// The DECIDE shell (the R package is TargetWise): navbar, pages, theme, language. Page values match the
 // Shiny app's (welcome_panel, scorecard_panel, ...) so the server's navigation
 // (tw_nav() in R/utils_react.R), session restore and every link keep working.
 //
@@ -16,15 +16,18 @@ import {
 import { ShinyOutput, useSetShinyInput, useShinyInitialized, useShinyInput, useShinyMessageHandler } from "@/shiny";
 import { useT } from "@/i18n";
 import { SessionToolbar } from "@/components/SessionToolbar";
+import { DecideName, PhaseLetters } from "@/components/Decide";
 
-type Page = { value: string; label: string; Icon: ComponentType<{ size?: number }> };
-type NavEntry = Page | { menu: string; value: string; label: string; Icon: Page["Icon"]; pages: Page[] };
+// `phases`: the DECIDE letters an entry covers (0 Design, 1 Estimate, 2 Clean,
+// 3 Identify, 4 Document, 5 Evaluate), shown before its label
+type Page = { value: string; label: string; Icon: ComponentType<{ size?: number }>; phases?: number[] };
+type NavEntry = Page | { menu: string; value: string; label: string; Icon: Page["Icon"]; phases?: number[]; pages: Page[] };
 
 const NAV: NavEntry[] = [
   { value: "welcome_panel", label: "Welcome", Icon: House },
-  { value: "scorecard_panel", label: "1. Targeting Design", Icon: Scale },
+  { value: "scorecard_panel", label: "Targeting Design", Icon: Scale, phases: [0, 1] },
   {
-    menu: "selection", value: "selection_menu", label: "2. Beneficiary Selection", Icon: UserCheck,
+    menu: "selection", value: "selection_menu", label: "Beneficiary Selection", Icon: UserCheck, phases: [2, 3],
     pages: [
       { value: "import_panel", label: "Load registration data", Icon: Upload },
       { value: "overview_panel", label: "Overview", Icon: MapIcon },
@@ -33,8 +36,8 @@ const NAV: NavEntry[] = [
       { value: "ben_panel", label: "Selection", Icon: CircleUserRound },
     ],
   },
-  { value: "pdm_panel", label: "3. Targeting Monitoring", Icon: Target },
-  { value: "modif_logs", label: "Audit Trail", Icon: History },
+  { value: "pdm_panel", label: "Targeting Monitoring", Icon: Target, phases: [5] },
+  { value: "modif_logs", label: "Activity Log", Icon: History, phases: [4] },
 ];
 const PAGES: Page[] = NAV.flatMap((e) => ("pages" in e ? e.pages : [e]));
 
@@ -94,7 +97,7 @@ export default function App() {
           <span className="navbar-brand">
             <img src="www/wfp-logo-standard-white-en.png" height={35} style={{ marginTop: -5 }} alt="WFP" />
             <span className="brand-divider" />
-            <span className="brand-text">TargetWise</span>
+            <span className="brand-text"><DecideName dark /></span>
           </span>
           <ul className="navbar-nav nav me-auto">
             {NAV.map((e) =>
@@ -102,7 +105,7 @@ export default function App() {
                 <li key={e.value} ref={menuRef} className={"nav-item dropdown" + (menuOpen ? " show" : "")}>
                   <a href="#" role="button" className={"nav-link dropdown-toggle" + (inMenu(e) ? " active" : "")}
                      onClick={(ev) => { ev.preventDefault(); setMenuOpen(!menuOpen); }}>
-                    <e.Icon size={15} /> {t(e.label)}
+                    {e.phases ? <PhaseLetters phases={e.phases} /> : <e.Icon size={15} />} {t(e.label)}
                   </a>
                   <ul className={"dropdown-menu" + (menuOpen ? " show" : "")}>
                     {e.pages.filter((p) => !hidden.has(p.value)).map((p) => (
@@ -119,7 +122,7 @@ export default function App() {
                 <li key={e.value} className="nav-item">
                   <a href="#" data-value={e.value} className={"nav-link" + (e.value === current ? " active" : "")}
                      onClick={(ev) => { ev.preventDefault(); go(e.value); }}>
-                    <e.Icon size={15} /> {t(e.label)}
+                    {e.phases ? <PhaseLetters phases={e.phases} /> : <e.Icon size={15} />} {t(e.label)}
                   </a>
                 </li>
               ),

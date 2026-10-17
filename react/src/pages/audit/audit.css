@@ -1,0 +1,26 @@
+/* Audit trail (React): insights above the table. Tokens from wfp-ui.css. */
+.tw-audit { display: flex; flex-direction: column; gap: 12px; }
+.tw-audit-top { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 12px; align-items: stretch; }
+@media (max-width: 1100px) { .tw-audit-top { grid-template-columns: minmax(0, 1fr); } }
+.tw-audit-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.tw-audit-tile { display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: var(--surface, var(--bs-body-bg));
+  border: 1px solid var(--border, rgba(128,128,128,.2)); border-radius: var(--card-radius, 12px); }
+.tw-audit-tile-icon { flex: 0 0 auto; width: 36px; height: 36px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; }
+.tone-blue .tw-audit-tile-icon { color: #007DBC; background: rgba(0,125,188,.12); }
+.tone-red .tw-audit-tile-icon { color: #c5192d; background: rgba(197,25,45,.12); }
+.tone-amber .tw-audit-tile-icon { color: #b9840a; background: rgba(247,184,37,.18); }
+.tone-green .tw-audit-tile-icon { color: #3f7e44; background: rgba(63,126,68,.14); }
+.tw-audit-tile-label { font-size: .7rem; text-transform: uppercase; letter-spacing: .05em; color: var(--bs-secondary-color); }
+.tw-audit-tile-value { font-size: 1.35rem; font-weight: 700; line-height: 1.2; font-variant-numeric: tabular-nums; }
+.tw-audit-tile-sub { font-size: .74rem; color: var(--bs-secondary-color); }
+.tw-audit-phases { grid-column: 1 / -1; padding: 10px 14px; background: var(--surface, var(--bs-body-bg));
+  border: 1px solid var(--border, rgba(128,128,128,.2)); border-radius: var(--card-radius, 12px); }
+.tw-audit-phases-label { font-size: .7rem; text-transform: uppercase; letter-spacing: .05em; color: var(--bs-secondary-color); margin-bottom: 6px; }
+.tw-audit-phasebar { display: flex; height: 10px; border-radius: 5px; overflow: hidden; gap: 2px; background: rgba(128,128,128,.12); }
+.tw-audit-phasebar span { display: block; min-width: 3px; }
+.tw-audit-legend { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 7px; font-size: .78rem; }
+.tw-audit-legend i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 5px; }
+.tw-audit-chart { margin: 0; }
+.tw-audit-undo-note { white-space: nowrap; }
+.tw-audit-undo-note svg { vertical-align: -2px; }
+.tw-undo-btn { padding: 1px 10px; font-size: .74rem; }

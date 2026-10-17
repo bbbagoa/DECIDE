@@ -682,6 +682,6 @@ session_contents <- function(saved) {
                                 if (!is.null(w$pdm$results)) " with implementation errors" else ""),
     if (!is.null(w$monitoring)) sprintf("Monitoring: %d dataset(s), %d report item(s)",
                                         length(w$monitoring$datasets), length(w$monitoring$items)),
-    if (!is.null(saved$modification_log)) sprintf("Audit trail: %s entries", format(nrow(saved$modification_log), big.mark = ","))
+    if (!is.null(saved$modification_log)) sprintf("Activity log: %s entries", format(nrow(saved$modification_log), big.mark = ","))
   )
 }

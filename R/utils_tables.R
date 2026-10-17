@@ -211,9 +211,9 @@ record_detail_modal <- function(row, title = "Record details") {
 #' @noRd
 xl_summary_sheet <- function(wb, sheet, title, subtitle, sections) {
   openxlsx::addWorksheet(wb, sheet, gridLines = FALSE)
-  s_title <- openxlsx::createStyle(fontSize = 16, textDecoration = "bold", fontColour = "#0A6EB4")
+  s_title <- openxlsx::createStyle(fontSize = 16, textDecoration = "bold", fontColour = "#007DBC")
   s_sub <- openxlsx::createStyle(fontSize = 10, fontColour = "#5B6B7E")
-  s_sec <- openxlsx::createStyle(fontSize = 10, textDecoration = "bold", fontColour = "#FFFFFF", fgFill = "#0A6EB4")
+  s_sec <- openxlsx::createStyle(fontSize = 10, textDecoration = "bold", fontColour = "#FFFFFF", fgFill = "#007DBC")
   s_key <- openxlsx::createStyle(fontSize = 10, fontColour = "#5B6B7E", valign = "top",
                                  border = "bottom", borderColour = "#DFE6EE")
   s_val <- openxlsx::createStyle(fontSize = 10, wrapText = TRUE, valign = "top",
@@ -246,7 +246,7 @@ xl_summary_sheet <- function(wb, sheet, title, subtitle, sections) {
 xl_data_sheet <- function(wb, sheet, df) {
   openxlsx::addWorksheet(wb, sheet)
   head <- openxlsx::createStyle(fontSize = 10, textDecoration = "bold", fontColour = "#FFFFFF",
-                                fgFill = "#0A6EB4", border = "bottom", borderColour = "#085A93",
+                                fgFill = "#007DBC", border = "bottom", borderColour = "#085387",
                                 halign = "left", valign = "center")
   write_data(wb, sheet, df, headerStyle = head, withFilter = TRUE)
   openxlsx::freezePane(wb, sheet, firstRow = TRUE)

@@ -1,0 +1,17 @@
+/* DECIDE: the name in its six colours, and the phase letters of the navigation */
+/* the name: Barlow Bold at normal width, tracked out (the brand's wordmark face, used for the name only) */
+.tw-decide { display: inline-flex; align-items: flex-start; gap: .11em; padding-top: .165em; font-family: "Barlow", "Open Sans", sans-serif;
+  font-weight: 700; line-height: 1; white-space: nowrap; vertical-align: middle; }
+.tw-decide-step { display: inline-flex; flex-direction: column; align-items: stretch; gap: .09em; }
+.tw-decide-l { -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-text-fill-color: transparent; }
+.tw-decide-bar { display: block; height: .075em; border-radius: .04em; }
+.tw-phase-words { display: inline-flex; flex-wrap: wrap; justify-content: center; gap: 4px 0; }
+.tw-phase-words > span + span::before { content: "\00B7"; margin: 0 .55em; opacity: .55; }
+.tw-phase-words b { font-weight: 800; }
+/* navbar: the brand is a row, logo | rule | name, centred on one another */
+.navbar-brand { display: inline-flex !important; align-items: center; }
+.navbar-brand img { display: block; }
+.navbar-brand .brand-text { display: inline-flex; align-items: center; }
+.navbar-brand .tw-decide { font-size: 22px; }
+.tw-phase-letters { display: inline-flex; gap: 1px; min-width: 1.2em; justify-content: center; }
+.tw-phase-letter::before { content: attr(data-l); font-weight: 800; font-size: .95em; letter-spacing: 0; }

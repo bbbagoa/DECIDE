@@ -416,7 +416,7 @@ mod_overview_server <- function(id, uploaded_df, user_setup) {
   }
   output$col_tiles <- renderUI(ov_tiles(collection()$tiles, "tw-tiles-col"))
 
-  AREA_COLS <- c("#0A6EB4", "#26bde2", "#f7b825", "#3f7e44", "#c5192d", "#8a96a3")
+  AREA_COLS <- c("#007DBC", "#26bde2", "#f7b825", "#3f7e44", "#c5192d", "#8a96a3")
   output$daily_plot <- render_wfp_plotly({
     cl <- collection()
     shiny::validate(shiny::need(!is.null(cl$daily), "Not in these data: map the data collection date to see the daily submissions."))
@@ -432,7 +432,7 @@ mod_overview_server <- function(id, uploaded_df, user_setup) {
       plotly::plot_ly(d, x = ~day, y = ~n, color = ~area, colors = pal[unique(d$area)], type = "bar",
                       hovertemplate = "%{x|%d %b}: %{y:,.0f} households<extra>%{fullData.name}</extra>")
     } else {
-      plotly::plot_ly(d, x = ~day, y = ~n, type = "bar", marker = list(color = "#0A6EB4"), name = "Households",
+      plotly::plot_ly(d, x = ~day, y = ~n, type = "bar", marker = list(color = "#007DBC"), name = "Households",
                       hovertemplate = "%{x|%d %b}: %{y:,.0f} households<extra></extra>")
     }
     p |>
@@ -453,14 +453,14 @@ mod_overview_server <- function(id, uploaded_df, user_setup) {
   share_plot <- function(ch) {
     d <- ch$data; d$pct <- d$n / sum(d$n)
     if (identical(ch$kind, "bins")) {
-      plotly::plot_ly(d, x = ~factor(category, levels = category), y = ~pct, type = "bar", marker = list(color = "#0A6EB4"),
+      plotly::plot_ly(d, x = ~factor(category, levels = category), y = ~pct, type = "bar", marker = list(color = "#007DBC"),
                       text = ~sprintf("%.0f%%", 100 * pct), textposition = "outside", cliponaxis = FALSE, textfont = list(size = 9),
                       hovertemplate = "%{x}: %{y:.1%} (%{customdata:,.0f} households)<extra></extra>", customdata = ~n) |>
         plotly::layout(margin = list(l = 8, r = 8, t = 6, b = 26), yaxis = list(visible = FALSE, range = c(0, max(d$pct) * 1.25)),
                        xaxis = list(title = "", tickfont = list(size = 10)))
     } else {
       d <- d[rev(seq_len(nrow(d))), , drop = FALSE]
-      plotly::plot_ly(d, y = ~factor(category, levels = category), x = ~pct, type = "bar", orientation = "h", marker = list(color = "#0A6EB4"),
+      plotly::plot_ly(d, y = ~factor(category, levels = category), x = ~pct, type = "bar", orientation = "h", marker = list(color = "#007DBC"),
                       text = ~sprintf("%.0f%%", 100 * pct), textposition = "outside", cliponaxis = FALSE, textfont = list(size = 9),
                       hovertemplate = "%{y}: %{x:.1%} (%{customdata:,.0f} households)<extra></extra>", customdata = ~n) |>
         plotly::layout(margin = list(l = 8, r = 30, t = 6, b = 6), xaxis = list(visible = FALSE, range = c(0, max(d$pct) * 1.3)),

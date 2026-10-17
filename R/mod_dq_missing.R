@@ -491,7 +491,7 @@ dq_upset_option <- function(combos, pillars, sizes) {
   for (i in seq_along(sets)) for (j in seq_along(pillars)) {
     on <- combos[[pillars[j]]][i] == 1
     dots[[length(dots) + 1]] <- list(value = list(i - 1, j - 1), symbolSize = if (on) 11 else 7,
-                                     itemStyle = list(color = if (on) "#0A6EB4" else "rgba(128,128,128,0.25)"),
+                                     itemStyle = list(color = if (on) "#007DBC" else "rgba(128,128,128,0.25)"),
                                      tip = sprintf("<b>%s</b>: %s", sets[i], members[i]))
   }
   # the lines joining the fields of a pattern
@@ -503,7 +503,7 @@ dq_upset_option <- function(combos, pillars, sizes) {
   links <- Filter(Negate(is.null), links)
   dot_series <- list(type = "scatter", xAxisIndex = 2, yAxisIndex = 2, data = dots, z = 3)
   if (length(links)) dot_series$markLine <- list(silent = TRUE, symbol = "none", label = list(show = FALSE),
-                                                 lineStyle = list(color = "#0A6EB4", width = 2, type = "solid"), data = links)
+                                                 lineStyle = list(color = "#007DBC", width = 2, type = "solid"), data = links)
   o <- list(
     tooltip = list(trigger = "item", formatter = "fn:tip"),
     grid = list(
@@ -524,7 +524,7 @@ dq_upset_option <- function(combos, pillars, sizes) {
       list(gridIndex = 2, type = "category", data = I(pillars), inverse = TRUE, axisLabel = list(show = FALSE),
            axisTick = list(show = FALSE), axisLine = list(show = FALSE), splitLine = list(show = TRUE))),
     series = list(
-      list(type = "bar", xAxisIndex = 0, yAxisIndex = 0, barMaxWidth = 28, itemStyle = list(color = "#0A6EB4"),
+      list(type = "bar", xAxisIndex = 0, yAxisIndex = 0, barMaxWidth = 28, itemStyle = list(color = "#007DBC"),
            label = list(show = TRUE, position = "top", fontSize = 10, formatter = "fn:num", color = "#8a96a3", textBorderWidth = 0),
            data = lapply(seq_along(sets), function(i) list(value = combos$count[i],
              tip = sprintf("<b>%s</b>: %s records<br>%s", sets[i], format(combos$count[i], big.mark = ","), members[i])))),

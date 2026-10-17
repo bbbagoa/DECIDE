@@ -291,14 +291,14 @@ ov_in_view <- function(lng, lat, idx, bounds) {
 
 #' A share as a ring (80% hole), the figure inside, the label under it
 #' @noRd
-ov_donut_html <- function(share, label, sub = "", colour = "#0A6EB4") {
+ov_donut_html <- function(share, label, sub = "", colour = "#007DBC") {
   r <- 27; cfr <- 2 * pi * r
   on <- if (is.finite(share)) max(0, min(1, share)) * cfr else 0
   sprintf(paste0('<div class="tw-donut" title="%s"><svg viewBox="0 0 64 64" width="84" height="84" role="img" aria-label="%s: %s">',
                  '<circle cx="32" cy="32" r="%.1f" fill="none" stroke="rgba(128,128,128,.18)" stroke-width="6.4"/>',
                  '<circle cx="32" cy="32" r="%.1f" fill="none" stroke="%s" stroke-width="6.4" stroke-linecap="round" ',
                  'stroke-dasharray="%.2f %.2f" transform="rotate(-90 32 32)"/>',
-                 '<text x="32" y="36.5" text-anchor="middle" style="font:700 13px Commissioner,system-ui,sans-serif;fill:currentColor">%s</text></svg>',
+                 '<text x="32" y="36.5" text-anchor="middle" style="font:700 13px Open Sans,system-ui,sans-serif;fill:currentColor">%s</text></svg>',
                  '<div class="tw-donut-label">%s</div></div>'),
           htmltools::htmlEscape(sub), htmltools::htmlEscape(label), ov_pct(share), r, r, colour, on, cfr - on,
           ov_pct(share), htmltools::htmlEscape(label))
@@ -465,7 +465,7 @@ ov_bar_table_html <- function(d, value_label, pct = TRUE, overall = NULL, colour
     if (!is.null(d$group) && !identical(d$group[i], last)) {
       rows <- c(rows, sprintf('<tr class="bt-group"><th colspan="%d">%s</th></tr>', 3 + !is.null(d$extra), esc(d$group[i]))); last <- d$group[i]
     }
-    col <- if (!is.null(colours)) colours[i] else "#0A6EB4"
+    col <- if (!is.null(colours)) colours[i] else "#007DBC"
     rows <- c(rows, sprintf(paste0('<tr><td class="bt-label">%s</td><td class="num">%s</td>',
                                    '<td class="bt-cell"><div class="bt-wrap"><div class="bt-track"><span class="bt-bar" style="width:%.1f%%;background:%s"></span>%s</div>',
                                    '<span class="bt-val">%s</span></div></td>%s</tr>'),
@@ -574,7 +574,7 @@ too_many_options <- function(x, name) {
 
 #' Chart builder colours (WFP token hexes)
 #' @noRd
-GB_COLS <- c("#0A6EB4", "#f7b825", "#3f7e44", "#c5192d", "#26bde2", "#8a96a3", "#5b6b7c", "#e67e22")
+GB_COLS <- c("#007DBC", "#f7b825", "#3f7e44", "#c5192d", "#26bde2", "#8a96a3", "#5b6b7c", "#e67e22")
 
 #' At most this many points drawn in a scatter (the correlation and the trend
 #' use every household)

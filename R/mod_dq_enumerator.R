@@ -115,19 +115,22 @@ dq_enumerator_server <- function(input, output, session, ns, core) {
            reasons = as.list(strsplit(f$reasons[i], "; ", fixed = TRUE)[[1]]))))
   })
 
-  observeEvent(input$enum_open, {
-    df <- dq_filtered_data(); req(df, user_setup$enumerator_id)
-    recs <- df[which(as.character(df[[user_setup$enumerator_id]]) == input$enum_open), , drop = FALSE]
-    m <- enum_metrics()
-    why <- m$reasons[as.character(m$enumerator_id) == input$enum_open][1]
-    output$enum_recs <- DT::renderDT(record_table(recs, user_setup, session$ns, "enum_view", page_length = 10))
-    showModal(modalDialog(
-      title = tagList(bsicons::bs_icon("person-badge"), " ", input$enum_open, sprintf(": %s interviews", format(nrow(recs), big.mark = ","))),
-      size = "xl", easyClose = TRUE,
-      if (!is.na(why) && nzchar(why)) tags$div(class = "alert alert-warning small", why),
-      DT::DTOutput(ns("enum_recs"), fill = FALSE),
-      footer = modalButton("Close")
-    ))
+  # The interviews of one enumerator: a React dialog (EnumeratorTab.tsx)
+  # draws enum_dialog and the table enum_recs once input$enum_open is set.
+  enum_pick <- reactiveVal(NULL)
+  observeEvent(input$enum_open, { req(input$enum_open); enum_pick(input$enum_open) })
+  enum_pick_recs <- reactive({
+    p <- enum_pick(); df <- dq_filtered_data(); req(p, df, user_setup$enumerator_id)
+    df[which(as.character(df[[user_setup$enumerator_id]]) == p), , drop = FALSE]
+  })
+  output$enum_recs <- render_react_table({
+    record_table(enum_pick_recs(), user_setup, session$ns, "enum_view", page_length = 10)
+  }, html = "Details", labels = list(Details = ""), empty = "No interview.")
+  output$enum_dialog <- shinyreact::reactive_output({
+    p <- enum_pick(); if (is.null(p)) return(NULL)
+    m <- tryCatch(enum_metrics(), error = function(e) NULL)
+    why <- if (!is.null(m)) m$reasons[as.character(m$enumerator_id) == p][1] else NA
+    list(id = p, n = tryCatch(nrow(enum_pick_recs()), error = function(e) 0L), why = if (is.na(why %||% NA)) "" else why)
   })
   observeEvent(input$enum_view, {
     showModal(record_detail_modal(find_record(dq_filtered_data(), user_setup, input$enum_view),
@@ -226,7 +229,7 @@ dq_enumerator_server <- function(input, output, session, ns, core) {
     tab <- utils::head(m[order(-m$interviews), , drop = FALSE], 30)
     med <- stats::median(m$interviews)
     dq_hbar(substr(as.character(tab$enumerator_id), 1, 24), round(tab$interviews),
-            color = ifelse(tab$flag == "Review", "#c5192d", "#0A6EB4"),
+            color = ifelse(tab$flag == "Review", "#c5192d", "#007DBC"),
             tips = sprintf("<b>%s</b>: %s interviews<br>%s", htmltools::htmlEscape(tab$enumerator_id),
                            format(round(tab$interviews), big.mark = ","), htmltools::htmlEscape(ifelse(nzchar(tab$reasons), tab$reasons, "No flag"))),
             x_name = "Interviews", value_fmt = "fn:num",
@@ -268,7 +271,7 @@ dq_enumerator_server <- function(input, output, session, ns, core) {
     tab <- tab[order(tab$avg_duration), , drop = FALSE]
     lo <- th$dur_lo %||% NA; hi <- th$dur_hi %||% NA
     col <- ifelse(!is.na(lo) & tab$avg_duration < lo, "#c5192d",
-                  ifelse(!is.na(hi) & tab$avg_duration > hi, "#f7b825", "#0A6EB4"))
+                  ifelse(!is.na(hi) & tab$avg_duration > hi, "#f7b825", "#007DBC"))
     dq_hbar(substr(as.character(tab$enumerator_id), 1, 24), round(tab$avg_duration, 1), color = col,
             tips = sprintf("<b>%s</b>: %.1f min on average<br>%s interviews", htmltools::htmlEscape(tab$enumerator_id),
                            tab$avg_duration, format(round(tab$interviews), big.mark = ",")),

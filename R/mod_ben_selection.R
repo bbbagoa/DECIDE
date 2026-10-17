@@ -114,8 +114,7 @@ mod_ben_selection_ui <- function(id) {
                  uiOutput(ns("scorecard_ui")),
                  conditionalPanel(
                    condition = sprintf("!input['%s']", ns("use_scorecard")),
-                   sliderInput(ns("ben_score_min"), "Minimum vulnerability score", min = 0, max = 100, value = 0, width = "100%"),
-                   sliderInput(ns("ben_score_max"), "Maximum vulnerability score", min = 0, max = 100, value = 100, width = "100%")),
+                   sliderInput(ns("ben_score_range"), "Vulnerability score", min = 0, max = 100, value = c(0, 100), width = "100%")),
                  condition = approach_js(ns, c("hybrid", "scorecard"))),
             step("Community decision",
                  selectInput(ns("ben_comm_col"), "Column recording the community's decision",
@@ -235,8 +234,20 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
     observeEvent(scorecard_fingerprint(user_setup$scorecard), {
       applied$sc_threshold <- NULL
       sc <- user_setup$scorecard
-      if (!scorecard_is_empty(sc)) updateNumericInput(session, "scorecard_threshold", value = as.numeric(sc$threshold %||% 0))
+      if (!scorecard_is_empty(sc)) updateSliderInput(session, "scorecard_threshold", value = as.numeric(sc$threshold %||% 0))
     }, ignoreInit = TRUE)
+    # The threshold slider runs over the scores the card gives this data (and
+    # always reaches the agreed threshold); it starts on the agreed one.
+    observe({
+      sc <- user_setup$scorecard; df <- uploaded_df()
+      if (scorecard_is_empty(sc) || is.null(df)) return()
+      thr <- as.numeric(sc$threshold %||% 0)
+      r <- tryCatch(range(apply_scorecard(df, sc)$score, na.rm = TRUE, finite = TRUE), error = function(e) c(NA, NA), warning = function(w) c(NA, NA))
+      lo <- floor(min(c(r[1], thr), na.rm = TRUE)); hi <- ceiling(max(c(r[2], thr), na.rm = TRUE))
+      if (hi <= lo) hi <- lo + 1
+      cur <- isolate(applied$sc_threshold) %||% thr
+      updateSliderInput(session, "scorecard_threshold", min = lo, max = hi, step = if (hi - lo > 50) 1 else 0.1, value = cur)
+    })
 
     # --- Caseload per area ------------------------------------------------------
     # list(unit, kind ("households" | "share"), total, values (named, as typed),
@@ -249,8 +260,8 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
     observeEvent(input$ben_prio_count, if (isolate(has_size())) count_pref(input$ben_prio_count))
     observe({
       if (!has_size()) updateRadioButtons(session, "ben_prio_count", selected = "households",
-                                         choices = c("Households (map household size to count people)" = "households"))
-      else updateRadioButtons(session, "ben_prio_count", choices = c("People (beneficiaries)" = "people", "Households" = "households"),
+                                         choices = c("Households (map the size to count people)" = "households"))
+      else updateRadioButtons(session, "ben_prio_count", choices = c("People" = "people", "Households" = "households"),
                               selected = isolate(count_pref()))
     })
     count_unit <- reactive(if (has_size() && !identical(input$ben_prio_count, "households")) "people" else "households")
@@ -518,8 +529,7 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
           for (k in c("admin1", "admin2", "admin3")) {
             shinyWidgets::updatePickerInput(session, paste0("ben_", k), selected = s[[k]] %||% character(0))
           }
-          updateSliderInput(session, "ben_score_min", value = s$score_min)
-          updateSliderInput(session, "ben_score_max", value = s$score_max)
+          updateSliderInput(session, "ben_score_range", value = c(s$score_min, s$score_max))
           updateSelectInput(session, "ben_approach", selected = s$approach)
           updateRadioButtons(session, "ben_combine", selected = s$combine)
           updateSelectInput(session, "ben_comm_col", selected = s$comm_col %||% "")
@@ -591,8 +601,7 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
           if (!identical(c(lo, hi), isolate(c(score_range$min, score_range$max)))) {
             score_range$min <- lo
             score_range$max <- hi
-            updateSliderInput(session, "ben_score_min", min = lo, max = hi, value = lo)
-            updateSliderInput(session, "ben_score_max", min = lo, max = hi, value = hi)
+            updateSliderInput(session, "ben_score_range", min = lo, max = hi, value = c(lo, hi))
             applied$score_min <- lo
             applied$score_max <- hi
           }
@@ -616,8 +625,9 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
       applied$admin1 <- input$ben_admin1
       applied$admin2 <- input$ben_admin2
       applied$admin3 <- input$ben_admin3
-      applied$score_min <- input$ben_score_min
-      applied$score_max <- input$ben_score_max
+      # one range: from and to
+      rng <- input$ben_score_range
+      if (length(rng) == 2) { applied$score_min <- min(rng); applied$score_max <- max(rng) }
       applied$approach <- input$ben_approach %||% "hybrid"
       applied$combine <- input$ben_combine %||% "both"
       applied$comm_col <- input$ben_comm_col
@@ -658,8 +668,7 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
       for (lvl in c("ben_admin1", "ben_admin2", "ben_admin3")) {
         shinyWidgets::updatePickerInput(session, lvl, selected = character(0))
       }
-      updateSliderInput(session, "ben_score_min", value = score_range$min)
-      updateSliderInput(session, "ben_score_max", value = score_range$max)
+      updateSliderInput(session, "ben_score_range", value = c(score_range$min, score_range$max))
 
       applied$admin1 <- NULL
       applied$admin2 <- NULL
@@ -1298,7 +1307,7 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
         use <- card && !isFALSE(input$use_scorecard)
         changed <- if (card && use != isTRUE(applied$use_scorecard)) TRUE
                    else if (use) !num_same(input$scorecard_threshold, applied$sc_threshold %||% sc$threshold %||% 0)
-                   else !num_same(input$ben_score_min, applied$score_min) || !num_same(input$ben_score_max, applied$score_max)
+                   else !num_same(input$ben_score_range[1], applied$score_min) || !num_same(input$ben_score_range[2], applied$score_max)
         if (changed) what <- c(what, "score")
       }
       if ("community" %in% gates && (!identical(input$ben_comm_col %||% "", applied$comm_col %||% "") ||
@@ -1321,6 +1330,16 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
       a <- targeting_approaches()[[applied$approach]]
       list(label = a$label, list_produced = isTRUE(s$list_produced), eligible = sum(s$eligible),
            served = sum(s$prioritized), notes = I(as.character(unlist(s$notes))))
+    })
+
+    # Every figure in households and people (output$ben_figs, the KPI tiles)
+    output$ben_figs <- shinyreact::reactive_output({
+      s <- sel_or_null(); df <- uploaded_df()
+      if (is.null(s) || is.null(df)) return(NULL)
+      hs <- col_of("hh_size"); size <- if (!is.null(hs)) as_number(df[[hs]])
+      f <- function(m) list(hh = sum(m), people = if (is.null(size)) NULL else sum(size[m], na.rm = TRUE))
+      el <- s$eligible %in% TRUE; sv <- s$prioritized %in% TRUE
+      list(total = f(rep(TRUE, nrow(df))), eligible = f(el), served = f(sv), cut = f(el & !sv))
     })
 
     output$ben_total <- renderText({
@@ -1364,7 +1383,7 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
       d <- d[order(d$criterion, -d$n), , drop = FALSE]
       labs <- paste0(d$category, "  \u00b7  ", d$criterion)
       crit <- unique(d$criterion)
-      colour <- c(Eligibility = "#0A6EB4", `Vulnerability group` = "#f7b825")
+      colour <- c(Eligibility = "#007DBC", `Vulnerability group` = "#f7b825")
       series <- lapply(crit, function(k) list(
         type = "bar", name = k, stack = "s", barMaxWidth = 22, itemStyle = list(color = colour[[k]]),
         data = lapply(seq_len(nrow(d)), function(i) if (d$criterion[i] != k) "-" else list(
@@ -1407,7 +1426,7 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
            grid = list(left = 8, right = 16, top = 16, bottom = 28, containLabel = TRUE),
            xAxis = list(type = "category", data = as.character(k), name = "Deprivations", nameLocation = "middle", nameGap = 26),
            yAxis = pct_axis("% selected"),
-           series = list(list(type = "bar", barMaxWidth = 40, itemStyle = list(color = "#0A6EB4"),
+           series = list(list(type = "bar", barMaxWidth = 40, itemStyle = list(color = "#007DBC"),
                               data = lapply(seq_along(k), function(i) list(value = round(p[i], 1),
                                 tip = sprintf("%s deprivations<br><b>%.0f%%</b> selected (of %s households)", k[i], p[i], fmt_n(n[i])))))))
     }, height = 320)
@@ -1469,7 +1488,7 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
       s <- selection(); df <- uploaded_df(); req(s, df)
       a <- col_of("admin1")
       validate(need(!is.null(a), "Map Admin 1 to see the selection by area."))
-      colour <- c(Served = "#0A6EB4", `Excluded by design` = "#f7b825", `Not eligible` = "#b8c0ca")
+      colour <- c(Served = "#007DBC", `Excluded by design` = "#f7b825", `Not eligible` = "#b8c0ca")
       status <- factor(ifelse(s$prioritized, "Served", ifelse(s$eligible, "Excluded by design", "Not eligible")), levels = names(colour))
       m <- table(as.character(df[[a]]), status)
       top <- utils::head(names(sort(m[, "Served"] + m[, "Excluded by design"], decreasing = TRUE)), 25)
@@ -1481,6 +1500,60 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
         yAxis = list(type = "category", data = top, inverse = TRUE),
         series = lapply(names(colour), function(k) list(type = "bar", name = k, stack = "s", barMaxWidth = 22,
                                                        itemStyle = list(color = colour[[k]]), data = as.numeric(m[top, k]))))
+      attr(opt, "height") <- max(300, min(640, 70 + 24 * length(top)))
+      opt
+    })
+
+    # Beside the area chart: how much of the need each area covers, and who
+    # heads the households selected there (same areas, same order).
+    area_top <- function(df, s, a) {
+      u <- as.character(df[[a]])
+      el <- tapply(s$eligible, u, sum)
+      utils::head(names(sort(el, decreasing = TRUE)), 25)
+    }
+    output$ben_cov_plot <- render_echart({
+      s <- selection(); df <- uploaded_df(); req(s, df)
+      a <- col_of("admin1")
+      validate(need(!is.null(a), "Map Admin 1 to see the coverage by area."))
+      u <- as.character(df[[a]]); top <- area_top(df, s, a)
+      el <- as.numeric(tapply(s$eligible, u, sum)[top]); sv <- as.numeric(tapply(s$prioritized, u, sum)[top])
+      hh <- as.numeric(table(u)[top])
+      pe <- ifelse(el > 0, round(100 * sv / el, 1), NA); ph <- round(100 * sv / hh, 1)
+      opt <- list(
+        legend = list(top = 0, left = 0),
+        tooltip = list(trigger = "axis", axisPointer = list(type = "shadow"), formatter = "fn:tip"),
+        grid = list(left = 8, right = 16, top = 30, bottom = 28, containLabel = TRUE),
+        xAxis = list(type = "value", max = 100, name = "%", nameLocation = "middle", nameGap = 26),
+        yAxis = list(type = "category", data = top, inverse = TRUE),
+        series = list(
+          list(type = "bar", name = "Of eligible served", barMaxWidth = 12, itemStyle = list(color = "#007DBC"),
+               data = lapply(seq_along(top), function(i) list(value = pe[i], tip = sprintf("%s<br><b>%s%%</b> of the eligible served (%s of %s)", top[i], pe[i], fmt_n(sv[i]), fmt_n(el[i]))))),
+          list(type = "bar", name = "Of all households served", barMaxWidth = 12, itemStyle = list(color = "#26bde2"),
+               data = lapply(seq_along(top), function(i) list(value = ph[i], tip = sprintf("%s<br><b>%s%%</b> of all households served (%s of %s)", top[i], ph[i], fmt_n(sv[i]), fmt_n(hh[i])))))))
+      attr(opt, "height") <- max(300, min(640, 70 + 24 * length(top)))
+      opt
+    })
+    output$ben_sex_plot <- render_echart({
+      s <- selection(); df <- uploaded_df(); req(s, df)
+      a <- col_of("admin1"); sx <- col_of("hhh_sex")
+      validate(need(!is.null(a), "Map Admin 1 to see the selection by area."),
+               need(!is.null(sx), "Map the sex of the head of household to see who heads the selected households."))
+      sel <- s$prioritized %in% TRUE
+      validate(need(any(sel), "Nobody selected."))
+      u <- as.character(df[[a]]); top <- area_top(df, s, a)
+      fem <- is_female(df[[sx]])
+      f <- as.numeric(tapply(sel & fem, u, sum)[top]); m <- as.numeric(tapply(sel & !fem, u, sum)[top])
+      tot <- f + m
+      mk <- function(v, who) lapply(seq_along(top), function(i) list(value = v[i],
+        tip = sprintf("%s<br>%s-headed: <b>%s</b> (%s%% of the selected)", top[i], who, fmt_n(v[i]), if (tot[i] > 0) round(100 * v[i] / tot[i]) else 0)))
+      opt <- list(
+        legend = list(top = 0, left = 0),
+        tooltip = list(trigger = "axis", axisPointer = list(type = "shadow"), formatter = "fn:tip"),
+        grid = list(left = 8, right = 16, top = 30, bottom = 28, containLabel = TRUE),
+        xAxis = list(type = "value", name = "Selected households", nameLocation = "middle", nameGap = 26),
+        yAxis = list(type = "category", data = top, inverse = TRUE),
+        series = list(list(type = "bar", name = "Female-headed", stack = "s", barMaxWidth = 22, itemStyle = list(color = "#c5192d"), data = mk(f, "Female")),
+                      list(type = "bar", name = "Male-headed", stack = "s", barMaxWidth = 22, itemStyle = list(color = "#8a96a3"), data = mk(m, "Male"))))
       attr(opt, "height") <- max(300, min(640, 70 + 24 * length(top)))
       opt
     })
@@ -1508,7 +1581,10 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
     # the server above 5,000 rows.
     output$ben_table <- render_react_table({
       req(selected_data())
-      record_table(selected_data(), user_setup, session$ns, "ben_view")
+      # who each beneficiary is: name, sex, age, size, residency (no GPS)
+      d <- selected_data()
+      who <- setdiff(ptm_identity_cols(d, user_setup), c(user_setup$lat, user_setup$lon))
+      record_table(d, user_setup, session$ns, "ben_view", extra_cols = who)
     }, html = "Details", empty = "Nobody selected.")
 
 
@@ -1555,7 +1631,7 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
                  actionButton(ns("export_mapped"), "Mapped fields only", class = "btn-outline-secondary btn-sm"),
                  actionButton(ns("export_all"), "All variables", class = "btn-outline-secondary btn-sm")),
         checkboxInput(ns("export_score"), "Add the selection score column", value = TRUE),
-        checkboxInput(ns("export_audit"), "Include the audit trail (Audit_trail sheet)", value = FALSE),
+        checkboxInput(ns("export_audit"), "Include the activity log (Activity_log sheet)", value = FALSE),
         radioButtons(ns("export_split"), "Files", inline = TRUE,
                      choices = c("One workbook" = "one", "One workbook per area (zipped)" = "area"),
                      selected = "one"),
@@ -1622,7 +1698,7 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
           "Reset to the original data" = if (count_act("Reset to original")) "yes" else "no",
           "Calculated variables" = if (is.null(calc) || !nrow(calc)) "none" else
             paste(sprintf("%s = %s", calc$column, calc$new_value), collapse = "; "),
-          "Full history" = if (isTRUE(with_audit)) "see the Audit_trail sheet" else "in the app's Audit Trail (not exported)"),
+          "Full history" = if (isTRUE(with_audit)) "see the Activity_log sheet" else "in the app's Activity Log (not exported)"),
         # what the registration data allowed (fields not mapped), and the
         # standardisation applied at import
         "Data available" = local({
@@ -1687,7 +1763,7 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
         # The report is about the selection, not about which columns an
         # export carried.
         sections$Selection <- sections$Selection[names(sections$Selection) != "Variables exported"]
-        sections[["Data preparation (before selection)"]][["Full history"]] <- "in the app's Audit Trail"
+        sections[["Data preparation (before selection)"]][["Full history"]] <- "in the app's Activity Log"
         hs <- col_of("hh_size")
         people <- if (is.null(hs)) NA else sum(as_number(df_all[[hs]])[s$prioritized], na.rm = TRUE)
         sel <- s$prioritized
@@ -1756,7 +1832,7 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
           if (!is.null(ex_df) && nrow(ex_df)) xl_data_sheet(wb, "Excluded_by_design", sanitize_for_excel(ex_df))
           if (isTRUE(input$export_audit) && !is.null(lg) && nrow(lg)) {
             lg$timestamp <- fmt_datetime(lg$timestamp)
-            xl_data_sheet(wb, "Audit_trail", sanitize_for_excel(data.frame(phase = audit_phase(lg$action), lg,
+            xl_data_sheet(wb, "Activity_log", sanitize_for_excel(data.frame(phase = audit_phase(lg$action), lg,
                                                                            stringsAsFactors = FALSE)))
           }
           wb
@@ -1796,13 +1872,119 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
       }
     )
 
-    # What Targeting Monitoring draws its verification sample from: every
-    # household of the areas covered, served or not, and eligible or not.
-    list(frame = reactive({
-      df <- uploaded_df(); req(df)
-      s <- selection()
-      list(df = df, served = s$prioritized, eligible = s$eligible)
-    }))
+    # --- Summary by area (under the design): households and people ---------
+    level_choices <- function() {
+      df <- uploaded_df()
+      lv <- Filter(function(k) shiny::isTruthy(user_setup[[k]]) && isTRUE(user_setup[[k]] %in% names(df)), names(AREA_LEVELS))
+      stats::setNames(lv, unname(AREA_LEVELS[lv]))
+    }
+    observe({
+      ch <- level_choices()
+      updateSelectInput(session, "sum_level", choices = ch,
+                        selected = if (isTRUE(isolate(input$sum_level) %in% ch)) isolate(input$sum_level) else unname(ch[1]))
+    })
+    # a display toggle: the level only switches between views of the applied selection
+    output$sel_by_area <- render_react_table({
+      s <- selection(); df <- uploaded_df(); req(s, df, any(s$prioritized))
+      lv <- level_choices(); req(length(lv))
+      upto <- if (isTRUE(input$sum_level %in% lv)) input$sum_level else lv[[1]]
+      st <- list(hh_size = user_setup$hh_size)
+      for (k in names(AREA_LEVELS)[seq_len(match(upto, names(AREA_LEVELS)))]) st[[k]] <- user_setup[[k]]
+      out <- selection_by_area(df, st, s)
+      req(out)
+      tot <- out[1, , drop = FALSE]
+      for (cl in names(out)) tot[[cl]] <- if (is.numeric(out[[cl]])) sum(out[[cl]], na.rm = TRUE) else ""
+      tot[[1]] <- "Total"
+      tot$`Eligible served (%)` <- if (tot$Eligible > 0) round(100 * tot$Served / tot$Eligible, 1) else NA
+      tot$`Households served (%)` <- round(100 * tot$Served / tot$Households, 1)
+      rbind(out, tot)
+    }, empty = "Apply a selection to see it by area.")
+
+    # --- The monitoring sample ------------------------------------------------
+    # Households found eligible and not eligible by this selection, drawn area
+    # by area, for a post-targeting survey / baseline (before distribution) or
+    # a PDM. Monitoring reads the workbook back (ptm_read_sample()).
+    mon_sample <- reactiveVal(NULL)
+    observeEvent(input$mon_open, {
+      req(input$mon_open > 0)  # React buttons send an initial 0
+      s <- sel_or_null()
+      need_ok(!is.null(s) && any(s$prioritized), "Apply a selection that serves households first.")
+      need_ok(shiny::isTruthy(user_setup$unique_id), "Map the household identifier first: each interview is matched back on it.")
+      ch <- level_choices()
+      mon_sample(NULL)
+      showModal(modalDialog(
+        title = tagList(bsicons::bs_icon("shuffle"), " Draw a monitoring sample"), size = "m", easyClose = TRUE,
+        tags$p(class = "small text-muted",
+               "Households this selection found eligible and households it found not eligible, drawn at random in each area,",
+               " to measure the implementation errors. Eligible households cut by prioritisation (excluded by design) are left out."),
+        radioButtons(ns("mon_kind"), "Survey", width = "100%",
+                     choices = c("Post-targeting survey / baseline (before distribution, recommended)" = "Baseline",
+                                 "PDM (after distribution)" = "PDM"), selected = "Baseline"),
+        selectInput(ns("mon_level"), "Draw separately in each", width = "100%",
+                    choices = c("(one group for all areas)" = "", ch), selected = if (length(ch)) unname(ch[1]) else ""),
+        radioButtons(ns("mon_size_mode"), "Households per group and area", inline = TRUE,
+                     choices = c("From a margin of error" = "margin", "A fixed number" = "fixed"), selected = "margin"),
+        conditionalPanel(sprintf("input['%s'] === 'margin'", ns("mon_size_mode")),
+                         numericInput(ns("mon_margin"), tagList("Margin of error (%)", info_tip("For each group of each area, enough households to estimate a share within this margin at 95% confidence (about 96 households at 10%, fewer in small groups).")),
+                                      value = 10, min = 3, max = 25, step = 1, width = "100%")),
+        conditionalPanel(sprintf("input['%s'] === 'fixed'", ns("mon_size_mode")),
+                         numericInput(ns("mon_n"), "Households per group", value = 60, min = 5, step = 5, width = "100%")),
+        tags$div(class = "d-flex gap-2",
+                 numericInput(ns("mon_reserve"), tagList("Replacements (%)", info_tip("Extra households drawn in each group, on their own sheet, to replace households that cannot be found, have moved or refuse.")),
+                              value = 10, min = 0, max = 100, step = 5, width = "100%"),
+                 numericInput(ns("mon_seed"), "Seed", value = 123, min = 1, step = 1, width = "100%")),
+        uiOutput(ns("mon_result")),
+        footer = tagList(modalButton("Close"),
+                         actionButton(ns("mon_draw"), "Draw", icon = icon("shuffle"), class = "btn-primary"))
+      ))
+    })
+    observeEvent(input$mon_draw, {
+      req(input$mon_draw > 0)
+      tw_guard("Drawing the monitoring sample", {
+        s <- selection(); df <- uploaded_df()
+        status <- ifelse(s$prioritized, "selected", ifelse(s$eligible, "by_design", "not_selected"))
+        lvl <- input$mon_level
+        area <- if (shiny::isTruthy(lvl) && isTRUE(user_setup[[lvl]] %in% names(df))) df[[user_setup[[lvl]]]]
+        size <- list(mode = input$mon_size_mode %||% "margin", margin = (input$mon_margin %||% 10) / 100, n = input$mon_n %||% 60)
+        reserve <- input$mon_reserve %||% 10; seed <- input$mon_seed %||% 123
+        d <- ptm_draw(status, area, size, reserve = reserve / 100, seed = seed)
+        need_ok(NROW(d$rows) > 0, "Nothing to draw: no eligible or not eligible household.")
+        mon_sample(list(lists = ptm_sample_lists(df, d, user_setup), design = d$design, kind = input$mon_kind %||% "Baseline",
+                        level = if (is.null(area)) "" else user_setup[[lvl]], drawn_at = fmt_datetime(),
+                        size = size, reserve = reserve, seed = seed, by_design = sum(status == "by_design")))
+        audit_add(modification_log, "Selection", "Monitoring sample drawn",
+                  sprintf("%s: %s households to survey, %s replacements, %d area(s)", input$mon_kind %||% "Baseline",
+                          fmt_n(sum(d$design$n)), fmt_n(sum(d$design$reserve)), length(unique(d$design$area))))
+      })
+    })
+    output$mon_result <- renderUI({
+      m <- mon_sample(); if (is.null(m)) return(NULL)
+      d <- m$design
+      tags$div(class = "alert alert-success small py-2 mt-2",
+               bsicons::bs_icon("check-circle-fill"),
+               sprintf(" %s households to survey (%s eligible, %s not eligible) and %s replacements, in %d area(s).",
+                       fmt_n(sum(d$n)), fmt_n(sum(d$n[d$group == "selected"])), fmt_n(sum(d$n[d$group == "not_selected"])),
+                       fmt_n(sum(d$reserve)), length(unique(d$area))),
+               tags$div(class = "mt-2", downloadButton(ns("mon_download"), "Download the sample list (Excel)", class = "btn-primary btn-sm")),
+               tags$div(class = "mt-2 text-muted",
+                        "After the survey, load the survey data and this workbook in Targeting Monitoring > Implementation errors."))
+    })
+    output$mon_download <- download_handler(
+      filename = function() export_file_name(if (identical(mon_sample()$kind, "PDM")) "PDM_sample" else "Post_targeting_sample", "xlsx", "%Y-%m-%d_%Hh%M"),
+      content = function(file) {
+        m <- mon_sample(); req(m)
+        wb <- ptm_sample_workbook(m$lists, m$design, kind = m$kind, meta = list(
+          "Survey" = if (identical(m$kind, "PDM")) "PDM (after distribution)" else "Post-targeting survey / baseline (before distribution)",
+          "Drawn at" = m$drawn_at, "Household ID column" = user_setup$unique_id,
+          "Areas by" = if (nzchar(m$level)) m$level else "one group for all areas",
+          "Size" = if (identical(m$size$mode, "fixed")) paste(m$size$n, "households per group")
+                   else sprintf("margin of error %.0f%% at 95%% confidence", 100 * m$size$margin),
+          "Replacements" = paste0(m$reserve, "%"), "Seed" = m$seed,
+          "Excluded by design (not in the frame)" = fmt_n(m$by_design)))
+        save_workbook_readonly(wb, file)
+      })
+    observe(gate_button("mon_open", isTRUE(any(sel_or_null()$prioritized)), "Apply a selection that serves households first."))
+    invisible(NULL)
   })
 }
 
@@ -1882,12 +2064,21 @@ selection_by_area <- function(df, settings, s) {
   first <- !duplicated(g)
   out <- key[first, , drop = FALSE][order(g[first]), , drop = FALSE]
   names(out) <- AREA_LEVELS[lv]
+  cut <- s$eligible & !s$prioritized
   out$Households <- agg(rep(1, nrow(df)))
+  out$People <- agg(size)
   out$Eligible <- agg(s$eligible)
+  out$`Eligible people` <- agg(ifelse(s$eligible, size, 0))
   out$Served <- agg(s$prioritized)
-  out$`Excluded by design` <- agg(s$eligible & !s$prioritized)
   out$`People served` <- agg(ifelse(s$prioritized, size, 0))
-  out$`Served (%)` <- round(100 * out$Served / out$Households, 1)
+  out$`Excluded by design` <- agg(cut)
+  out$`Excluded people` <- agg(ifelse(cut, size, 0))
+  # coverage of need (served / eligible) and share of the population served
+  out$`Eligible served (%)` <- ifelse(out$Eligible > 0, round(100 * out$Served / out$Eligible, 1), NA)
+  out$`Households served (%)` <- round(100 * out$Served / out$Households, 1)
+  # no household size mapped: no new people columns (zeros would mislead;
+  # People served stays, the selection report reads it)
+  if (all(is.na(size))) out <- out[, setdiff(names(out), c("People", "Eligible people", "Excluded people")), drop = FALSE]
   rownames(out) <- NULL
   out
 }

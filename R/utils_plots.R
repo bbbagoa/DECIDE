@@ -1,6 +1,6 @@
 #' WFP chart theme for plotly
 #'
-#' Applies the house style (Commissioner, token colorway, transparent surfaces,
+#' Applies the house style ('Open Sans', token colorway, transparent surfaces,
 #' neutral gridlines, dark hover labels, no modebar) to any plotly object.
 #' Only fills in layout keys the chart has not set itself, so chart-specific
 #' margins, axes or legends always win.
@@ -15,11 +15,11 @@ wfp_plotly <- function(p, dark = FALSE) {
   if (is.null(attrs)) attrs <- list()
   existing <- Reduce(function(a, b) utils::modifyList(a, b), attrs, p$x$layout %||% list())
 
-  font <- list(family = "Commissioner, 'Segoe UI', system-ui, sans-serif", size = 12,
+  font <- list(family = "'Open Sans', 'Segoe UI', system-ui, sans-serif", size = 12,
                color = if (isTRUE(dark)) "#e6ebf2" else "#1f2a37")
   defaults <- list(
     font = font,
-    colorway = c("#0A6EB4", "#26bde2", "#f7b825", "#3f7e44", "#c5192d", "#6c757d"),
+    colorway = c("#007DBC", "#26bde2", "#f7b825", "#3f7e44", "#c5192d", "#6c757d"),
     paper_bgcolor = "rgba(0,0,0,0)",
     plot_bgcolor = "rgba(0,0,0,0)",
     hoverlabel = list(bgcolor = "#1f2a37", bordercolor = "#1f2a37",
@@ -78,7 +78,7 @@ empty_state <- function(title, subtitle = NULL, icon = "clipboard-data") {
 #' One characteristic's weighted distribution: bars of the (top 12) answers,
 #' or a histogram of a number
 #' @noRd
-profile_distribution <- function(x, w, colour = "#0A6EB4") {
+profile_distribution <- function(x, w, colour = "#007DBC") {
   ok <- !is.na(x) & is.finite(w) & w > 0
   x <- x[ok]; w <- w[ok]
   if (is.numeric(x)) {
@@ -112,7 +112,7 @@ profile_distribution <- function(x, w, colour = "#0A6EB4") {
 create_profile_plot <- function(data, view_col, demo_col, weights = NULL, title = NULL) {
 
   # WFP token palette (blue / cyan / amber / green / red)
-  wfp_pal <- c("#0A6EB4", "#26bde2", "#f7b825", "#3f7e44", "#c5192d")
+  wfp_pal <- c("#007DBC", "#26bde2", "#f7b825", "#3f7e44", "#c5192d")
 
   if (is.null(weights)) weights <- rep(1, nrow(data))
   weights <- rep(weights, length.out = nrow(data))
@@ -198,7 +198,7 @@ create_profile_plot <- function(data, view_col, demo_col, weights = NULL, title 
       textposition = 'inside',
       insidetextanchor = 'middle',
       insidetextfont = list(color = "#023047", size = 9,
-                            family = "Commissioner, 'Segoe UI', system-ui, sans-serif"),
+                            family = "'Open Sans', 'Segoe UI', system-ui, sans-serif"),
       hovertemplate = ~paste0(View, ": %{y:.1f}%<extra></extra>")
     ) |>
       plotly::layout(barmode = "stack")
@@ -243,7 +243,7 @@ create_profile_plot <- function(data, view_col, demo_col, weights = NULL, title 
 #' @param d data.frame(criterion (ordered factor), value, direction, hover)
 #' @noRd
 lollipop_plot <- function(d, xtitle) {
-  cols <- c(inclusion = "#0A6EB4", exclusion = "#c5192d")
+  cols <- c(inclusion = "#007DBC", exclusion = "#c5192d")
   # past 20 criteria every other name is written on the axis (hover gives all)
   lv <- levels(d$criterion) %||% unique(as.character(d$criterion))
   yax <- list(title = "", automargin = TRUE)

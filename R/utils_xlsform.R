@@ -20,7 +20,7 @@
 #' @param title Form title.
 #' @return list(survey, choices, settings, readme) data frames.
 #' @noRd
-xlsform_draft <- function(sc, cuts = list(), areas = NULL, labels = character(0), title = "TargetWise household registration") {
+xlsform_draft <- function(sc, cuts = list(), areas = NULL, labels = character(0), title = "DECIDE household registration") {
   safe <- function(x) {
     n <- gsub("[^A-Za-z0-9_.-]", "_", as.character(x))
     n <- ifelse(grepl("^[A-Za-z_]", n), n, paste0("_", n))
@@ -175,8 +175,8 @@ xlsform_draft <- function(sc, cuts = list(), areas = NULL, labels = character(0)
   kind <- if (pm) "proxy means test" else if (rk) "vulnerability ranking" else "scorecard"
   readme <- data.frame(
     Item = c("What this is", "Made from", "Score", "Eligible", "Vulnerability categories", "Questions", "Before use",
-             "Enumerators", "Back in TargetWise"),
-    Note = c("A DRAFT registration form for KoboToolbox, ODK or MODA, made by TargetWise from the adopted design. Adjust and correct it before use.",
+             "Enumerators", "Back in DECIDE"),
+    Note = c("A DRAFT registration form for KoboToolbox, ODK or MODA, made by DECIDE from the adopted design. Adjust and correct it before use.",
              sprintf("The adopted %s (%d criteria, adopted %s, eligible when the score is above %s).", kind, length(items),
                      sc$adopted_at %||% "-", num(sc$threshold %||% 0)),
              "vuln_score rebuilds the design's score from the answers (points per criterion, exclusion criteria subtract; never below 0 except for a PMT).",
@@ -184,9 +184,9 @@ xlsform_draft <- function(sc, cuts = list(), areas = NULL, labels = character(0)
              sprintf("vuln_quartile (1-4) and vuln_quintile (1-5): the score's quartile and quintile on the design data (cut points %s and %s); higher = more vulnerable.",
                      paste(num(sort(unique(cuts$quartiles))), collapse = ", "), paste(num(sort(unique(cuts$quintiles))), collapse = ", ")),
              "Household identification (consent, ID, enumerator, areas, GPS) and the head of household as beneficiary (names, sex, date of birth and age, marital status, phone, identity document, optional photo, household size), with an optional alternate recipient (names, sex, age, relationship, optional photo). One required question per criterion, named as in the design. Criteria built in the calculator are asked as they are named: rewrite them as the questions they come from, with calculations if needed. Yes/no answers are stored as 1/0.",
-             "Upload it once to KoboToolbox / MODA or ODK's online converter to check it; this file was not validated by TargetWise.",
+             "Upload it once to KoboToolbox / MODA or ODK's online converter to check it; this file was not validated by DECIDE.",
              "Keep the calculated score hidden from enumerators: a visible score invites answers that change it.",
-             "Load the registration data in Beneficiary Selection: TargetWise recomputes the score and eligibility from the answers; the form's own score is a field check."),
+             "Load the registration data in Beneficiary Selection: DECIDE recomputes the score and eligibility from the answers; the form's own score is a field check."),
     stringsAsFactors = FALSE)
   list(survey = survey, choices = choices, settings = settings, readme = readme)
 }
@@ -259,7 +259,7 @@ xlsform_write <- function(x, file) {
   wb <- openxlsx::createWorkbook()
   for (nm in c("survey", "choices", "settings")) xl_data_sheet(wb, nm, x[[nm]])
   xl_summary_sheet(wb, "About this draft", "Draft registration form (XLSForm)",
-                   paste("Made by TargetWise on", fmt_date(), "- adjust it, then check it in the form builder"),
+                   paste("Made by DECIDE on", fmt_date(), "- adjust it, then check it in the form builder"),
                    list("This draft" = stats::setNames(x$readme$Note, x$readme$Item)))
   openxlsx::saveWorkbook(wb, file, overwrite = TRUE)   # not locked: the CO edits this form
   invisible(file)

@@ -25,17 +25,17 @@ app_ui_build <- function() {
   i18n <- app_i18n()
   shinyreact::page_react(
     src_dir = app_sys("app/react"),
-    title = "TargetWise",
+    title = paste("DECIDE -", DECIDE_LINE),
     theme = bslib::bs_theme(
       version = 5,
-      primary = "#0A6EB4",
+      primary = "#007DBC",
       secondary = "#f7b825",
       success = "#3f7e44",
       info = "#26bde2",
       warning = "#f7b825",
       danger = "#c5192d",
       base_font = app_font(),
-      code_font = app_font()
+      code_font = "'IBM Plex Mono', ui-monospace, Consolas, monospace"
     ),
     if (!is.null(i18n)) shiny.i18n::usei18n(i18n),
     tags$head(golem_add_external_resources()),
@@ -65,7 +65,7 @@ golem_add_external_resources <- function() {
     favicon(),
     bundle_resources(
       path = app_sys("app/www"),
-      app_title = "TargetWise",
+      app_title = paste("DECIDE -", DECIDE_LINE),
       # a new address per installation: the browser fetches the new files
       version = tw_resource_version()
     )

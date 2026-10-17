@@ -2,7 +2,7 @@
 // The sidebar filters the data every tab reads (applied on Apply); the tabs
 // are input$dq_tabs, so the Health check's Review buttons switch them from
 // the server (bslib::nav_select("dq_tabs", <tab title>)). See PORT.md.
-import { CalendarRange, ClipboardList, Copy, FileText, Filter, Gauge, HeartPulse, IdCard, MapPin, RotateCcw, SpellCheck, X } from "lucide-react";
+import { CalendarRange, ClipboardList, Copy, FileText, Filter, Gauge, HeartPulse, IdCard, MapPin, RotateCcw, SpellCheck, Tags, X } from "lucide-react";
 import { DataExport } from "@/components/DataExport";
 import { useShinyInputValue, useShinyOutputValue } from "@/shiny";
 import { ActionButton, DateInput, DownloadButton, SelectInput, TextOutput } from "@/lib/inputs";
@@ -11,6 +11,7 @@ import { ns, type T } from "./common";
 import { HealthTab } from "./HealthTab";
 import { SpellingTab } from "./SpellingTab";
 import { LocationTab } from "./LocationTab";
+import { ValuesTab } from "./ValuesTab";
 import { MissingTab } from "./MissingTab";
 import { OutliersTab } from "./OutliersTab";
 import { DuplicatesTab } from "./DuplicatesTab";
@@ -68,6 +69,7 @@ export function DqPage({ t }: { active: boolean; t: T }) {
     { value: "Health check", label: t("Health check"), icon: <HeartPulse size={14} />, content: <HealthTab t={t} /> },
     { value: "Spelling & Integrity", label: t("Spelling & Integrity"), icon: <SpellCheck size={14} />, content: <SpellingTab t={t} /> },
     { value: "Location names normalization", label: t("Location names"), icon: <MapPin size={14} />, content: <LocationTab t={t} /> },
+    { value: "Category values", label: t("Category values"), icon: <Tags size={14} />, content: <ValuesTab t={t} /> },
     { value: "Missing Data Checking", label: t("Missing data"), icon: <ClipboardList size={14} />, content: <MissingTab t={t} /> },
     { value: "Outliers", label: t("Outliers"), icon: <Gauge size={14} />, content: <OutliersTab t={t} /> },
     { value: "Duplicates", label: t("Duplicates"), icon: <Copy size={14} />, content: <DuplicatesTab t={t} /> },

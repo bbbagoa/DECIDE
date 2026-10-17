@@ -996,7 +996,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
       req(nrow(d) > 0)
       ord <- stats::aggregate(effect ~ criterion, d, mean)
       cats <- ord$criterion[order(-ord$effect)]
-      pal <- c("#0A6EB4", "#26bde2", "#f7b825", "#3f7e44", "#c5192d", "#8a96a3")
+      pal <- c("#007DBC", "#26bde2", "#f7b825", "#3f7e44", "#c5192d", "#8a96a3")
       mods <- unique(d$model)
       ser <- lapply(seq_along(mods), function(k) {
         g <- d[d$model == mods[k], , drop = FALSE]
@@ -1375,7 +1375,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
                              splitLine = list(show = FALSE), axisLabel = list(formatter = "fn:pctv"))),
            series = list(
              list(type = "bar", name = "Eigenvalue", barMaxWidth = 38,
-                  data = lapply(seq_along(ev), function(k) list(value = round(ev[k], 4), itemStyle = list(color = if (kept[k]) "#0A6EB4" else "#b8c4d0"),
+                  data = lapply(seq_along(ev), function(k) list(value = round(ev[k], 4), itemStyle = list(color = if (kept[k]) "#007DBC" else "#b8c4d0"),
                                                                tip = sprintf("%s: eigenvalue <b>%.2f</b>, %.1f%% of the variation%s", ax[k], ev[k], share[k], if (kept[k]) " (in the index)" else ""))),
                   markLine = ec_markline(list(list(yAxis = 1)), "Kaiser: 1", "#f7b825")),
              list(type = "line", name = "Cumulative %", yAxisIndex = 1, symbolSize = 6, itemStyle = list(color = "#c5192d"),
@@ -1390,7 +1390,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
       L <- ix$axis_loadings
       ord <- order(-L[, 1])
       cats <- rownames(L)[ord]
-      pal <- c("#0A6EB4", "#26bde2", "#f7b825", "#3f7e44", "#c5192d")
+      pal <- c("#007DBC", "#26bde2", "#f7b825", "#3f7e44", "#c5192d")
       o <- ec_bars(cats, lapply(seq_len(ncol(L)), function(j) list(
         name = colnames(L)[j], color = pal[(j - 1) %% length(pal) + 1], values = round(L[ord, j], 4),
         tips = sprintf("%s, %s: <b>%.2f</b>", ec_esc(cats), ec_esc(colnames(L)[j]), L[ord, j]))),
@@ -1417,7 +1417,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
         list(type = "lda", x = sc[ok], group = grp, M = M[ok, , drop = FALSE])
       }
     })
-    grp_cols <- c(Vulnerable = "#c5192d", `Not vulnerable` = "#3f7e44", Selected = "#0A6EB4", `Not selected` = "#8a96a3")
+    grp_cols <- c(Vulnerable = "#c5192d", `Not vulnerable` = "#3f7e44", Selected = "#007DBC", `Not selected` = "#8a96a3")
 
     # Deprivation counting: how many weighted deprivations households have.
     output$dep_count_plot <- render_echart({
@@ -1431,7 +1431,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
            yAxis = list(type = "value", name = "% of households", nameLocation = "middle", nameGap = 40, axisLabel = list(formatter = "fn:pctv")),
            series = list(list(type = "bar", name = "Households", barMaxWidth = 38,
                               data = lapply(seq_len(nrow(d)), function(k) list(
-                                value = list(d$score[k], round(d$pct[k], 2)), itemStyle = list(color = if (d$score[k] > t) "#0A6EB4" else "#b8c4d0"),
+                                value = list(d$score[k], round(d$pct[k], 2)), itemStyle = list(color = if (d$score[k] > t) "#007DBC" else "#b8c4d0"),
                                 tip = sprintf("%s weighted deprivations<br><b>%.1f%%</b> of households (%s)", fmt5(d$score[k]), d$pct[k], format(d$n[k], big.mark = ",")))),
                               markLine = ec_markline(list(list(xAxis = t)), sprintf("threshold %s", fmt5(t))))))
     })
@@ -1491,8 +1491,8 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
         g <- paste("Profile", ix$assign[idx]); ifelse(ix$assign[idx] %in% ix$target, paste(g, "(targeted)"), g)
       } else ifelse(scored()$eligible[idx] %in% TRUE, "Selected", "Not selected")
       lv <- sort(unique(grp))
-      pal <- if (identical(ix$type, "cluster")) stats::setNames(rep_len(c("#c5192d", "#f7b825", "#0A6EB4", "#26bde2", "#3f7e44", "#8a96a3", "#5b6b7c", "#b8c4d0"), length(lv)), lv)
-             else c(Selected = "#0A6EB4", `Not selected` = "#b8c4d0")
+      pal <- if (identical(ix$type, "cluster")) stats::setNames(rep_len(c("#c5192d", "#f7b825", "#007DBC", "#26bde2", "#3f7e44", "#8a96a3", "#5b6b7c", "#b8c4d0"), length(lv)), lv)
+             else c(Selected = "#007DBC", `Not selected` = "#b8c4d0")
       share <- summary(pc)$importance[2, 1:2]
       list(x = jit(Z[, 1]), y = jit(Z[, 2]), group = grp, pal = pal,
            xlab = sprintf("Component 1 (%.0f%%, towards %s)", 100 * share[1], anchor_text(ix$anchor)),
@@ -1541,7 +1541,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
     output$pq_plot <- render_wfp_plotly({
       q <- pq(); req(q)
       p <- plotly::plot_ly(q, x = ~k, y = ~silhouette, type = "scatter", mode = "lines+markers", name = "Silhouette",
-                           line = list(color = "#0A6EB4"), marker = list(color = "#0A6EB4"))
+                           line = list(color = "#007DBC"), marker = list(color = "#007DBC"))
       if (!all(is.na(q$entropy))) p <- plotly::add_trace(p, y = ~entropy, name = "Entropy", line = list(color = "#c5192d"),
                                                          marker = list(color = "#c5192d"))
       plotly::layout(p, xaxis = list(title = "Number of profiles", dtick = 1), yaxis = list(title = ""),
@@ -1580,9 +1580,9 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
                   lineStyle = list(color = "rgba(128,128,128,0.45)", width = 1),
                   data = lapply(seq_along(th), function(k) list(round(cos(th[k]), 4), round(sin(th[k]), 4)))),
              list(type = "lines", coordinateSystem = "cartesian2d", silent = TRUE, symbol = I(c("none", "arrow")), symbolSize = 8,
-                  lineStyle = list(color = "#0A6EB4", width = 1.4, opacity = 0.9),
+                  lineStyle = list(color = "#007DBC", width = 1.4, opacity = 0.9),
                   data = lapply(seq_along(x), function(k) list(coords = list(c(0, 0), c(round(x[k], 4), round(y[k], 4)))))),
-             list(type = "scatter", name = "Criteria", symbolSize = 6, itemStyle = list(color = "#0A6EB4"),
+             list(type = "scatter", name = "Criteria", symbolSize = 6, itemStyle = list(color = "#007DBC"),
                   label = list(show = TRUE, position = "top", fontSize = 10, formatter = "{b}"),
                   data = lapply(seq_along(x), function(k) list(name = ix$criteria[k], value = list(round(x[k], 4), round(y[k], 4)),
                                                                tip = sprintf("%s<br>axis 1: %.2f, axis 2: %.2f", lab[k], x[k], y[k]))))))
@@ -1609,7 +1609,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
       d <- d[order(-d$r), , drop = FALSE]
       lab <- vapply(d$criterion, function(v) { l <- var_label(v); if (is.na(l)) ec_esc(v) else sprintf("%s<br><i>%s</i>", ec_esc(v), ec_esc(l)) }, "")
       o <- ec_bars(d$criterion, list(list(name = "Correlation", values = round(d$r, 4),
-                                          colors = ifelse(is.na(d$r) | d$r >= 0, "#0A6EB4", "#c5192d"),
+                                          colors = ifelse(is.na(d$r) | d$r >= 0, "#007DBC", "#c5192d"),
                                           tips = sprintf("%s<br>correlation with the index: <b>%.2f</b>", lab, d$r))),
                    horizontal = TRUE, value_name = "Correlation with the index", legend = FALSE)
       o$xAxis$min <- -1; o$xAxis$max <- 1
@@ -1662,7 +1662,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
       d <- pmt_eval_sample(f); req(nrow(d) > 0); ll <- f$log_line
       cell <- ifelse(d$actual <= ll, ifelse(d$predicted <= ll, "Poor, predicted poor", "Poor, predicted not poor (exclusion)"),
                      ifelse(d$predicted <= ll, "Not poor, predicted poor (inclusion)", "Not poor, predicted not poor"))
-      pal <- c("Poor, predicted poor" = "#0A6EB4", "Poor, predicted not poor (exclusion)" = "#c5192d",
+      pal <- c("Poor, predicted poor" = "#007DBC", "Poor, predicted not poor (exclusion)" = "#c5192d",
                "Not poor, predicted poor (inclusion)" = "#f7b825", "Not poor, predicted not poor" = "#9aa5b1")
       rng <- range(c(d$actual, d$predicted), na.rm = TRUE)
       o <- ec_scatter(d$actual, d$predicted, cell, pal, "Measured log welfare per person", "Predicted log welfare per person",
@@ -1682,7 +1682,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
       d <- pmt_decile_coverage(f$eval, pmt_cut(f))
       poor_dec <- ceiling(10 * f$headcount)
       o <- ec_bars(paste0("D", d$decile), list(list(name = "Selected", values = round(100 * d$selected, 1),
-                                                    colors = ifelse(d$decile <= poor_dec, "#0A6EB4", "#9aa5b1"),
+                                                    colors = ifelse(d$decile <= poor_dec, "#007DBC", "#9aa5b1"),
                                                     tips = sprintf("D%d: <b>%.0f%%</b> selected", d$decile, 100 * d$selected))),
                    value_name = "Selected (%)", pct = TRUE, legend = FALSE, rotate = 0)
       o$xAxis$name <- "Decile of measured welfare per person (D1 poorest)"; o$xAxis$nameLocation <- "middle"; o$xAxis$nameGap <- 26
@@ -1711,7 +1711,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
       f <- fitted()$pmt; req(f)
       d <- pmt_eval_sample(f); req(nrow(d) > 0)
       res <- d$actual - d$predicted
-      o <- ec_scatter(d$predicted, res, rep("Households", nrow(d)), c(Households = "#0A6EB4"),
+      o <- ec_scatter(d$predicted, res, rep("Households", nrow(d)), c(Households = "#007DBC"),
                       "Predicted log welfare per person", "Measured - predicted", tip_fmt = "%s<br>%s: %.2f<br>%s: %+.2f", size = 4, opacity = 0.5)
       o$legend <- NULL; o$grid$top <- 16
       o$series[[1]]$markLine <- list(silent = TRUE, symbol = "none", label = list(show = FALSE), animation = FALSE,
@@ -1723,7 +1723,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
     # cut-off moves; the curve nearest the bottom-left corner is best.
     output$pmt_compare_plot <- render_echart({
       b <- bench(); req(isTRUE(b$pmt), length(b$curves) > 1)
-      cols <- c("#0A6EB4", "#26bde2", "#f7b825", "#3f7e44", "#c5192d", "#6c757d")
+      cols <- c("#007DBC", "#26bde2", "#f7b825", "#3f7e44", "#c5192d", "#6c757d")
       o <- ec_lines(lapply(seq_along(b$curves), function(k) {
         d <- b$curves[[k]]
         list(name = names(b$curves)[k], x = 100 * d$inclusion_error, y = 100 * d$exclusion_error,
@@ -1805,7 +1805,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
 
     output$comparison_roc <- render_echart({
       b <- live_bench(); req(length(b$roc) > 0)
-      pal <- c("#0A6EB4", "#26bde2", "#3f7e44", "#f7b825", "#c5192d", "#8a96a3")
+      pal <- c("#007DBC", "#26bde2", "#3f7e44", "#f7b825", "#c5192d", "#8a96a3")
       nm <- names(b$roc)[vapply(b$roc, function(r) NROW(r) > 0, logical(1))]
       o <- ec_lines(lapply(seq_along(nm), function(i) {
         cur <- ec_thin(b$roc[[nm[i]]], 400)
@@ -2155,7 +2155,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
     output$cov_area_plot <- render_echart({
       d <- cov_area_tab(); req(nrow(d))
       overall <- 100 * mean(scored()$eligible %in% TRUE)
-      ec_bars(d$area, list(list(name = "Selected", values = round(100 * d$share, 1), color = "#0A6EB4",
+      ec_bars(d$area, list(list(name = "Selected", values = round(100 * d$share, 1), color = "#007DBC",
                                 tips = sprintf("<b>%s</b><br>%.1f%% selected of %s households", ec_esc(d$area), 100 * d$share, format(d$n, big.mark = ",")),
                                 markLine = ec_markline(list(list(yAxis = overall)), sprintf("all areas: %.0f%%", overall), dotted = TRUE))),
               value_name = "% selected", pct = TRUE, legend = FALSE)
@@ -2166,7 +2166,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
       met <- rowSums(s$detail != 0, na.rm = TRUE)
       d <- stats::aggregate(list(sel = s$eligible %in% TRUE), list(met = met), function(v) c(n = length(v), p = mean(v)))
       d <- data.frame(met = d$met, n = d$sel[, "n"], p = 100 * d$sel[, "p"])
-      o <- ec_bars(d$met, list(list(name = "Selected", values = round(d$p, 1), color = "#0A6EB4",
+      o <- ec_bars(d$met, list(list(name = "Selected", values = round(d$p, 1), color = "#007DBC",
                                     tips = sprintf("%d criteria met<br><b>%.0f%%</b> selected (of %s households)", d$met, d$p, format(d$n, big.mark = ",")))),
                    value_name = "% selected", pct = TRUE, legend = FALSE, rotate = 0)
       o$xAxis$name <- "Criteria met by the household"; o$xAxis$nameLocation <- "middle"; o$xAxis$nameGap <- 26
@@ -2196,7 +2196,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
       o <- order(-gap)
       cats <- crit[o]
       tip <- function(k, lab) sprintf("%s<br>%s: <b>%.1f%%</b> meet it<br>gap %+.0f points", ec_esc(cats), lab, p[k, o], gap[o])
-      ec_bars(cats, list(list(name = "Selected", values = round(p[1, o], 1), color = "#0A6EB4", tips = tip(1, "Selected")),
+      ec_bars(cats, list(list(name = "Selected", values = round(p[1, o], 1), color = "#007DBC", tips = tip(1, "Selected")),
                          list(name = "Not selected", values = round(p[2, o], 1), color = "#8a96a3", tips = tip(2, "Not selected"))),
               value_name = "% of households meeting it", pct = TRUE)
     })
@@ -2361,7 +2361,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
       lv <- seq(0, max(met))
       a <- tabulate(met[el] + 1L, length(lv)); b <- tabulate(met[!el] + 1L, length(lv))
       tip <- function(n, lab) sprintf("%d criteria met<br>%s: <b>%s</b> households", lv, lab, format(n, big.mark = ","))
-      o <- ec_bars(lv, list(list(name = "Eligible", values = a, color = "#0A6EB4", tips = tip(a, "Eligible")),
+      o <- ec_bars(lv, list(list(name = "Eligible", values = a, color = "#007DBC", tips = tip(a, "Eligible")),
                             list(name = "Not eligible", values = b, color = "#8a96a3", tips = tip(b, "Not eligible"))),
                    value_name = "Households", rotate = 0)
       o$xAxis$name <- "Criteria met by the household"; o$xAxis$nameLocation <- "middle"; o$xAxis$nameGap <- 26
@@ -2959,7 +2959,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
           "Recommended action" = v$action,
           "Assessment source" = assessment_source() %||% "unknown",
           "Built at" = fmt_datetime(),
-          "Built with" = paste0("TargetWise ",
+          "Built with" = paste0("DECIDE (TargetWise package) ",
                                 tryCatch(as.character(utils::packageVersion("TargetWise")),
                                          error = function(e) ""))
         )

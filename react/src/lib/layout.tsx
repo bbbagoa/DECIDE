@@ -158,6 +158,17 @@ function TabsView({ tabs, className, pills, cur, set }: TabsProps & { cur: strin
 
 /* --------------------------------------------------- notes and dialogs */
 
+/** A loading veil over its (relative) parent: a ring and what is being done. */
+export function Busy({ show, label }: { show: boolean; label?: ReactNode }) {
+  if (!show) return null;
+  return (
+    <div className="tw-busy" role="status" aria-live="polite">
+      <span className="tw-busy-ring" aria-hidden />
+      {label ? <span className="tw-busy-label">{label}</span> : null}
+    </div>
+  );
+}
+
 export function Notice({ kind = "info", children, className }: { kind?: "info" | "warning" | "danger" | "success"; children: ReactNode; className?: string }) {
   return (
     <div className={`tw-notice tw-notice-${kind}${className ? " " + className : ""}`} role={kind === "danger" ? "alert" : undefined}>

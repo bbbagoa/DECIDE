@@ -49,7 +49,7 @@ export function RichText({ id, send, item, label, placeholder = "", rows = 3, va
           <B cmd="underline" title="Underline"><Underline size={s} /></B>
           <B cmd="strikeThrough" title="Strikethrough"><Strikethrough size={s} /></B>
           <span className="tw-rt-sep" />
-          <label className="tw-rt-color" title="Text colour"><Type size={s} /><input type="color" data-cmd="foreColor" defaultValue="#0A6EB4" /></label>
+          <label className="tw-rt-color" title="Text colour"><Type size={s} /><input type="color" data-cmd="foreColor" defaultValue="#007DBC" /></label>
           <label className="tw-rt-color" title="Highlight"><Highlighter size={s} /><input type="color" data-cmd="hiliteColor" defaultValue="#fff3bf" /></label>
           <span className="tw-rt-sep" />
           <B cmd="insertUnorderedList" title="Bulleted list"><List size={s} /></B>

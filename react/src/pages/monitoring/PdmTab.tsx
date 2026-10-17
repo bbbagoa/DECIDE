@@ -1,12 +1,12 @@
 // Tab 1, implementation errors (R/mod_pdm.R, module monitoring_1-pdm): the
-// verification sample drawn from the selection, the survey (or PDM) data,
+// survey (or PDM) data, the sample list drawn in Beneficiary Selection,
 // who was selected and who was eligible, the weighting, then the errors, the
 // verdict, the decision per area, the details and the ranking calibration.
 // Facts come from output$pdm_state, pdm_side, pdm_verdict and calib_state;
 // the file input is the server's, hosted.
 import { useRef, type ReactNode } from "react";
 import {
-  Calculator, ChartColumn, ClipboardCheck, Download, Info, MapPin, Scale, Shuffle, SignpostBig, SlidersHorizontal, Table,
+  Calculator, ChartColumn, ClipboardCheck, Download, Info, MapPin, Scale, SignpostBig, SlidersHorizontal, Table,
   Target, Upload, UserCheck, Users, UserMinus, UserPlus, Percent, Play, TrendingUp,
 } from "lucide-react";
 import { useShinyInputValue, useShinyOutputValue } from "@/shiny";
@@ -30,7 +30,7 @@ const ns = (x: string) => P + x;
 type Decision = { area: string; n_selected: number; n_not: number; inclusion: number | null; exclusion: number | null; level: string; decision: string };
 type PdmState = {
   data: { source: string; rows: number; cols: number } | null;
-  sample: { drawn_at: string; n: number; selected: number; not_selected: number; reserve: number; areas: number } | null;
+  sample: { file: string; drawn_at: string; n: number; selected: number; not_selected: number; areas: number; design: boolean } | null;
   match: { n: number; of: number } | null;
   results: {
     kind: string; inclusion: number | null; exclusion: number | null; coverage: number | null; precision: number | null; recall: number | null;
@@ -39,7 +39,10 @@ type PdmState = {
   } | null;
 };
 
-type Side = { benef: { n: number; choices: Choice[] } | null; elig: { kind: "warning" | "note"; text: string } | null };
+type Side = {
+  benef: { n: number; choices: Choice[] } | null; elig: { kind: "warning" | "note"; text: string } | null;
+  elig_levels: { n: number; choices: Choice[] } | null;
+};
 type Verdict = VerdictFacts & { excl_design: { n: number; share: number | null } | null };
 type Calib = {
   status: "none" | "nodata" | "ready"; missing?: string[]; cols?: string[];
@@ -69,7 +72,6 @@ export function PdmTab({ t }: { t: (s: string) => string }) {
   // pdm_state waits while this tab is hidden (it matches the survey to the sample)
   const here = useRef<HTMLDivElement>(null);
   useOutputVisibility(ns("pdm_state"), here);
-  const sizeMode = useShinyInputValue<string>(ns("ptm_size_mode")) ?? "margin";
   const kind = useShinyInputValue<string>(ns("data_kind")) ?? "Baseline";
   const benefSrc = useShinyInputValue<string>(ns("benef_source")) ?? "design";
   const eligSrc = useShinyInputValue<string>(ns("pdm_elig_source")) ?? "column";
@@ -83,38 +85,7 @@ export function PdmTab({ t }: { t: (s: string) => string }) {
 
   const sidebar = (
     <>
-      <Steps open="sample" steps={[
-        {
-          key: "sample", title: t("0. Verification sample"), icon: <Shuffle size={14} />,
-          summary: st?.sample ? `${n0(st.sample.n)} ${t("households")}` : t("Not drawn"),
-          content: <>
-            <p className="small text-muted mb-2">{t("Draw households the targeting selected and households it did not, area by area, from the current selection (Beneficiary Selection). Survey them before any distribution: errors found then can still be corrected.")}</p>
-            <SelectInput id={ns("ptm_level")} label={t("Area level")} choices={[]} value="" />
-            <RadioInput id={ns("ptm_size_mode")} label={t("Households per group and area")} value="margin" buttons
-                        choices={[{ value: "margin", label: t("From a margin of error") }, { value: "fixed", label: t("A fixed number") }]} />
-            <div style={show(sizeMode === "margin")}>
-              <NumericInput id={ns("ptm_margin")} label={t("Margin of error (%)")} value={10} min={3} max={25} step={1}
-                            help={t("For each group of each area, enough households to estimate a share within this margin at 95% confidence (about 96 households at 10%, fewer in small groups).")} />
-            </div>
-            <div style={show(sizeMode === "fixed")}>
-              <NumericInput id={ns("ptm_n")} label={t("Households per group")} value={60} min={10} step={10} />
-            </div>
-            <div className="tw-grid-2 tw-mon-pair">
-              <NumericInput id={ns("ptm_reserve")} label={t("Reserve (%)")} value={10} min={0} max={50} step={5} />
-              <NumericInput id={ns("ptm_seed")} label={t("Seed")} value={123} min={1} step={1} />
-            </div>
-            <div className="small text-muted mb-2">{t("The reserve replaces households who cannot be found.")}</div>
-            <div className="d-flex flex-column gap-2">
-              <ActionButton id={ns("ptm_draw")} label={t("Draw the sample")} icon={<Shuffle size={14} />} className="w-100" />
-              <DownloadButton id={ns("ptm_download")} label={t("Sample list (Excel)")} icon={<Download size={14} />} variant="outline-secondary" className="w-100" />
-            </div>
-            <div className="tw-mon-status">
-              {st?.sample
-                ? <span className="ok">{t("Drawn")} {st.sample.drawn_at}: {n0(st.sample.n)} {t("households to survey")} ({n0(st.sample.selected)} {t("selected")}, {n0(st.sample.not_selected)} {t("not selected")}) {t("and")} {n0(st.sample.reserve)} {t("in reserve")}, {st.sample.areas} {t("area(s).")}</span>
-                : t("No sample drawn yet.")}
-            </div>
-          </>,
-        },
+      <Steps open="data" steps={[
         {
           key: "data", title: t("1. Survey data"), icon: <Upload size={14} />,
           summary: st?.data ? st.data.source : t("Nothing loaded"),
@@ -124,10 +95,12 @@ export function PdmTab({ t }: { t: (s: string) => string }) {
               { value: "PDM", label: t("PDM (after distribution, least preferred)") }]} />
             {kind === "PDM"
               ? <Notice kind="warning" className="mb-2">{t("The least preferred option: after distribution nothing can be undone, vulnerability may have changed, and the assistance itself may have changed the answers to some criteria (assets bought, debts paid). Use it when no survey could be done before distribution.")}</Notice>
-              : <p className="small text-muted mb-2">{t("A survey of selected and non-selected households after the selection and before the distribution (the sample drawn in step 0): problems in an area can still be fixed, or its distribution paused.")}</p>}
+              : <p className="small text-muted mb-2">{t("A survey of eligible and not eligible households after the selection and before the distribution (the sample drawn in Beneficiary Selection): problems in an area can still be fixed, or its distribution paused.")}</p>}
             <Dropzone id={ns("pdm_file_ui")} />
             <ModaImport ns={ns("moda")} size="sm" t={t} />
             <ModaRefresh ns={ns("moda_refresh")} block className="mt-2" t={t} />
+            <ActionButton id={ns("fsi-open")} label={t("Food security indicators")} icon={<Calculator size={14} />} variant="outline-secondary"
+                          title={t("Calculate FCS, rCSI, LCS, FES or CARI from the WFP standard variables")} className="w-100 mt-2" />
             <DataSummary ns={ns("summary")} block className="mt-2" t={t} />
             {st?.data && (
               <div className="tw-mon-status">
@@ -143,11 +116,19 @@ export function PdmTab({ t }: { t: (s: string) => string }) {
           summary: benefSrc === "design" ? t("From the sample list") : t("A column"),
           content: <>
             <RadioInput id={ns("benef_source")} value="design" choices={[
-              { value: "design", label: t("From the sample list (match the household ID)") }, { value: "column", label: t("A column in the data") }]} />
+              { value: "design", label: t("From the sample list (upload it, match the household ID)") }, { value: "column", label: t("A column in the data") }]} />
             <div style={show(benefSrc === "design")}>
+              <div className="small text-muted mb-1">{t("The sample list downloaded from Beneficiary Selection (Excel), as it is.")}</div>
+              <Dropzone id={ns("ptm_sample_ui")} />
+              {st?.sample && (
+                <div className="tw-mon-status mb-2">
+                  <span className="ok"><strong>{st.sample.file || t("Sample list")}</strong></span><br />
+                  {n0(st.sample.n)} {t("households")} ({n0(st.sample.selected)} {t("eligible")}, {n0(st.sample.not_selected)} {t("not eligible")}), {st.sample.areas} {t("area(s)")}{st.sample.drawn_at ? `, ${t("drawn")} ${st.sample.drawn_at}` : ""}.
+                  {!st.sample.design && <div className="text-warning">{t("No Design sheet: type the population sizes in step 4.")}</div>}
+                </div>)}
               <SelectInput id={ns("ptm_id")} label={t("Household ID in the survey")} choices={[]} value="" />
               {!st?.sample
-                ? <div className="small text-warning mb-2">{t("Draw the sample in step 0 first, or use a column in the data.")}</div>
+                ? <div className="small text-warning mb-2">{t("Upload the sample list first, or use a column in the data.")}</div>
                 : st.match && (
                   <div className={`small mb-2 ${st.match.n < st.match.of ? "text-warning" : "text-success"}`}>
                     {n0(st.match.n)} {t("of")} {n0(st.match.of)} {t("surveyed households found in the sample list.")}
@@ -176,7 +157,12 @@ export function PdmTab({ t }: { t: (s: string) => string }) {
               { value: "column", label: t("A column in the data") }, { value: "scorecard", label: t("Apply the adopted scorecard") },
               { value: "rules", label: t("Apply the eligibility rules") }]} />
             <div style={show(eligSrc === "column")}>
-              <SelectInput id={ns("pdm_eligibility")} label={t("Eligibility column")} choices={[]} value="" />
+              <SelectInput id={ns("pdm_eligibility")} label={t("Eligibility column")} choices={[]} value=""
+                           help={t("A yes / no column, e.g. one made by Food security indicators (CARI_FES_2class, FCS_PoorBorderline...).")} />
+              {/* always mounted, so the server's choice of answer reaches it */}
+              <div hidden={side?.elig_levels?.n !== 2}>
+                <RadioInput id={ns("pdm_elig_level")} label={t("Answer meaning 'vulnerable' (should be assisted)")} inline choices={side?.elig_levels?.choices ?? []} />
+              </div>
             </div>
             {side?.elig && (side.elig.kind === "warning"
               ? <Notice kind="warning" className="mb-2">{t(side.elig.text)}</Notice>
@@ -218,6 +204,7 @@ export function PdmTab({ t }: { t: (s: string) => string }) {
   const perUnit = wMode === "population" && popScope === "unit";
   return (
     <SidebarLayout width={330} sidebar={sidebar}>
+      {!r && <HowTo t={t} />}
       {perUnit && (!unit || unit === "(none)"
         ? <Notice kind="warning">{t("Choose the area column (step 2) to give the population sizes per area.")}</Notice>
         : <Card title={t("Population sizes per area")} icon={<Users size={15} />}>
@@ -225,7 +212,7 @@ export function PdmTab({ t }: { t: (s: string) => string }) {
             <DataTable id={ns("pop_table")} searchable={false} compact />
           </Card>)}
       {!st?.data
-        ? <EmptyState title={t("No survey data loaded")} sub={t("Draw the verification sample (step 0), survey it before distribution, then load the survey in step 1 and set up steps 2 to 4. A PDM extract can be loaded instead.")} />
+        ? <EmptyState title={t("No survey data loaded")} sub={t("Load the survey in step 1 and the sample list in step 2, then set up steps 3 and 4.")} />
         : !r && <EmptyState title={t("Ready to compute")} sub={t("Check steps 2 to 4, then click Compute implementation errors.")} />}
       <Tabs id={ns("pdm_tabs")} tabs={[
         {
@@ -379,5 +366,21 @@ function Calibrate({ t }: { t: (s: string) => string }) {
         </>
       )}
     </div>
+  );
+}
+
+/** What to do, in order: the sample is drawn in Beneficiary Selection, the survey and the list come back here. */
+function HowTo({ t }: { t: (s: string) => string }) {
+  return (
+    <Card title={t("How to measure the implementation errors")} icon={<SignpostBig size={15} />}>
+      <ol className="small mb-0 ps-3">
+        <li>{t("In Beneficiary Selection, apply the selection, then click Draw a monitoring sample and download the sample list (Excel). It holds the households to survey, their replacements, whether each was found eligible, and where to find them.")}</li>
+        <li>{t("Survey those households (before the distribution for a post-targeting survey, after it for a PDM) with the questions of the eligibility criteria and the household ID. Replace a household that cannot be found with the next one of the same area and group on the Replacements sheet.")}</li>
+        <li>{t("Here, step 1: load the survey data. Step 2: upload the sample list as it was downloaded and choose the survey's household ID column.")}</li>
+        <li>{t("Step 3: say who was really eligible (apply the adopted scorecard or the rules to the survey answers). Step 4: keep the weights from the sample design.")}</li>
+        <li>{t("Compute: the inclusion and exclusion errors, the verdict and a decision per area.")}</li>
+      </ol>
+      <div className="small text-muted mt-2">{t("A PDM with a column saying who received assistance can be used without the sample list: choose A column in the data in step 2 and type the population sizes in step 4.")}</div>
+    </Card>
   );
 }

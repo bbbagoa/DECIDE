@@ -2,7 +2,7 @@
 export type Tile = { label: string; value: string; sub?: string; icon?: string; share?: number | null };
 
 /** WFP chart colours (the token hexes of wfp-ui.css). */
-export const WFP = { blue: "#0A6EB4", cyan: "#26bde2", amber: "#f7b825", green: "#3f7e44", red: "#c5192d", grey: "#8a96a3", slate: "#5b6b7c" };
+export const WFP = { blue: "#007DBC", cyan: "#26bde2", amber: "#f7b825", green: "#3f7e44", red: "#c5192d", grey: "#8a96a3", slate: "#5b6b7c" };
 export const AREA_COLS = [WFP.blue, WFP.cyan, WFP.amber, WFP.green, WFP.red, WFP.grey];
 
 const isShare = (t: Tile) => typeof t.share === "number" && isFinite(t.share);
@@ -39,7 +39,7 @@ export function Ring({ tile }: { tile: Tile }) {
         <circle cx="32" cy="32" r={r} fill="none" stroke="rgba(128,128,128,.18)" strokeWidth="6" />
         <circle cx="32" cy="32" r={r} fill="none" stroke={WFP.blue} strokeWidth="6" strokeLinecap="round"
                 strokeDasharray={`${on} ${c - on}`} transform="rotate(-90 32 32)" />
-        <text x="32" y="36.5" textAnchor="middle" style={{ font: "700 13px Commissioner, system-ui, sans-serif", fill: "currentColor" }}>
+        <text x="32" y="36.5" textAnchor="middle" style={{ font: "700 13px 'Open Sans', system-ui, sans-serif", fill: "currentColor" }}>
           {tile.value}
         </text>
       </svg>

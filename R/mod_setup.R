@@ -434,7 +434,7 @@ mod_setup_server <- function(id, r_data, parent_session, trigger_open = reactive
           tags$div(
             tags$h6(class = "tw-review-h", bsicons::bs_icon("search"), " Checks on the content"),
             if (!nrow(warns)) tags$p(class = "small text-success", bsicons::bs_icon("check-circle"), " No problem found in the mapped columns.")
-            else tagList(tags$p(class = "small text-muted", "These do not stop anything; they go to the audit trail. Correct them in Data Quality or in the source file."),
+            else tagList(tags$p(class = "small text-muted", "These do not stop anything; they go to the activity log. Correct them in Data Quality or in the source file."),
                          tags$ul(class = "small", lapply(warns$message, tags$li))),
             tags$h6(class = "tw-review-h mt-3", bsicons::bs_icon("grid-3x3-gap"), " What these data allow"),
             tags$table(class = "table table-sm tw-ready-table",
