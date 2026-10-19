@@ -77,8 +77,7 @@ mod_pdm_ui <- function(id, explore = NULL) {
               # ground truth is the criteria, re-applied to the PDM answers.
               radioButtons(ns("pdm_elig_source"), NULL,
                            choices = c("A column in the data" = "column",
-                                       "Apply the adopted scorecard" = "scorecard",
-                                       "Apply the eligibility rules" = "rules"),
+                                       "Apply the selection logic" = "logic"),
                            selected = "column"),
               conditionalPanel(sprintf("input['%s'] === 'column'", ns("pdm_elig_source")),
                                pick("pdm_eligibility", "Eligibility column")),
@@ -158,6 +157,13 @@ mod_pdm_server <- function(id, workspace = NULL, country_office = reactive(NULL)
                            user_setup = NULL) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
+    # The selection logic, loaded here from the file Beneficiary Selection
+    # downloads (approach, card with the threshold applied, rules): each
+    # workstream stands alone, so nothing adopted elsewhere is read here, and
+    # the Design card alone is not used (Selection may change its threshold
+    # and add rules). Its card (a ranking) also feeds "Calibrate the ranking".
+    pdm_logic <- reactiveVal(NULL)
+    pdm_card <- reactive(pdm_logic()$scorecard)
 
     # Kept whole; the analysis runs on the areas covered (see mod_area_scope).
     pdm_all <- reactiveVal(NULL)
@@ -182,8 +188,8 @@ mod_pdm_server <- function(id, workspace = NULL, country_office = reactive(NULL)
     pdm_inputs <- c("pdm_eligibility", "pdm_beneficiary", "pdm_prioritized", "pdm_unit", "pdm_weight", "ptm_id")
     workspace_register(workspace, "pdm",
       snapshot = function() {
-        if (is.null(pdm_df()) && is.null(sample_design())) return(NULL)
-        list(df = pdm_all(), results = results(), source = pdm_source(), moda_form = pdm_form(), sample_design = sample_design(),
+        if (is.null(pdm_df()) && is.null(sample_design()) && is.null(pdm_logic())) return(NULL)
+        list(df = pdm_all(), results = results(), logic = pdm_logic(), source = pdm_source(), moda_form = pdm_form(), sample_design = sample_design(),
              inputs = lapply(stats::setNames(pdm_inputs, pdm_inputs), function(k) input[[k]]),
              options = list(data_kind = input$data_kind, elig_source = input$pdm_elig_source, weight_mode = input$pdm_weight_mode,
                             benef_source = input$benef_source,
@@ -193,6 +199,7 @@ mod_pdm_server <- function(id, workspace = NULL, country_office = reactive(NULL)
                             tol = c(input$tol_lower, input$tol_upper)))
       },
       restore = function(s) {
+        pdm_logic(s$logic)
         pdm_df(s$df)
         pdm_source(s$source)
         pdm_form(s$moda_form)
@@ -205,7 +212,9 @@ mod_pdm_server <- function(id, workspace = NULL, country_office = reactive(NULL)
         }
         o <- s$options %||% list()
         if (!is.null(o$data_kind)) updateRadioButtons(session, "data_kind", selected = o$data_kind)
-        if (!is.null(o$elig_source)) updateRadioButtons(session, "pdm_elig_source", selected = o$elig_source)
+        # the scorecard and rules sources became the selection logic
+        if (!is.null(o$elig_source)) updateRadioButtons(session, "pdm_elig_source",
+                                                        selected = if (o$elig_source %in% c("scorecard", "rules")) "logic" else o$elig_source)
         if (!is.null(o$weight_mode)) updateRadioButtons(session, "pdm_weight_mode", selected = o$weight_mode)
         if (!is.null(o$benef_source)) updateRadioButtons(session, "benef_source", selected = o$benef_source)
         if (!is.null(o$pop_scope)) updateRadioButtons(session, "pop_scope", selected = o$pop_scope)
@@ -244,6 +253,20 @@ mod_pdm_server <- function(id, workspace = NULL, country_office = reactive(NULL)
                           format(sum(sd$group == "Selected", na.rm = TRUE), big.mark = ",")))
       })
     })
+    # --- The selection logic, from its file -----------------------------------
+    observeEvent(input$pdm_logic_file, {
+      f <- input$pdm_logic_file; req(f)
+      tw_guard("Reading the selection logic", {
+        lg <- read_selection_logic(f$datapath)
+        pdm_logic(lg)
+        calib(NULL)
+        updateRadioButtons(session, "pdm_elig_source", selected = "logic")
+        audit_add(modification_log, "Monitoring", "Selection logic loaded", paste0(f$name, ": ", logic_describe(lg)))
+      })
+    })
+    output$pdm_logic_ui <- renderUI(fileInput(ns("pdm_logic_file"), NULL, width = "100%", accept = ".json",
+                                              placeholder = "The selection logic (.json)"))
+    outputOptions(output, "pdm_logic_ui", suspendWhenHidden = FALSE)
     output$ptm_sample_ui <- renderUI(fileInput(ns("ptm_sample_file"), NULL, width = "100%", accept = c(".xlsx", ".xls"),
                                                placeholder = "The sample list (Excel)"))
     outputOptions(output, "ptm_sample_ui", suspendWhenHidden = FALSE)
@@ -370,18 +393,14 @@ mod_pdm_server <- function(id, workspace = NULL, country_office = reactive(NULL)
     elig_note <- function() {
       src <- input$pdm_elig_source %||% "column"
       if (identical(src, "column")) return(NULL)
-      if (identical(src, "scorecard")) {
-        sc <- if (is.null(user_setup)) NULL else user_setup$scorecard
-        if (scorecard_is_empty(sc)) return(list(kind = "warning", text = "No scorecard is adopted yet (Targeting Design)."))
-        df <- pdm_df()
-        # the columns alone say what is missing: nothing is scored here
-        miss <- if (is.null(df)) character(0) else pdm_scorecard_eligibility(df[0, , drop = FALSE], sc)$missing
-        return(if (length(miss)) list(kind = "warning", text = paste0("The PDM data lacks: ", paste(miss, collapse = ", "), "."))
-               else list(kind = "note", text = sprintf("%d criteria, eligible when score > %s.", length(sc$items), fmt5(sc$threshold %||% 0))))
-      }
-      rs <- if (is.null(user_setup)) NULL else user_setup$rules
-      if (is.null(rs) || ruleset_is_empty(rs)) return(list(kind = "warning", text = "No eligibility rules are saved yet (Beneficiary Selection)."))
-      list(kind = "note", text = paste(ruleset_describe(rs, user_setup), collapse = " "))
+      lg <- pdm_logic()
+      if (is.null(lg)) return(list(kind = "warning", text = "Load the selection logic downloaded from Beneficiary Selection (.json)."))
+      df <- pdm_df()
+      # the columns alone say what is missing: nothing is computed here
+      r <- if (is.null(df)) list(missing = character(0)) else
+        tryCatch(logic_eligibility(df[0, , drop = FALSE], lg), error = function(e) list(missing = conditionMessage(e)))
+      if (length(r$missing)) list(kind = "warning", text = paste0("The survey data lacks: ", paste(r$missing, collapse = ", "), "."))
+      else list(kind = "note", text = logic_describe(lg))
     }
 
     # --- Load -------------------------------------------------------------
@@ -440,6 +459,19 @@ mod_pdm_server <- function(id, workspace = NULL, country_office = reactive(NULL)
                                       selected = guess(c("admin1", "province", "region")) %||% "(none)")
       shinyWidgets::updatePickerInput(session, "pdm_weight", choices = c("(none)", cols),
                                       selected = guess(c("weight", "poids", "pond")) %||% "(none)")
+      # A survey that kept the sample list's columns carries the sample: no
+      # list to upload, and the group sizes give the weights.
+      sv <- ptm_survey_design(df)
+      if (!is.null(sv)) {
+        sample_design(sv)
+        updateRadioButtons(session, "benef_source", selected = "design")
+        updateRadioButtons(session, "pdm_weight_mode", selected = if (is.null(sv$design)) "population" else "design")
+        audit_add(modification_log, "Monitoring", "Sample read from the survey",
+                  sprintf("%s households, %s eligible", format(sum(!is.na(sv$group)), big.mark = ","),
+                          format(sum(sv$group == "Selected", na.rm = TRUE), big.mark = ",")))
+      } else if (isTRUE(sample_design()$from_survey)) {
+        sample_design(NULL)   # the previous survey's, not this one's
+      }
       sd <- sample_design()
       idg <- if (!is.null(sd) && sd$id_col %in% cols) sd$id_col else guess(c("household_id", "hh_id", "hhid", "unique", "id"))
       shinyWidgets::updatePickerInput(session, "ptm_id", choices = c("Choose a column" = "", cols), selected = idg %||% "")
@@ -494,25 +526,15 @@ mod_pdm_server <- function(id, workspace = NULL, country_office = reactive(NULL)
       }
       src <- input$pdm_elig_source %||% "column"
       elig <- switch(src,
-        scorecard = {
-          r <- pdm_scorecard_eligibility(df, if (is.null(user_setup)) NULL else user_setup$scorecard)
+        logic = {
+          if (is.null(pdm_logic())) { showNotification("Load the selection logic downloaded from Beneficiary Selection first.", type = "error"); return() }
+          r <- tryCatch(logic_eligibility(df, pdm_logic()), error = function(e) list(missing = conditionMessage(e)))
           if (length(r$missing)) {
-            showNotification(paste0("The scorecard cannot be applied: the PDM data lacks ", paste(r$missing, collapse = ", "), "."),
+            showNotification(paste0("The selection logic cannot be applied: the survey data lacks ", paste(r$missing, collapse = ", "), "."),
                              type = "error", duration = 12)
             return()
           }
           r$eligible
-        },
-        rules = {
-          rs <- if (is.null(user_setup)) NULL else user_setup$rules
-          if (is.null(rs) || ruleset_is_empty(rs)) { showNotification("No eligibility rules are saved yet.", type = "error"); return() }
-          ev <- ruleset_eval(df, rs, user_setup)
-          if (length(ev$unresolved)) {
-            showNotification(paste0("The rules cannot be applied: the PDM data lacks ", paste(ev$unresolved, collapse = ", "), "."),
-                             type = "error", duration = 12)
-            return()
-          }
-          ev$mask
         },
         { req(input$pdm_eligibility); elig_col_flag(df) })
 
@@ -584,6 +606,9 @@ mod_pdm_server <- function(id, workspace = NULL, country_office = reactive(NULL)
         w_elig <- sum(wts[elig %in% TRUE])
         excl_design <- list(n = length(by_design),
                             share = if (w_elig > 0) sum(wts[by_design]) / w_elig else NA_real_)
+        # served although not prioritised: outside the criteria for targeting
+        # and prioritisation, so an inclusion error (Advisory 2/2025, p. 5)
+        elig[which(elig %in% TRUE & prio %in% FALSE)] <- FALSE
         elig[by_design] <- NA
       }
 
@@ -619,18 +644,49 @@ mod_pdm_server <- function(id, workspace = NULL, country_office = reactive(NULL)
         check.names = FALSE,
         stringsAsFactors = FALSE
       )
+      # the same four cells for the page's matrix (Advisory 2/2025, p. 6), each
+      # with the households surveyed in it
+      nsum <- function(mask) sum(known & mask & wts > 0, na.rm = TRUE)
+      matrix <- list(correct_in = wsum(elig & sel), incl = wsum(!elig & sel),
+                     excl = wsum(elig & !sel), correct_out = wsum(!elig & !sel),
+                     n_correct_in = nsum(elig & sel), n_incl = nsum(!elig & sel),
+                     n_excl = nsum(elig & !sel), n_correct_out = nsum(!elig & !sel))
 
       # a decision per area, while it can still be acted on
       tol <- c((input$tol_lower %||% 5) / 100, (input$tol_upper %||% 20) / 100)
+      before <- !identical(input$data_kind, "PDM")
       decisions <- if (!is.null(unit_col) && unit_col %in% names(df))
-        ptm_area_decisions(benef, elig, df[[unit_col]], wts, tol[1], tol[2], before = !identical(input$data_kind, "PDM"))
+        ptm_area_decisions(benef, elig, df[[unit_col]], wts, tol[1], tol[2], before = before)
+      # the same table at every area level the survey carries, for the page's
+      # level picker: the sample's areas, the chosen column, the mapped levels
+      # (found under a form's group path too), else the levels guessed from
+      # the survey's own column names
+      base <- sub(".*[/.]", "", names(df))
+      guessed <- NULL
+      lv_cols <- c(if (identical(unit_col, ".ptm_area")) stats::setNames(".ptm_area", paste("Sample area", sample_design()$level %||% "")),
+                   if (shiny::isTruthy(input$pdm_unit) && input$pdm_unit %in% names(df)) stats::setNames(input$pdm_unit, input$pdm_unit))
+      for (k in names(AREA_LEVELS)) {
+        v <- as.character(if (!is.null(user_setup)) user_setup[[k]] else "")[1]
+        hit <- if (!is.na(v) && nzchar(v)) names(df)[base == v][1] else NA
+        if (is.na(hit)) {
+          if (is.null(guessed)) guessed <- tryCatch(guess_mapping(df[setdiff(names(df), c(".ptm_area", ".ptm_group"))]), error = function(e) data.frame(key = character(), column = character()))
+          v <- guessed$column[guessed$key == k][1]
+          hit <- if (!is.na(v) && nzchar(v)) v else NA
+        }
+        if (!is.na(hit)) lv_cols[sprintf("%s \u00b7 %s", AREA_LEVELS[[k]], v)] <- hit
+      }
+      lv_cols <- lv_cols[!duplicated(lv_cols)]
+      by_level <- lapply(names(lv_cols), function(nm) list(
+        label = trimws(nm), rows = ptm_area_decisions(benef, elig, df[[lv_cols[[nm]]]], wts, tol[1], tol[2], before = before)))
       results(list(
         metrics = metrics,
         decisions = decisions,
+        by_level = by_level,
         kind = input$data_kind %||% "Baseline",
         from_design = from_design,
         by_unit = by_unit,
         confusion = confusion,
+        matrix = matrix,
         excl_design = excl_design,
         n = nrow(df),
         n_known = sum(known),
@@ -641,8 +697,8 @@ mod_pdm_server <- function(id, workspace = NULL, country_office = reactive(NULL)
                            column = paste("weight column", wcol), "none"),
         strata = strata,
         no_nonbenef = no_nonbenef,
-        elig_source = switch(src, scorecard = "the adopted scorecard, applied to the PDM answers",
-                             rules = "the eligibility rules, applied to the PDM answers",
+        elig_source = switch(src, logic = paste0("the selection logic of Beneficiary Selection, applied to the survey answers (",
+                                                 sub("[.]$", "", logic_describe(pdm_logic())), ")"),
                              paste("the PDM column", input$pdm_eligibility)),
         elig_col = if (identical(src, "column")) input$pdm_eligibility else src,
         benef_col = if (from_design) "the sample list" else input$pdm_beneficiary,
@@ -663,7 +719,7 @@ mod_pdm_server <- function(id, workspace = NULL, country_office = reactive(NULL)
     # adopted, the columns that can hold the outcome, what the data lack, and
     # the last measure.
     output$calib_state <- shinyreact::reactive_output({
-      sc <- if (is.null(user_setup)) NULL else user_setup$scorecard
+      sc <- pdm_card()
       if (scorecard_is_empty(sc) || !is_ranking(sc)) return(list(status = "none"))
       df <- pdm_df()
       if (is.null(df)) return(list(status = "nodata"))
@@ -686,7 +742,7 @@ mod_pdm_server <- function(id, workspace = NULL, country_office = reactive(NULL)
     })
     observeEvent(input$calib_run, {
       req(input$calib_run > 0)   # a React button sends 0 at start
-      sc <- user_setup$scorecard; df <- pdm_df()
+      sc <- pdm_card(); df <- pdm_df()
       need_ok(!scorecard_is_empty(sc) && !is.null(df) && shiny::isTruthy(input$calib_outcome), "Choose the outcome column first.")
       r <- pdm_scorecard_eligibility(df, sc)
       need_ok(!length(r$missing), sprintf("These data lack the criteria %s.", paste(r$missing, collapse = ", ")))
@@ -833,30 +889,48 @@ mod_pdm_server <- function(id, workspace = NULL, country_office = reactive(NULL)
       r$confusion
     }, formats = list(Beneficiary = "int", `Non-beneficiary` = "int"))
 
+    # bars of rates, coloured by meaning, with an optional dashed band
+    rate_bars <- function(d, mark = NULL, ymax = NULL) {
+      d <- d[!is.na(d$value), , drop = FALSE]
+      req(nrow(d) > 0)
+      list(tooltip = list(trigger = "item", formatter = "fn:tip"),
+           grid = list(left = 8, right = if (is.null(mark)) 16 else 64, top = 24, bottom = 8, containLabel = TRUE),
+           xAxis = list(type = "category", data = d$metric, axisLabel = list(interval = 0, width = 110, overflow = "break")),
+           yAxis = Filter(Negate(is.null), list(type = "value", min = 0, max = if (max(d$value) > 0.8) 1 else ymax,
+                                                axisLabel = list(formatter = "fn:pct"))),
+           series = list(Filter(Negate(is.null), list(type = "bar", barMaxWidth = 70,
+                              label = list(show = TRUE, position = "top", formatter = "fn:pct1"),
+                              markLine = mark,
+                              data = lapply(seq_len(nrow(d)), function(i) list(
+                                value = d$value[i], itemStyle = list(color = d$colour[i]),
+                                tip = sprintf("%s: <b>%.1f%%</b>", d$metric[i], 100 * d$value[i])))))))
+    }
+
+    # the two errors against the tolerance band, dashed
     output$pdm_plot <- render_echart({
       r <- results(); req(r)
       m <- r$metrics
-      d <- data.frame(
-        metric = c("Implementation inclusion error",
-                   "Implementation exclusion error", "Coverage"),
-        value = c(m$inclusion_error, m$exclusion_error, m$coverage_rate),
-        colour = c("#c5192d", "#f7b825", "#3f7e44"),
-        stringsAsFactors = FALSE
-      )
-      d <- d[!is.na(d$value), , drop = FALSE]
-      req(nrow(d) > 0)
-      # the colours carry the meaning: inclusion, exclusion, coverage
-      list(tooltip = list(trigger = "item", formatter = "fn:tip"),
-           grid = list(left = 8, right = 16, top = 24, bottom = 8, containLabel = TRUE),
-           xAxis = list(type = "category", data = d$metric, axisLabel = list(interval = 0, width = 110, overflow = "break")),
-           yAxis = Filter(Negate(is.null), list(type = "value", min = 0, max = if (max(d$value) > 0.8) 1,
-                                                axisLabel = list(formatter = "fn:pct"))),
-           series = list(list(type = "bar", barMaxWidth = 70,
-                              label = list(show = TRUE, position = "top", formatter = "fn:pct1"),
-                              data = lapply(seq_len(nrow(d)), function(i) list(
-                                value = d$value[i], itemStyle = list(color = d$colour[i]),
-                                tip = sprintf("%s: <b>%.1f%%</b>", d$metric[i], 100 * d$value[i]))))))
-    }, height = 300)
+      d <- data.frame(metric = c("Inclusion error", "Exclusion error"),
+                      value = c(m$inclusion_error, m$exclusion_error), colour = c("#c5192d", "#f7b825"),
+                      stringsAsFactors = FALSE)
+      tol <- c(lower = (input$tol_lower %||% 5) / 100, upper = (input$tol_upper %||% 20) / 100)
+      tol_lines <- list(symbol = "none", silent = TRUE,
+        data = lapply(names(tol), function(k) list(yAxis = tol[[k]],
+          lineStyle = list(type = "dashed", width = 1.5, color = if (k == "upper") "#c5192d" else "#3f7e44"),
+          label = list(show = TRUE, position = "end", fontSize = 10, color = if (k == "upper") "#c5192d" else "#3f7e44",
+                       formatter = sprintf("%s %d%%", if (k == "upper") "Upper" else "Lower", round(100 * tol[[k]]))))))
+      top <- max(d$value, na.rm = TRUE)
+      rate_bars(d, tol_lines, ymax = if (is.finite(top) && top < tol[["upper"]]) ceiling(24 * tol[["upper"]]) / 20)
+    }, height = 320)
+
+    # who was reached among the eligible, and who was right among the assisted
+    output$pdm_cov_plot <- render_echart({
+      r <- results(); req(r)
+      m <- r$metrics
+      rate_bars(data.frame(metric = c("Coverage (recall)", "Precision"),
+                           value = c(m$coverage_rate, m$precision), colour = c("#3f7e44", "#007DBC"),
+                           stringsAsFactors = FALSE))
+    }, height = 320)
 
     output$pdm_by_unit <- render_react_table({
       r <- results(); req(r)
@@ -874,56 +948,9 @@ mod_pdm_server <- function(id, workspace = NULL, country_office = reactive(NULL)
       filename = function() export_file_name("Targeting_PDM_Accuracy", "xlsx", "%Y-%m-%d_%Hh%Mm%Ss"),
       content = function(file) {
         r <- results()
-        wb <- openxlsx::createWorkbook()
-
-        openxlsx::addWorksheet(wb, "Summary")
-        if (is.null(r)) {
-          write_data(wb, "Summary", data.frame(Message = "No analysis has been run."))
-        } else {
-          m <- r$metrics
-          summary_df <- data.frame(
-            Field = c("Survey", "Country office", "Exported at", "Areas covered", "Eligibility from", "Weighting", "Records analysed", "Records with known eligibility",
-                      "Eligibility column", "Beneficiary column", "Weighted",
-                      "Implementation inclusion error",
-                      "Implementation exclusion error", "Coverage rate",
-                      "Selection ratio", "Precision", "Recall",
-                      "Excluded by design (not counted as errors)"),
-            Value = c(
-              if (identical(r$kind, "PDM")) "Post-distribution monitoring (after distribution)" else "Post-targeting survey / baseline (before distribution)",
-              country_office() %||% "",
-              fmt_datetime(),
-              scope$text(),
-              r$elig_source %||% r$elig_col, r$weighting %||% (if (isTRUE(r$weighted)) "weight column" else "none"),
-              format(r$n, big.mark = ","),
-              format(r$n_known, big.mark = ","),
-              r$elig_col, r$benef_col, if (isTRUE(r$weighted)) "yes" else "no",
-              pct(m$inclusion_error), pct(m$exclusion_error), pct(m$coverage_rate),
-              if (is.na(m$selection_ratio)) "\u2014" else sprintf("%.2f", m$selection_ratio),
-              pct(m$precision), pct(m$recall),
-              if (is.null(r$excl_design)) "no prioritised column mapped" else
-                sprintf("%s households (%s of eligible)", format(r$excl_design$n, big.mark = ","),
-                        pct(r$excl_design$share))
-            ),
-            stringsAsFactors = FALSE
-          )
-          write_data(wb, "Summary", summary_df)
-
-          openxlsx::addWorksheet(wb, "Confusion")
-          write_data(wb, "Confusion", r$confusion)
-
-          if (!is.null(r$decisions) && nrow(r$decisions) > 0) {
-            openxlsx::addWorksheet(wb, "Decisions_by_area")
-            dd <- r$decisions
-            write_data(wb, "Decisions_by_area", data.frame(Area = dd$area, `Selected surveyed` = dd$n_selected, `Not selected surveyed` = dd$n_not,
-                                                          `Inclusion error (%)` = round(100 * dd$inclusion_error, 1),
-                                                          `Exclusion error (%)` = round(100 * dd$exclusion_error, 1),
-                                                          Decision = dd$decision, check.names = FALSE))
-          }
-          if (!is.null(r$by_unit) && nrow(r$by_unit) > 0) {
-            openxlsx::addWorksheet(wb, "By_Unit")
-            write_data(wb, "By_Unit", sanitize_for_excel(r$by_unit))
-          }
-        }
+        wb <- pdm_workbook(r, tol = c((input$tol_lower %||% 5) / 100, (input$tol_upper %||% 20) / 100),
+                           meta = c(`Country office` = country_office() %||% "", `Exported at` = fmt_datetime(),
+                                    `Areas covered` = scope$text()))
         save_workbook_readonly(wb, file)
       }
     )
@@ -958,15 +985,17 @@ mod_pdm_server <- function(id, workspace = NULL, country_office = reactive(NULL)
         data = if (!is.null(pdm_all())) list(source = pdm_source() %||% "Data loaded", rows = NROW(df), cols = NCOL(df)),
         sample = if (!is.null(sd)) list(file = sd$file %||% "", drawn_at = sd$drawn_at %||% "", n = sum(sd$group %in% "Selected") + sum(sd$group %in% "Not selected"),
                                         selected = sum(sd$group %in% "Selected"), not_selected = sum(sd$group %in% "Not selected"),
-                                        areas = length(unique(sd$area)), design = !is.null(d)),
+                                        areas = length(unique(sd$area)), design = !is.null(d), from_survey = isTRUE(sd$from_survey)),
         match = if (!is.null(mt)) list(n = mt$n, of = mt$of),
         results = if (!is.null(r)) list(
           kind = r$kind, inclusion = m$inclusion_error, exclusion = m$exclusion_error, coverage = m$coverage_rate,
           precision = m$precision, recall = m$recall, elig_source = r$elig_source %||% "a PDM column",
-          weighting = r$weighting %||% "none", no_nonbenef = isTRUE(r$no_nonbenef),
-          decisions = if (!is.null(dd) && nrow(dd)) lapply(seq_len(nrow(dd)), function(i) list(
+          weighting = r$weighting %||% "none", no_nonbenef = isTRUE(r$no_nonbenef), matrix = r$matrix,
+          excl_design = if (!is.null(r$excl_design)) r$excl_design$n,
+          levels = lapply(r$by_level, function(l) { dd <- l$rows; list(label = l$label, rows = lapply(seq_len(nrow(dd)), function(i) list(
             area = as.character(dd$area[i]), n_selected = dd$n_selected[i], n_not = dd$n_not[i],
-            inclusion = dd$inclusion_error[i], exclusion = dd$exclusion_error[i], level = dd$level[i], decision = dd$decision[i]))))
+            eligible = dd$eligible[i], reached = dd$reached[i], coverage = dd$coverage[i],
+            inclusion = dd$inclusion_error[i], exclusion = dd$exclusion_error[i], level = dd$level[i], decision = dd$decision[i]))) })))
     })
 
     # For the Targeting Monitoring report and the PDM chart builder.

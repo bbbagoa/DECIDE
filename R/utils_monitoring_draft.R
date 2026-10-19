@@ -360,52 +360,6 @@ monitoring_checks <- function(items, p = NULL, texts = character(0), include_pdm
   w
 }
 
-#' Area centroids of the PDM data with the exclusion error per area
-#'
-#' The coverage by area is the share of eligible households assisted, so the
-#' exclusion error of an area is 1 - coverage. Coordinates are the average of
-#' the area's households (the first latitude / longitude columns found).
-#' @return data.frame(unit, lon, lat, eligible, exclusion) or NULL.
-#' @noRd
-monitoring_area_points <- function(df, unit_col, by_unit) {
-  if (is.null(df) || is.null(by_unit) || !nrow(by_unit) || is.null(unit_col) || is.na(unit_col) || !unit_col %in% names(df)) return(NULL)
-  nm <- names(df)
-  lat <- grep("(^|_)(lat|latitude)$", nm, ignore.case = TRUE, value = TRUE)[1]
-  lon <- grep("(^|_)(lon|long|lng|longitude)$", nm, ignore.case = TRUE, value = TRUE)[1]
-  if (is.na(lat) || is.na(lon)) return(NULL)
-  y <- as_number(df[[lat]]); x <- as_number(df[[lon]])
-  ok <- is.finite(x) & is.finite(y) & abs(x) <= 180 & abs(y) <= 90 & !(x == 0 & y == 0)
-  if (!any(ok)) return(NULL)
-  u <- as.character(df[[unit_col]])[ok]
-  cx <- tapply(x[ok], u, mean); cy <- tapply(y[ok], u, mean)
-  bu <- by_unit[as.character(by_unit[[1]]) %in% names(cx), , drop = FALSE]
-  if (!nrow(bu)) return(NULL)
-  k <- as.character(bu[[1]])
-  data.frame(unit = k, lon = as.numeric(cx[k]), lat = as.numeric(cy[k]), eligible = bu$eligible,
-             exclusion = 1 - bu$coverage, stringsAsFactors = FALSE)
-}
-
-#' Leaflet map: one circle per area, coloured by its exclusion error
-#' @noRd
-monitoring_area_map <- function(pts, tol = c(0.05, 0.20), lang = "en") {
-  band <- ifelse(is.na(pts$exclusion), "n/a", ifelse(pts$exclusion <= tol[1], "Within tolerance",
-                 ifelse(pts$exclusion <= tol[2], "In the review band", "Beyond tolerance")))
-  lv <- c("Within tolerance", "In the review band", "Beyond tolerance", "n/a")
-  cols <- c("#3f7e44", "#f7b825", "#c5192d", "#8a96a3")
-  pts$col <- cols[match(band, lv)]
-  r <- 7 + 18 * sqrt(pts$eligible / max(pts$eligible, 1, na.rm = TRUE))
-  shown <- lv %in% band
-  esri_basemap(leaflet::leaflet(pts, width = "100%", height = 420)) |>
-    leaflet::addCircleMarkers(~lon, ~lat, radius = r, stroke = TRUE, weight = 1, color = "#ffffff", fillColor = ~col,
-                              fillOpacity = 0.85,
-                              label = sprintf("%s: exclusion error %s (%s eligible)", pts$unit,
-                                              ifelse(is.na(pts$exclusion), "n/a", sprintf("%.1f%%", 100 * pts$exclusion)),
-                                              format(round(pts$eligible), big.mark = ","))) |>
-    leaflet::addLegend("bottomright", colors = cols[shown],
-                       labels = vapply(lv[shown], function(t) i18n_lookup(t, lang), character(1)), opacity = 0.9) |>
-    fit_to_points(pts$lon, pts$lat)
-}
-
 #' The executive summary block: traffic-light tiles (with the change since
 #' the previous round) and what to do
 #'

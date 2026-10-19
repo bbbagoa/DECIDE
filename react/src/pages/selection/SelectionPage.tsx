@@ -9,7 +9,7 @@
 // components/VarCalc.
 import { useRef, type ReactNode } from "react";
 import {
-  CalendarX, ChartBar, CircleAlert, CircleCheck, CircleMinus, Download, FileSpreadsheet, FileText, Filter, Info, Layers, List, MapPin,
+  CalendarX, ChartBar, CircleAlert, CircleCheck, CircleMinus, Download, FileCog, FileSpreadsheet, FileText, Filter, Info, Layers, List, MapPin,
   Shuffle, SlidersHorizontal, User, Users, UsersRound, Venus, X,
 } from "lucide-react";
 import { useShinyInputValue, useShinyOutputError, useShinyOutputValue } from "@/shiny";
@@ -79,6 +79,8 @@ export function SelectionPage({ t }: { active: boolean; t: T }) {
         <div className="tw-sel-side-cap">{t("Outputs")}</div>
         <ActionButton id={ns("export_open")} label={t("Export selection (Excel)")} icon={<Download size={14} />} className="w-100" />
         <DownloadButton id={ns("selection_report")} label={t("Selection report (HTML)")} icon={<FileText size={14} />} className="w-100 mt-2" />
+        <DownloadButton id={ns("download_logic")} label={t("Selection logic (for monitoring)")} icon={<FileCog size={14} />} className="w-100 mt-2"
+                        title={t("The approach, scorecard and threshold, and rules applied here, to measure implementation errors in Targeting Monitoring")} />
         <ActionButton id={ns("mon_open")} label={t("Draw a monitoring sample")} icon={<Shuffle size={14} />} className="w-100 mt-2"
                       title={t("Households to survey for a post-targeting survey / baseline or a PDM, with replacements")} />
         <div className="tw-sel-side-cap mt-3">{t("Tools")}</div>

@@ -56,7 +56,7 @@ Targeting Design last.
     describes the households in the map view and follows it (debounced 600 ms)
   - "Not available with these data:" strip of features the mapping cannot give (verify)
   - tiles: Households, Individuals, Communities, Days of collection, Households
-    per day, Enumerators, Interview length (each only when its field is mapped),
+    per day, Enumerators (each only when its field is mapped),
     sub-line on hover
   - "Households per day": bars per day, stacked by Admin 1 (top 5 + Other areas)
     or one total; dotted cumulative line on a right axis; **Total / By area**

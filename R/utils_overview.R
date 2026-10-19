@@ -91,18 +91,7 @@ ov_collection <- function(df, settings, max_areas = 6) {
     tiles[[length(tiles) + 1]] <- list(label = "Enumerators", value = ov_num(ne), icon = "person-badge",
                                        sub = sprintf("%s interviews each", ov_num(n / max(1, ne))))
   }
-  dur <- ov_duration(df, w)
-  if (!is.na(dur)) tiles[[length(tiles) + 1]] <- list(label = "Interview length", value = sprintf("%.0f min", dur), icon = "stopwatch", sub = "average, 5 min to 3 h kept")
   list(tiles = tiles, daily = daily, area_label = area_label)
-}
-
-# average interview length from the form's start and end times (NA when absent)
-ov_duration <- function(df, w) {
-  s <- intersect(c("start", "starttime"), names(df))[1]; e <- intersect(c("end", "endtime"), names(df))[1]
-  if (is.na(s) || is.na(e)) return(NA_real_)
-  d <- suppressWarnings(as.numeric(difftime(lubridate::as_datetime(df[[e]]), lubridate::as_datetime(df[[s]]), units = "mins")))
-  ok <- !is.na(d) & d > 5 & d < 180 & !is.na(w) & w > 0
-  if (!any(ok)) NA_real_ else sum(d[ok] * w[ok]) / sum(w[ok])
 }
 
 # ---- 2. Who is in the data ---------------------------------------------------

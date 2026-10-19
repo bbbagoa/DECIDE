@@ -210,10 +210,7 @@ ok(all(c("household_id", "eligibility", "sample_area") %in% names(sm)) && setequ
 ok(nrow(openxlsx::read.xlsx(sf, "Replacements")) > 0, "replacements on their own sheet")
 close_modal()
 # Monitoring: the survey (the sample's households, their eligibility re-measured) and the sample list
-reg <- utils::read.csv(file, stringsAsFactors = FALSE)
-sv <- reg[match(sm$household_id, reg$instanceID), ]
-set.seed(4); sv$elig_now <- ifelse(xor(sm$eligibility == "Eligible", runif(nrow(sv)) < 0.1), "Yes", "No")
-svf <- file.path(tempdir(), "post_targeting.csv"); utils::write.csv(sv, svf, row.names = FALSE)
+svf <- file.path(tw_root, "inst/extdata/survey_demo.csv")  # every registered household, re-measured
 tw_js(app, "Array.from(document.querySelectorAll('.tw-navbar .nav-link')).find(a=>a.textContent.includes('Targeting Monitoring')).click(); true")
 Sys.sleep(1.5); tw_idle(app)
 app$wait_for_js("!!document.querySelector('#monitoring_1-pdm-pdm_file.shiny-bound-input')", timeout = 60000)
@@ -225,11 +222,41 @@ mon <- tw_js(app, "document.querySelector('.tw-mon').textContent")
 ok(grepl("surveyed households found in the sample list", mon), paste("matched:", regmatches(mon, regexpr("[0-9,]+ of [0-9,]+ surveyed households found", mon))))
 ms <- function(id, v) tw_js(app, sprintf("(function(){var el=document.getElementById('monitoring_1-pdm-%s');$(el).data('shiny-input-binding').receiveMessage(el,{value:%s});return true})()",
                                          id, jsonlite::toJSON(v, auto_unbox = TRUE)))
-ms("ptm_id", "instanceID"); Sys.sleep(1); ms("pdm_eligibility", "elig_now"); Sys.sleep(1); tw_idle(app)
+# Monitoring stands alone: Selection's logic (card, threshold applied, rules)
+# is downloaded there and loaded in Monitoring from its file
+lf <- app$get_download(ns("download_logic"))
+lg <- jsonlite::fromJSON(lf, simplifyVector = FALSE)
+ok(identical(lg$format, "DECIDE selection logic") && length(lg$scorecard$items) == 4,
+   paste("selection logic downloaded:", lg$approach, "threshold", lg$scorecard$threshold))
+app$upload_file(`monitoring_1-pdm-pdm_logic_file` = lf); tw_idle(app); Sys.sleep(1)
+ms("ptm_id", "instanceID"); Sys.sleep(1); ms("pdm_elig_source", "logic"); Sys.sleep(1); tw_idle(app)
 tw_js(app, "document.getElementById('monitoring_1-pdm-pdm_run').click(); true"); Sys.sleep(3); tw_idle(app)
-ok(grepl("[0-9]%", tw_js(app, "(document.querySelector('.tw-mon-kpis')||{}).textContent||''")),
-   paste("errors computed from the sample:", tw_js(app, "(document.querySelector('.tw-mon-kpis')||{}).textContent||''")))
+ok(grepl("[0-9]%", tw_js(app, "(document.querySelector('.tw-mon .sc-cm')||{}).textContent||''")),
+   paste("errors computed from the sample:", tw_js(app, "(document.querySelector('.tw-mon .sc-cm')||{}).textContent||''")))
 tw_shot(app, "mon_from_sample")
+kpi_list <- tw_js(app, "(document.querySelector('.tw-mon .sc-cm')||{}).textContent||''")
+
+# the survey alone: the sample's households with the list's columns kept (as a
+# preloaded form would) and their answers; nothing uploaded in step 2
+ok("sample_group_size" %in% names(sm), "the sample list carries each group's size")
+sv <- utils::read.csv(svf, stringsAsFactors = FALSE)
+# the demo survey has every household, so the list route also surveyed the
+# replacements: keep both sheets for the same households
+keepc <- c("household_id", "eligibility", "sample_area", "sample_group_size")
+pre <- rbind(sm[keepc], openxlsx::read.xlsx(sf, "Replacements")[keepc])
+alone <- cbind(pre, sv[match(pre$household_id, sv$instanceID), setdiff(names(sv), names(sm)), drop = FALSE])
+af <- file.path(tempdir(), "survey_alone.csv"); utils::write.csv(alone, af, row.names = FALSE)
+app$upload_file(`monitoring_1-pdm-pdm_file` = af); Sys.sleep(2); tw_idle(app)
+mon <- tw_js(app, "document.querySelector('.tw-mon').textContent")
+ok(grepl("Read from the survey", mon), "sample read from the survey, nothing to upload")
+ms("pdm_elig_source", "logic"); Sys.sleep(1); tw_idle(app)
+tw_js(app, "document.getElementById('monitoring_1-pdm-pdm_run').click(); true"); Sys.sleep(3); tw_idle(app)
+kpi_alone <- tw_js(app, "(document.querySelector('.tw-mon .sc-cm')||{}).textContent||''")
+ok(identical(kpi_alone, kpi_list), paste("same errors from the survey alone:", kpi_alone))
+tw_shot(app, "mon_survey_alone")
+cm <- tw_js(app, "(document.querySelector('.tw-mon .sc-cm')||{}).textContent||''")
+ok(grepl("Inclusion error", cm) && grepl("surveyed", cm), paste("implementation matrix:", substr(cm, 1, 160)))
+tw_shot(app, "mon_matrix")
 
 # shinyreact logs every output error, validate() messages included, as "Error for <id>"
 notes <- tw_js(app, "Array.from(document.querySelectorAll('[id^=\"ben_selection_1-\"].tw-output-note')).map(e => e.id + ': ' + e.textContent).join(' | ')")

@@ -20,9 +20,11 @@ community-process presets). Browser check: `NOT_CRAN=true Rscript react/dev/test
   - 4. Weighting: design / population (overall numbers, or per area -> editable table) / column / none.
   - Actions: Compute (`pdm_run`, the one primary), Export (Excel, gated).
   - Main: population table (`pop_table`, editable last two columns), empty states, tabs `pdm_tabs`:
-    errors (KPIs, how computed, decision by area, tolerance inputs, verdict card `components/VerdictCard.tsx` from
-    `pdm_verdict` = `verdict_facts()`, with the excluded by design),
-    details (confusion table, error decomposition chart, coverage by area), calibrate (from `calib_state`: no ranking /
+    errors ("Errors and decisions": how computed, tolerance inputs, the implementation matrix (`ImplMatrix`,
+    from `pdm_state$results$matrix`) beside two charts: the errors (`pdm_plot`, tolerance band as dashed lines) and coverage (recall) with precision (`pdm_cov_plot`),
+    then one decision-and-coverage table by area (`AreaTable`, `pdm_state$results$levels`: every area level
+    computed with the errors, a client-side level picker); no KPI tiles or verdict card (`pdm_verdict` is still
+    computed for the report)), calibrate (from `calib_state`: no ranking /
     no data empty states, outcome `calib_outcome`, level `calib_pos` filled by the server, Measure `calib_run`, KPIs, best threshold),
     explore (chart builder).
 - **2. Targeting process** (ProcessTab.tsx): datasets step (hosted `pm_file_ui`, dataset picker, remove, MODA,
@@ -31,7 +33,7 @@ community-process presets). Browser check: `NOT_CRAN=true Rscript react/dev/test
   date + period / number / out of / split / percentages / only where + values; live preview (`preview`,
   `render_echart(chart_echart_option())`) or table (`preview_table`); title, comment (rich text), Add to report.
   Choices from `cb_meta`, state from `cb_state` (empty state, too many options, pie note, crosstab test in `note`).
-- **3. Monitoring report** (ReportTab.tsx): template (pick, Draft, Export JSON, Delete, Import file hosted
+- **3. Report builder** (ReportTab.tsx; the tab shows the number of items in the report, from `mon_state$items`): template (pick, Draft, Export JSON, Delete, Import file hosted
   `tpl_import_ui`, rounds line), Context / Key findings / Recommendations (rich text, Shiny inputs), include
   PDM, report check (`report_check` -> Shiny modal or `tw-mon-download` -> hidden `report` link), save as
   template (Shiny modal). Items from `mon_state$items`: drag by the handle (`item_order`), width / up / down /

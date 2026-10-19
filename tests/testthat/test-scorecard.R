@@ -256,19 +256,31 @@ test_that("the ROC curve carries the design errors at every threshold", {
 
 test_that("design errors reproduce the advisory's worked example", {
   # Advisory Issue 2/2025, page 4: eligible 40 vulnerable / 10 not,
-  # not eligible 30 vulnerable / 20 not. Exclusion 43%. At the design stage
-  # the inclusion error is taken over the households not vulnerable (10 / 30,
-  # 33%), not over the eligible (the Advisory's 10 / 50).
+  # not eligible 30 vulnerable / 20 not. Inclusion 10 / (40 + 10) = 20%,
+  # exclusion 30 / (40 + 30) = 43%.
   eligible   <- c(rep(TRUE, 50), rep(FALSE, 50))
   vulnerable <- c(rep(TRUE, 40), rep(FALSE, 10), rep(TRUE, 30), rep(FALSE, 20))
 
   e <- tm("design_errors")(eligible, vulnerable)
-  expect_equal(e$inclusion_error, 10 / 30)
+  expect_equal(e$inclusion_error, 10 / 50)
   expect_equal(round(e$exclusion_error, 4), round(30 / 70, 4))
-  expect_equal(round(100 * e$inclusion_error), 33)
+  expect_equal(round(100 * e$inclusion_error), 20)
   expect_equal(round(100 * e$exclusion_error), 43)
   expect_equal(e$correctly_included, 40)
   expect_equal(e$correctly_excluded, 20)
+})
+
+test_that("design errors reproduce the advisory's CARI example (page 11)", {
+  # A 900, C 280 eligible; B 134, 600 not eligible: 12.9% and 23.7%
+  e <- tm("design_errors")(rep(c(TRUE, TRUE, FALSE, FALSE), c(900, 280, 134, 600)),
+                           rep(c(TRUE, FALSE, TRUE, FALSE), c(900, 280, 134, 600)))
+  expect_equal(e$exclusion_error, 134 / (900 + 134))   # the Advisory prints ~12.9%
+  expect_equal(e$inclusion_error, 280 / (900 + 280))   # ~23.7%
+  # roc_curve gives the same pair at the same cut
+  r <- tm("roc_curve")(rep(c(1, 1, 0, 0), c(900, 280, 134, 600)), rep(c(1, 0, 1, 0), c(900, 280, 134, 600)))$curve
+  k <- which(r$n_eligible == 1180)[1]
+  expect_equal(r$inclusion_error[k], e$inclusion_error)
+  expect_equal(r$exclusion_error[k], e$exclusion_error)
 })
 
 test_that("the verdict follows the advisory's decision table", {

@@ -163,15 +163,18 @@ Uploads up to **2 GB** are accepted by default.
 
 ## Try it with the demo data
 
-Two synthetic datasets are installed with the package:
+Three synthetic datasets are installed with the package:
 
 ```r
 system.file("extdata", "assessment_demo.csv",   package = "DECIDE")  # 1,500 households, CARI outcome
 system.file("extdata", "registration_demo.csv", package = "DECIDE")  # 1,500 registered households
+system.file("extdata", "survey_demo.csv",       package = "DECIDE")  # the same households, surveyed after selection
 ```
 
 1. **Targeting Design**: load `assessment_demo.csv`. The outcome `FSI_CARI2_2class` is picked automatically.
 2. **Beneficiary Selection › Load registration data**: load `registration_demo.csv`, then map the variables.
+3. **Beneficiary Selection**: apply a selection, then **Draw a monitoring sample** and download the sample list.
+4. **Targeting Monitoring › Implementation errors**: load `survey_demo.csv` (step 1), upload the sample list and choose `instanceID` as the household ID (step 2), apply the adopted scorecard (step 3), then **Compute implementation errors**. The survey re-measured every registered household a month later and about 8% of the answers changed, so the errors come out around 10%. For the PDM route, choose *A column in the survey* with `received_assistance` and, in step 3, the column `FSI_CARI2_2class`. `dev/make_survey_demo.R` rebuilds the file.
 
 ---
 

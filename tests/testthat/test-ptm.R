@@ -115,3 +115,91 @@ test_that("Monitoring calculates the food security indicators on the survey and 
     expect_true(is.finite(r$metrics$inclusion_error))
   })
 })
+
+test_that("a survey that kept the sample columns is enough on its own", {
+  set.seed(7); N <- 3000
+  reg <- data.frame(hh_id = sprintf("H%05d", 1:N), province = sample(c("North", "South"), N, TRUE), stringsAsFactors = FALSE)
+  served <- runif(N) < 0.35
+  status <- ifelse(served, "selected", "not_selected")
+  d <- DECIDE:::ptm_draw(status, reg$province, list(mode = "fixed", n = 50), reserve = 0, seed = 1)
+  main <- DECIDE:::ptm_sample_lists(reg, d, list(unique_id = "hh_id", admin1 = "province"))$main
+  expect_true("sample_group_size" %in% names(main))
+  # the survey: the preloaded sample columns (under a form group) and the answers
+  truth <- main$eligibility == "Eligible"
+  north <- main$province == "North"
+  truth[north] <- runif(sum(north)) < 0.5
+  survey <- data.frame(`pre/household_id` = main$household_id, `pre/eligibility` = main$eligibility,
+                       `pre/sample_area` = main$sample_area, `pre/sample_group_size` = as.character(main$sample_group_size),
+                       eligible_now = ifelse(truth, "Yes", "No"), check.names = FALSE, stringsAsFactors = FALSE)
+  sv <- DECIDE:::ptm_survey_design(survey)
+  expect_equal(sv$id_col, "pre/household_id")
+  # the group sizes are the population's, as in the Design sheet
+  expect_equal(sum(sv$design$N[sv$design$group == "selected"]), sum(served))
+  expect_null(DECIDE:::ptm_survey_design(survey["eligible_now"]))
+
+  setup <- shiny::reactiveValues(unique_id = "hh_id", admin1 = "province")
+  log <- shiny::reactiveVal(data.frame(timestamp = character(0), uid = character(0), column = character(0), old_value = character(0),
+                                       new_value = character(0), action = character(0), user = character(0), reason = character(0)))
+  shiny::testServer(DECIDE:::mod_pdm_server,
+                    args = list(workspace = DECIDE:::workspace_new(), user_setup = setup, modification_log = log), {
+    take_pdm(survey, "survey.csv")
+    expect_true(isTRUE(sample_design()$from_survey))
+    session$setInputs(data_kind = "Baseline", benef_source = "design", ptm_id = "pre/household_id",
+                      pdm_elig_source = "column", pdm_eligibility = "eligible_now",
+                      pdm_weight_mode = "design", pdm_prioritized = "(none)", pdm_unit = "(none)",
+                      tol_lower = 5, tol_upper = 20)
+    expect_equal(ptm_matched()$n, 200)
+    session$setInputs(pdm_run = 1)
+    r <- results()
+    expect_match(r$weighting, "sample design")
+    expect_setequal(r$decisions$area, c("North", "South"))
+    expect_match(r$decisions$decision[r$decisions$area == "North"], "Pause|Review")
+    # a survey without the columns drops the previous survey's sample
+    take_pdm(survey["eligible_now"], "other.csv")
+    expect_null(sample_design())
+  })
+})
+
+test_that("Monitoring applies only the selection logic loaded there, not the card adopted elsewhere", {
+  card <- list(kind = "scorecard", outcome = "poor", threshold = 0, created = "2026-01-01",
+               items = list(list(criterion = "tent", direction = "inclusion", weight = 1)))
+  logic <- list(format = "DECIDE selection logic", version = 1, approach = "scorecard", approach_label = "Scorecard", combine = "both",
+                scorecard = card)
+  jf <- tempfile(fileext = ".json"); jsonlite::write_json(logic, jf, auto_unbox = TRUE)
+  setup <- shiny::reactiveValues(scorecard = DECIDE:::normalise_scorecard(card))   # adopted in Design
+  log <- shiny::reactiveVal(data.frame(timestamp = character(0), uid = character(0), column = character(0), old_value = character(0),
+                                       new_value = character(0), action = character(0), user = character(0), reason = character(0)))
+  shiny::testServer(DECIDE:::mod_pdm_server,
+                    args = list(workspace = DECIDE:::workspace_new(), user_setup = setup, modification_log = log), {
+    pdm_df(data.frame(id = 1:4, `grp/Tent` = c(1, 0, 1, 0), check.names = FALSE))
+    session$setInputs(pdm_elig_source = "logic")
+    expect_null(pdm_card())
+    expect_match(elig_note()$text, "Load the selection logic")
+    session$setInputs(pdm_logic_file = list(datapath = jf, name = "logic.json"))
+    expect_equal(length(pdm_card()$items), 1)
+    expect_match(elig_note()$text, "Scorecard")
+    # found under the form's group path, whatever the case
+    expect_equal(DECIDE:::logic_eligibility(pdm_df(), pdm_logic())$eligible, c(TRUE, FALSE, TRUE, FALSE))
+  })
+})
+
+test_that("the Implementation errors workbook follows the page", {
+  dd <- data.frame(area = c("North", "South"), n_selected = c(40, 50), n_not = c(35, 45), eligible = c(300, 420), reached = c(150, 410),
+                   coverage = c(0.5, 0.976), inclusion_error = c(0.3, 0.04), exclusion_error = c(0.5, 0.024),
+                   level = c("redesign", "good"), decision = c("Pause", "Proceed"), stringsAsFactors = FALSE)
+  r <- list(kind = "Baseline", n = 400, n_known = 390, benef_col = "the sample list", elig_source = "the scorecard", weighting = "sample design",
+            metrics = list(inclusion_error = 0.491, exclusion_error = 0.777, coverage_rate = 0.223, precision = 0.509),
+            matrix = list(correct_in = 176, incl = 170, excl = 612, correct_out = 542, n_correct_in = 176, n_incl = 170, n_excl = 612, n_correct_out = 542),
+            by_level = list(list(label = "Province", rows = dd), list(label = "Admin 2 \u00b7 Territoire", rows = dd)))
+  wb <- DECIDE:::pdm_workbook(r, tol = c(0.05, 0.2), meta = c(`Country office` = "Chad"))
+  expect_equal(names(wb), c("Summary", "Matrix", "Areas - Province", "Areas - Territoire"))
+  f <- tempfile(fileext = ".xlsx"); openxlsx::saveWorkbook(wb, f)
+  mx <- openxlsx::read.xlsx(f, "Matrix", colNames = FALSE, skipEmptyRows = FALSE)
+  expect_equal(as.numeric(mx[5, 3]), 170)
+  expect_match(mx[6, 3], "49.1% of the assisted - inclusion error", fixed = TRUE)
+  ar <- openxlsx::read.xlsx(f, "Areas - Province")
+  expect_equal(names(ar)[c(4, 6, 9)], c("Eligible.(est.)", "Coverage", "Decision"))
+  sm <- openxlsx::read.xlsx(f, "Summary", colNames = FALSE)
+  expect_true(any(grepl("49.1% (beyond the tolerance band)", sm[[2]], fixed = TRUE)))
+  expect_equal(names(DECIDE:::pdm_workbook(NULL)), "Summary")
+})

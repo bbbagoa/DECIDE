@@ -420,7 +420,7 @@ mod_monitoring_server <- function(id, workspace = NULL, country_office = reactiv
       tol <- pdm$tolerance()
       list(metrics = r$metrics, n = r$n, by_unit = r$by_unit, excl_design = r$excl_design, tolerance = tol,
            elig_source = r$elig_source, weighting = r$weighting, strata = r$strata, no_nonbenef = r$no_nonbenef,
-           kind = pdm$kind(), areas = pdm$areas(), unit_col = r$unit_col, decisions = r$decisions,
+           kind = pdm$kind(), areas = pdm$areas(), unit_col = r$unit_col, decisions = r$decisions, matrix = r$matrix,
            verdict = tryCatch(error_verdict(r$metrics$inclusion_error, r$metrics$exclusion_error, tol[1], tol[2],
                                             stage = "implementation"), error = function(e) NULL))
     }
@@ -445,12 +445,11 @@ mod_monitoring_server <- function(id, workspace = NULL, country_office = reactiv
       filename = function() export_file_name("Targeting_monitoring_report", "html", "%Y-%m-%d_%Hh%M"),
       content = function(file) {
         p <- report_pdm()
-        pts <- if (!is.null(p)) tryCatch(monitoring_area_points(pdm$df(), p$unit_col, p$by_unit), error = function(e) NULL)
         lang <- session$rootScope()$input$lang_selector
         write_monitoring_report(file, list(country_office = country_office(), context = input$context,
                                            findings = input$findings, recommendations = input$recommendations,
                                            pdm = p, items = items(), kind = pdm$kind(),
-                                           previous = previous_rounds(), area_points = pts,
+                                           previous = previous_rounds(),
                                            variables_md = variables_md(unlist(lapply(items(), function(it)
                                              c(it$spec$x, it$spec$group, it$spec$value, it$spec$date, it$spec$den))), session)),
                                 lang = if (identical(lang, "fr")) "fr" else "en")

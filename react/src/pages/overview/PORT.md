@@ -45,7 +45,7 @@ Client: `OverviewPage.tsx`, `charts.tsx` (ECharts), `Builders.tsx`,
   - "Follow the map" switch (`view_follow`, off by default)
   - "Not available with these data:" strip
   - tiles: Households, Individuals, Communities, Days of collection, Households
-    per day, Enumerators, Interview length (each only when its field is mapped)
+    per day, Enumerators (each only when its field is mapped)
   - "Households per day" (ECharts): bars per day, stacked by Admin 1 or one
     total, dashed cumulative line on a right axis; hover: the day, each area,
     "In all"; **Total / By area** toggle (display only, default By area)

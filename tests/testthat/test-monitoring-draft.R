@@ -87,14 +87,6 @@ test_that("the pre-export checks list what to look at", {
   expect_false(any(grepl("Key findings", w)))
 })
 
-test_that("the area map points carry the exclusion error of each area", {
-  bu <- data.frame(unit = c("Ituri", "Nord-Kivu"), eligible = c(40, 20), selected = c(30, 20), coverage = c(0.75, 1))
-  pts <- tm("monitoring_area_points")(pdm_df, "province", bu)
-  expect_equal(pts$exclusion, c(0.25, 0))
-  expect_equal(pts$lat, c(1.5, -0.5))
-  expect_s3_class(tm("monitoring_area_map")(pts), "leaflet")
-})
-
 test_that("a draft does not take a registration list for complaints data", {
   reg <- data.frame(HHStatus = rep(c("Resident", "Returnee"), 30),
                     SvyDate = as.Date("2026-01-01") + 0:59, Province = rep(c("A", "B"), each = 30))

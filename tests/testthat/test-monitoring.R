@@ -65,6 +65,25 @@ test_that("the monitoring report carries the errors, charts, tables and comments
   expect_false(grepl("@@(FIG|IMPL)", html))
 })
 
+test_that("the report carries the page's matrix and one area table, coloured, and no map", {
+  f <- withr::local_tempfile(fileext = ".html")
+  dd <- data.frame(area = c("North", "South"), n_selected = c(40, 50), n_not = c(35, 45), eligible = c(300, 420), reached = c(150, 410),
+                   coverage = c(0.5, 0.976), inclusion_error = c(0.3, 0.04), exclusion_error = c(0.5, 0.024),
+                   level = c("redesign", "good"), decision = c("Pause the distribution here", "Proceed with the distribution"))
+  DECIDE:::write_monitoring_report(f, list(kind = "Baseline", pdm = list(
+    metrics = list(inclusion_error = .12, exclusion_error = .3, coverage_rate = .7, precision = .88, recall = .7), n = 400,
+    tolerance = c(.05, .2), unit_col = "province", decisions = dd,
+    matrix = list(correct_in = 176, incl = 170, excl = 612, correct_out = 542, n_correct_in = 176, n_incl = 170, n_excl = 612, n_correct_out = 542))))
+  html <- paste(readLines(f, encoding = "UTF-8"), collapse = "
+")
+  expect_match(html, "Eligibility vs. assistance received", fixed = TRUE)
+  expect_match(html, "170</strong> (<span style=\"color:#c5192d;font-weight:600\">49.1%</span>)", fixed = TRUE)
+  expect_match(html, "Decision and coverage by area, before distribution (province)", fixed = TRUE)
+  expect_match(html, "<span style=\"color:#3f7e44;font-weight:600\">4.0%</span>", fixed = TRUE)   # South, within the band
+  expect_false(grepl("Coverage by area:|Exclusion error by area|class=\"leaflet html-widget", html))
+  expect_false(grepl("@@(MATRIX|AREAS)", html))
+})
+
 test_that("a crosstab gives row, column and total percentages with a chi-square test", {
   df <- data.frame(sex = rep(c("F", "M"), c(60, 40)),
                    complaint = c(rep("yes", 45), rep("no", 15), rep("yes", 10), rep("no", 30)))
@@ -144,4 +163,18 @@ test_that("chart builder refuses a By column with too many options", {
     expect_match(too_many(), "Too many options for site", fixed = TRUE)
     expect_null(agg())
   })
+})
+
+test_that("chart colours set in the dialog reach the preview and the report", {
+  tm <- function(f) utils::getFromNamespace(f, "DECIDE")
+  d <- data.frame(x = c("A", "B", "A", "B"), group = c("F", "F", "M", "M"), value = c(5, 3, 2, 4), n = c(5, 3, 2, 4))
+  sp <- list(type = "count", x = "v", group = "g", style = "column", colours = list(M = "#123456", Zed = "#abcdef", F = "bad"))
+  cols <- tm("chart_colours")(d, sp)
+  expect_equal(unname(cols), c("#007DBC", "#123456"))   # unknown name and bad value ignored
+  op <- tm("chart_echart_option")(d, sp)
+  expect_equal(op$series[[2]]$color, "#123456")
+  b <- tm("monitoring_item_chart")(list(data = d, spec = sp))
+  expect_equal(b$x$bb_opts$data$colors$M, "#123456")
+  pie <- tm("chart_echart_option")(d, modifyList(sp, list(style = "pie", colours = list(B = "#00ff00"))))
+  expect_equal(pie$series[[1]]$data[[2]]$itemStyle$color, "#00ff00")   # B is the second-largest slice
 })

@@ -421,17 +421,30 @@ pdm_stratum_weights <- function(benef, unit = NULL, pop) {
 #' @return list(`eligible`, `missing`)
 #' @noRd
 pdm_scorecard_eligibility <- function(df, scorecard) {
-  if (scorecard_is_empty(scorecard)) return(list(eligible = NULL, missing = "(no scorecard adopted)"))
+  if (scorecard_is_empty(scorecard)) return(list(eligible = NULL, missing = "(no scorecard loaded)"))
+  r <- card_resolve(df, scorecard)
+  if (length(r$missing)) return(list(eligible = NULL, missing = r$missing))
+  a <- apply_scorecard(df, r$scorecard)
+  list(eligible = a$eligible, score = a$score, missing = character(0))
+}
+
+#' Point each criterion of a card at the survey's column: by its name, then
+#' the same name in other case or punctuation, or under a form's group path.
+#' list(scorecard, missing)
+#' @noRd
+card_resolve <- function(df, scorecard) {
   missing <- character(0)
+  # a column is found by its name, then the same name in other case or
+  # punctuation, or under a form's group path
+  norm <- normalise_colname(sub(".*[/]", "", names(df)))
   scorecard$items <- lapply(scorecard$items, function(it) {
     cand <- c(it$column, it$criterion)
-    cand <- cand[!is.na(cand) & nzchar(cand) & cand %in% names(df)]
+    cand <- cand[!is.na(cand) & nzchar(cand)]
+    cand <- c(cand[cand %in% names(df)], names(df)[norm %in% normalise_colname(cand)])
     if (!length(cand)) missing <<- c(missing, it$criterion) else it$column <- cand[1]
     it
   })
-  if (length(missing)) return(list(eligible = NULL, missing = missing))
-  a <- apply_scorecard(df, scorecard)
-  list(eligible = a$eligible, score = a$score, missing = character(0))
+  list(scorecard = scorecard, missing = missing)
 }
 
 #' The distinct answers of a column (text, trimmed, blanks left out)

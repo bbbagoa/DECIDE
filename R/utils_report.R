@@ -345,8 +345,8 @@ design_report_md <- function(x, figures = character(0)) {
         if (shiny::isTruthy(x$exceed_note)) c("", "**Adopted although errors are beyond the tolerance, because:**", "",
                                              paste(">", gsub("\n", "\n> ", x$exceed_note, fixed = TRUE))),
         "", "### Design error matrix", "", "@@MATRIX@@", "",
-        sprintf("- **Inclusion error** %s = %s / %s: of the households not in need, the share the score makes eligible.",
-                md_pct(e$inclusion_error), e$included_not_in_need, e$included_not_in_need + e$correctly_excluded),
+        sprintf("- **Inclusion error** %s = %s / %s: of the eligible households, the share not in need.",
+                md_pct(e$inclusion_error), e$included_not_in_need, e$correctly_included + e$included_not_in_need),
         sprintf("- **Exclusion error** %s = %s / %s: of everyone who needed assistance, the share left out.",
                 md_pct(e$exclusion_error), e$excluded_in_need, e$correctly_included + e$excluded_in_need),
         "", "Valid for direct household-level (Tier 1) assistance only.", "")
@@ -595,8 +595,8 @@ design_report_methods <- function(x) {
 
   item("Design errors and verdict",
        "On the evaluation households, eligibility (score above the threshold) is crossed with the outcome. ",
-       "**Inclusion error** = eligible but not vulnerable / all not vulnerable; **exclusion error** = vulnerable but not eligible / all vulnerable ",
-       "(adapted from Targeting Advisory 2/2025 and the WFP Targeting OGN 2021, p. 59, which divide the inclusion error by all eligible households: at the design stage both errors compare the eligibility the score gives with the vulnerability measured). Each is compared with the tolerance band ",
+       "**Inclusion error** = eligible but not vulnerable / all eligible; **exclusion error** = vulnerable but not eligible / all vulnerable ",
+       "(Targeting Advisory 2/2025, p. 4; WFP Targeting OGN 2021, p. 59). Each is compared with the tolerance band ",
        sprintf("(%.0f%% - %.0f%%): below the lower bound is acceptable, above the upper bound calls for redesign, and the combination gives the verdict from the Advisory's decision table. ",
                100 * (x$tolerance[1] %||% .05), 100 * (x$tolerance[2] %||% .2)),
        "These are design errors, valid for direct household-level (Tier 1) assistance; implementation errors are measured separately on PDM data.")
@@ -677,11 +677,12 @@ report_error_matrix <- function(e, threshold = NULL, outcome = NULL, outcome_pos
   n_not <- e$excluded_in_need + e$correctly_excluded
   n_vuln <- e$correctly_included + e$excluded_in_need
   n_novuln <- e$included_not_in_need + e$correctly_excluded
-  # each cell's share of its column: of the vulnerable, of the not vulnerable
-  cell <- function(count, row_total, label, err = FALSE) sprintf(
+  # each cell's share of its column (of the vulnerable, of the not vulnerable),
+  # except the inclusion error, a share of its row (of the eligible, Advisory 2/2025)
+  cell <- function(count, row_total, label, err = FALSE, of = "of column") sprintf(
     '<td class="%s"><div class="m-label">%s</div><div class="m-count">%s</div><div class="m-share">%s %s \u00b7 %s %s</div></td>',
     if (err) "m-cell m-err" else "m-cell", tr(label), num(count),
-    pct(count, row_total), tr("of column"), pct(count, e$n), tr("of all"))
+    pct(count, row_total), tr(of), pct(count, e$n), tr("of all"))
   tot <- function(x) sprintf('<td class="m-tot"><div class="m-count">%s</div><div class="m-share">%s</div></td>', num(x), pct(x, e$n))
   paste0(
     '<div class="err-matrix-wrap"><table class="err-matrix"><thead>',
@@ -693,7 +694,7 @@ report_error_matrix <- function(e, threshold = NULL, outcome = NULL, outcome_pos
     '<tr><th class="m-row">', tr(row_labels[1]),
     if (!is.null(threshold)) sprintf('<div class="m-sub">%s > %s</div>', tr("score"), fmt5(threshold)) else "", '</th>',
     cell(e$correctly_included, n_vuln, "Correctly included"),
-    cell(e$included_not_in_need, n_novuln, "Inclusion error", err = TRUE), tot(n_elig), '</tr>',
+    cell(e$included_not_in_need, n_elig, "Inclusion error", err = TRUE, of = "of row"), tot(n_elig), '</tr>',
     '<tr><th class="m-row">', tr(row_labels[2]), '</th>',
     cell(e$excluded_in_need, n_vuln, "Exclusion error", err = TRUE),
     cell(e$correctly_excluded, n_novuln, "Correctly excluded"), tot(n_not), '</tr>',

@@ -536,8 +536,8 @@ design_report_extra_plots <- function(df = NULL, criteria = NULL, vulnerable = N
 }
 
 # Donut of shares (category, n): the profile charts of the selection report.
-rp_donut <- function(d, height = 240) {
-  cols <- stats::setNames(rep_len(c("#007DBC", "#f7b825", "#26bde2", "#3f7e44", "#c5192d", "#8a96a3"), nrow(d)), d$category)
+rp_donut <- function(d, height = 240, cols = NULL) {
+  if (is.null(cols)) cols <- stats::setNames(rep_len(c("#007DBC", "#f7b825", "#26bde2", "#3f7e44", "#c5192d", "#8a96a3"), nrow(d)), d$category)
   # 80% hollow: the ring is a fifth of the radius; the largest share is
   # written in the middle.
   radius <- (height - 50) / 2

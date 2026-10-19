@@ -241,6 +241,7 @@ function ErrorMatrix({ th, t }: { th: Thresh; t: T }) {
     </td>
   );
   // the two error cells: the count and the error rate, coloured by the tolerance band
+  // (inclusion over the eligible row, exclusion over the vulnerable column: Advisory 2/2025)
   const band = (v: number | null) => (!isNum(v) ? "na" : v <= th.lower ? "good" : v <= th.upper ? "review" : "bad");
   const errCell = (n: number, v: number | null, den: number, label: string, kind: string) => (
     <td className={`sc-cm-cell ${kind}`}>
@@ -264,7 +265,7 @@ function ErrorMatrix({ th, t }: { th: Thresh; t: T }) {
           <tr>
             <th scope="row">{w.elig}<small>{t("score >")} {th.threshold}</small></th>
             {cell(e.correctly_included, colV, t("Correctly included"), "ok")}
-            {errCell(e.included_not_in_need, e.inclusion_error, colN, w.incl, "incl")}
+            {errCell(e.included_not_in_need, e.inclusion_error, rowE, w.incl, "incl")}
             <td className="sc-cm-tot">{int(rowE)}</td>
           </tr>
           <tr>

@@ -735,8 +735,9 @@ roc_curve <- function(score, outcome) {
     fpr = fp / nneg,
     stringsAsFactors = FALSE
   )
-  # Design errors, in the advisory's own terms (Issue 2/2025).
-  curve$inclusion_error <- fp / nneg
+  # Design errors, in the advisory's own terms (Issue 2/2025): inclusion over
+  # the eligible, exclusion over the vulnerable (fpr stays for the ROC).
+  curve$inclusion_error <- ifelse(tp + fp > 0, fp / (tp + fp), NA_real_)
   curve$exclusion_error <- (npos - tp) / npos
 
   # Mann-Whitney AUC: the probability a random vulnerable household scores
@@ -758,14 +759,13 @@ roc_curve <- function(score, outcome) {
 #' Design inclusion and exclusion errors
 #'
 #' Using the advisory's contingency table, where rows are eligibility and
-#' columns are vulnerability:
+#' columns are vulnerability (A correctly included, B excluded in need,
+#' C included not in need):
 #'
-#'   inclusion error = not-vulnerable-but-eligible / all not vulnerable
-#'   exclusion error = vulnerable-but-not-eligible / all vulnerable
+#'   inclusion error = C / (A + C): of the eligible, the share not vulnerable
+#'   exclusion error = B / (A + B): of the vulnerable, the share not eligible
 #'
-#' At the design stage both errors compare the eligibility the score gives
-#' with the vulnerability measured: each is the share of one outcome group
-#' the score puts on the wrong side.
+#' Advisory 2/2025, p. 4 (10 / (40 + 10) = 20%) and p. 11.
 #'
 #' @param eligible Logical vector.
 #' @param vulnerable Logical or 0/1 vector (the outcome).
@@ -784,7 +784,7 @@ design_errors <- function(eligible, vulnerable) {
     n = length(e),
     correctly_included = a, excluded_in_need = b,
     included_not_in_need = cc, correctly_excluded = d,
-    inclusion_error = if ((cc + d) > 0) cc / (cc + d) else NA_real_,
+    inclusion_error = if ((a + cc) > 0) cc / (a + cc) else NA_real_,
     exclusion_error = if ((a + b) > 0) b / (a + b) else NA_real_,
     coverage = if (length(e) > 0) (a + cc) / length(e) else NA_real_
   )
@@ -813,7 +813,7 @@ balanced_threshold <- function(score, vulnerable) {
   sv <- sort(s[v]); sn <- sort(s[!v])
   tp <- length(sv) - findInterval(cand, sv)   # vulnerable with score > t
   fp <- length(sn) - findInterval(cand, sn)
-  incl <- fp / length(sn)                     # of the households not vulnerable
+  incl <- ifelse(tp + fp > 0, fp / (tp + fp), NA_real_)   # of the eligible
   excl <- (length(sv) - tp) / length(sv)
   worst <- pmax(ifelse(is.na(incl), 1, incl), excl)
   i <- order(worst, ifelse(is.na(incl), 1, incl) + excl, cand)[1]
@@ -1579,4 +1579,16 @@ score_floor_sentence <- function(f) {
     total = "The score is floored at zero.",
     items = "Exclusion criteria (negative points) count as zero, so they remove no points.",
     "The score is not floored: households meeting exclusion criteria can score below zero.")
+}
+
+#' Read a scorecard file: the workbook exported from Targeting Design (.xlsx)
+#' or its .json. Stops with a message the user can act on.
+#' @noRd
+read_scorecard_file <- function(path, name = path) {
+  ext <- tolower(tools::file_ext(name))
+  if (ext == "xlsx") return(read_scorecard_workbook(path))
+  if (ext == "json") return(normalise_scorecard(jsonlite::fromJSON(
+    paste(readLines(path, warn = FALSE), collapse = "\n"),
+    simplifyVector = TRUE, simplifyDataFrame = FALSE, simplifyMatrix = FALSE)))
+  stop("Load the .xlsx exported from Targeting Design, or its .json.", call. = FALSE)
 }

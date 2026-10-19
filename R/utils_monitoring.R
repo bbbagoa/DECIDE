@@ -230,14 +230,14 @@ monitoring_item_chart <- function(item, lang = "en") {
   wide <- stats::reshape(d[, c("x", "group", "value")], idvar = "x", timevar = "group", direction = "wide")
   names(wide) <- sub("^value[.]", "", names(wide))
   wide[is.na(wide)] <- 0
-  cols <- stats::setNames(rep_len(rp_cols$models, length(groups)), groups)
+  cols <- chart_colours(d, item$spec)
   vlab <- tr(chart_value_label(item$spec))
   st <- chart_style(item$spec)
   one <- function(b) if (length(groups) == 1) billboarder::bb_legend(b, show = FALSE) else b
   if (st %in% c("pie", "donut")) {
     p <- chart_pie_data(d)
-    if (identical(st, "donut")) return(rp_donut(p, height = 300))
-    pc <- stats::setNames(rep_len(rp_cols$models, nrow(p)), p$category)
+    if (identical(st, "donut")) return(rp_donut(p, height = 300, cols = cols))
+    pc <- cols
     return(rp_base(300) |>
              billboarder::bb_piechart(p) |>
              rp_colors(pc) |>
@@ -280,11 +280,10 @@ bb_value_range <- function(b, d, spec) {
 #' Targeting Monitoring report (HTML)
 #'
 #' @param x List: `country_office`, `context`, `findings`, `recommendations`,
-#'   `pdm` (list with `metrics`, `verdict`, `tolerance`, `n`, `by_unit`,
-#'   `excl_design`, or NULL), `items` (report items: `title`, `comment`,
-#'   `source`, `spec`, `data`), `previous` (earlier rounds, oldest first, from
-#'   `monitoring_round()`; optional), `area_points` (from
-#'   `monitoring_area_points()`; optional).
+#'   `pdm` (list with `metrics`, `verdict`, `tolerance`, `n`, `matrix`,
+#'   `decisions`, `excl_design`, or NULL), `items` (report items: `title`,
+#'   `comment`, `source`, `spec`, `data`), `previous` (earlier rounds, oldest
+#'   first, from `monitoring_round()`; optional).
 #' @noRd
 write_monitoring_report <- function(file, x, lang = "en") {
   L <- character(0)
@@ -307,7 +306,6 @@ write_monitoring_report <- function(file, x, lang = "en") {
   last <- if (length(rounds)) rounds[[length(rounds)]]
   ind <- monitoring_indicators(p, items)
   todo <- monitoring_todo(x$recommendations, p$verdict$action)
-  has_map <- !is.null(x$area_points) && nrow(x$area_points) > 0
   trend <- if (length(rounds)) tryCatch(monitoring_trend_chart(rounds, ind, lang), error = function(e) NULL)
   # This round against the last one, for an item of the same title.
   change_table <- function(it) {
@@ -329,11 +327,11 @@ write_monitoring_report <- function(file, x, lang = "en") {
   # The error gauges above already show the two errors; their tiles are only
   # repeated when there is a previous round to compare with.
   if (!is.null(p) && is.null(last)) ind <- ind[setdiff(names(ind), c("inclusion", "exclusion"))]
-  if (length(ind) || length(todo) || has_map) {
+  if (length(ind) || length(todo)) {
     add("## Executive summary", "",
         if (!is.null(last)) sprintf("_Changes are shown against the previous round, %s (%s)._", last$label, fmt_date(last$date)) else NULL, "",
         "@@EXEC@@", "",
-        if (has_map && !is.null(trend)) "@@FIG:areamap,trend@@" else if (has_map) "@@FIG:areamap@@" else if (!is.null(trend)) "@@FIG:trend@@" else NULL, "")
+        if (!is.null(trend)) "@@FIG:trend@@" else NULL, "")
   }
   add("## 1. Context", "", quote_block(x$context), "")
   # What the officer concluded comes straight after the context; the evidence follows.
@@ -356,6 +354,10 @@ write_monitoring_report <- function(file, x, lang = "en") {
                                              format(p$excl_design$n, big.mark = ","), pct(p$excl_design$share)),
         "",
         if (!is.null(p$verdict)) sprintf("**%s** Action: %s", p$verdict$interpretation, p$verdict$action) else NULL, "")
+    if (!is.null(p$matrix)) {
+      pairs[["@@MATRIX@@"]] <- implementation_matrix_html(p$matrix, p$tolerance %||% c(0.05, 0.20), isTRUE(p$no_nonbenef))
+      add("**Eligibility vs. assistance received (estimated households)**", "", "@@MATRIX@@", "")
+    }
     if (!is.null(p$strata) && nrow(p$strata)) {
       st <- p$strata
       add("Households surveyed and population, by group:", "",
@@ -366,18 +368,13 @@ write_monitoring_report <- function(file, x, lang = "en") {
     }
     dd <- p$decisions
     if (!is.null(dd) && nrow(dd)) {
-      add(if (identical(kind, "Baseline")) "Decision by area, before distribution:" else "Lessons by area, for the next round:", "",
-          md_table(data.frame(Area = dd$area, `Selected surveyed` = dd$n_selected, `Not selected surveyed` = dd$n_not,
-                              `Inclusion error` = vapply(dd$inclusion_error, pct, character(1)),
-                              `Exclusion error` = vapply(dd$exclusion_error, pct, character(1)),
-                              Decision = dd$decision, check.names = FALSE)), "")
+      lvl <- if (!is.null(p$unit_col) && !is.na(p$unit_col) && nzchar(p$unit_col)) sprintf(" (%s)", p$unit_col) else ""
+      pairs[["@@AREAS@@"]] <- area_decisions_html(dd, p$tolerance %||% c(0.05, 0.20))
+      add(sprintf("**%s%s**", if (identical(kind, "Baseline")) "Decision and coverage by area, before distribution" else "Lessons and coverage by area, for the next round", lvl), "",
+          "@@AREAS@@", "",
+          "_Error rates coloured against the tolerance band: green within it, amber to review, red above it. Areas with fewer than 30 surveyed households in either group are not judged._", "")
     }
     if (identical(kind, "PDM")) add("_Measured after distribution: nothing could be corrected before assistance was given, and the assistance itself may have changed some answers. A post-targeting survey before distribution is preferred._", "")
-    if (!is.null(p$by_unit) && nrow(p$by_unit)) {
-      bu <- p$by_unit
-      add("Coverage by area:", "", md_table(data.frame(Area = bu[[1]], Eligible = round(bu$eligible), Selected = round(bu$selected),
-                                                      Coverage = vapply(bu$coverage, pct, character(1)), check.names = FALSE)), "")
-    }
   }
 
   esc <- function(t) htmltools::htmlEscape(t %||% "")
@@ -424,9 +421,9 @@ write_monitoring_report <- function(file, x, lang = "en") {
   add("## 6. Recommendations", "", quote_block(x$recommendations), "",
       "## 7. Method", "",
       paste(sprintf("**Implementation errors** are measured on the %s sample.", kind), "Eligibility is re-established for each surveyed household",
-            "(from a column of the survey data, or by applying the adopted scorecard or eligibility rules to its answers).",
-            "Inclusion error = beneficiaries who were not eligible / all beneficiaries, from the beneficiary sample.",
-            "Exclusion error = eligible households not assisted / all eligible households; it needs the non-beneficiary sample, and",
+            "(from a column of the survey data, or by applying to its answers a scorecard loaded in Monitoring, or the eligibility rules).",
+            "Inclusion error = assisted households who were not eligible / all assisted households, from the beneficiary sample.",
+            "Exclusion error = eligible households not assisted / all eligible households (Targeting Advisory 2/2025, p. 6); it needs the non-beneficiary sample, and",
             "because the PDM surveys set numbers of beneficiaries and non-beneficiaries, each household is weighted by its group's",
             "population over the number surveyed from it (per area when the sizes are given per area), so the non-beneficiaries",
             "count for their real share.",
@@ -434,9 +431,9 @@ write_monitoring_report <- function(file, x, lang = "en") {
             "Eligible households left out because of prioritisation are excluded by design and reported separately (Targeting Advisory 2/2025)."), "",
       paste("**Targeting process** charts count records, total or average a number, or divide two totals (for example women among",
             "participants), by area or category, as chosen by the officer, shown as a chart or a table; each carries the officer's comment."), "",
-      paste("**Executive summary.** The errors are judged against the tolerance band set on the PDM tab; coverage, satisfaction and",
-            "awareness are good from 80% (watch from 60%), complaints resolved from 80% (watch from 50%), women among participants from 50%",
-            "(watch from 40%). The exclusion error of an area on the map is 1 - its coverage of eligible households."), "")
+      paste("**Executive summary.** The errors are judged against the tolerance band set in the Implementation errors sidebar; coverage,",
+            "satisfaction and awareness are good from 80% (watch from 60%), complaints resolved from 80% (watch from 50%), women among",
+            "participants from 50% (watch from 40%)."), "")
 
   plots <- list(); caps <- character(0)
   for (it in items) {
@@ -445,9 +442,8 @@ write_monitoring_report <- function(file, x, lang = "en") {
     # the item's heading already names the chart
     if (!is.null(ch)) { plots[[it$id]] <- ch; caps[[it$id]] <- "" }
   }
-  if (has_map) plots$areamap <- tryCatch(monitoring_area_map(x$area_points, p$tolerance %||% c(0.05, 0.20), lang), error = function(e) NULL)
   if (!is.null(trend)) plots$trend <- trend
-  caps <- c(caps, areamap = "Exclusion error by area", trend = "Headline indicators over the rounds (%)")
+  caps <- c(caps, trend = "Headline indicators over the rounds (%)")
   impl <- if (is.null(p)) "" else implementation_cards(p, lang)
   report_write_page(
     file, paste(L, collapse = "\n"), plots, captions = caps, lang = lang,
@@ -459,6 +455,62 @@ write_monitoring_report <- function(file, x, lang = "en") {
                     "@@EXEC@@" = monitoring_summary_html(ind, last$indicators, last$label, todo, lang)), pairs))
 }
 
+# an error rate placed on the tolerance band, as on the page: green within,
+# amber to review, red above
+band_colour <- function(v, tol) {
+  if (is.null(v) || is.na(v)) return("inherit")
+  if (v <= tol[1]) "#3f7e44" else if (v <= tol[2]) "#a87400" else "#c5192d"
+}
+rate_span <- function(v, tol) {
+  if (is.null(v) || is.na(v)) return("n/a")
+  sprintf('<span style="color:%s;font-weight:600">%.1f%%</span>', band_colour(v, tol), 100 * v)
+}
+
+#' The implementation matrix of the monitoring report (Advisory 2/2025, p. 6):
+#' assistance in rows, eligibility in columns, estimated households, each cell
+#' with its rate and the households surveyed in it, as on the page
+#' @noRd
+implementation_matrix_html <- function(m, tol = c(0.05, 0.20), no_nonbenef = FALSE) {
+  esc <- htmltools::htmlEscape
+  n <- function(x) format(round(x), big.mark = ",")
+  rate <- function(x, d) if (d > 0) sprintf("%.1f%%", 100 * x / d) else "n/a"
+  rowA <- m$correct_in + m$incl; rowN <- m$excl + m$correct_out
+  colE <- m$correct_in + m$excl; colN <- m$incl + m$correct_out
+  cell <- function(x, ns, d, label, of, err = FALSE) {
+    r <- if (err && d > 0) rate_span(x / d, tol) else rate(x, d)
+    sprintf("<td><strong>%s</strong> (%s)<br>%s<br><small>%s &middot; %s surveyed</small></td>", n(x), r, esc(label), esc(of), n(ns))
+  }
+  na <- "<td>n/a<br><small>no non-beneficiaries surveyed</small></td>"
+  paste0('<table><thead><tr><th>Assistance (rows) / eligibility (columns)</th><th>Eligible</th><th>Not eligible</th><th>Total</th></tr></thead><tbody>',
+         "<tr><th>Assisted</th>", cell(m$correct_in, m$n_correct_in, colE, "Correctly included", "of the eligible"),
+         cell(m$incl, m$n_incl, rowA, "Inclusion error", "of the assisted", TRUE), "<td>", n(rowA), "</td></tr>",
+         "<tr><th>Not assisted</th>",
+         if (no_nonbenef) na else cell(m$excl, m$n_excl, colE, "Exclusion error", "of the eligible", TRUE),
+         if (no_nonbenef) na else cell(m$correct_out, m$n_correct_out, colN, "Correctly excluded", "of the not eligible"),
+         "<td>", if (no_nonbenef) "n/a" else n(rowN), "</td></tr>",
+         "<tr><th>Total</th><td>", if (no_nonbenef) "n/a" else n(colE), "</td><td>", if (no_nonbenef) "n/a" else n(colN),
+         "</td><td><strong>", n(if (no_nonbenef) rowA else rowA + rowN), "</strong></td></tr></tbody></table>")
+}
+
+#' Decision and coverage by area for the monitoring report, errors coloured
+#' against the tolerance band, as on the page
+#' @noRd
+area_decisions_html <- function(dd, tol = c(0.05, 0.20)) {
+  esc <- htmltools::htmlEscape
+  n <- function(x) format(round(x), big.mark = ",")
+  pc <- function(x) if (is.na(x)) "n/a" else sprintf("%.1f%%", 100 * x)
+  dcol <- c(redesign = "#c5192d", review = "#a87400", good = "#3f7e44")
+  rows <- vapply(seq_len(nrow(dd)), function(i) sprintf(
+    "<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td style=\"color:%s;font-weight:600\">%s</td></tr>",
+    esc(dd$area[i]), n(dd$n_selected[i]), n(dd$n_not[i]), n(dd$eligible[i] %||% NA), n(dd$reached[i] %||% NA), pc(dd$coverage[i] %||% NA),
+    rate_span(dd$inclusion_error[i], tol), rate_span(dd$exclusion_error[i], tol),
+    dcol[dd$level[i]] %||% "inherit", esc(dd$decision[i])), character(1))
+  rows <- sub('style="color:NA;', 'style="color:inherit;', rows, fixed = TRUE)
+  paste0("<table><thead><tr><th>Area</th><th>Selected surveyed</th><th>Not selected surveyed</th><th>Eligible (est.)</th>",
+         "<th>Reached (est.)</th><th>Coverage</th><th>Inclusion error</th><th>Exclusion error</th><th>Decision</th></tr></thead><tbody>",
+         paste(rows, collapse = ""), "</tbody></table>")
+}
+
 #' Implementation error gauges for the monitoring report
 #' @noRd
 implementation_cards <- function(p, lang = "en") {
@@ -468,7 +520,7 @@ implementation_cards <- function(p, lang = "en") {
   card <- function(label, v, what, icon) {
     band <- if (is.null(v) || is.na(v)) "na" else if (v <= tol[1]) "ok" else if (v <= tol[2]) "warn" else "bad"
     state <- c(ok = "Within tolerance", warn = "In the review band", bad = "Beyond tolerance", na = "Not available")[[band]]
-    report_gauge_card(tr(label), v %||% NA_real_, band, tr(state), tr(what), tr("Measured on the PDM sample"),
+    report_gauge_card(tr(label), v %||% NA_real_, band, tr(state), tr(what), tr(if (identical(p$kind, "PDM")) "Measured on the PDM sample" else "Measured on the post-targeting survey"),
                       icon, zones = c(ok = tol[1], warn = tol[2], bad = 0.5), max = 0.5)
   }
   ico_in <- '<svg viewBox="0 0 16 16"><path d="M2 8h8M7 4.5 10.5 8 7 11.5M13 3v10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>'
@@ -549,6 +601,19 @@ chart_style <- function(spec) {
   if (!s %in% chart_styles() || identical(s, "auto")) if (identical(spec$type, "trend")) "line" else "bar" else s
 }
 
+#' The colour of each series (each slice of a pie or donut), named by group
+#' or category: the WFP palette, with the ones set in the Colours dialog
+#' (`spec$colours`, a list name = "#rrggbb") over it
+#' @noRd
+chart_colours <- function(d, spec) {
+  keys <- if (chart_style(spec) %in% c("pie", "donut")) as.character(chart_pie_data(d)$category) else unique(as.character(d$group))
+  cols <- stats::setNames(rep_len(rp_cols$models, length(keys)), keys)
+  set <- unlist(spec$colours)
+  set <- set[names(set) %in% keys & grepl("^#[0-9A-Fa-f]{6}$", set)]
+  if (length(set)) cols[names(set)] <- set
+  cols
+}
+
 #' Parts of a whole for a pie or donut: one slice per category, the split
 #' (if any) added up
 #' @noRd
@@ -574,6 +639,7 @@ chart_pie_note <- function(spec) {
 #' @noRd
 chart_echart_option <- function(d, spec) {
   st <- chart_style(spec)
+  cols <- chart_colours(d, spec)
   whole <- all(abs(d$value - round(d$value)) < 1e-9, na.rm = TRUE)
   fmt <- if (whole) "fn:num" else "fn:dec1"
   if (st %in% c("pie", "donut")) {
@@ -585,7 +651,8 @@ chart_echart_option <- function(d, spec) {
       legend = list(type = "scroll", bottom = 0),
       series = list(list(type = "pie", radius = if (donut) c("58%", "74%") else c("0%", "72%"), center = c("50%", "46%"),
                          label = list(show = !donut, formatter = "{d}%"),
-                         data = lapply(seq_len(nrow(pd)), function(i) list(name = as.character(pd$category[i]), value = pd$n[i])))))
+                         data = lapply(seq_len(nrow(pd)), function(i) list(name = as.character(pd$category[i]), value = pd$n[i],
+                                                                           itemStyle = list(color = cols[[i]]))))))
     # a donut says its largest share in the middle
     if (donut && length(top)) out$title <- list(
       text = sprintf("%.0f%%", 100 * pd$n[top] / sum(pd$n)), subtext = substr(as.character(pd$category[top]), 1, 22),
@@ -601,7 +668,7 @@ chart_echart_option <- function(d, spec) {
     s <- d[as.character(d$group) == g, , drop = FALSE]
     v <- s$value[match(cats, as.character(s$x))]
     # NULL fields left out: JSON would send them as {} (a truthy stack)
-    Filter(Negate(is.null), list(type = if (line) "line" else "bar", name = if (grp) g else chart_value_label(spec),
+    Filter(Negate(is.null), list(type = if (line) "line" else "bar", name = if (grp) g else chart_value_label(spec), color = cols[[g]],
          stack = if (stack) "s", areaStyle = if (identical(st, "area")) list(opacity = 0.25),
          label = if (!line && !stack) list(show = TRUE, position = if (identical(st, "bar")) "right" else "top", formatter = fmt, fontSize = 10),
          data = lapply(v, function(z) if (is.na(z)) "-" else z)))

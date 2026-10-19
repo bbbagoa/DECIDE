@@ -552,6 +552,7 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
       why <- "Apply a selection that serves at least one household first."
       gate_button("export_open", has, why)
       gate_button("selection_report", has, why)
+      gate_button("download_logic", has, why)
     })
 
     output$approach_desc <- renderUI({
@@ -1000,18 +1001,7 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
 
     observeEvent(input$sc_file, {
       req(input$sc_file)
-      ext <- tolower(tools::file_ext(input$sc_file$name))
-      sc <- tryCatch({
-        if (ext == "xlsx") {
-          read_scorecard_workbook(input$sc_file$datapath)
-        } else if (ext == "json") {
-          normalise_scorecard(jsonlite::fromJSON(
-            paste(readLines(input$sc_file$datapath, warn = FALSE), collapse = "\n"),
-            simplifyVector = TRUE, simplifyDataFrame = FALSE, simplifyMatrix = FALSE))
-        } else {
-          stop("Load the .xlsx exported from Targeting Design, or its .json.", call. = FALSE)
-        }
-      }, error = function(e) {
+      sc <- tryCatch(read_scorecard_file(input$sc_file$datapath, input$sc_file$name), error = function(e) {
         showNotification(conditionMessage(e), type = "error", duration = 15)
         NULL
       })
@@ -1785,6 +1775,19 @@ mod_ben_selection_server <- function(id, uploaded_df, user_setup, workspace = NU
           lang = if (identical(lang, "fr")) "fr" else "en")
         audit_add(modification_log, "Selection", "Selection report exported",
                   sprintf("%s households served", format(sum(sel), big.mark = ",")))
+      }
+    )
+
+    # The selection logic (.json): what decided eligibility here, for
+    # Monitoring to apply to the survey answers (the Design card alone may
+    # differ: the threshold set here, the rules, the approach).
+    output$download_logic <- download_handler(
+      filename = function() export_file_name("Selection_logic", "json"),
+      content = function(file) {
+        df <- uploaded_df(); req(df)
+        lg <- selection_logic(reactiveValuesToList(applied), user_setup$scorecard, active_ruleset(), user_setup, names(df))
+        write_selection_logic(lg, file)
+        audit_add(modification_log, "Selection", "Selection logic exported", logic_describe(lg))
       }
     )
 

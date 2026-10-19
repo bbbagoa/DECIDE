@@ -136,9 +136,9 @@ mod_chart_builder_server <- function(id, data, source, dataset_name = reactive("
     spec <- reactive(list(type = input$type, x = input$x, group = input$group, value = input$value, den = input$den,
                           date = input$date, period = input$period, filter_col = input$filter_col,
                           filter_vals = input$filter_vals, pct = input$pct, style = input$style %||% "auto",
-                          axis_min = axes()$ymin, axis_max = axes()$ymax))
-    # the axis bounds do not change the numbers: the aggregation ignores them
-    spec_data <- reactive(spec()[setdiff(names(spec()), c("axis_min", "axis_max"))])
+                          axis_min = axes()$ymin, axis_max = axes()$ymax, colours = colours()))
+    # the axis bounds and colours do not change the numbers: the aggregation ignores them
+    spec_data <- reactive(spec()[setdiff(names(spec()), c("axis_min", "axis_max", "colours"))])
     # By and the split are drawn as categories: refuse one with too many options
     too_many <- reactive({
       df <- data(); sp <- spec_data(); if (is.null(df)) return(NULL)
@@ -165,6 +165,40 @@ mod_chart_builder_server <- function(id, data, source, dataset_name = reactive("
     observeEvent(input$ax_apply, { axes(axis_read(input, "ax_")[c("ymin", "ymax")]); removeModal() })
     observeEvent(input$ax_reset, { axes(list(ymin = NA_real_, ymax = NA_real_)); removeModal() })
     observe(updateActionButton(session, "axes", label = if (any(is.finite(unlist(axes())))) "Axes (set)" else "Axes"))
+
+    # Colours: one per series (per slice of a pie or donut), kept by name
+    # (group or category) so they follow the chart as its fields change.
+    colours <- reactiveVal(list())
+    col_keys <- reactiveVal(character(0))
+    # the browser's own colour picker; each dialog gets fresh input ids
+    col_id <- function(i) paste0("col_", input$colours, "_", i)
+    observeEvent(input$colours, {
+      req(input$colours > 0)
+      d <- agg()
+      if (is.null(d) || !nrow(d)) { showNotification("Choose the columns first: the colours follow the chart.", type = "warning"); return() }
+      cols <- chart_colours(d, spec())
+      col_keys(names(cols))
+      pick <- function(i) tags$label(class = "d-flex align-items-center gap-2 mb-1",
+        tags$input(type = "color", value = cols[[i]], class = "form-control form-control-color",
+                   oninput = sprintf("Shiny.setInputValue('%s', this.value)", ns(col_id(i)))),
+        tags$span(class = "small", names(cols)[i]))
+      showModal(modalDialog(
+        title = "Colours", size = "m", easyClose = TRUE,
+        tags$p(class = "small text-muted", "Click a colour to change it. The report uses the same colours."),
+        tags$div(style = "columns: 2; column-gap: 16px;", lapply(seq_along(cols), pick)),
+        footer = tagList(actionButton(ns("col_reset"), "Automatic", class = "btn-outline-secondary"),
+                         modalButton("Cancel"),
+                         actionButton(ns("col_apply"), "Apply", class = "btn-primary"))))
+    })
+    observeEvent(input$col_apply, {
+      cur <- colours()
+      for (i in seq_along(col_keys())) {
+        v <- input[[col_id(i)]]
+        if (is.character(v) && grepl("^#[0-9A-Fa-f]{6}$", v)) cur[[col_keys()[i]]] <- v
+      }
+      colours(cur); removeModal()
+    })
+    observeEvent(input$col_reset, { colours(list()); removeModal() })
 
     output$preview_title <- renderText(if (nzchar(input$title %||% "")) input$title else "Preview")
     output$preview <- render_echart({
@@ -199,7 +233,9 @@ mod_chart_builder_server <- function(id, data, source, dataset_name = reactive("
     output$cb_state <- shinyreact::reactive_output({
       d <- agg()
       list(has_data = !is.null(data()), too_many = too_many(), ready = !is.null(d) && nrow(d) > 0,
-           axes_set = any(is.finite(unlist(axes()))), note = stat_note(d))
+           axes_set = any(is.finite(unlist(axes()))),
+           colours_set = !is.null(d) && nrow(d) > 0 && any(names(colours()) %in% names(chart_colours(d, spec()))),
+           note = stat_note(d))
     })
     # the comment editor (www/richtext.js) is drawn by React and bound by Shiny
 

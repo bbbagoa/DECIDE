@@ -5,7 +5,7 @@
 // conditionalPanel() are hidden here too, but stay mounted so the server's
 // updateSelectInput() still reaches them.
 import { useEffect, useRef } from "react";
-import { Calculator, ChartColumn, Info, MoveVertical, Plus, SlidersHorizontal, TriangleAlert } from "lucide-react";
+import { Calculator, ChartColumn, Info, MoveVertical, Palette, Plus, SlidersHorizontal, TriangleAlert } from "lucide-react";
 import { useShinyInputValue, useShinyOutputValue } from "@/shiny";
 import { ActionButton, RadioInput, SelectInput, TextInput, type Choice } from "@/lib/inputs";
 import { Chart } from "@/lib/chart";
@@ -16,7 +16,7 @@ import { EmptyState } from "@/components/Figures";
 import { RichText } from "./RichText";
 
 type Meta = { presets: Choice[]; types: Record<string, string>; styles: Record<string, string> };
-type State = { has_data: boolean; too_many: string | null; ready: boolean; axes_set: boolean; note: { kind: "warning" | "test"; text: string } | null };
+type State = { has_data: boolean; too_many: string | null; ready: boolean; axes_set: boolean; colours_set?: boolean; note: { kind: "warning" | "test"; text: string } | null };
 
 export function ChartBuilder({ prefix, t }: { prefix: string; t: (s: string) => string }) {
   const ns = (x: string) => prefix + x;
@@ -47,6 +47,8 @@ export function ChartBuilder({ prefix, t }: { prefix: string; t: (s: string) => 
             <SelectInput id={ns("style")} label={t("Chart style")} choices={meta.styles} value="auto" className="flex-fill" />
             <ActionButton id={ns("axes")} label={st?.axes_set ? t("Axes (set)") : t("Axes")} icon={<MoveVertical size={13} />}
                           variant="outline-secondary" className="tw-cb-axes" title={t("Set the value axis")} />
+            <ActionButton id={ns("colours")} label={st?.colours_set ? t("Colours (set)") : t("Colours")} icon={<Palette size={13} />}
+                          variant="outline-secondary" className="tw-cb-axes" title={t("Choose the colour of each series")} />
           </div>
         </div>
         <div style={show(type !== "trend")}>
