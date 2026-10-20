@@ -100,3 +100,19 @@ test_that("admin areas get their labels: cascading lists, attached CSVs, old hea
   # without the attached file the codes stay, nothing breaks
   expect_false("village" %in% names(DECIDE:::build_odk_label_map(f)))
 })
+
+test_that("a choice list labelled only in another language column keeps its labels", {
+  f <- withr::local_tempfile(fileext = ".xlsx")
+  openxlsx::write.xlsx(list(
+    survey = data.frame(type = c("select_one st", "select_one yn"), name = c("status", "card"),
+                        label = c("Status", "Has a card"), `label::English (en)` = c("", "Card"), check.names = FALSE),
+    choices = data.frame(list_name = c("st", "st", "yn", "yn"), name = c("idp", "host_community", "yes", "no"),
+                         label = c("Displaced", "Host community", "Yes", "No"),
+                         `label::English (en)` = c(NA, NA, "Yes (en)", "No (en)"), check.names = FALSE)), f)
+  m <- DECIDE:::build_odk_label_map(f)
+  out <- DECIDE:::apply_odk_labels(data.frame(status = c("idp", "host_community"), card = c("yes", "no")), m)
+  expect_equal(as.vector(out$status), c("Displaced", "Host community"))   # the English column is empty for this list
+  expect_equal(as.vector(out$card), c("Yes (en)", "No (en)"))            # the app's language first
+  expect_equal(attr(out$status, "label"), "Status")
+  expect_equal(unname(attr(out$status, "tw_codes")[["Host community"]]), "host_community")
+})

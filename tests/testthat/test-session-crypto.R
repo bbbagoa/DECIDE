@@ -5,16 +5,16 @@
 with_session_dir <- function(code) {
   tmp <- tempfile()
   dir.create(tmp, recursive = TRUE)
-  old <- Sys.getenv("TARGETWISE_SESSION_DIR")
-  old_pw <- Sys.getenv("TARGETWISE_SESSION_PASSPHRASE")
+  old <- Sys.getenv("DECIDE_SESSION_DIR")
+  old_pw <- Sys.getenv("DECIDE_SESSION_PASSPHRASE")
   Sys.setenv(
-    TARGETWISE_SESSION_DIR = tmp,
-    TARGETWISE_SESSION_PASSPHRASE = ""
+    DECIDE_SESSION_DIR = tmp,
+    DECIDE_SESSION_PASSPHRASE = ""
   )
   on.exit({
     Sys.setenv(
-      TARGETWISE_SESSION_DIR = old,
-      TARGETWISE_SESSION_PASSPHRASE = old_pw
+      DECIDE_SESSION_DIR = old,
+      DECIDE_SESSION_PASSPHRASE = old_pw
     )
   }, add = TRUE)
   force(code)

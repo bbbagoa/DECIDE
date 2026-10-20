@@ -5,7 +5,7 @@ source("react/dev/e2e.R")
 ok <- function(cond, what) cat(if (isTRUE(cond)) "PASS" else "FAIL", what, "\n")
 suppressMessages(pkgload::load_all(tw_root, quiet = TRUE, export_all = TRUE))
 store <- tempfile("twstore"); dir.create(store)
-Sys.setenv(TARGETWISE_SESSION_DIR = store)
+Sys.setenv(DECIDE_SESSION_DIR = store)
 
 # 1. a Design session saved from the app
 app <- tw_launch(store = store)

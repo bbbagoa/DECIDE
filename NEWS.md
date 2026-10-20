@@ -1,4 +1,7 @@
-# TargetWise 1.0.0
+# DECIDE 1.0.0
+
+* Renamed **DECIDE** (formerly TargetWise). Settings are now `DECIDE_*` (the `TARGETWISE_*` names still work); sessions, the key and settings are brought over from the TargetWise folder on first start.
+
 
 * Targeting Design, Exports: **Registration form (XLSForm)**, a draft KoboToolbox / ODK / MODA form built from the adopted design (enabled once adopted). Consent, household ID, enumerator, the area levels of the registration data as cascading lists, GPS, the head of household as beneficiary (first name, surname, third name if any, sex, date of birth and age, marital status, phone, identity document, optional photo, household size), an optional alternate recipient (names, sex, age, relationship, optional photo), one required question per criterion, and hidden calculations: each criterion's points, the vulnerability score (as TargetWise computes it), eligibility at the adopted threshold, and two vulnerability categories (quartile 1-4 and quintile 1-5 of the score on the design data). In English and French (label and hint columns per language, English by default; area names and criterion labels copied from the data). Formatted like the other exports (styled header, frozen row, filters; an "About this draft" summary sheet). It is a draft to adjust: the only export that is not locked. An "About this draft" sheet says what each part does; check the form in the form builder before use.
 * Simpler pages, nothing left out (reports and exports keep every detail):

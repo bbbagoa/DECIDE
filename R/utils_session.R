@@ -35,7 +35,7 @@ app_user <- function(session = shiny::getDefaultReactiveDomain()) {
 
 #' Whether an authenticated user is required before any data may be loaded
 #'
-#' Set `TARGETWISE_REQUIRE_AUTH=true` on any shared deployment. The app
+#' Set `DECIDE_REQUIRE_AUTH=true` on any shared deployment. The app
 #' then refuses to run when the platform has not identified the user, instead
 #' of silently dropping every visitor into one shared session store.
 #'
@@ -51,7 +51,7 @@ require_auth <- function() {
 #' Returns a per-user directory suitable for persisting session data.
 #' Creates the directory if it does not exist.
 #'
-#' The optional environment variable `TARGETWISE_SESSION_DIR` overrides
+#' The optional environment variable `DECIDE_SESSION_DIR` overrides
 #' the default user data directory. This is useful for tests and ephemeral
 #' deployments.
 #'
@@ -312,7 +312,7 @@ list_saved_sessions <- function(user = NULL) {
 #' Default session encryption passphrase
 #'
 #' The passphrase can be overridden with the environment variable
-#' `TARGETWISE_SESSION_PASSPHRASE`. When set, the key is derived from it
+#' `DECIDE_SESSION_PASSPHRASE`. When set, the key is derived from it
 #' (so sessions remain portable across machines that share the passphrase).
 #'
 #' When the env var is unset, a per-install random key file is used instead (see
@@ -330,7 +330,7 @@ session_passphrase <- function() {
 #' Path to the per-install session key file
 #'
 #' Stored under the user config directory so it is unique to this installation.
-#' Overridable via `TARGETWISE_SESSION_DIR` for tests / ephemeral hosts.
+#' Overridable via `DECIDE_SESSION_DIR` for tests / ephemeral hosts.
 #'
 #' @return A character string with the key file path.
 #' @noRd
@@ -363,7 +363,7 @@ get_or_create_session_key <- function(user = NULL) {
 
 #' Derive a sodium encryption key for session encryption
 #'
-#' If `TARGETWISE_SESSION_PASSPHRASE` is set, the key is derived from it
+#' If `DECIDE_SESSION_PASSPHRASE` is set, the key is derived from it
 #' (portable across machines sharing the passphrase). Otherwise the per-install
 #' random key file is used.
 #'
@@ -459,7 +459,7 @@ save_session <- function(uploaded_df, user_setup, modification_log, theme = "wfp
 #' Autosave serialises + encrypts + writes the whole dataset after every change;
 #' for large data (the app targets ~1 GB) that blocks the session for tens of
 #' seconds, so it is left to the explicit Save button instead. Override with
-#' `TARGETWISE_AUTOSAVE_MAX_MB`.
+#' `DECIDE_AUTOSAVE_MAX_MB`.
 #' @noRd
 autosave_max_bytes <- function() {
   mb <- suppressWarnings(as.numeric(tw_env("AUTOSAVE_MAX_MB", "200")))

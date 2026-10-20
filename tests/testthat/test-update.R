@@ -9,7 +9,7 @@ test_that("update availability compares versions and tolerates unknowns", {
 })
 
 test_that("the update check can be switched off", {
-  withr::local_envvar(TARGETWISE_UPDATE_CHECK = "false")
+  withr::local_envvar(DECIDE_UPDATE_CHECK = "false")
   expect_null(DECIDE:::update_status())
 })
 

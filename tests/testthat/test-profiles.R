@@ -1,9 +1,9 @@
 local_profile_dir <- function(env = parent.frame()) {
   tmp <- tempfile()
-  old <- Sys.getenv("TARGETWISE_SESSION_DIR", unset = NA)
-  Sys.setenv(TARGETWISE_SESSION_DIR = tmp)
+  old <- Sys.getenv("DECIDE_SESSION_DIR", unset = NA)
+  Sys.setenv(DECIDE_SESSION_DIR = tmp)
   withr::defer({
-    if (is.na(old)) Sys.unsetenv("TARGETWISE_SESSION_DIR") else Sys.setenv(TARGETWISE_SESSION_DIR = old)
+    if (is.na(old)) Sys.unsetenv("DECIDE_SESSION_DIR") else Sys.setenv(DECIDE_SESSION_DIR = old)
     unlink(tmp, recursive = TRUE)
   }, envir = env)
   tmp

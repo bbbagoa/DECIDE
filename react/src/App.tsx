@@ -1,4 +1,4 @@
-// The DECIDE shell (the R package is TargetWise): navbar, pages, theme, language. Page values match the
+// The DECIDE shell: navbar, pages, theme, language. Page values match the
 // Shiny app's (welcome_panel, scorecard_panel, ...) so the server's navigation
 // (tw_nav() in R/utils_react.R), session restore and every link keep working.
 //

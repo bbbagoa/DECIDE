@@ -169,7 +169,7 @@ xlsform_draft <- function(sc, cuts = list(), areas = NULL, labels = character(0)
                                      for (c in setdiff(names(a), names(b))) b[[c]] <- ""
                                      rbind(a, b[names(a)]) }, ch)
   choices <- bil(choices, "label")
-  form_id <- paste0("targetwise_registration_", format(Sys.Date(), "%Y%m%d"))
+  form_id <- paste0("decide_registration_", format(Sys.Date(), "%Y%m%d"))
   settings <- data.frame(form_title = title, form_id = form_id, version = format(Sys.time(), "%Y%m%d%H%M"),
                          default_language = "English (en)", stringsAsFactors = FALSE)
   kind <- if (pm) "proxy means test" else if (rk) "vulnerability ranking" else "scorecard"

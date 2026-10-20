@@ -129,6 +129,6 @@
       unsubscribe: function (el) { $(el).off(".twrich"); },
       getRatePolicy: function () { return { policy: "debounce", delay: 400 }; }
     });
-    Shiny.inputBindings.register(binding, "targetwise.richtext");
+    Shiny.inputBindings.register(binding, "decide.richtext");
   }
 })();

@@ -447,7 +447,7 @@ mod_session_manager_server <- function(
     })
 
     # Autosave every N minutes, set from the save dialog: the same name and
-    # parts, saved in full. TARGETWISE_AUTOSAVE_EVERY_MIN changes the period.
+    # parts, saved in full. DECIDE_AUTOSAVE_EVERY_MIN changes the period.
     observe({
       p <- periodic(); req(p)
       invalidateLater(60000)
@@ -619,7 +619,7 @@ mod_session_manager_server <- function(
     # After 20 minutes of work that is not saved under a name, a reminder with
     # Save now / Later. Not shown while autosave keeps a named session up to
     # date. A notification, not a dialog: a dialog would replace whatever
-    # dialog the user is working in. TARGETWISE_SAVE_REMINDER_MIN changes the
+    # dialog the user is working in. DECIDE_SAVE_REMINDER_MIN changes the
     # delay (0 turns it off).
     reminder_minutes <- function() {
       m <- suppressWarnings(as.numeric(tw_env("SAVE_REMINDER_MIN", "20")))

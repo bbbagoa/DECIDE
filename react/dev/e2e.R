@@ -21,7 +21,7 @@ tw_launch <- function(width = 1500, height = 950, background = FALSE, store = NU
   dir.create(dir)
   store <- store %||% tempfile("twstore")   # a folder of saved sessions to start with, or a new one
   writeLines(c(
-    sprintf('Sys.setenv(TARGETWISE_BACKGROUND = "%s", TARGETWISE_UPDATE_CHECK = "false", TARGETWISE_SESSION_DIR = "%s")',
+    sprintf('Sys.setenv(DECIDE_BACKGROUND = "%s", DECIDE_UPDATE_CHECK = "false", DECIDE_SESSION_DIR = "%s")',
             if (background) "true" else "false", gsub("\\\\", "/", store)),
     sprintf('pkgload::load_all("%s", quiet = TRUE, export_all = TRUE)', gsub("\\\\", "/", tw_root)),
     "options(shiny.maxRequestSize = 2 * 1024^3)",

@@ -121,7 +121,7 @@ test_that("a template survives its file, with its comments and rounds, and nothi
 })
 
 test_that("Monitoring saves a template with its texts, imports a shared one and drafts from it", {
-  withr::local_envvar(TARGETWISE_SESSION_DIR = withr::local_tempdir())
+  withr::local_envvar(DECIDE_SESSION_DIR = withr::local_tempdir())
   drafted <- tm("monitoring_draft")("process", process = list(cfm.csv = cfm))$items
   drafted[[1]]$comment <- "<p>Exclusion complaints concentrate in Beni.</p>"
   shared <- tempfile(fileext = ".json")

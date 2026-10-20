@@ -8,7 +8,7 @@ manifest.json
 rsconnect/
 .quarto/
 **/*.quarto_ipynb
-TargetWise.Rcheck/
+DECIDE.Rcheck/
 *.tar.gz
 .kimi/
 

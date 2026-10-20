@@ -240,7 +240,7 @@
   // do not freeze or put to sleep a background tab holding one, which would
   // close the connection to R.
   if (navigator.locks && navigator.locks.request) {
-    try { navigator.locks.request("targetwise-keep-awake", function () { return new Promise(function () {}); }); } catch (e) {}
+    try { navigator.locks.request("decide-keep-awake", function () { return new Promise(function () {}); }); } catch (e) {}
   }
 
   // Connection lost: say what happened and how to get the work back,

@@ -1,9 +1,9 @@
 # Speed helpers: every core, one row per answer pattern (R/utils_parallel.R)
 
-test_that("the app uses every core unless TARGETWISE_CORES caps it", {
-  withr::local_envvar(TARGETWISE_CORES = "")
+test_that("the app uses every core unless DECIDE_CORES caps it", {
+  withr::local_envvar(DECIDE_CORES = "")
   expect_equal(DECIDE:::tw_cores(), max(1L, parallel::detectCores()))
-  withr::local_envvar(TARGETWISE_CORES = "1")
+  withr::local_envvar(DECIDE_CORES = "1")
   expect_equal(DECIDE:::tw_cores(), 1L)
 })
 

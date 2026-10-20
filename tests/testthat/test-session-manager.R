@@ -41,10 +41,10 @@ test_that("named session save/load roundtrip works in temp dir", {
 
 test_that("audit-log companions are not listed as sessions and are deleted with them", {
   tmp_dir <- tempfile()
-  old <- Sys.getenv("TARGETWISE_SESSION_DIR", unset = NA)
-  Sys.setenv(TARGETWISE_SESSION_DIR = tmp_dir)
+  old <- Sys.getenv("DECIDE_SESSION_DIR", unset = NA)
+  Sys.setenv(DECIDE_SESSION_DIR = tmp_dir)
   on.exit({
-    if (is.na(old)) Sys.unsetenv("TARGETWISE_SESSION_DIR") else Sys.setenv(TARGETWISE_SESSION_DIR = old)
+    if (is.na(old)) Sys.unsetenv("DECIDE_SESSION_DIR") else Sys.setenv(DECIDE_SESSION_DIR = old)
     unlink(tmp_dir, recursive = TRUE)
   }, add = TRUE)
 
@@ -62,10 +62,10 @@ test_that("audit-log companions are not listed as sessions and are deleted with 
 
 test_that("the audit companion is readable back (restore prefers it when longer)", {
   tmp_dir <- tempfile()
-  old <- Sys.getenv("TARGETWISE_SESSION_DIR", unset = NA)
-  Sys.setenv(TARGETWISE_SESSION_DIR = tmp_dir)
+  old <- Sys.getenv("DECIDE_SESSION_DIR", unset = NA)
+  Sys.setenv(DECIDE_SESSION_DIR = tmp_dir)
   on.exit({
-    if (is.na(old)) Sys.unsetenv("TARGETWISE_SESSION_DIR") else Sys.setenv(TARGETWISE_SESSION_DIR = old)
+    if (is.na(old)) Sys.unsetenv("DECIDE_SESSION_DIR") else Sys.setenv(DECIDE_SESSION_DIR = old)
     unlink(tmp_dir, recursive = TRUE)
   }, add = TRUE)
 
@@ -85,10 +85,10 @@ test_that("the audit companion is readable back (restore prefers it when longer)
 
 test_that("session storage is isolated per authenticated user", {
   tmp_dir <- tempfile()
-  old <- Sys.getenv("TARGETWISE_SESSION_DIR", unset = NA)
-  Sys.setenv(TARGETWISE_SESSION_DIR = tmp_dir)
+  old <- Sys.getenv("DECIDE_SESSION_DIR", unset = NA)
+  Sys.setenv(DECIDE_SESSION_DIR = tmp_dir)
   on.exit({
-    if (is.na(old)) Sys.unsetenv("TARGETWISE_SESSION_DIR") else Sys.setenv(TARGETWISE_SESSION_DIR = old)
+    if (is.na(old)) Sys.unsetenv("DECIDE_SESSION_DIR") else Sys.setenv(DECIDE_SESSION_DIR = old)
     unlink(tmp_dir, recursive = TRUE)
   }, add = TRUE)
 
@@ -119,30 +119,30 @@ test_that("session storage is isolated per authenticated user", {
 })
 
 test_that("require_auth reads the environment switch", {
-  old <- Sys.getenv("TARGETWISE_REQUIRE_AUTH", unset = NA)
-  on.exit(if (is.na(old)) Sys.unsetenv("TARGETWISE_REQUIRE_AUTH") else Sys.setenv(TARGETWISE_REQUIRE_AUTH = old), add = TRUE)
-  Sys.unsetenv("TARGETWISE_REQUIRE_AUTH")
+  old <- Sys.getenv("DECIDE_REQUIRE_AUTH", unset = NA)
+  on.exit(if (is.na(old)) Sys.unsetenv("DECIDE_REQUIRE_AUTH") else Sys.setenv(DECIDE_REQUIRE_AUTH = old), add = TRUE)
+  Sys.unsetenv("DECIDE_REQUIRE_AUTH")
   expect_false(DECIDE:::require_auth())
-  Sys.setenv(TARGETWISE_REQUIRE_AUTH = "true")
+  Sys.setenv(DECIDE_REQUIRE_AUTH = "true")
   expect_true(DECIDE:::require_auth())
-  Sys.setenv(TARGETWISE_REQUIRE_AUTH = "no")
+  Sys.setenv(DECIDE_REQUIRE_AUTH = "no")
   expect_false(DECIDE:::require_auth())
 })
 
 test_that("app_user falls back through platform, env, then anonymous", {
-  old <- Sys.getenv("TARGETWISE_USER", unset = NA)
-  on.exit(if (is.na(old)) Sys.unsetenv("TARGETWISE_USER") else Sys.setenv(TARGETWISE_USER = old), add = TRUE)
-  Sys.unsetenv("TARGETWISE_USER")
+  old <- Sys.getenv("DECIDE_USER", unset = NA)
+  on.exit(if (is.na(old)) Sys.unsetenv("DECIDE_USER") else Sys.setenv(DECIDE_USER = old), add = TRUE)
+  Sys.unsetenv("DECIDE_USER")
   expect_null(DECIDE:::app_user(NULL))
   expect_equal(DECIDE:::app_user(list(user = "carla@wfp.org")), "carla@wfp.org")
-  Sys.setenv(TARGETWISE_USER = "env-user")
+  Sys.setenv(DECIDE_USER = "env-user")
   expect_equal(DECIDE:::app_user(NULL), "env-user")
   # A platform-supplied user always wins over the environment fallback.
   expect_equal(DECIDE:::app_user(list(user = "carla@wfp.org")), "carla@wfp.org")
 })
 
 test_that("a session keeps the original import only when it differs from the working data", {
-  withr::local_envvar(TARGETWISE_SESSION_DIR = withr::local_tempdir())
+  withr::local_envvar(DECIDE_SESSION_DIR = withr::local_tempdir())
   orig <- data.frame(id = 1:3, x = c(1, 2, 3))
   edited <- orig[-2, ]
   DECIDE:::save_session(edited, list(), NULL, name = "o1", original_df = orig)
@@ -152,7 +152,7 @@ test_that("a session keeps the original import only when it differs from the wor
 })
 
 test_that("the country-office settings file is not listed as a saved session", {
-  withr::local_envvar(TARGETWISE_SESSION_DIR = withr::local_tempdir())
+  withr::local_envvar(DECIDE_SESSION_DIR = withr::local_tempdir())
   DECIDE:::save_session(data.frame(a = 1), list(), NULL, name = "real")
   DECIDE:::app_setting_set("country_office", "Mali")
   expect_equal(DECIDE:::list_saved_sessions()$name, "real")
@@ -160,7 +160,7 @@ test_that("the country-office settings file is not listed as a saved session", {
 
 test_that("a session saved as 'settings' no longer breaks the country office (raw to character)", {
   dir <- withr::local_tempdir()
-  withr::local_envvar(TARGETWISE_SESSION_DIR = dir)
+  withr::local_envvar(DECIDE_SESSION_DIR = dir)
   # The state of the computer that crashed: settings.rds holds an encrypted
   # session (raw bytes), as when a session was saved under the name "settings".
   DECIDE:::save_session(data.frame(a = 1:3), list(admin1 = "a"), data.frame(), name = "settings")
@@ -177,7 +177,7 @@ test_that("a session saved as 'settings' no longer breaks the country office (ra
 
 test_that("settings from an older version (a list in settings.rds) are carried over once", {
   dir <- withr::local_tempdir()
-  withr::local_envvar(TARGETWISE_SESSION_DIR = dir)
+  withr::local_envvar(DECIDE_SESSION_DIR = dir)
   saveRDS(list(country_office = "Niger"), file.path(dir, "settings.rds"))
   expect_equal(DECIDE:::app_setting_get("country_office"), "Niger")
   expect_false(file.exists(file.path(dir, "settings.rds")))
@@ -212,7 +212,7 @@ test_that("large frames go through Parquet and come back identical", {
 })
 
 test_that("each workstream saves its own part and loads beside the others", {
-  withr::local_envvar(TARGETWISE_SESSION_DIR = withr::local_tempdir())
+  withr::local_envvar(DECIDE_SESSION_DIR = withr::local_tempdir())
   log <- data.frame(timestamp = c("2026-01-01 10:00:00", "2026-01-01 11:00:00", "2026-01-01 12:00:00"),
                     action = c("Design: Model fitted", "Duplicate deletion", "Monitoring: PDM loaded"),
                     stringsAsFactors = FALSE)
@@ -245,7 +245,7 @@ test_that("each workstream saves its own part and loads beside the others", {
 })
 
 test_that("Save writes one session per workstream and Load brings one back beside the rest", {
-  withr::local_envvar(TARGETWISE_SESSION_DIR = withr::local_tempdir(), TARGETWISE_SAVE_REMINDER_MIN = "0")
+  withr::local_envvar(DECIDE_SESSION_DIR = withr::local_tempdir(), DECIDE_SAVE_REMINDER_MIN = "0")
   ws <- DECIDE:::workspace_new()
   design <- NULL
   DECIDE:::workspace_register(ws, "scorecard", function() list(data = data.frame(x = 1:3), threshold = 2),

@@ -110,7 +110,7 @@ source("install.R")
 ### Updating
 
 **How you know an update is available.**
-- **In the app.** When the app starts with an internet connection, it compares your version with the one on GitHub and shows a notice, *"Update available: version x.y.z"*, with the command to run. It checks at most once a day and is silent offline. Turn it off with `TARGETWISE_UPDATE_CHECK=false`.
+- **In the app.** When the app starts with an internet connection, it compares your version with the one on GitHub and shows a notice, *"Update available: version x.y.z"*, with the command to run. It checks at most once a day and is silent offline. Turn it off with `DECIDE_UPDATE_CHECK=false`.
 - **By email.** On the repository page, click **Watch → Custom → Releases** (needs a free GitHub account).
 - **Offline users** receive the new offline installer from the maintainer.
 
@@ -302,19 +302,19 @@ Each design report's **Methods** section gives these explanations for the choice
 
 ## Configuration
 
-Set these environment variables, for example in `.Renviron` or in your hosting platform:
+Set these environment variables, for example in `.Renviron` or in your hosting platform (the former `TARGETWISE_*` names still work):
 
 | Variable | Effect |
 |---|---|
-| `TARGETWISE_SESSION_PASSPHRASE` | Derive the session encryption key from this passphrase, so saved sessions open on any machine that shares it. Without it, a random per-install key is used. |
-| `TARGETWISE_SESSION_DIR` | Where encrypted sessions are stored. Default: `tools::R_user_dir("DECIDE", "data")`. |
-| `TARGETWISE_REQUIRE_AUTH` | `true` on any shared deployment: the app refuses anonymous use and keeps one session store per signed-in user. |
-| `TARGETWISE_USER` | Fixed user name when the platform does not provide one (single-user installs). |
-| `TARGETWISE_EXPORT_PASSWORD` | Password needed to unlock the exported Excel files. Without it, exports are still locked against accidental edits but Excel's *Unprotect Sheet* opens them. |
-| `TARGETWISE_UPDATE_CHECK` | `false` turns off the start-up check for a newer version (e.g. on a server whose administrator manages updates). |
-| `TARGETWISE_RELEASES_URL` | An organisation's own copy of the releases (a web address, or a `file:///` path to a shared drive), checked for updates instead of GitHub. |
+| `DECIDE_SESSION_PASSPHRASE` | Derive the session encryption key from this passphrase, so saved sessions open on any machine that shares it. Without it, a random per-install key is used. |
+| `DECIDE_SESSION_DIR` | Where encrypted sessions are stored. Default: `tools::R_user_dir("DECIDE", "data")`. |
+| `DECIDE_REQUIRE_AUTH` | `true` on any shared deployment: the app refuses anonymous use and keeps one session store per signed-in user. |
+| `DECIDE_USER` | Fixed user name when the platform does not provide one (single-user installs). |
+| `DECIDE_EXPORT_PASSWORD` | Password needed to unlock the exported Excel files. Without it, exports are still locked against accidental edits but Excel's *Unprotect Sheet* opens them. |
+| `DECIDE_UPDATE_CHECK` | `false` turns off the start-up check for a newer version (e.g. on a server whose administrator manages updates). |
+| `DECIDE_RELEASES_URL` | An organisation's own copy of the releases (a web address, or a `file:///` path to a shared drive), checked for updates instead of GitHub. |
 | `GITHUB_PAT` | Optional GitHub token. Not needed (the repository is public); it only raises GitHub's limit on anonymous downloads for offices sharing one connection. |
-| `TARGETWISE_AUTOSAVE_MAX_MB` | Datasets larger than this (default 200 MB) are not autosaved; use *Session › Save*. |
+| `DECIDE_AUTOSAVE_MAX_MB` | Datasets larger than this (default 200 MB) are not autosaved; use *Session › Save*. |
 
 ---
 
@@ -323,7 +323,7 @@ Set these environment variables, for example in `.Renviron` or in your hosting p
 - Data is processed **in memory** in the R session and never sent anywhere else.
 - **Sessions** hold the registration data, the variable mapping and the audit log, plus the work done in each phase: the whole Targeting Design (assessment data, calculated variables, selection, every model run, edited points, review ticks, threshold and rationale), the Beneficiary Selection settings, the spot-check sample and back-check, and the PDM analysis. Each phase is **its own session**: Save writes one file per phase that holds work (Targeting Design, Beneficiary Selection, Targeting Monitoring), and Load brings one back without touching the others, so a selection save never rewrites the design dataset. The adopted scorecard and the eligibility rules travel with the sessions that use them; sessions saved before the split load as they are. Datasets are stored as Parquet inside the session (about 7x smaller). They are **encrypted with libsodium** before being written to disk. They autosave once there is something worth saving, and can be restored on start-up.
 - **MODA/ONA API tokens are never saved.**
-- On shared servers, put the app behind the platform's authentication (Posit Connect, Shiny Server Pro, ShinyProxy) and set `TARGETWISE_REQUIRE_AUTH=true`.
+- On shared servers, put the app behind the platform's authentication (Posit Connect, Shiny Server Pro, ShinyProxy) and set `DECIDE_REQUIRE_AUTH=true`.
 - Every data change (corrections, deletions, created variables) is written to the activity log.
 
 ---
@@ -393,7 +393,7 @@ dev/          development and deployment scripts
    This produces `dist/repo/`, a package repository with the source and Windows builds of this package only, and `dist/DECIDE_<version>_offline_windows_R<x.y>.zip`, the offline installer with every dependency (about 270 MB). The script stops if any dependency fails to download.
 5. Push to `main` and create a GitHub release tagged `v0.2.0` with the `NEWS.md` section as description. The in-app notice reads the version from `DESCRIPTION` on GitHub, so users see it from their next start.
 6. Share the offline zip with offline users (attach it to the GitHub release as well).
-7. Optional: an organisation that cannot reach GitHub can host `dist/repo/` on its own server or shared drive and point the app at it with `TARGETWISE_RELEASES_URL`; users then install with `install.packages("DECIDE", repos = c("<that address>", "https://cloud.r-project.org"))`.
+7. Optional: an organisation that cannot reach GitHub can host `dist/repo/` on its own server or shared drive and point the app at it with `DECIDE_RELEASES_URL`; users then install with `install.packages("DECIDE", repos = c("<that address>", "https://cloud.r-project.org"))`.
 
 `AGENTS.md` documents the architecture and conventions in detail. Report issues or suggest changes at <https://github.com/bbbagoa/DECIDE/issues>; pull requests are welcome.
 

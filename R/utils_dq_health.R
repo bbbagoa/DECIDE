@@ -101,7 +101,7 @@ name_cols_guess <- function(df, setup) {
 #' Data small enough for the health check to run by itself when its tab
 #' opens (rows x columns); above it the page asks for a click.
 #' 5 million cells by default (e.g. 100,000 records x 50 columns);
-#' TARGETWISE_HEALTH_AUTO_CELLS sets another size.
+#' DECIDE_HEALTH_AUTO_CELLS sets another size.
 #' @noRd
 health_auto_cells <- function() {
   v <- suppressWarnings(as.numeric(tw_env("HEALTH_AUTO_CELLS", "")))

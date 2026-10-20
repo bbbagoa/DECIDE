@@ -180,7 +180,7 @@ f <- dl("download_xlsform"); ok(is_zip(f), paste("XLSForm (xlsx):", basename(f %
 f <- dl("download_json"); ok(!is.na(f) && is.list(tryCatch(jsonlite::fromJSON(f), error = function(e) NULL)), "card (JSON)")
 # the score floor and the design errors reach every export
 html <- paste(readLines(dl("download_report"), warn = FALSE), collapse = "\n")
-ok(grepl("not floored", html) && grepl("all not vulnerable", html, fixed = TRUE), "report: floor and inclusion error over the not vulnerable")
+ok(grepl("not floored", html) && grepl("eligible but not vulnerable / all eligible", html, fixed = TRUE), "report: floor and inclusion error over the eligible")
 ok(grepl("Score distribution: all households", html, fixed = TRUE), "report: the score histogram")
 wb <- dl("download")
 dsg <- openxlsx::read.xlsx(wb, sheet = "Design")

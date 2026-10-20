@@ -6,7 +6,7 @@ Was `mod_welcome_ui()` (R/mod_welcome.R). Server: `mod_welcome_server()`
 
 ## Behaviour tree (Shiny page)
 
-- hero: eyebrow "WFP Vulnerability Analysis and Mapping", WFP logo | TargetWise,
+- hero: eyebrow "WFP Vulnerability Analysis and Mapping", WFP logo | DECIDE,
   tagline "Reaching the most vulnerable", amber rule, one-paragraph lead
 - three phase cards, numbered 1-3, each with an icon, a dataset chip and a
   paragraph: Targeting Design (needs-assessment data), Beneficiary Selection

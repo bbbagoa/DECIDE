@@ -28,7 +28,7 @@ jobs:
       GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
       R_KEEP_PKG_SOURCE: yes
       # The app writes sessions to R_user_dir by default; keep CI out of it.
-      TARGETWISE_SESSION_DIR: ${{ runner.temp }}/targeting-sessions
+      DECIDE_SESSION_DIR: ${{ runner.temp }}/targeting-sessions
 
     steps:
       - uses: actions/checkout@v4

@@ -48,7 +48,7 @@ app_server <- function(input, output, session) {
   # own login for an app holding household PII would be strictly worse. What we
   # DO enforce is that on a shared deployment nobody gets in anonymously --
   # otherwise every visitor shares one session store and one encryption key.
-  # Enable with TARGETWISE_REQUIRE_AUTH=true.
+  # Enable with DECIDE_REQUIRE_AUTH=true.
   # ---------------------------------------------------------------------------
   if (require_auth() && is.null(app_user(session))) {
     showModal(modalDialog(
@@ -59,7 +59,7 @@ app_server <- function(input, output, session) {
       tags$p(class = "text-muted small",
              "Ask your administrator to enable authentication in front of the app ",
              "(Posit Connect, Shiny Server Pro or ShinyProxy), or unset ",
-             tags$code("TARGETWISE_REQUIRE_AUTH"), " for local use.")
+             tags$code("DECIDE_REQUIRE_AUTH"), " for local use.")
     ))
     return(invisible(NULL))
   }

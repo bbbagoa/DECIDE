@@ -13,7 +13,7 @@ test_that("a saved session carries module work and puts it back", {
   snap <- DECIDE:::workspace_snapshot(ws)
   expect_equal(names(snap), "a")
 
-  withr::local_envvar(TARGETWISE_SESSION_DIR = withr::local_tempdir())
+  withr::local_envvar(DECIDE_SESSION_DIR = withr::local_tempdir())
   DECIDE:::save_session(data.frame(a = 1), list(), data.frame(), name = "ws", workspace = snap)
   DECIDE:::workspace_restore(ws, DECIDE:::load_session("ws")$workspace)
   expect_equal(val, 1)

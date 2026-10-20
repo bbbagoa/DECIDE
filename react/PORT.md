@@ -1,4 +1,4 @@
-# Porting TargetWise to the shinyreact `ui.tsx` pattern
+# Porting DECIDE to the shinyreact `ui.tsx` pattern
 
 **Status (07/10/2026):** the whole app runs on a React shell (`react/src/App.tsx`,
 built to `inst/app/react/ui.js`, served by `shinyreact::page_react()`). Every
@@ -10,7 +10,7 @@ Targeting Design last.
 
 ## The shell
 
-- navbar, left to right: WFP logo | TargetWise, then
+- navbar, left to right: WFP logo | DECIDE, then
   - Welcome (`welcome_panel`)
   - 1. Targeting Design (`scorecard_panel`)
   - 2. Beneficiary Selection, a menu: Load registration data (`import_panel`),

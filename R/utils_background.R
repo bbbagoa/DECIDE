@@ -6,7 +6,7 @@
 #' the app stays responsive and the waiter's cross can stop it: the process is
 #' killed and the user carries on. The first task of a session also loads the
 #' package in that process (a few seconds; from source, the same source folder,
-#' see `tw_source_path()`). `TARGETWISE_BACKGROUND=false`, or a
+#' see `tw_source_path()`). `DECIDE_BACKGROUND=false`, or a
 #' session that is not a running app (unit tests, testServer), runs the task
 #' inline as before.
 #' @noRd

@@ -6,12 +6,12 @@
 #' token the package was installed with (GITHUB_PAT, or the git credential
 #' store set by gitcreds::gitcreds_set()); without one it stays silent. An organisation
 #' that hosts its own copy of the releases (a CRAN-like folder built by
-#' dev/release.R) sets TARGETWISE_RELEASES_URL, and that copy is
+#' dev/release.R) sets DECIDE_RELEASES_URL, and that copy is
 #' checked first.
 #'
 #' The check is best effort: offline, blocked or a slow network simply mean
 #' no message. It runs at most once a day per R process, and can be
-#' turned off with TARGETWISE_UPDATE_CHECK=false (e.g. on a server where
+#' turned off with DECIDE_UPDATE_CHECK=false (e.g. on a server where
 #' the administrator updates the package).
 #'
 #' @name update_check
@@ -22,7 +22,7 @@ NULL
 update_repo <- function() "bbbagoa/DECIDE"
 
 #' The public release repository (built by dev/release.R). Override with
-#' TARGETWISE_RELEASES_URL, e.g. for an organisation's own server.
+#' DECIDE_RELEASES_URL, e.g. for an organisation's own server.
 #' @noRd
 release_repo_url <- function() {
   tw_env("RELEASES_URL", "")

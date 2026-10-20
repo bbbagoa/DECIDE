@@ -1,7 +1,7 @@
 #' Speed on large data: every core, and one row per answer pattern
 #'
 #' The app runs on laptops and servers alike: it uses all the cores the
-#' machine has (`TARGETWISE_CORES` caps it). Models with their own threads
+#' machine has (`DECIDE_CORES` caps it). Models with their own threads
 #' (ranger, xgboost) get them directly; independent refits (tuning of the
 #' single-threaded models, stability resamples) are spread over worker
 #' processes when the data is large enough to be worth it.
@@ -9,7 +9,7 @@
 #' @noRd
 NULL
 
-#' Cores to use: all of this machine's, or TARGETWISE_CORES when set lower
+#' Cores to use: all of this machine's, or DECIDE_CORES when set lower
 #' @noRd
 tw_cores <- function() {
   n <- suppressWarnings(parallel::detectCores(logical = TRUE))

@@ -305,7 +305,7 @@ write_csv_utf8 <- function(df, file) {
 #' A browser download is always a plain, editable file, so the protection has
 #' to live inside it: every sheet is locked (reading, selecting, filtering and
 #' widening columns still work) and sheets cannot be added, removed or renamed.
-#' Set TARGETWISE_EXPORT_PASSWORD to require a password to unlock; without it
+#' Set DECIDE_EXPORT_PASSWORD to require a password to unlock; without it
 #' Excel's Unprotect Sheet opens them, which still stops accidental edits.
 #' @noRd
 save_workbook_readonly <- function(wb, file) {

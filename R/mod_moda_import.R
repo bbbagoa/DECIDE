@@ -141,13 +141,25 @@ build_odk_label_map <- function(odk_path, media = NULL) {
   # The label column in the app's language when the form has one
   # (label::French, label::English (en)...), else the first.
   want <- if (identical(import_yes_no()[1], "Oui")) "fran|french|[(]fr[)]" else "english|[(]en[)]"
-  pick_label <- function(nms) { labs <- grep("^label", nms, value = TRUE); c(grep(want, labs, value = TRUE, ignore.case = TRUE), labs)[1] }
+  label_cols <- function(nms) { labs <- grep("^label", nms, value = TRUE); unique(c(grep(want, labs, value = TRUE, ignore.case = TRUE), labs)) }
+  pick_label <- function(nms) label_cols(nms)[1]
+  # each row's label in that language, else in another one the form fills
+  # (a list labelled only in the default column keeps its labels)
+  row_labels <- function(d) {
+    out <- rep(NA_character_, nrow(d))
+    for (k in label_cols(names(d))) {
+      v <- trimws(as.character(d[[k]]))
+      fill <- (is.na(out) | !nzchar(out)) & !is.na(v) & nzchar(v)
+      out[fill] <- v[fill]
+    }
+    out
+  }
   choice_label_col <- if (!is.null(choices)) pick_label(names(choices)) else NA_character_
 
   # Question labels (variable labels), in the same language as the choices.
   q_label_col <- pick_label(names(survey))
   questions <- if (is.na(q_label_col)) character(0) else {
-    ql <- stats::setNames(trimws(as.character(survey[[q_label_col]])), strip_prefix(as.character(survey[["name"]])))
+    ql <- stats::setNames(row_labels(survey), strip_prefix(as.character(survey[["name"]])))
     ql[!is.na(ql) & nzchar(ql) & !is.na(names(ql)) & nzchar(names(ql))]
   }
 
@@ -170,13 +182,13 @@ build_odk_label_map <- function(odk_path, media = NULL) {
     if (is.null(p) || !file.exists(p) || !grepl("[.]csv$", p, ignore.case = TRUE)) return(NULL)
     d <- tidy(utils::read.csv(p, colClasses = "character", check.names = FALSE, encoding = "UTF-8"))
     lab <- pick_label(names(d)); if (is.na(lab) || !"name" %in% names(d)) return(NULL)
-    d$.label <- d[[lab]]; d
+    d$.label <- row_labels(d); d
   }
   sheet_choices <- function(ln) {
     if (is.null(choices) || is.na(choice_label_col) || !"list_name" %in% names(choices)) return(NULL)
     d <- choices[choices[["list_name"]] %in% ln, , drop = FALSE]
     if (!nrow(d)) return(NULL)
-    d$.label <- d[[choice_label_col]]; d
+    d$.label <- row_labels(d); d
   }
 
   label_map <- list()
@@ -745,6 +757,7 @@ mod_moda_import_server <- function(id, summary = TRUE) {
         label_map <- build_odk_label_map(odk_path, media)
         df <- apply_odk_labels(df, label_map)
         df <- split_multiselect(split_geopoints(df))   # GPS -> coordinates; multi-selects the form did not name -> Yes/No columns
+        register_labels(df)   # question and choice labels into the session's dictionary (pickers, Variables sheets)
 
         waiter_progress(session, message = "Finalizing...")
         import_label(paste("MODA:", label))

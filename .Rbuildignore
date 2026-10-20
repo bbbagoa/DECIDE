@@ -22,6 +22,6 @@
 ^renv$
 ^renv\.lock$
 ^rsconnect$
-^TargetWise\.Rcheck$
-^TargetWise_.*\.tar\.gz$
+^DECIDE\.Rcheck$
+^DECIDE_.*\.tar\.gz$
 ^react$

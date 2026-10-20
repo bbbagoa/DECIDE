@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 const src = (p: string) => fileURLToPath(new URL(`./src/${p}`, import.meta.url));
 
 // The client is built into the R package (inst/app/react/ui.js + ui.css) so
-// installing TargetWise never needs Node.
+// installing DECIDE never needs Node.
 //
 // ONE React: "react" and "react-dom/client" resolve to modules that re-export
 // window.shinyreact's (src/shims/), so every package, ESM or CommonJS, shares

@@ -61,22 +61,22 @@ test_that("read_import_file reads CSV and Parquet into plain data.frames", {
 })
 
 test_that("autosave threshold defaults to 200 MB and honours the env override", {
-  old <- Sys.getenv("TARGETWISE_AUTOSAVE_MAX_MB", unset = NA)
-  on.exit(if (is.na(old)) Sys.unsetenv("TARGETWISE_AUTOSAVE_MAX_MB") else Sys.setenv(TARGETWISE_AUTOSAVE_MAX_MB = old))
-  Sys.unsetenv("TARGETWISE_AUTOSAVE_MAX_MB")
+  old <- Sys.getenv("DECIDE_AUTOSAVE_MAX_MB", unset = NA)
+  on.exit(if (is.na(old)) Sys.unsetenv("DECIDE_AUTOSAVE_MAX_MB") else Sys.setenv(DECIDE_AUTOSAVE_MAX_MB = old))
+  Sys.unsetenv("DECIDE_AUTOSAVE_MAX_MB")
   expect_equal(DECIDE:::autosave_max_bytes(), 200 * 1024^2)
-  Sys.setenv(TARGETWISE_AUTOSAVE_MAX_MB = "50")
+  Sys.setenv(DECIDE_AUTOSAVE_MAX_MB = "50")
   expect_equal(DECIDE:::autosave_max_bytes(), 50 * 1024^2)
-  Sys.setenv(TARGETWISE_AUTOSAVE_MAX_MB = "garbage")
+  Sys.setenv(DECIDE_AUTOSAVE_MAX_MB = "garbage")
   expect_equal(DECIDE:::autosave_max_bytes(), 200 * 1024^2)
 })
 
 test_that("session files are written uncompressed and still round-trip", {
   tmp_dir <- tempfile()
-  old <- Sys.getenv("TARGETWISE_SESSION_DIR", unset = NA)
-  Sys.setenv(TARGETWISE_SESSION_DIR = tmp_dir)
+  old <- Sys.getenv("DECIDE_SESSION_DIR", unset = NA)
+  Sys.setenv(DECIDE_SESSION_DIR = tmp_dir)
   on.exit({
-    if (is.na(old)) Sys.unsetenv("TARGETWISE_SESSION_DIR") else Sys.setenv(TARGETWISE_SESSION_DIR = old)
+    if (is.na(old)) Sys.unsetenv("DECIDE_SESSION_DIR") else Sys.setenv(DECIDE_SESSION_DIR = old)
     unlink(tmp_dir, recursive = TRUE)
   }, add = TRUE)
 

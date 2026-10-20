@@ -32,7 +32,7 @@ smoke_app <- function(envir = parent.frame()) {
   root <- normalizePath(testthat::test_path("..", ".."), winslash = "/", mustWork = FALSE)
   if (!file.exists(file.path(root, "DESCRIPTION"))) return(shiny::shinyApp(ui = app_ui, server = app_server))
   dir <- withr::local_tempdir(.local_envir = envir)
-  writeLines(c('Sys.setenv(TARGETWISE_BACKGROUND = "false")',
+  writeLines(c('Sys.setenv(DECIDE_BACKGROUND = "false")',
                sprintf('pkgload::load_all("%s", quiet = TRUE, export_all = TRUE)', root),
                "shiny::shinyApp(app_ui, app_server)"), file.path(dir, "app.R"))
   dir
@@ -70,7 +70,7 @@ test_that("the app boots, imports, maps variables and reveals the analysis tabs"
 
   # Keep the session store out of the developer's real one.
   store <- withr::local_tempdir()
-  withr::local_envvar(c(TARGETWISE_SESSION_DIR = store, TARGETWISE_UPDATE_CHECK = "false"))
+  withr::local_envvar(c(DECIDE_SESSION_DIR = store, DECIDE_UPDATE_CHECK = "false"))
 
   app <- shinytest2::AppDriver$new(
     smoke_app(),
@@ -165,7 +165,7 @@ test_that("a saved setup profile reapplies to a fresh import of the same form", 
 
   fixture <- testthat::test_path("fixtures", "mini_targeting.csv")
   store <- withr::local_tempdir()
-  withr::local_envvar(c(TARGETWISE_SESSION_DIR = store, TARGETWISE_UPDATE_CHECK = "false"))
+  withr::local_envvar(c(DECIDE_SESSION_DIR = store, DECIDE_UPDATE_CHECK = "false"))
 
   # Plant a profile the way the setup modal would have written it.
   mapping <- fixture_mapping()
@@ -223,7 +223,7 @@ visible_errors_everywhere <- function(app) {
 
 start_app <- function(name) {
   store <- withr::local_tempdir(.local_envir = parent.frame())
-  withr::local_envvar(c(TARGETWISE_SESSION_DIR = store, TARGETWISE_UPDATE_CHECK = "false"), .local_envir = parent.frame())
+  withr::local_envvar(c(DECIDE_SESSION_DIR = store, DECIDE_UPDATE_CHECK = "false"), .local_envir = parent.frame())
   app <- shinytest2::AppDriver$new(
     smoke_app(),
     name = name, height = 1200, width = 1600,
@@ -291,7 +291,7 @@ test_that("the country office's profile is offered on a fresh import", {
   skip_if_no_app_driver()
   skip_on_cran()
   store <- withr::local_tempdir()
-  withr::local_envvar(c(TARGETWISE_SESSION_DIR = store, TARGETWISE_UPDATE_CHECK = "false"))
+  withr::local_envvar(c(DECIDE_SESSION_DIR = store, DECIDE_UPDATE_CHECK = "false"))
   DECIDE:::app_setting_set("country_office", "Chad", NULL)
   prof <- DECIDE:::profile_from_settings(
     c(fixture_mapping()[c("unique_id", "admin1", "admin2", "hhh_sex")], list(recode_maps = list(hhh_sex = list(Female = "Female", Male = "Male")),

@@ -1,5 +1,5 @@
 {
-  "name": "targetwise-ui",
+  "name": "decide-ui",
   "private": true,
   "version": "1.0.0",
   "description": "TargetWise React client (shinyreact ui.tsx pattern). Built to inst/app/react/ui.js, which ships in the package.",

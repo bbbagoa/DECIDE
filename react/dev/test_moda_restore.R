@@ -5,7 +5,7 @@ source("react/dev/e2e.R")
 ok <- function(cond, what) cat(if (isTRUE(cond)) "PASS" else "FAIL", what, "\n")
 suppressMessages(pkgload::load_all(tw_root, quiet = TRUE, export_all = TRUE))
 store <- tempfile("twstore"); dir.create(store)
-Sys.setenv(TARGETWISE_SESSION_DIR = store)
+Sys.setenv(DECIDE_SESSION_DIR = store)
 d <- utils::read.csv(file.path(tw_root, "inst/extdata/registration_demo.csv"), stringsAsFactors = FALSE)
 save_session(uploaded_df = d, user_setup = list(unique_id = "instanceID", admin1 = "Province", data_source = "MODA form 123456"),
              modification_log = NULL, moda_credentials = list(form_id = "123456", token = "secret"),
