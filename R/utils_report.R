@@ -272,6 +272,8 @@ design_report_md <- function(x, figures = character(0)) {
     }
     dg <- x$model$diagram
     if (!is.null(dg) && nzchar(diagram_svg(dg))) add(paste("###", diagram_title(dg$kind)), "", diagram_help(dg$kind, nof), "", "@@DIAGRAM@@", "")
+    rd <- x$model$residuals
+    if (!is.null(rd)) add(paste("###", residual_title()), "", residual_help(rd), "", "@@RESIDUALS@@", "")
     rl <- x$model$tree_rules
     if (!is.null(rl) && nrow(rl)) add("### Decision tree rules", "",
       if (nof) "Each leaf of the tree: the answers that lead to it, the households it holds and the share of them in the targeted profiles. The points of the ranking are the tree's average effects; the rules show what the tree itself does."
@@ -655,6 +657,7 @@ write_design_report <- function(file, x, plots = list(), lang = "en") {
     blocks = list("@@RATIONALE@@" = sprintf('<div class="rich">%s</div>', rich_html(x$rationale)),
                   "@@RANK_CARDS@@" = if (nof) report_rank_cards(x, lang) else "",
                   "@@DIAGRAM@@" = diagram_svg(x$model$diagram, if (nof) "targeted" else "vulnerable"),
+                  "@@RESIDUALS@@" = residual_svg(x$model$residuals),
                   "@@ERRORS@@" = report_error_cards(x, lang),
                   "@@MATRIX@@" = report_error_matrix(x$errors, x$threshold, x$outcome, x$outcome_pos, lang)))
 }

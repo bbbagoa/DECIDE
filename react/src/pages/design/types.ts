@@ -121,6 +121,7 @@ export type Profiles = {
 export type DiagramFacts = {
   nof: boolean;
   diagram: { title: string; help: string; svg: string } | null;
+  residuals: { title: string; help: string; svg: string } | null;
   tree: { rule: string; households: number; share: number }[] | null;
 };
 

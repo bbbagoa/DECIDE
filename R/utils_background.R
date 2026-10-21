@@ -173,6 +173,7 @@ design_fit_job <- function(a) {
     fit1 <- function(m) fit_pmt(a$df, a$pc, a$keep, a$line, m, rows = a$sp$train, test = a$sp$test,
                                 weights = a$weights, stepwise = a$stepwise, stepwise_dir = a$stepwise_dir)
     out <- fit1(a$method)
+    out$residuals <- tryCatch(residual_data_numeric(out$pmt$eval, held_out = length(a$sp$test) > 0), error = function(e) NULL)
     # the other PMT models on the same proxies and households
     fits <- c(list(out), lapply(setdiff(a$compare, a$method), function(m) {
       waiter_log(sprintf("Comparing: %s", model_label(m)))
@@ -203,6 +204,9 @@ design_fit_job <- function(a) {
                                 scheme = a$scheme, rows = a$sp$train, weights = a$weights,
                                 pca_axes = a$pca_axes %||% 1, pca_min_var = a$pca_min_var,
                                 tune = isTRUE(a$tune), folds = a$folds %||% 5)
+  out$residuals <- tryCatch(residual_data(additive_score(a$df, out$weights), as_binary_outcome(a$df[[a$outcome_col]], a$outcome_pos),
+                                          a$sp$train, if (length(a$sp$test)) a$sp$test else a$sp$train, a$weights),
+                            error = function(e) NULL)
   eff <- tryCatch(model_effects(a$df, a$outcome_col, a$keep, a$outcome_pos,
                                 rows = a$sp$train, weights = a$weights,
                                 methods = unique(c(out$method, a$compare))),

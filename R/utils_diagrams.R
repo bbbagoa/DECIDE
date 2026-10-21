@@ -383,3 +383,139 @@ dendrogram_svg <- function(dd) {
            paste0(".lab{", svg_font(500, 11), ";fill:#1f2a37}.tick{", svg_font(400, 9.5), ";fill:#5b6b7c}.cut{", svg_font(600, 10.5), ";fill:#c5192d}"),
            c(parts, leg))
 }
+
+# ---- Residual diagnostics -------------------------------------------------
+
+#' Residual diagnostics of a fitted model, drawn like the diagrams (app card
+#' and report). A yes/no outcome: the model's additive score made a
+#' probability by one logistic fit on the training households (the logistic
+#' model's own fit), residual = outcome - probability on the held-out
+#' households (training ones when none are held out); binned residuals
+#' (Gelman and Hill) and calibration by tenth. A PMT: measured - predicted log
+#' welfare; residuals against predicted, normal Q-Q, scale-location, histogram.
+#' @param score The model's score, one per row; `y` the 0/1 outcome.
+#' @param train,eval Row indices; `w` optional survey weights, one per row.
+#' @noRd
+residual_data <- function(score, y, train, eval, w = NULL) {
+  if (is.null(score)) return(NULL)
+  keep <- function(r) r[!is.na(y[r]) & is.finite(score[r])]
+  train <- keep(train); held_out <- !identical(train, keep(eval)); eval <- keep(eval)
+  if (length(train) < 20 || length(eval) < 20 || length(unique(y[train])) < 2) return(NULL)
+  w <- if (is.null(w)) rep(1, length(y)) else { w <- suppressWarnings(as.numeric(w)); w[!is.finite(w) | w < 0] <- 0; w }
+  d <- data.frame(y = y[train], s = score[train], w = w[train])
+  b <- stats::coef(suppressWarnings(stats::glm(y ~ s, stats::binomial(), d, weights = w)))
+  if (!all(is.finite(b))) return(NULL)
+  p <- stats::plogis(b[1] + b[2] * score[eval]); yy <- y[eval]; ww <- w[eval]
+  bins <- function(g) {
+    k <- ceiling(g * rank(p, ties.method = "first") / length(p))
+    sw <- rowsum(ww, k)[, 1]; n <- tabulate(k, g)
+    pm <- rowsum(ww * p, k)[, 1] / sw
+    data.frame(p = pm, obs = rowsum(ww * yy, k)[, 1] / sw, n = n, se = sqrt(pm * (1 - pm) / n))
+  }
+  bn <- bins(max(5L, min(20L, floor(sqrt(length(p))))))
+  list(kind = "binary", n = length(eval), held_out = held_out,
+       binned = data.frame(p = bn$p, r = bn$obs - bn$p, se = bn$se, n = bn$n), calib = bins(10L)[, c("p", "obs", "n")])
+}
+
+#' The same for a PMT, from its evaluation households (actual, predicted, w)
+#' @noRd
+residual_data_numeric <- function(e, held_out = TRUE) {
+  if (is.null(e)) return(NULL)
+  e <- e[is.finite(e$actual) & is.finite(e$predicted), , drop = FALSE]
+  if (nrow(e) < 20) return(NULL)
+  w <- if (is.null(e$w)) rep(1, nrow(e)) else e$w
+  r <- e$actual - e$predicted
+  sigma <- sqrt(sum(w * r^2) / sum(w)); if (!is.finite(sigma) || sigma == 0) return(NULL)
+  z <- r / sigma
+  k <- ceiling(10 * rank(e$predicted, ties.method = "first") / nrow(e))
+  sw <- rowsum(w, k)[, 1]
+  trend <- data.frame(x = rowsum(w * e$predicted, k)[, 1] / sw, r = rowsum(w * r, k)[, 1] / sw,
+                      spread = rowsum(w * sqrt(abs(z)), k)[, 1] / sw)
+  set.seed(1); s <- if (nrow(e) > 1500) sort(sample.int(nrow(e), 1500)) else seq_len(nrow(e))
+  pr <- stats::ppoints(200)
+  h <- graphics::hist(pmax(pmin(z, 4.99), -4.99), breaks = seq(-5, 5, by = 0.5), plot = FALSE)
+  list(kind = "numeric", n = nrow(e), held_out = held_out, sigma = sigma,
+       points = data.frame(x = e$predicted[s], r = r[s], z = z[s]), trend = trend,
+       qq = data.frame(theory = stats::qnorm(pr), sample = unname(stats::quantile(z, pr))),
+       hist = data.frame(mid = h$mids, density = h$density))
+}
+
+#' Title and how to read the residual diagnostics (app card and report)
+#' @noRd
+residual_title <- function() "Residual diagnostics"
+residual_help <- function(r) if (identical(r$kind, "numeric"))
+  paste("Residuals are the measured minus the predicted log welfare per person, on the held-out households (training ones when none are held out).",
+        "Residuals against predicted: a cloud centred on zero at every level; the amber line (the average by tenth) should stay flat, a slope means some households are predicted too well-off or too poor.",
+        "Normal Q-Q: the standardised residuals against a normal distribution; points off the line at the ends mean a few households are badly predicted.",
+        "Scale-location: the spread of the residuals against predicted welfare; a rising line means the errors grow with welfare.",
+        "Histogram: the standardised residuals with the normal curve.") else
+  paste("Residuals are the outcome (1 vulnerable, 0 not) minus the probability the model gives, on the held-out households (training ones when none are held out); the model's score is made a probability by one logistic fit on the training households.",
+        "Binned residuals: households grouped by predicted probability, each dot a group's average residual; about 95% of the dots should fall inside the shaded band (2 standard errors), red dots are ranges where the model is off.",
+        "Calibration: the observed share vulnerable against the predicted probability, by tenth; a well calibrated model follows the dashed diagonal.")
+
+# One chart panel: frame, grid, ticks, axis titles; `draw(sx, sy)` adds the marks
+rd_panel <- function(x0, y0, xr, yr, title, xlab, ylab, draw, pw = 440, ph = 300) {
+  if (diff(xr) <= 0) xr <- xr + c(-0.5, 0.5)
+  if (diff(yr) <= 0) yr <- yr + c(-0.5, 0.5)
+  l <- x0 + 56; r <- x0 + pw - 14; t <- y0 + 30; b <- y0 + ph - 44
+  sx <- function(v) l + (v - xr[1]) / diff(xr) * (r - l)
+  sy <- function(v) b - (v - yr[1]) / diff(yr) * (b - t)
+  xt <- pretty(xr, 5); xt <- xt[xt >= xr[1] & xt <= xr[2]]
+  yt <- pretty(yr, 5); yt <- yt[yt >= yr[1] & yt <= yr[2]]
+  c(sprintf('<text x="%.1f" y="%.1f" class="head">%s</text>', l, y0 + 16, svg_esc(title)),
+    sprintf('<line x1="%.1f" x2="%.1f" y1="%.1f" y2="%.1f" stroke="#e6ebf0"/><text x="%.1f" y="%.1f" text-anchor="end" class="tick">%s</text>',
+            l, r, sy(yt), sy(yt), l - 6, sy(yt) + 3.5, format(yt)),
+    sprintf('<text x="%.1f" y="%.1f" text-anchor="middle" class="tick">%s</text>', sx(xt), b + 15, format(xt)),
+    sprintf('<rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" fill="none" stroke="#c9d3dd"/>', l, t, r - l, b - t),
+    sprintf('<text x="%.1f" y="%.1f" text-anchor="middle" class="ax">%s</text>', (l + r) / 2, b + 34, svg_esc(xlab)),
+    sprintf('<text transform="translate(%.1f %.1f) rotate(-90)" text-anchor="middle" class="ax">%s</text>', x0 + 14, (t + b) / 2, svg_esc(ylab)),
+    draw(sx, sy))
+}
+rd_dots <- function(sx, sy, x, y, col = "#007DBC", r = 4, op = 0.9)
+  sprintf('<circle cx="%.1f" cy="%.1f" r="%s" fill="%s" fill-opacity="%s"/>', sx(x), sy(y), r, col, op)
+rd_line <- function(sx, sy, x, y, col, dash = "", width = 2)
+  sprintf('<polyline points="%s" fill="none" stroke="%s" stroke-width="%s" stroke-dasharray="%s"/>',
+          paste(sprintf("%.1f,%.1f", sx(x), sy(y)), collapse = " "), col, width, dash)
+
+#' The residual diagnostics as SVG (two panels for a yes/no outcome, four for a PMT)
+#' @noRd
+residual_svg <- function(rd) {
+  if (is.null(rd)) return("")
+  pad <- function(v, m = 0.05) { r <- range(v, na.rm = TRUE); r + c(-1, 1) * m * max(diff(r), 1e-6) }
+  if (identical(rd$kind, "binary")) {
+    bn <- rd$binned; cb <- rd$calib
+    out <- abs(bn$r) > 2 * bn$se
+    ym <- max(abs(c(bn$r, 2 * bn$se)), 0.02) * 1.1
+    o <- order(bn$p)
+    p1 <- rd_panel(0, 0, pad(bn$p), c(-ym, ym),
+      sprintf("Binned residuals (%d of %d groups outside the band)", sum(out), nrow(bn)),
+      "Predicted probability", "Average residual", function(sx, sy) c(
+        sprintf('<polygon points="%s" fill="#e8f1f8"/>', paste(sprintf("%.1f,%.1f", sx(c(bn$p[o], rev(bn$p[o]))), sy(c(2 * bn$se[o], -2 * rev(bn$se[o])))), collapse = " ")),
+        rd_line(sx, sy, range(bn$p), c(0, 0), "#5b6b7c", "4 3", 1),
+        rd_dots(sx, sy, bn$p, bn$r, ifelse(out, "#c5192d", "#007DBC"))))
+    p2 <- rd_panel(440, 0, c(0, 1), c(0, 1), "Calibration by tenth", "Predicted probability", "Observed share vulnerable",
+      function(sx, sy) c(rd_line(sx, sy, c(0, 1), c(0, 1), "#5b6b7c", "4 3", 1),
+                         rd_line(sx, sy, cb$p, cb$obs, "#007DBC", "", 1.5), rd_dots(sx, sy, cb$p, cb$obs)))
+    W <- 880; H <- 300; parts <- c(p1, p2)
+  } else {
+    pt <- rd$points; tr <- rd$trend; q <- rd$qq; h <- rd$hist
+    p1 <- rd_panel(0, 0, pad(pt$x), pad(pt$r), "Residuals against predicted", "Predicted log welfare", "Measured - predicted",
+      function(sx, sy) c(rd_dots(sx, sy, pt$x, pt$r, r = 2, op = 0.35), rd_line(sx, sy, range(pt$x), c(0, 0), "#5b6b7c", "4 3", 1),
+                         rd_line(sx, sy, tr$x, tr$r, "#f7b825", "", 2.5)))
+    p2 <- rd_panel(440, 0, pad(q$theory), pad(c(q$theory, q$sample)), "Normal Q-Q", "Normal quantiles", "Standardised residuals",
+      function(sx, sy) c(rd_line(sx, sy, range(q$theory), range(q$theory), "#5b6b7c", "4 3", 1), rd_dots(sx, sy, q$theory, q$sample, r = 2.5)))
+    p3 <- rd_panel(0, 300, pad(pt$x), c(0, max(sqrt(abs(pt$z)), tr$spread) * 1.05), "Scale-location", "Predicted log welfare", "Root of |standardised residual|",
+      function(sx, sy) c(rd_dots(sx, sy, pt$x, sqrt(abs(pt$z)), r = 2, op = 0.35), rd_line(sx, sy, tr$x, tr$spread, "#f7b825", "", 2.5)))
+    zz <- seq(-5, 5, by = 0.1)
+    p4 <- rd_panel(440, 300, c(-5, 5), c(0, max(h$density, 0.42) * 1.05), "Histogram of the standardised residuals", "Standardised residual", "Density",
+      function(sx, sy) c(sprintf('<rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" fill="#007DBC" fill-opacity="0.55"/>',
+                                 sx(h$mid - 0.25) + 0.5, sy(h$density), sx(h$mid + 0.25) - sx(h$mid - 0.25) - 1, sy(0) - sy(h$density)),
+                         rd_line(sx, sy, zz, stats::dnorm(zz), "#c5192d", "", 1.5)))
+    W <- 880; H <- 600; parts <- c(p1, p2, p3, p4)
+  }
+  note <- sprintf('<text x="%d" y="%d" text-anchor="end" class="tick">%s households, %s</text>', W - 14, H + 14,
+                  format(rd$n, big.mark = ","), if (isTRUE(rd$held_out)) "held out" else "training (none held out)")
+  svg_wrap(W, H + 20, "Residual diagnostics",
+           paste0(".head{", svg_font(600, 11.5), ";fill:#1f2a37}.tick{", svg_font(400, 10), ";fill:#5b6b7c}.ax{", svg_font(500, 10.5), ";fill:#5b6b7c}"),
+           c(parts, note))
+}

@@ -322,6 +322,12 @@ export function DiagramCards({ t }: { t: T }) {
           <div className="sc-diagram" dangerouslySetInnerHTML={{ __html: d.diagram.svg }} />
         </Card>
       ) : null}
+      {d.residuals ? (
+        <Card full title={t(d.residuals.title)} icon={<Network size={15} />} help={<Tip>{t(d.residuals.help)}</Tip>} className="sc-diagram-card">
+          {/* app-written SVG (residual_svg() in R/utils_diagrams.R) */}
+          <div className="sc-diagram" dangerouslySetInnerHTML={{ __html: d.residuals.svg }} />
+        </Card>
+      ) : null}
       {d.tree?.length ? (
         <Card full title={t("Decision tree: the rules")} icon={<Network size={15} />}
               help={<Tip>{d.nof

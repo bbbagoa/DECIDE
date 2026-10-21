@@ -757,6 +757,19 @@ model_effects <- function(df, outcome, criteria, outcome_positive = NULL,
   res
 }
 
+#' A model's additive score: the sum of its per-criterion effects (a missing
+#' answer counts as no); NULL when none of its criteria is in the data
+#' @noRd
+additive_score <- function(df, w) {
+  if (is.null(w) || !nrow(w)) return(NULL)
+  eff <- if (!is.null(w$coefficient)) w$coefficient else w$weight
+  ok <- !is.na(eff) & w$criterion %in% names(df)
+  if (!any(ok)) return(NULL)
+  X <- vapply(w$criterion[ok], function(cl) { v <- as_binary_criterion(df[[cl]]); v[is.na(v)] <- 0L; as.numeric(v) },
+              numeric(nrow(df)))
+  structure(as.numeric(matrix(X, nrow = nrow(df)) %*% eff[ok]), criteria = sum(ok))
+}
+
 #' Model comparison from the models compared per variable
 #'
 #' Each model's score is the sum of its per-criterion effects (every model
@@ -779,14 +792,8 @@ compare_models_auc <- function(df, outcome, outcome_positive = NULL, split, fits
   }
   if (!is.null(scorecard_score)) add("Scorecard (as adopted)", NA_integer_, as.numeric(scorecard_score))
   for (nm in names(fits)) {
-    w <- fits[[nm]]$weights
-    if (is.null(w) || !nrow(w)) next
-    eff <- if (!is.null(w$coefficient)) w$coefficient else w$weight
-    ok <- !is.na(eff) & w$criterion %in% names(df)
-    if (!any(ok)) next
-    X <- vapply(w$criterion[ok], function(cl) { v <- as_binary_criterion(df[[cl]]); v[is.na(v)] <- 0L; as.numeric(v) },
-                numeric(nrow(df)))
-    add(nm, sum(ok), as.numeric(matrix(X, nrow = nrow(df)) %*% eff[ok]))
+    s <- additive_score(df, fits[[nm]]$weights)
+    if (!is.null(s)) add(nm, attr(s, "criteria"), as.numeric(s))
   }
   list(table = if (length(rows)) round5(do.call(rbind, rows)) else data.frame(), roc = curves, importance = NULL)
 }

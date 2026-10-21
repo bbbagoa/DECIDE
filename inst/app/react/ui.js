@@ -10658,52 +10658,66 @@ function Mm({ t: e }) {
 }
 function Nm({ t: e }) {
 	let t = M(W("sc_diagram"));
-	return t ? /* @__PURE__ */ (0, R.jsxs)(R.Fragment, { children: [t.diagram ? /* @__PURE__ */ (0, R.jsx)(U, {
-		full: !0,
-		title: e(t.diagram.title),
-		icon: /* @__PURE__ */ (0, R.jsx)(Kr, { size: 15 }),
-		help: /* @__PURE__ */ (0, R.jsx)(q, { children: e(t.diagram.help) }),
-		className: "sc-diagram-card",
-		children: /* @__PURE__ */ (0, R.jsx)("div", {
-			className: "sc-diagram",
-			dangerouslySetInnerHTML: { __html: t.diagram.svg }
-		})
-	}) : null, t.tree?.length ? /* @__PURE__ */ (0, R.jsx)(U, {
-		full: !0,
-		title: e("Decision tree: the rules"),
-		icon: /* @__PURE__ */ (0, R.jsx)(Kr, { size: 15 }),
-		help: /* @__PURE__ */ (0, R.jsx)(q, { children: t.nof ? e("Each row is a leaf of the tree: the answers that lead to it, how many households it holds and the share of them in the targeted profiles. The points of the ranking are the tree's average effects, so it stays additive; the rules show what the tree itself does.") : e("Each row is a leaf of the tree: the answers that lead to it, how many training households it holds and the share of them that is vulnerable. The points of the card are the tree's average effects, so the card stays additive; the rules show what the tree itself does.") }),
-		children: /* @__PURE__ */ (0, R.jsx)("div", {
-			className: "wfp-model-table-wrap sc-tree-rules",
-			children: /* @__PURE__ */ (0, R.jsxs)("table", {
-				className: "wfp-model-table",
-				children: [/* @__PURE__ */ (0, R.jsx)("thead", { children: /* @__PURE__ */ (0, R.jsxs)("tr", { children: [
-					/* @__PURE__ */ (0, R.jsx)("th", { children: e("If the household...") }),
-					/* @__PURE__ */ (0, R.jsx)("th", {
-						className: "num",
-						children: e("Households")
-					}),
-					/* @__PURE__ */ (0, R.jsx)("th", {
-						className: "num",
-						children: t.nof ? e("In targeted profiles") : e("Vulnerable")
-					})
-				] }) }), /* @__PURE__ */ (0, R.jsx)("tbody", { children: t.tree.map((e, t) => /* @__PURE__ */ (0, R.jsxs)("tr", { children: [
-					/* @__PURE__ */ (0, R.jsx)("td", {
-						className: "small",
-						children: e.rule
-					}),
-					/* @__PURE__ */ (0, R.jsx)("td", {
-						className: "num",
-						children: Wp(e.households)
-					}),
-					/* @__PURE__ */ (0, R.jsx)("td", {
-						className: "num",
-						children: /* @__PURE__ */ (0, R.jsx)("strong", { children: xm(e.share) })
-					})
-				] }, t)) })]
+	return t ? /* @__PURE__ */ (0, R.jsxs)(R.Fragment, { children: [
+		t.diagram ? /* @__PURE__ */ (0, R.jsx)(U, {
+			full: !0,
+			title: e(t.diagram.title),
+			icon: /* @__PURE__ */ (0, R.jsx)(Kr, { size: 15 }),
+			help: /* @__PURE__ */ (0, R.jsx)(q, { children: e(t.diagram.help) }),
+			className: "sc-diagram-card",
+			children: /* @__PURE__ */ (0, R.jsx)("div", {
+				className: "sc-diagram",
+				dangerouslySetInnerHTML: { __html: t.diagram.svg }
 			})
-		})
-	}) : null] }) : null;
+		}) : null,
+		t.residuals ? /* @__PURE__ */ (0, R.jsx)(U, {
+			full: !0,
+			title: e(t.residuals.title),
+			icon: /* @__PURE__ */ (0, R.jsx)(Kr, { size: 15 }),
+			help: /* @__PURE__ */ (0, R.jsx)(q, { children: e(t.residuals.help) }),
+			className: "sc-diagram-card",
+			children: /* @__PURE__ */ (0, R.jsx)("div", {
+				className: "sc-diagram",
+				dangerouslySetInnerHTML: { __html: t.residuals.svg }
+			})
+		}) : null,
+		t.tree?.length ? /* @__PURE__ */ (0, R.jsx)(U, {
+			full: !0,
+			title: e("Decision tree: the rules"),
+			icon: /* @__PURE__ */ (0, R.jsx)(Kr, { size: 15 }),
+			help: /* @__PURE__ */ (0, R.jsx)(q, { children: t.nof ? e("Each row is a leaf of the tree: the answers that lead to it, how many households it holds and the share of them in the targeted profiles. The points of the ranking are the tree's average effects, so it stays additive; the rules show what the tree itself does.") : e("Each row is a leaf of the tree: the answers that lead to it, how many training households it holds and the share of them that is vulnerable. The points of the card are the tree's average effects, so the card stays additive; the rules show what the tree itself does.") }),
+			children: /* @__PURE__ */ (0, R.jsx)("div", {
+				className: "wfp-model-table-wrap sc-tree-rules",
+				children: /* @__PURE__ */ (0, R.jsxs)("table", {
+					className: "wfp-model-table",
+					children: [/* @__PURE__ */ (0, R.jsx)("thead", { children: /* @__PURE__ */ (0, R.jsxs)("tr", { children: [
+						/* @__PURE__ */ (0, R.jsx)("th", { children: e("If the household...") }),
+						/* @__PURE__ */ (0, R.jsx)("th", {
+							className: "num",
+							children: e("Households")
+						}),
+						/* @__PURE__ */ (0, R.jsx)("th", {
+							className: "num",
+							children: t.nof ? e("In targeted profiles") : e("Vulnerable")
+						})
+					] }) }), /* @__PURE__ */ (0, R.jsx)("tbody", { children: t.tree.map((e, t) => /* @__PURE__ */ (0, R.jsxs)("tr", { children: [
+						/* @__PURE__ */ (0, R.jsx)("td", {
+							className: "small",
+							children: e.rule
+						}),
+						/* @__PURE__ */ (0, R.jsx)("td", {
+							className: "num",
+							children: Wp(e.households)
+						}),
+						/* @__PURE__ */ (0, R.jsx)("td", {
+							className: "num",
+							children: /* @__PURE__ */ (0, R.jsx)("strong", { children: xm(e.share) })
+						})
+					] }, t)) })]
+				})
+			})
+		}) : null
+	] }) : null;
 }
 function Pm({ t: e }) {
 	let t = M(W("sc_pmt_accuracy"));
@@ -12469,7 +12483,7 @@ function ph({ fit: e, meta: t, t: n }) {
 			children: [
 				/* @__PURE__ */ (0, R.jsx)(yt, { size: 15 }),
 				" ",
-				/* @__PURE__ */ (0, R.jsx)("span", { children: n("More diagnostics: diagram, decision rules and charts") }),
+				/* @__PURE__ */ (0, R.jsx)("span", { children: n("More diagnostics: diagram, residuals, decision rules and charts") }),
 				/* @__PURE__ */ (0, R.jsx)(Dt, {
 					size: 15,
 					className: "sc-more-chev"

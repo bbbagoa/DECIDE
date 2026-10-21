@@ -460,7 +460,7 @@ function Diagnostics({ fit, meta, t }: { fit: Flow["fit"]; meta?: Meta; t: T }) 
   return (
     <section className={`sc-more${open ? " open" : ""}`}>
       <button type="button" className="sc-more-head" aria-expanded={open} onClick={() => setOpen(!open)}>
-        <BarChart3 size={15} /> <span>{t("More diagnostics: diagram, decision rules and charts")}</span>
+        <BarChart3 size={15} /> <span>{t("More diagnostics: diagram, residuals, decision rules and charts")}</span>
         <ChevronDown size={15} className="sc-more-chev" />
       </button>
       <div ref={ref} className="sc-more-body" style={{ display: open ? undefined : "none" }}>

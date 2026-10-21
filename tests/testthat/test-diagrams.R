@@ -65,3 +65,21 @@ test_that("pick_layout takes the shortest readable layout", {
   expect_equal(pl(list(c(5000, 100), c(4000, 100))), 2L)  # none readable: the least shrunk
   expect_equal(DECIDE:::diagram_columns(5, 700, 26, 60), 1L)
 })
+
+test_that("residual diagnostics: binned residuals and calibration, PMT residual panels", {
+  set.seed(2)
+  n <- 2000
+  x <- rbinom(n, 1, 0.4); z <- rbinom(n, 1, 0.5)
+  y <- rbinom(n, 1, plogis(-1 + 1.5 * x + 0.8 * z))
+  rd <- DECIDE:::residual_data(1.5 * x + 0.8 * z, y, 1:1500, 1501:2000)
+  expect_equal(rd$kind, "binary"); expect_true(rd$held_out); expect_equal(rd$n, 500)
+  expect_equal(nrow(rd$calib), 10)
+  # a well specified model: the binned residuals sit around zero
+  expect_lt(abs(weighted.mean(rd$binned$r, rd$binned$n)), 0.05)
+  expect_match(DECIDE:::residual_svg(rd), "Binned residuals")
+  expect_null(DECIDE:::residual_data(rep(1, n), y, 1:1500, 1501:2000))   # a constant score
+  e <- data.frame(actual = rnorm(800, 7), predicted = rnorm(800, 7), w = 1)
+  rn <- DECIDE:::residual_data_numeric(e)
+  expect_equal(rn$kind, "numeric"); expect_equal(nrow(rn$qq), 200)
+  expect_match(DECIDE:::residual_svg(rn), "Normal Q-Q")
+})

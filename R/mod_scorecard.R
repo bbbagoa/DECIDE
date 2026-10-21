@@ -1024,7 +1024,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
     # Model settings (PCA / MCA axes, number of profiles): kept here, set in a
     # dialog from the button beside the model, used by every fit.
     model_params <- reactiveValues(pca_mode = "axes", pca_axes = 1, pca_min_var = 60, n_clusters = 3,
-                                   holdout_pct = 20, split_seed = 123, tune = FALSE, folds = 5, auto_k = FALSE, diagram = TRUE)
+                                   holdout_pct = 20, split_seed = 123, tune = FALSE, folds = 5, auto_k = FALSE, diagram = TRUE, residuals = TRUE)
     has_axes <- function(m) isTRUE(m %in% c("pca", "mca"))
     # The PCA variation shares, worked out once when the dialog opens: the
     # preview then only redraws text as the settings change (nothing runs
@@ -1070,6 +1070,12 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
             "the network for a neural network, variable importance for a random forest or XGBoost,",
             "the dendrogram for Ward clustering."))),
           value = !isFALSE(model_params$diagram)),
+        if (!no_outcome()) checkboxInput(ns("residuals"),
+          tagList("Draw the residual diagnostics", info_tip(paste(
+            "Shows how far the model's predictions are from the data, in the app and in the report:",
+            "binned residuals and calibration for a yes/no outcome,",
+            "residuals against predicted, normal Q-Q, scale-location and histogram for a proxy means test."))),
+          value = !isFALSE(model_params$residuals)),
         # outcome models with hyperparameters: tuned by cross-validation
         if (!no_outcome() && isTRUE(m %in% tunable_models())) tagList(
           tags$div(class = "small fw-bold text-uppercase mb-2", "Hyperparameters"),
@@ -1106,6 +1112,7 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
       if (!is.null(input$folds)) model_params$folds <- round(num(input$folds, 2, 10, 5))
       if (!is.null(input$auto_k)) model_params$auto_k <- isTRUE(input$auto_k)
       if (!is.null(input$diagram)) model_params$diagram <- isTRUE(input$diagram)
+      if (!is.null(input$residuals)) model_params$residuals <- isTRUE(input$residuals)
       removeModal()
     })
     pca_min_var_now <- function() if (identical(model_params$pca_mode, "var")) model_params$pca_min_var / 100
@@ -1333,8 +1340,10 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
       d <- f$diagram
       svg <- if (is.null(d) || isFALSE(model_params$diagram)) "" else diagram_svg(d, if (nof) "targeted" else "vulnerable")
       rl <- f$tree_rules
+      rd <- if (isFALSE(model_params$residuals)) NULL else f$residuals
       list(nof = nof,
            diagram = if (nzchar(svg)) list(title = diagram_title(d$kind), help = diagram_help(d$kind, nof), svg = svg),
+           residuals = if (!is.null(rd)) list(title = residual_title(), help = residual_help(rd), svg = residual_svg(rd)),
            tree = if (identical(f$method, "tree") && !is.null(rl) && nrow(rl))
              lapply(seq_len(nrow(rl)), function(i) list(rule = rl$rule[i], households = u(rl$households[i]), share = u(rl$share_vulnerable[i]))))
     })
@@ -1925,7 +1934,8 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
             method_code = f$method, scheme_code = f$scheme, stepwise = f$stepwise %||% "none", stepwise_dir = f$stepwise_dir %||% "backward",
             n_train = f$n, n_test = length(sp$test), seed = model_params$split_seed,
             weights = input$model_weights, dropped = f$dropped, filled = f$filled, converged = f$converged,
-            tuning = f$tuning, tree_rules = f$tree_rules, diagram = if (!isFALSE(model_params$diagram)) f$diagram, k_quality = f$index$k_quality,
+            tuning = f$tuning, tree_rules = f$tree_rules, diagram = if (!isFALSE(model_params$diagram)) f$diagram,
+            residuals = if (!isFALSE(model_params$residuals)) f$residuals, k_quality = f$index$k_quality,
             fit_stats = fit_stats),
           runs = runs_df, estimates = wts,
           index = if (isTRUE(f$unsupervised) || isTRUE(f$method %in% c("pca", "lda"))) f$index,
@@ -2521,7 +2531,8 @@ mod_scorecard_server <- function(id, uploaded_df, user_setup, workspace = NULL, 
           sprintf("%s, seed %s", if (isTRUE(model_params$auto_k)) "profiles chosen by silhouette" else sprintf("%d profiles", as.integer(model_params$n_clusters)),
                   model_params$split_seed),
         if (!nof && isTRUE(m %in% tunable_models()) && isTRUE(model_params$tune)) sprintf("tuned by %d-fold cross-validation", as.integer(model_params$folds)),
-        if (isTRUE(m %in% diagram_models()) && isFALSE(model_params$diagram)) "no diagram")
+        if (isTRUE(m %in% diagram_models()) && isFALSE(model_params$diagram)) "no diagram",
+        if (!nof && isFALSE(model_params$residuals)) "no residual diagnostics")
       list(
         mode = mode, here = here, has_data = has_data,
         data = if (has_data) list(rows = nrow(df), cols = ncol(df), source = assessment_source() %||% "unknown"),
