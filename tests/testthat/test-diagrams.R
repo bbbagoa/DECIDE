@@ -77,6 +77,9 @@ test_that("residual diagnostics: binned residuals and calibration, PMT residual 
   # a well specified model: the binned residuals sit around zero
   expect_lt(abs(weighted.mean(rd$binned$r, rd$binned$n)), 0.05)
   expect_match(DECIDE:::residual_svg(rd), "Binned residuals")
+  # randomized quantile residuals of a right model are standard normal
+  expect_lt(max(abs(rd$qq$sample[20:180] - rd$qq$theory[20:180])), 0.35)
+  expect_match(DECIDE:::residual_svg(rd), "Histogram against the normal curve")
   expect_null(DECIDE:::residual_data(rep(1, n), y, 1:1500, 1501:2000))   # a constant score
   e <- data.frame(actual = rnorm(800, 7), predicted = rnorm(800, 7), w = 1)
   rn <- DECIDE:::residual_data_numeric(e)

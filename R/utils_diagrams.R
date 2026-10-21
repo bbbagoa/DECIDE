@@ -413,8 +413,21 @@ residual_data <- function(score, y, train, eval, w = NULL) {
     data.frame(p = pm, obs = rowsum(ww * yy, k)[, 1] / sw, n = n, se = sqrt(pm * (1 - pm) / n))
   }
   bn <- bins(max(5L, min(20L, floor(sqrt(length(p))))))
-  list(kind = "binary", n = length(eval), held_out = held_out,
-       binned = data.frame(p = bn$p, r = bn$obs - bn$p, se = bn$se, n = bn$n), calib = bins(10L)[, c("p", "obs", "n")])
+  # randomized quantile residuals (Dunn and Smyth 1996): standard normal when
+  # the model is right, so the Q-Q and the histogram read as for a PMT
+  set.seed(1)
+  u <- ifelse(yy == 1, stats::runif(length(p), 1 - p, 1), stats::runif(length(p), 0, 1 - p))
+  c(list(kind = "binary", n = length(eval), held_out = held_out,
+         binned = data.frame(p = bn$p, r = bn$obs - bn$p, se = bn$se, n = bn$n), calib = bins(10L)[, c("p", "obs", "n")]),
+    residual_normality(stats::qnorm(pmin(pmax(u, 1e-9), 1 - 1e-9))))
+}
+
+# Q-Q points and histogram of standardised residuals
+residual_normality <- function(z) {
+  pr <- stats::ppoints(200)
+  h <- graphics::hist(pmax(pmin(z, 4.99), -4.99), breaks = seq(-5, 5, by = 0.5), plot = FALSE)
+  list(qq = data.frame(theory = stats::qnorm(pr), sample = unname(stats::quantile(z, pr))),
+       hist = data.frame(mid = h$mids, density = h$density))
 }
 
 #' The same for a PMT, from its evaluation households (actual, predicted, w)
@@ -432,12 +445,9 @@ residual_data_numeric <- function(e, held_out = TRUE) {
   trend <- data.frame(x = rowsum(w * e$predicted, k)[, 1] / sw, r = rowsum(w * r, k)[, 1] / sw,
                       spread = rowsum(w * sqrt(abs(z)), k)[, 1] / sw)
   set.seed(1); s <- if (nrow(e) > 1500) sort(sample.int(nrow(e), 1500)) else seq_len(nrow(e))
-  pr <- stats::ppoints(200)
-  h <- graphics::hist(pmax(pmin(z, 4.99), -4.99), breaks = seq(-5, 5, by = 0.5), plot = FALSE)
-  list(kind = "numeric", n = nrow(e), held_out = held_out, sigma = sigma,
-       points = data.frame(x = e$predicted[s], r = r[s], z = z[s]), trend = trend,
-       qq = data.frame(theory = stats::qnorm(pr), sample = unname(stats::quantile(z, pr))),
-       hist = data.frame(mid = h$mids, density = h$density))
+  c(list(kind = "numeric", n = nrow(e), held_out = held_out, sigma = sigma,
+         points = data.frame(x = e$predicted[s], r = r[s], z = z[s]), trend = trend),
+    residual_normality(z))
 }
 
 #' Title and how to read the residual diagnostics (app card and report)
@@ -451,7 +461,8 @@ residual_help <- function(r) if (identical(r$kind, "numeric"))
         "Histogram: the standardised residuals with the normal curve.") else
   paste("Residuals are the outcome (1 vulnerable, 0 not) minus the probability the model gives, on the held-out households (training ones when none are held out); the model's score is made a probability by one logistic fit on the training households.",
         "Binned residuals: households grouped by predicted probability, each dot a group's average residual; about 95% of the dots should fall inside the shaded band (2 standard errors), red dots are ranges where the model is off.",
-        "Calibration: the observed share vulnerable against the predicted probability, by tenth; a well calibrated model follows the dashed diagonal.")
+        "Calibration: the observed share vulnerable against the predicted probability, by tenth; a well calibrated model follows the dashed diagonal.",
+        "Normal Q-Q and histogram: randomized quantile residuals (Dunn and Smyth), which follow a standard normal distribution when the model is right; points off the line, or bars away from the curve, show where it is not.")
 
 # One chart panel: frame, grid, ticks, axis titles; `draw(sx, sy)` adds the marks
 rd_panel <- function(x0, y0, xr, yr, title, xlab, ylab, draw, pw = 440, ph = 300) {
@@ -477,7 +488,20 @@ rd_line <- function(sx, sy, x, y, col, dash = "", width = 2)
   sprintf('<polyline points="%s" fill="none" stroke="%s" stroke-width="%s" stroke-dasharray="%s"/>',
           paste(sprintf("%.1f,%.1f", sx(x), sy(y)), collapse = " "), col, width, dash)
 
-#' The residual diagnostics as SVG (two panels for a yes/no outcome, four for a PMT)
+rd_qq <- function(rd, x0, y0, title = "Normal Q-Q") {
+  q <- rd$qq; r <- range(c(q$theory, q$sample)); r <- r + c(-1, 1) * 0.05 * diff(r)
+  rd_panel(x0, y0, range(q$theory) + c(-0.15, 0.15), r, title, "Normal quantiles", "Standardised residuals",
+    function(sx, sy) c(rd_line(sx, sy, range(q$theory), range(q$theory), "#5b6b7c", "4 3", 1), rd_dots(sx, sy, q$theory, q$sample, r = 2.5)))
+}
+rd_hist <- function(rd, x0, y0) {
+  h <- rd$hist; zz <- seq(-5, 5, by = 0.1)
+  rd_panel(x0, y0, c(-5, 5), c(0, max(h$density, 0.42) * 1.05), "Histogram against the normal curve", "Standardised residual", "Density",
+    function(sx, sy) c(sprintf('<rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" fill="#007DBC" fill-opacity="0.55"/>',
+                               sx(h$mid - 0.25) + 0.5, sy(h$density), sx(h$mid + 0.25) - sx(h$mid - 0.25) - 1, sy(0) - sy(h$density)),
+                       rd_line(sx, sy, zz, stats::dnorm(zz), "#c5192d", "", 1.5)))
+}
+
+#' The residual diagnostics as SVG (four panels)
 #' @noRd
 residual_svg <- function(rd) {
   if (is.null(rd)) return("")
@@ -496,22 +520,16 @@ residual_svg <- function(rd) {
     p2 <- rd_panel(440, 0, c(0, 1), c(0, 1), "Calibration by tenth", "Predicted probability", "Observed share vulnerable",
       function(sx, sy) c(rd_line(sx, sy, c(0, 1), c(0, 1), "#5b6b7c", "4 3", 1),
                          rd_line(sx, sy, cb$p, cb$obs, "#007DBC", "", 1.5), rd_dots(sx, sy, cb$p, cb$obs)))
-    W <- 880; H <- 300; parts <- c(p1, p2)
+    W <- 880; H <- 600; parts <- c(p1, p2, rd_qq(rd, 0, 300, "Normal Q-Q (randomized quantile residuals)"), rd_hist(rd, 440, 300))
   } else {
-    pt <- rd$points; tr <- rd$trend; q <- rd$qq; h <- rd$hist
+    pt <- rd$points; tr <- rd$trend
     p1 <- rd_panel(0, 0, pad(pt$x), pad(pt$r), "Residuals against predicted", "Predicted log welfare", "Measured - predicted",
       function(sx, sy) c(rd_dots(sx, sy, pt$x, pt$r, r = 2, op = 0.35), rd_line(sx, sy, range(pt$x), c(0, 0), "#5b6b7c", "4 3", 1),
                          rd_line(sx, sy, tr$x, tr$r, "#f7b825", "", 2.5)))
-    p2 <- rd_panel(440, 0, pad(q$theory), pad(c(q$theory, q$sample)), "Normal Q-Q", "Normal quantiles", "Standardised residuals",
-      function(sx, sy) c(rd_line(sx, sy, range(q$theory), range(q$theory), "#5b6b7c", "4 3", 1), rd_dots(sx, sy, q$theory, q$sample, r = 2.5)))
+    p2 <- rd_qq(rd, 440, 0)
     p3 <- rd_panel(0, 300, pad(pt$x), c(0, max(sqrt(abs(pt$z)), tr$spread) * 1.05), "Scale-location", "Predicted log welfare", "Root of |standardised residual|",
       function(sx, sy) c(rd_dots(sx, sy, pt$x, sqrt(abs(pt$z)), r = 2, op = 0.35), rd_line(sx, sy, tr$x, tr$spread, "#f7b825", "", 2.5)))
-    zz <- seq(-5, 5, by = 0.1)
-    p4 <- rd_panel(440, 300, c(-5, 5), c(0, max(h$density, 0.42) * 1.05), "Histogram of the standardised residuals", "Standardised residual", "Density",
-      function(sx, sy) c(sprintf('<rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" fill="#007DBC" fill-opacity="0.55"/>',
-                                 sx(h$mid - 0.25) + 0.5, sy(h$density), sx(h$mid + 0.25) - sx(h$mid - 0.25) - 1, sy(0) - sy(h$density)),
-                         rd_line(sx, sy, zz, stats::dnorm(zz), "#c5192d", "", 1.5)))
-    W <- 880; H <- 600; parts <- c(p1, p2, p3, p4)
+    W <- 880; H <- 600; parts <- c(p1, p2, p3, rd_hist(rd, 440, 300))
   }
   note <- sprintf('<text x="%d" y="%d" text-anchor="end" class="tick">%s households, %s</text>', W - 14, H + 14,
                   format(rd$n, big.mark = ","), if (isTRUE(rd$held_out)) "held out" else "training (none held out)")
