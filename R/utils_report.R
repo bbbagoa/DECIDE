@@ -273,7 +273,11 @@ design_report_md <- function(x, figures = character(0)) {
     dg <- x$model$diagram
     if (!is.null(dg) && nzchar(diagram_svg(dg))) add(paste("###", diagram_title(dg$kind)), "", diagram_help(dg$kind, nof), "", "@@DIAGRAM@@", "")
     rd <- x$model$residuals
-    if (!is.null(rd)) add(paste("###", residual_title()), "", residual_help(rd), "", "@@RESIDUALS@@", "")
+    if (!is.null(rd)) add(paste("###", residual_title()), "", residual_help(rd), "",
+                          sprintf("**RMSE %.3f, MAE %.3f** (%s, %s households, %s).", rd$rmse %||% NA, rd$mae %||% NA,
+                                  if (identical(rd$kind, "numeric")) "log welfare per person" else "probability of being vulnerable",
+                                  format(rd$n, big.mark = ","), if (isTRUE(rd$held_out)) "held out" else "training, none held out"), "",
+                          "@@RESIDUALS@@", "")
     rl <- x$model$tree_rules
     if (!is.null(rl) && nrow(rl)) add("### Decision tree rules", "",
       if (nof) "Each leaf of the tree: the answers that lead to it, the households it holds and the share of them in the targeted profiles. The points of the ranking are the tree's average effects; the rules show what the tree itself does."

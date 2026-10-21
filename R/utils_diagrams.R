@@ -418,6 +418,7 @@ residual_data <- function(score, y, train, eval, w = NULL) {
   set.seed(1)
   u <- ifelse(yy == 1, stats::runif(length(p), 1 - p, 1), stats::runif(length(p), 0, 1 - p))
   c(list(kind = "binary", n = length(eval), held_out = held_out,
+         rmse = sqrt(sum(ww * (yy - p)^2) / sum(ww)), mae = sum(ww * abs(yy - p)) / sum(ww),
          binned = data.frame(p = bn$p, r = bn$obs - bn$p, se = bn$se, n = bn$n), calib = bins(10L)[, c("p", "obs", "n")]),
     residual_normality(stats::qnorm(pmin(pmax(u, 1e-9), 1 - 1e-9))))
 }
@@ -445,7 +446,7 @@ residual_data_numeric <- function(e, held_out = TRUE) {
   trend <- data.frame(x = rowsum(w * e$predicted, k)[, 1] / sw, r = rowsum(w * r, k)[, 1] / sw,
                       spread = rowsum(w * sqrt(abs(z)), k)[, 1] / sw)
   set.seed(1); s <- if (nrow(e) > 1500) sort(sample.int(nrow(e), 1500)) else seq_len(nrow(e))
-  c(list(kind = "numeric", n = nrow(e), held_out = held_out, sigma = sigma,
+  c(list(kind = "numeric", n = nrow(e), held_out = held_out, sigma = sigma, rmse = sigma, mae = sum(w * abs(r)) / sum(w),
          points = data.frame(x = e$predicted[s], r = r[s], z = z[s]), trend = trend),
     residual_normality(z))
 }
@@ -465,7 +466,7 @@ residual_help <- function(r) if (identical(r$kind, "numeric"))
         "Normal Q-Q and histogram: randomized quantile residuals (Dunn and Smyth), which follow a standard normal distribution when the model is right; points off the line, or bars away from the curve, show where it is not.")
 
 # One chart panel: frame, grid, ticks, axis titles; `draw(sx, sy)` adds the marks
-rd_panel <- function(x0, y0, xr, yr, title, xlab, ylab, draw, pw = 440, ph = 300) {
+rd_panel <- function(x0, y0, xr, yr, title, xlab, ylab, draw, pw = RD_PW, ph = 290) {
   if (diff(xr) <= 0) xr <- xr + c(-0.5, 0.5)
   if (diff(yr) <= 0) yr <- yr + c(-0.5, 0.5)
   l <- x0 + 56; r <- x0 + pw - 14; t <- y0 + 30; b <- y0 + ph - 44
@@ -501,39 +502,44 @@ rd_hist <- function(rd, x0, y0) {
                        rd_line(sx, sy, zz, stats::dnorm(zz), "#c5192d", "", 1.5)))
 }
 
-#' The residual diagnostics as SVG (four panels)
+#' The residual diagnostics as SVG: RMSE and MAE, then four panels in a row
 #' @noRd
+RD_PW <- 340
 residual_svg <- function(rd) {
   if (is.null(rd)) return("")
+  top <- 24
   pad <- function(v, m = 0.05) { r <- range(v, na.rm = TRUE); r + c(-1, 1) * m * max(diff(r), 1e-6) }
   if (identical(rd$kind, "binary")) {
     bn <- rd$binned; cb <- rd$calib
     out <- abs(bn$r) > 2 * bn$se
     ym <- max(abs(c(bn$r, 2 * bn$se)), 0.02) * 1.1
     o <- order(bn$p)
-    p1 <- rd_panel(0, 0, pad(bn$p), c(-ym, ym),
-      sprintf("Binned residuals (%d of %d groups outside the band)", sum(out), nrow(bn)),
+    p1 <- rd_panel(0, top, pad(bn$p), c(-ym, ym),
+      sprintf("Binned residuals: %d of %d outside the band", sum(out), nrow(bn)),
       "Predicted probability", "Average residual", function(sx, sy) c(
         sprintf('<polygon points="%s" fill="#e8f1f8"/>', paste(sprintf("%.1f,%.1f", sx(c(bn$p[o], rev(bn$p[o]))), sy(c(2 * bn$se[o], -2 * rev(bn$se[o])))), collapse = " ")),
         rd_line(sx, sy, range(bn$p), c(0, 0), "#5b6b7c", "4 3", 1),
         rd_dots(sx, sy, bn$p, bn$r, ifelse(out, "#c5192d", "#007DBC"))))
-    p2 <- rd_panel(440, 0, c(0, 1), c(0, 1), "Calibration by tenth", "Predicted probability", "Observed share vulnerable",
+    p2 <- rd_panel(RD_PW, top, c(0, 1), c(0, 1), "Calibration by tenth", "Predicted probability", "Observed share vulnerable",
       function(sx, sy) c(rd_line(sx, sy, c(0, 1), c(0, 1), "#5b6b7c", "4 3", 1),
                          rd_line(sx, sy, cb$p, cb$obs, "#007DBC", "", 1.5), rd_dots(sx, sy, cb$p, cb$obs)))
-    W <- 880; H <- 600; parts <- c(p1, p2, rd_qq(rd, 0, 300, "Normal Q-Q (randomized quantile residuals)"), rd_hist(rd, 440, 300))
+    parts <- c(p1, p2, rd_qq(rd, 2 * RD_PW, top, "Normal Q-Q (quantile residuals)"), rd_hist(rd, 3 * RD_PW, top))
   } else {
     pt <- rd$points; tr <- rd$trend
-    p1 <- rd_panel(0, 0, pad(pt$x), pad(pt$r), "Residuals against predicted", "Predicted log welfare", "Measured - predicted",
+    p1 <- rd_panel(0, top, pad(pt$x), pad(pt$r), "Residuals against predicted", "Predicted log welfare", "Measured - predicted",
       function(sx, sy) c(rd_dots(sx, sy, pt$x, pt$r, r = 2, op = 0.35), rd_line(sx, sy, range(pt$x), c(0, 0), "#5b6b7c", "4 3", 1),
                          rd_line(sx, sy, tr$x, tr$r, "#f7b825", "", 2.5)))
-    p2 <- rd_qq(rd, 440, 0)
-    p3 <- rd_panel(0, 300, pad(pt$x), c(0, max(sqrt(abs(pt$z)), tr$spread) * 1.05), "Scale-location", "Predicted log welfare", "Root of |standardised residual|",
+    p2 <- rd_qq(rd, RD_PW, top)
+    p3 <- rd_panel(2 * RD_PW, top, pad(pt$x), c(0, max(sqrt(abs(pt$z)), tr$spread) * 1.05), "Scale-location", "Predicted log welfare", "Root of |standardised residual|",
       function(sx, sy) c(rd_dots(sx, sy, pt$x, sqrt(abs(pt$z)), r = 2, op = 0.35), rd_line(sx, sy, tr$x, tr$spread, "#f7b825", "", 2.5)))
-    W <- 880; H <- 600; parts <- c(p1, p2, p3, rd_hist(rd, 440, 300))
+    parts <- c(p1, p2, p3, rd_hist(rd, 3 * RD_PW, top))
   }
-  note <- sprintf('<text x="%d" y="%d" text-anchor="end" class="tick">%s households, %s</text>', W - 14, H + 14,
+  W <- 4 * RD_PW; H <- top + 290
+  unit <- if (identical(rd$kind, "numeric")) " (log welfare)" else " (probability)"
+  note <- sprintf('<text x="56" y="16" class="head">RMSE %s &#160;&#160; MAE %s<tspan class="tick">%s &#183; %s households, %s</tspan></text>',
+                  format(round(rd$rmse, 3), nsmall = 3), format(round(rd$mae, 3), nsmall = 3), unit,
                   format(rd$n, big.mark = ","), if (isTRUE(rd$held_out)) "held out" else "training (none held out)")
-  svg_wrap(W, H + 20, "Residual diagnostics",
+  svg_wrap(W, H, "Residual diagnostics",
            paste0(".head{", svg_font(600, 11.5), ";fill:#1f2a37}.tick{", svg_font(400, 10), ";fill:#5b6b7c}.ax{", svg_font(500, 10.5), ";fill:#5b6b7c}"),
            c(parts, note))
 }

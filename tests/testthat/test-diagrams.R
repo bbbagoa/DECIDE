@@ -74,6 +74,8 @@ test_that("residual diagnostics: binned residuals and calibration, PMT residual 
   rd <- DECIDE:::residual_data(1.5 * x + 0.8 * z, y, 1:1500, 1501:2000)
   expect_equal(rd$kind, "binary"); expect_true(rd$held_out); expect_equal(rd$n, 500)
   expect_equal(nrow(rd$calib), 10)
+  expect_equal(rd$rmse, sqrt(mean((y[1501:2000] - plogis(qlogis(0.3)))^2)), tolerance = 0.2)
+  expect_lt(rd$mae, rd$rmse)
   # a well specified model: the binned residuals sit around zero
   expect_lt(abs(weighted.mean(rd$binned$r, rd$binned$n)), 0.05)
   expect_match(DECIDE:::residual_svg(rd), "Binned residuals")
